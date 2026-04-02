@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: Local Agent Office API - Step 2
+  version: 0.2.0
+paths:
+  /api/account-pools:
+    get:
+      summary: List account pools with latest normalized fatigue
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create an account pool
+      responses:
+        '201':
+          description: Created
+  /api/account-pools/{id}:
+    patch:
+      summary: Update an account pool
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated
+  /api/account-pools/{id}/fatigue:
+    get:
+      summary: Get fatigue snapshot history for an account pool
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/runtime-router/simulate:
+    post:
+      summary: Simulate a routing decision for a task request
+      requestBody:
+        required: true
+      responses:
+        '200':
+          description: OK
+  /api/runtime-router/resolve:
+    post:
+      summary: Resolve and persist a routing decision
+      requestBody:
+        required: true
+      responses:
+        '200':
+          description: OK
+  /api/provider-probes/run:
+    post:
+      summary: Run a provider usage/status probe and optionally persist snapshot
+      requestBody:
+        required: true
+      responses:
+        '200':
+          description: OK
+  /api/provider-probes/history:
+    get:
+      summary: List recent provider probe runs
+      responses:
+        '200':
+          description: OK

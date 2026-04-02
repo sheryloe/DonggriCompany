@@ -1,0 +1,22 @@
+{
+  "name": "donggri-company",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" run dev",
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test",
+    "db:migrate": "pnpm --filter @workspace/db run db:migrate",
+    "db:seed": "pnpm --filter @workspace/db run db:seed",
+    "db:verify": "pnpm --filter @workspace/db run db:verify"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  }
+}

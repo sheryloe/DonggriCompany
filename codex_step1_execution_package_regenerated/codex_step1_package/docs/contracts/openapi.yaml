@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: Local Foundation API
+  version: 0.1.0
+servers:
+  - url: http://localhost:4315
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/bootstrap/state:
+    get:
+      summary: Get bootstrap state
+      responses:
+        '200':
+          description: Bootstrap state
+  /api/bootstrap/init:
+    post:
+      summary: Initialize workspace bootstrap
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspaceName, rootPath, selectedProviders, selectedRolePackIds]
+              properties:
+                workspaceName: { type: string }
+                rootPath: { type: string }
+                selectedProviders:
+                  type: array
+                  items: { type: string }
+                selectedRolePackIds:
+                  type: array
+                  items: { type: string }
+                officeTheme: { type: string }
+      responses:
+        '200':
+          description: Bootstrap initialized
+  /api/providers:
+    get:
+      summary: List providers and probe state
+      responses:
+        '200':
+          description: Provider list
+  /api/providers/probe:
+    post:
+      summary: Probe one provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider]
+              properties:
+                provider:
+                  type: string
+                  enum: [claude, codex, gemini, jules]
+      responses:
+        '200':
+          description: Probe result
+  /api/rolepacks:
+    get:
+      summary: List discovered role packs
+      responses:
+        '200':
+          description: Role packs

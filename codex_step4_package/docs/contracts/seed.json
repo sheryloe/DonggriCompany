@@ -1,0 +1,52 @@
+{
+  "telegram_bot_settings": [
+    {
+      "id": "telegram-main",
+      "enabled": 0,
+      "polling_enabled": 1,
+      "bot_username": null,
+      "bot_token_encrypted": null,
+      "last_update_offset": 0,
+      "last_poll_started_at": null,
+      "last_poll_succeeded_at": null,
+      "last_poll_error": null
+    }
+  ],
+  "telegram_notification_rules": [
+    {
+      "id": "notif-approval",
+      "event_type": "session.approval_required",
+      "is_enabled": 1,
+      "min_severity": "warning",
+      "target_chat_id": null
+    },
+    {
+      "id": "notif-failed",
+      "event_type": "session.failed",
+      "is_enabled": 1,
+      "min_severity": "error",
+      "target_chat_id": null
+    },
+    {
+      "id": "notif-completed",
+      "event_type": "session.completed",
+      "is_enabled": 1,
+      "min_severity": "info",
+      "target_chat_id": null
+    },
+    {
+      "id": "notif-fatigue",
+      "event_type": "account_pool.fatigue_threshold",
+      "is_enabled": 1,
+      "min_severity": "warning",
+      "target_chat_id": null
+    },
+    {
+      "id": "notif-provider-offline",
+      "event_type": "provider.offline",
+      "is_enabled": 1,
+      "min_severity": "warning",
+      "target_chat_id": null
+    }
+  ]
+}

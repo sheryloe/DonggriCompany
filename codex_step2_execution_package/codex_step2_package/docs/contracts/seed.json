@@ -1,0 +1,73 @@
+{
+  "accountPools": [
+    {
+      "id": "pool_claude_pro_main",
+      "key": "claude-pro-main",
+      "provider": "claude",
+      "label": "Claude Pro Main",
+      "plan_tier": "pro",
+      "fatigue_mode": "derived",
+      "max_concurrency": 2
+    },
+    {
+      "id": "pool_codex_plus_main",
+      "key": "codex-plus-main",
+      "provider": "codex",
+      "label": "Codex Plus Main",
+      "plan_tier": "plus",
+      "fatigue_mode": "derived",
+      "max_concurrency": 2
+    },
+    {
+      "id": "pool_codex_pro_main",
+      "key": "codex-pro-main",
+      "provider": "codex",
+      "label": "Codex Pro Main",
+      "plan_tier": "pro",
+      "fatigue_mode": "derived",
+      "max_concurrency": 3
+    },
+    {
+      "id": "pool_gemini_ai_pro_main",
+      "key": "gemini-ai-pro-main",
+      "provider": "gemini",
+      "label": "Gemini AI Pro Main",
+      "plan_tier": "ai_pro",
+      "fatigue_mode": "official",
+      "max_concurrency": 2
+    }
+  ],
+  "runtimeCapabilities": [
+    { "id": "cap_planning", "key": "planning", "label": "Planning" },
+    { "id": "cap_coding", "key": "coding", "label": "Coding" },
+    { "id": "cap_review", "key": "review", "label": "Review" },
+    { "id": "cap_research", "key": "research", "label": "Research" },
+    { "id": "cap_patch", "key": "patch_generation", "label": "Patch Generation" }
+  ],
+  "routingRules": [
+    {
+      "id": "rule_blog_research",
+      "key": "blog-research",
+      "label": "Blog Research Routing",
+      "task_type": "research",
+      "role_key": "researcher",
+      "priority": 10,
+      "targets": [
+        { "runtime_profile_key": "gemini-research-a", "target_order": 1, "max_fatigue_percent": 80 },
+        { "runtime_profile_key": "claude-planner-a", "target_order": 2, "fallback_only": true, "max_fatigue_percent": 85 }
+      ]
+    },
+    {
+      "id": "rule_code_builder",
+      "key": "code-builder",
+      "label": "Code Builder Routing",
+      "task_type": "coding",
+      "role_key": "builder",
+      "priority": 10,
+      "targets": [
+        { "runtime_profile_key": "codex-builder-pro-a", "target_order": 1, "max_fatigue_percent": 85 },
+        { "runtime_profile_key": "claude-builder-a", "target_order": 2, "fallback_only": true, "max_fatigue_percent": 75 }
+      ]
+    }
+  ]
+}

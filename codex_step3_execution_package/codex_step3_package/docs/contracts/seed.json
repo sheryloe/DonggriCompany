@@ -1,0 +1,85 @@
+{
+  "workspaces": [
+    {
+      "id": "ws_planning",
+      "name": "Planning Room",
+      "kind": "planning",
+      "layout_mode": "grid",
+      "sort_order": 10,
+      "is_default": 0
+    },
+    {
+      "id": "ws_research",
+      "name": "Research Desk",
+      "kind": "research",
+      "layout_mode": "grid",
+      "sort_order": 20,
+      "is_default": 0
+    },
+    {
+      "id": "ws_coding",
+      "name": "Coding Desk",
+      "kind": "coding",
+      "layout_mode": "grid",
+      "sort_order": 30,
+      "is_default": 1
+    },
+    {
+      "id": "ws_review",
+      "name": "Review Desk",
+      "kind": "review",
+      "layout_mode": "grid",
+      "sort_order": 40,
+      "is_default": 0
+    }
+  ],
+  "visual_presets": [
+    {
+      "id": "vp_cat_pixel",
+      "key": "cat.pixel.blue",
+      "label": "Blue Pixel Cat",
+      "category": "pixel",
+      "fallback_emoji": "🐱"
+    },
+    {
+      "id": "vp_fox_pixel",
+      "key": "fox.pixel.orange",
+      "label": "Orange Pixel Fox",
+      "category": "pixel",
+      "fallback_emoji": "🦊"
+    },
+    {
+      "id": "vp_bot_pixel",
+      "key": "robot.pixel.gray",
+      "label": "Gray Pixel Robot",
+      "category": "pixel",
+      "fallback_emoji": "🤖"
+    }
+  ],
+  "employees": [
+    {
+      "id": "emp_planner_cat",
+      "name": "Planner Cat",
+      "role_template_key": "planner",
+      "visual_preset_id": "vp_cat_pixel",
+      "workspace_id": "ws_planning",
+      "status": "idle"
+    },
+    {
+      "id": "emp_research_fox",
+      "name": "Research Fox",
+      "role_template_key": "researcher",
+      "visual_preset_id": "vp_fox_pixel",
+      "workspace_id": "ws_research",
+      "status": "idle"
+    },
+    {
+      "id": "emp_builder_bot",
+      "name": "Builder Bot",
+      "role_template_key": "builder",
+      "visual_preset_id": "vp_bot_pixel",
+      "workspace_id": "ws_coding",
+      "status": "idle"
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+openapi: 3.1.0
+info:
+  title: Step 3 Employee Office UI API
+  version: 0.1.0
+paths:
+  /api/workspaces:
+    get:
+      summary: List workspaces
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create workspace
+      responses:
+        '201':
+          description: Created
+  /api/employees:
+    get:
+      summary: List employees
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create employee
+      responses:
+        '201':
+          description: Created
+  /api/employees/{id}:
+    patch:
+      summary: Update employee
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /api/employees/{id}/move:
+    post:
+      summary: Move employee to workspace
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /api/employees/{id}/runtime-override:
+    post:
+      summary: Set temporary runtime override for current or next session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /api/sessions/{id}/rebind:
+    post:
+      summary: Rebind runtime profile for an active session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /api/ui/events:
+    get:
+      summary: Timeline query
+      responses:
+        '200':
+          description: OK
+  /api/ui/stream:
+    get:
+      summary: SSE stream for office events
+      responses:
+        '200':
+          description: text/event-stream

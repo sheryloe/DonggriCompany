@@ -1,68 +1,77 @@
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import Image from "next/image";
 
 const agents = [
-  { id: '1', name: 'Albedo', role: 'Reviewer', provider: 'Claude', pool: 'claude-pro-main', fatigue: 85, heat: 60, task: 'Reviewing PR #42', avatarTheme: 'border-orange-500/50' },
-  { id: '2', name: 'Ignis', role: 'Builder', provider: 'Codex', pool: 'codex-plus-main', fatigue: 60, heat: 20, task: 'Implementing Auth flow', avatarTheme: 'border-emerald-500/50' },
-  { id: '3', name: 'ScoutBot', role: 'Scout', provider: 'Gemini', pool: 'gemini-ai-pro', fatigue: 15, heat: 10, task: 'Researching WebRTC', avatarTheme: 'border-blue-500/50' },
-  { id: '4', name: 'Jules-X', role: 'Tester', provider: 'Jules', pool: 'jules-default', fatigue: 100, heat: 5, task: 'Running E2E', avatarTheme: 'border-purple-500/50' }
+  { id: '1', name: 'Albedo', role: 'Reviewer', provider: 'Claude', pool: 'claude-pro-main', fatigue: 85, heat: 60, task: 'Reviewing PR #42', avatarTheme: 'border-orange-500', bg: 'bg-orange-100', seed: 'ClaudeBot' },
+  { id: '2', name: 'Ignis', role: 'Builder', provider: 'Codex', pool: 'codex-plus-main', fatigue: 60, heat: 20, task: 'Implementing Auth flow', avatarTheme: 'border-emerald-500', bg: 'bg-emerald-100', seed: 'CodexBuilder' },
+  { id: '3', name: 'ScoutBot', role: 'Scout', provider: 'Gemini', pool: 'gemini-ai-pro', fatigue: 15, heat: 10, task: 'Researching WebRTC', avatarTheme: 'border-blue-500', bg: 'bg-blue-100', seed: 'GeminiScout' },
+  { id: '4', name: 'Jules-X', role: 'Tester', provider: 'Jules', pool: 'jules-default', fatigue: 100, heat: 5, task: 'Running E2E', avatarTheme: 'border-purple-500', bg: 'bg-purple-100', seed: 'JulesAgent' }
 ];
 
 export function SquadView() {
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-6 md:grid-cols-2">
       {agents.map(agent => (
-        <div key={agent.id} className="group relative flex flex-col gap-3 rounded-xl border-2 border-muted bg-card p-4 transition-all hover:border-primary/50 shadow-sm">
+        <div key={agent.id} className="retro-card group relative flex flex-col gap-4 p-4 transition-transform hover:-translate-y-1">
           <div className="flex gap-4 items-start">
-            {/* Avatar / Character Sprite Box */}
-            <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border-2 bg-muted/50 ${agent.avatarTheme}`}>
-              {/* Fallback to simple retro text if no sprite */}
-              <span className="font-mono text-xl font-bold tracking-tighter opacity-80">{agent.provider.substring(0,2)}</span>
+            {/* Pixel Art Avatar Box */}
+            <div className={`retro-card shrink-0 h-20 w-20 flex items-center justify-center p-1 ${agent.bg}`}>
+              <Image
+                src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${agent.seed}`}
+                alt={`${agent.name} avatar`}
+                width={64}
+                height={64}
+                className="pixelated object-contain"
+              />
             </div>
 
-            <div className="flex-1 space-y-1">
+            <div className="flex-1 space-y-2">
               <div className="flex justify-between items-start">
                 <div>
-                  <h4 className="font-bold text-lg leading-tight flex items-center gap-2">
+                  <h4 className="font-bold text-xl uppercase tracking-wider flex items-center gap-2">
                     {agent.name}
-                    <Badge variant="secondary" className="text-[9px] uppercase tracking-wider">{agent.role}</Badge>
+                    <Badge className={`rounded-none border-2 border-black ${agent.avatarTheme} bg-transparent text-black hover:bg-transparent text-xs`}>
+                      {agent.role}
+                    </Badge>
                   </h4>
-                  <p className="text-xs text-muted-foreground font-mono">{agent.pool}</p>
+                  <p className="text-sm font-mono opacity-80">{agent.pool}</p>
                 </div>
               </div>
 
-              <div className="pt-1 text-sm bg-muted/30 p-2 rounded-md border border-muted mt-2">
-                <span className="font-medium text-xs text-muted-foreground uppercase tracking-widest">Doing: </span>
-                <span className="font-mono text-sm">{agent.task}</span>
+              <div className="text-sm bg-muted/50 p-2 border-2 border-black/20 font-mono flex items-center gap-2">
+                <span className="font-bold text-xs uppercase animate-pulse">▶ ACT:</span>
+                <span className="truncate">{agent.task}</span>
               </div>
             </div>
           </div>
 
-          <div className="space-y-3 pt-2">
+          <div className="space-y-3 pt-2 bg-black/5 p-3 border-2 border-black/10">
             {/* Fatigue (HP) */}
             <div className="space-y-1">
-              <div className="flex justify-between text-[10px] uppercase font-bold text-muted-foreground">
-                <span>Stamina (Quota)</span>
-                <span className={agent.fatigue < 30 ? 'text-red-500' : 'text-green-500'}>{agent.fatigue}%</span>
+              <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
+                <span>HP (Stamina)</span>
+                <span className={agent.fatigue < 30 ? 'text-red-600 animate-pulse' : 'text-green-600'}>{agent.fatigue}/100</span>
               </div>
-              <Progress
-                value={agent.fatigue}
-                className="h-2.5 bg-secondary border border-muted"
-                indicatorClass={agent.fatigue < 30 ? "bg-red-500" : agent.fatigue < 60 ? "bg-yellow-500" : "bg-green-500"}
-              />
+              <div className="pixel-bar-container">
+                <div
+                  className={`pixel-bar-fill ${agent.fatigue < 30 ? 'bg-red-500' : agent.fatigue < 60 ? 'bg-yellow-400' : 'bg-green-500'}`}
+                  style={{ width: `${agent.fatigue}%` }}
+                />
+              </div>
             </div>
 
             {/* Heat (MP/Context) */}
             <div className="space-y-1">
-              <div className="flex justify-between text-[10px] uppercase font-bold text-muted-foreground">
-                <span>Heat (Context)</span>
-                <span className={agent.heat > 80 ? 'text-red-500 animate-pulse' : 'text-orange-500'}>{agent.heat}%</span>
+              <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
+                <span>MP (Heat)</span>
+                <span className={agent.heat > 80 ? 'text-red-600 animate-bounce' : 'text-blue-600'}>{agent.heat}%</span>
               </div>
-              <Progress
-                value={agent.heat}
-                className="h-1.5 bg-secondary/50 border border-muted"
-                indicatorClass="bg-orange-500"
-              />
+              <div className="pixel-bar-container">
+                <div
+                  className="pixel-bar-fill bg-blue-500"
+                  style={{ width: `${agent.heat}%` }}
+                />
+              </div>
             </div>
           </div>
         </div>

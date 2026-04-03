@@ -17,24 +17,24 @@ export function MissionBoard() {
   return (
     <div className="flex flex-col gap-6">
       {missions.map(m => (
-        <div key={m.id} className="rounded-lg border bg-card text-card-foreground shadow-sm">
-          <div className="flex flex-col space-y-1.5 p-6 pb-4">
+        <div key={m.id} className="retro-card">
+          <div className="flex flex-col space-y-1.5 p-6 pb-4 border-b-4 border-black bg-gray-100">
             <div className="flex items-center justify-between">
-              <h3 className="text-xl font-semibold leading-none tracking-tight">{m.title}</h3>
-              <Badge variant={m.state === 'active' ? 'default' : 'secondary'}>{m.state.toUpperCase()}</Badge>
+              <h3 className="text-2xl font-bold uppercase tracking-wider">{m.title}</h3>
+              <Badge className="border-2 border-black rounded-none shadow-[2px_2px_0_0_rgba(0,0,0,1)] uppercase">{m.state}</Badge>
             </div>
           </div>
-          <div className="p-6 pt-0">
-            <div className="flex flex-col gap-3">
+          <div className="p-6">
+            <div className="flex flex-col gap-4">
               {m.tasks.map(t => (
-                <div key={t.id} className="flex items-center justify-between rounded-md border p-3">
+                <div key={t.id} className="flex items-center justify-between retro-card p-3 border-2 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className={`h-2 w-2 rounded-full ${t.state === 'done' ? 'bg-green-500' : 'bg-blue-500 animate-pulse'}`} />
-                    <span className={`font-medium ${t.state === 'done' ? 'line-through text-muted-foreground' : ''}`}>{t.title}</span>
+                    <div className={`h-4 w-4 border-2 border-black ${t.state === 'done' ? 'bg-green-500' : 'bg-blue-500 animate-pulse'}`} />
+                    <span className={`text-lg ${t.state === 'done' ? 'line-through text-muted-foreground' : 'font-bold'}`}>{t.title}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{t.role}</span>
-                    {t.subAgent && <Badge variant="outline" className="text-[10px]">{t.subAgent}</Badge>}
+                  <div className="flex items-center gap-4">
+                    <span className="font-bold text-muted-foreground uppercase">{t.role}</span>
+                    {t.subAgent && <Badge variant="outline" className="border-2 border-black bg-white rounded-none">{t.subAgent}</Badge>}
                   </div>
                 </div>
               ))}

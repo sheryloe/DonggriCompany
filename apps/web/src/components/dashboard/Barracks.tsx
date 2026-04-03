@@ -1,5 +1,3 @@
-
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
 const accounts = [
@@ -13,28 +11,28 @@ export function AccountBarracks() {
   return (
     <div className="flex flex-col gap-4">
       {accounts.map(acc => (
-        <div key={acc.id} className="flex flex-col gap-2 rounded-lg border p-4">
+        <div key={acc.id} className={`retro-card border-2 p-4 flex flex-col gap-3 ${acc.status === 'exhausted' ? 'bg-red-50' : 'bg-white'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="font-semibold">{acc.id}</span>
-              <Badge variant="outline">{acc.provider}</Badge>
+              <span className="font-bold text-lg uppercase tracking-wide">{acc.id}</span>
+              <Badge variant="outline" className="border-2 border-black rounded-none">{acc.provider}</Badge>
             </div>
-            <span className={`text-sm font-medium ${acc.status === 'exhausted' ? 'text-destructive' : acc.status === 'warm' ? 'text-yellow-500' : 'text-green-500'}`}>
-              {acc.status.toUpperCase()}
+            <span className={`text-sm font-bold border-2 border-black px-2 py-1 bg-white shadow-[2px_2px_0_0_rgba(0,0,0,1)] uppercase ${acc.status === 'exhausted' ? 'text-red-600' : acc.status === 'warm' ? 'text-yellow-600' : 'text-green-600'}`}>
+              {acc.status}
             </span>
           </div>
 
-          <div className="mt-2 space-y-1">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Fatigue (Usage)</span>
+          <div className="space-y-1 bg-black/5 p-2 border-2 border-black/10">
+            <div className="flex justify-between font-bold text-sm uppercase">
+              <span>Fatigue (Used)</span>
               <span>{acc.usage}%</span>
             </div>
-            <Progress value={acc.usage} className={`h-2 ${acc.status === 'exhausted' ? 'bg-destructive/20' : ''}`} />
-          </div>
-
-          <div className="mt-1 flex gap-2 text-xs text-muted-foreground">
-            <span className="bg-secondary px-2 py-0.5 rounded">Plan: {acc.plan}</span>
-            <span className="bg-secondary px-2 py-0.5 rounded">Reserve: 15%</span>
+            <div className="pixel-bar-container">
+              <div
+                className={`pixel-bar-fill ${acc.status === 'exhausted' ? 'bg-red-500' : 'bg-purple-500'}`}
+                style={{ width: `${acc.usage}%` }}
+              />
+            </div>
           </div>
         </div>
       ))}

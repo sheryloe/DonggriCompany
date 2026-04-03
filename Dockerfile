@@ -1,5 +1,5 @@
-# Base image
-FROM node:20-alpine AS base
+# Base image (Debian 기반으로 변경: 사내 인증서 이슈 회피가 더 쉬움)
+FROM node:20 AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -7,8 +7,13 @@ RUN corepack enable
 # Dependencies setup
 FROM base AS deps
 WORKDIR /app
-# pnpm 캐싱 및 빌드 툴(Python, make, g++) 설치 (better-sqlite3용)
-RUN apk add --no-cache python3 make g++
+
+# 사내망 환경 등 SSL/TLS 인증서 오류(eprism 등)를 무시하도록 apt-get 및 pnpm 설정
+RUN echo 'Acquire::https::Verify-Peer "false";' > /etc/apt/apt.conf.d/99disable-cert-checks && \
+    echo 'Acquire::https::Verify-Host "false";' >> /etc/apt/apt.conf.d/99disable-cert-checks && \
+    apt-get update -o Acquire::https::Verify-Peer=false && \
+    apt-get install -y --no-install-recommends python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/core/package.json packages/core/
@@ -23,6 +28,8 @@ COPY packages/role-compiler/package.json packages/role-compiler/
 COPY apps/web/package.json apps/web/
 COPY apps/orchestrator/package.json apps/orchestrator/
 
+# pnpm 설치 시 SSL 에러를 방지하기 위해 strict-ssl을 false로 강제 지정
+RUN pnpm config set strict-ssl false
 RUN pnpm install --frozen-lockfile
 
 # Build everything
@@ -51,5 +58,4 @@ RUN mkdir -p /app/packages/db/data
 
 EXPOSE 3000 3001
 
-# 기본 커맨드는 Web과 Orchestrator를 동시에 실행 (실제 상용에서는 PM2나 컨테이너 분리를 권장하지만, 초기 로컬 구동용)
 CMD ["sh", "-c", "cd packages/db && pnpm run db:migrate && cd ../../ && pnpm run start"]

@@ -1,0 +1,11 @@
+services:
+  office-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+    container_name: donggri-office-demo
+    ports:
+      - "3000:3000"
+      - "4315:4315"
+    volumes:
+      - ./.local:/app/.local

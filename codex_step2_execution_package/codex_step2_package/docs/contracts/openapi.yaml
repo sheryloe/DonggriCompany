@@ -38,6 +38,40 @@ paths:
       responses:
         '200':
           description: OK
+  /api/runtime-profiles:
+    get:
+      summary: List runtime profiles
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create a runtime profile
+      responses:
+        '201':
+          description: Created
+  /api/runtime-profiles/{id}:
+    patch:
+      summary: Update a runtime profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated
+    delete:
+      summary: Delete a runtime profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
   /api/runtime-router/simulate:
     post:
       summary: Simulate a routing decision for a task request
@@ -65,6 +99,23 @@ paths:
   /api/provider-probes/history:
     get:
       summary: List recent provider probe runs
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: provider
+          schema:
+            type: string
+        - in: query
+          name: accountPoolId
+          schema:
+            type: string
+        - in: query
+          name: runtimeProfileId
+          schema:
+            type: string
       responses:
         '200':
           description: OK

@@ -31,6 +31,8 @@ export type UsageNormalizationResult = {
   fallbackUsed: boolean;
 };
 
+const STALE_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 const clampPercent = (value: number): number => {
   if (value < 0) {
     return 0;
@@ -76,6 +78,20 @@ export const scoreConfidence = (
   return adjusted;
 };
 
+const isFallbackSnapshotStale = (
+  fallbackObservedAt: string,
+  inputObservedAt: string
+): boolean => {
+  const fallbackTimestamp = Date.parse(fallbackObservedAt);
+  const inputTimestamp = Date.parse(inputObservedAt);
+
+  if (!Number.isFinite(fallbackTimestamp) || !Number.isFinite(inputTimestamp)) {
+    return false;
+  }
+
+  return inputTimestamp - fallbackTimestamp > STALE_SNAPSHOT_MAX_AGE_MS;
+};
+
 export class UsageNormalizer {
   normalize(input: UsageNormalizerInput): UsageNormalizationResult {
     const hasDirectUsage =
@@ -93,11 +109,14 @@ export class UsageNormalizer {
     let rawLimitValue = input.limitValue;
     let rawUnit = input.unit;
     let fallbackUsed = false;
+    const fallbackEligible =
+      fallback !== null &&
+      !isFallbackSnapshotStale(fallback.observedAt, input.observedAt);
 
     if (hasDirectUsage) {
       normalizedPercent = clampPercent((input.usageValue as number / (input.limitValue as number)) * 100);
       status = input.status === "failure" ? "degraded" : "ok";
-    } else if (fallback) {
+    } else if (fallbackEligible && fallback) {
       normalizedPercent = clampPercent(fallback.normalizedPercent);
       status = "degraded";
       precision = fallback.precision;

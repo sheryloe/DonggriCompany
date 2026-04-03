@@ -3,6 +3,12 @@ info:
   title: Step 3 Employee Office UI API
   version: 0.1.0
 paths:
+  /api/office/bootstrap:
+    get:
+      summary: Load office bootstrap payload
+      responses:
+        '200':
+          description: OK
   /api/workspaces:
     get:
       summary: List workspaces
@@ -32,52 +38,184 @@ paths:
         - in: path
           name: id
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
         '200':
           description: OK
-  /api/employees/{id}/move:
-    post:
-      summary: Move employee to workspace
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: OK
-  /api/employees/{id}/runtime-override:
-    post:
-      summary: Set temporary runtime override for current or next session
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: OK
-  /api/sessions/{id}/rebind:
-    post:
-      summary: Rebind runtime profile for an active session
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: OK
-  /api/ui/events:
+  /api/sessions/active:
     get:
-      summary: Timeline query
+      summary: List active sessions
       responses:
         '200':
           description: OK
-  /api/ui/stream:
+  /api/sessions/{id}:
+    get:
+      summary: Get session detail
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/sessions/{id}/override-runtime:
+    post:
+      summary: Override session runtime profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/sessions/{id}/pause:
+    post:
+      summary: Pause session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/sessions/{id}/resume:
+    post:
+      summary: Resume session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/timeline:
+    get:
+      summary: Query timeline events
+      responses:
+        '200':
+          description: OK
+  /api/events/stream:
     get:
       summary: SSE stream for office events
       responses:
         '200':
           description: text/event-stream
+  /api/providers:
+    get:
+      summary: List provider status snapshots
+      responses:
+        '200':
+          description: OK
+  /api/providers/probe:
+    post:
+      summary: Probe provider CLI/login status
+      responses:
+        '200':
+          description: OK
+  /api/account-pools:
+    get:
+      summary: List account pools with latest fatigue
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create account pool
+      responses:
+        '201':
+          description: Created
+  /api/account-pools/{id}:
+    patch:
+      summary: Update account pool
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/account-pools/{id}/fatigue:
+    get:
+      summary: List fatigue snapshot history
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/runtime-profiles:
+    get:
+      summary: List runtime profiles
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create runtime profile
+      responses:
+        '201':
+          description: Created
+  /api/runtime-profiles/{id}:
+    patch:
+      summary: Update runtime profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: Delete runtime profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/provider-probes/run:
+    post:
+      summary: Run provider usage probe
+      responses:
+        '200':
+          description: OK
+  /api/provider-probes/history:
+    get:
+      summary: List provider usage probe runs
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: provider
+          schema:
+            type: string
+        - in: query
+          name: accountPoolId
+          schema:
+            type: string
+        - in: query
+          name: runtimeProfileId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK

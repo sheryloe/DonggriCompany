@@ -46,12 +46,15 @@ const parseBootstrapInitRequest = (payload: unknown): BootstrapInitRequest => {
 };
 
 export const registerBootstrapRoutes = (server: FastifyInstance): void => {
-  server.get("/api/bootstrap/state", async (): Promise<BootstrapStateResponse> => {
+  const readBootstrapState = async (): Promise<BootstrapStateResponse> => {
     return {
       ok: true,
       state: getBootstrapState()
     };
-  });
+  };
+
+  server.get("/api/bootstrap/state", readBootstrapState);
+  server.get("/api/office/bootstrap", readBootstrapState);
 
   server.post("/api/bootstrap/init", async (request): Promise<BootstrapInitResponse> => {
     const input = parseBootstrapInitRequest(request.body);

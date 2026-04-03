@@ -9,6 +9,7 @@
     "typecheck": "pnpm -r --if-present run typecheck",
     "lint": "pnpm -r --if-present run lint",
     "test": "pnpm -r --if-present run test",
+    "step2:review": "bash ./scripts/step2-autoreview.sh",
     "db:migrate": "pnpm --filter @workspace/db run db:migrate",
     "db:seed": "pnpm --filter @workspace/db run db:seed",
     "db:verify": "pnpm --filter @workspace/db run db:verify"

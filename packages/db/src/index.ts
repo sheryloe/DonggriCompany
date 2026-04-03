@@ -9,9 +9,12 @@ export {
   AccountPoolService,
   DbServiceError,
   ProviderUsageProbeService,
+  RuntimeProfileService,
   RuntimeRouter,
   createAccountPoolSchema,
+  createRuntimeProfileSchema,
   updateAccountPoolSchema,
+  updateRuntimeProfileSchema,
   mapFatigueState,
   scoreConfidence
 } from "./step2/index.js";

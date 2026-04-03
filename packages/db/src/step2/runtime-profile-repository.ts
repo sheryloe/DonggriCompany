@@ -2,6 +2,22 @@ import type { ProviderUsageProbeProvider, RuntimeCapabilityView, RuntimeProfileV
 
 import type { DatabaseHandle } from "../database.js";
 
+export type RuntimeProfileCreateInput = {
+  id: string;
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string | null;
+  key: string;
+  profilePath: string | null;
+  status: string;
+};
+
+export type RuntimeProfileUpdateInput = {
+  accountPoolId?: string | null;
+  key?: string;
+  profilePath?: string | null;
+  status?: string;
+};
+
 type RuntimeProfileRow = {
   id: string;
   provider: ProviderUsageProbeProvider;
@@ -108,6 +124,122 @@ export class RuntimeProfileRepository {
     }
 
     return this.attachCapabilities(db, [row])[0] ?? null;
+  }
+
+  getByKey(db: DatabaseHandle, key: string): RuntimeProfileView | null {
+    const row = db
+      .prepare(
+        `
+        SELECT id, provider, account_pool_id, profile_name, profile_path, status
+        FROM runtime_profiles
+        WHERE profile_name = ?
+        LIMIT 1
+        `
+      )
+      .get(key) as RuntimeProfileRow | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return this.attachCapabilities(db, [row])[0] ?? null;
+  }
+
+  create(db: DatabaseHandle, input: RuntimeProfileCreateInput, nowIso: string): RuntimeProfileView {
+    db.prepare(
+      `
+      INSERT INTO runtime_profiles (
+        id,
+        provider,
+        account_pool_id,
+        profile_name,
+        profile_path,
+        capabilities_json,
+        status,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        @id,
+        @provider,
+        @account_pool_id,
+        @profile_name,
+        @profile_path,
+        @capabilities_json,
+        @status,
+        @created_at,
+        @updated_at
+      )
+      `
+    ).run({
+      id: input.id,
+      provider: input.provider,
+      account_pool_id: input.accountPoolId,
+      profile_name: input.key,
+      profile_path: input.profilePath,
+      capabilities_json: "[]",
+      status: input.status,
+      created_at: nowIso,
+      updated_at: nowIso
+    });
+
+    const created = this.getById(db, input.id);
+    if (!created) {
+      throw new Error("Failed to create runtime profile");
+    }
+    return created;
+  }
+
+  update(db: DatabaseHandle, id: string, input: RuntimeProfileUpdateInput, nowIso: string): RuntimeProfileView {
+    const assignments: string[] = ["updated_at = @updated_at"];
+    const params: Record<string, unknown> = {
+      id,
+      updated_at: nowIso
+    };
+
+    if (input.accountPoolId !== undefined) {
+      assignments.push("account_pool_id = @account_pool_id");
+      params.account_pool_id = input.accountPoolId;
+    }
+    if (input.key !== undefined) {
+      assignments.push("profile_name = @profile_name");
+      params.profile_name = input.key;
+    }
+    if (input.profilePath !== undefined) {
+      assignments.push("profile_path = @profile_path");
+      params.profile_path = input.profilePath;
+    }
+    if (input.status !== undefined) {
+      assignments.push("status = @status");
+      params.status = input.status;
+    }
+
+    db.prepare(
+      `
+      UPDATE runtime_profiles
+      SET ${assignments.join(", ")}
+      WHERE id = @id
+      `
+    ).run(params);
+
+    const updated = this.getById(db, id);
+    if (!updated) {
+      throw new Error("Failed to update runtime profile");
+    }
+    return updated;
+  }
+
+  deleteById(db: DatabaseHandle, id: string): boolean {
+    const result = db
+      .prepare(
+        `
+        DELETE FROM runtime_profiles
+        WHERE id = ?
+        `
+      )
+      .run(id);
+
+    return result.changes > 0;
   }
 
   private attachCapabilities(db: DatabaseHandle, rows: RuntimeProfileRow[]): RuntimeProfileView[] {

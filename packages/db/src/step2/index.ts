@@ -1,5 +1,10 @@
 export { AccountPoolService, createAccountPoolSchema, updateAccountPoolSchema } from "./account-pool-service.js";
 export { ProviderUsageProbeService } from "./provider-usage-probes.js";
+export {
+  RuntimeProfileService,
+  createRuntimeProfileSchema,
+  updateRuntimeProfileSchema
+} from "./runtime-profile-service.js";
 export { RuntimeRouter } from "./runtime-router.js";
 export { FatigueEngine } from "./fatigue-engine.js";
 export { UsageNormalizer, mapFatigueState, scoreConfidence } from "./usage-normalizer.js";

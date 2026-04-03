@@ -201,6 +201,41 @@ export type AccountPoolFatigueHistoryResponse = {
   snapshots: FatigueSnapshotView[];
 };
 
+export type CreateRuntimeProfileRequest = {
+  key: string;
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  profilePath?: string | null;
+  status?: string;
+};
+
+export type UpdateRuntimeProfileRequest = {
+  key?: string;
+  accountPoolId?: string | null;
+  profilePath?: string | null;
+  status?: string;
+};
+
+export type RuntimeProfilesListResponse = {
+  ok: true;
+  profiles: RuntimeProfileView[];
+};
+
+export type RuntimeProfileCreateResponse = {
+  ok: true;
+  profile: RuntimeProfileView;
+};
+
+export type RuntimeProfileUpdateResponse = {
+  ok: true;
+  profile: RuntimeProfileView;
+};
+
+export type RuntimeProfileDeleteResponse = {
+  ok: true;
+  id: string;
+};
+
 export type RuntimeRouterRequest = {
   taskType?: string;
   roleKey?: string;
@@ -257,6 +292,13 @@ export type ProviderUsageProbeRunRequest = {
   accountPoolId?: string;
   runtimeProfileId?: string;
   persistSnapshot?: boolean;
+};
+
+export type ProviderUsageProbeHistoryQuery = {
+  limit?: number;
+  provider?: ProviderUsageProbeProvider;
+  accountPoolId?: string;
+  runtimeProfileId?: string;
 };
 
 export type ProviderProbeRunView = {

@@ -314,6 +314,67 @@ button.secondary {
   gap: 12px;
 }
 
+.office-ops-page {
+  display: grid;
+  gap: 16px;
+}
+
+.office-top-ops {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.office-ops-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.office-widget {
+  display: grid;
+  gap: 12px;
+}
+
+.probe-state {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.probe-state-success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.probe-state-partial {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.probe-state-stale {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.probe-state-no-signal {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.probe-state-error {
+  background: #7f1d1d;
+  color: #fee2e2;
+}
+
+.danger-box {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
 @media (max-width: 960px) {
   .stepper {
     grid-template-columns: 1fr 1fr;
@@ -324,6 +385,14 @@ button.secondary {
   }
 
   .form-grid.two-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .office-top-ops {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .office-ops-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -42,6 +42,13 @@ export type ProviderProbeRunRecord = {
   degraded: boolean;
 };
 
+export type ProviderProbeRunListQuery = {
+  limit: number;
+  provider?: ProviderUsageProbeProvider;
+  accountPoolId?: string;
+  runtimeProfileId?: string;
+};
+
 type ProviderProbeRunRow = {
   id: string;
   provider: ProviderUsageProbeProvider;
@@ -204,7 +211,24 @@ export class ProviderProbeRunRepository {
     return row ? toRunRecord(row) : null;
   }
 
-  listPublic(db: DatabaseHandle, limit = 50): ProviderProbeRunView[] {
+  listPublic(db: DatabaseHandle, query: ProviderProbeRunListQuery): ProviderProbeRunView[] {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (query.provider) {
+      conditions.push("provider = ?");
+      params.push(query.provider);
+    }
+    if (query.accountPoolId) {
+      conditions.push("account_pool_id = ?");
+      params.push(query.accountPoolId);
+    }
+    if (query.runtimeProfileId) {
+      conditions.push("runtime_profile_id = ?");
+      params.push(query.runtimeProfileId);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const rows = db
       .prepare(
         `
@@ -223,11 +247,12 @@ export class ProviderProbeRunRepository {
           finished_at,
           created_at
         FROM provider_probe_runs
+        ${whereClause}
         ORDER BY created_at DESC
         LIMIT ?
         `
       )
-      .all(limit) as ProviderProbeRunRow[];
+      .all(...params, query.limit) as ProviderProbeRunRow[];
 
     return rows.map((row) => toPublicView(toRunRecord(row)));
   }

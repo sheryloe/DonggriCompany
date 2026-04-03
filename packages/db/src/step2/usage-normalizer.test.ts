@@ -76,6 +76,35 @@ test("UsageNormalizer falls back to last known snapshot when raw usage is unavai
   assert.ok(Math.abs(result.confidenceScore - 0.35) < 1e-9);
 });
 
+test("UsageNormalizer ignores stale fallback snapshot older than 24h", () => {
+  const normalizer = new UsageNormalizer();
+  const result = normalizer.normalize({
+    provider: "claude",
+    precision: "derived",
+    status: "failure",
+    usageValue: null,
+    limitValue: null,
+    unit: null,
+    observedAt: "2026-04-03T01:00:00.000Z",
+    fallbackSnapshot: {
+      accountPoolId: "pool_claude_pro_main",
+      precision: "manual",
+      rawUsageValue: 7,
+      rawLimitValue: 10,
+      rawUnit: "requests",
+      normalizedPercent: 70,
+      fatigueState: "hot",
+      confidenceScore: 0.55,
+      observedAt: "2026-04-01T00:00:00.000Z"
+    }
+  });
+
+  assert.equal(result.fallbackUsed, false);
+  assert.equal(result.usage.normalizedPercent, 0);
+  assert.equal(result.usage.status, "degraded");
+  assert.equal(result.fatigueState, "unknown");
+});
+
 test("UsageNormalizer returns unknown fatigue without direct or fallback signal", () => {
   const normalizer = new UsageNormalizer();
   const result = normalizer.normalize({

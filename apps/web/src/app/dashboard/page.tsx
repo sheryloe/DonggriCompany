@@ -1,5 +1,5 @@
-import { DashboardShell } from "../../components/dashboard-shell";
+import OfficePage from "../../office/pages/OfficePage";
 
 export default function DashboardPage(): JSX.Element {
-  return <DashboardShell />;
+  return <OfficePage />;
 }

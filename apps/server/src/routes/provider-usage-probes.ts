@@ -1,5 +1,6 @@
 import { ProviderUsageProbeService } from "@workspace/db";
 import type {
+  ProviderUsageProbeHistoryQuery,
   ProviderUsageProbeHistoryResponse,
   ProviderUsageProbeRunRequest,
   ProviderUsageProbeRunResponse
@@ -21,7 +22,10 @@ const historyQuerySchema = z.object({
       }
       const parsed = Number(value);
       return Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), 200) : 50;
-    })
+    }),
+  provider: z.enum(["claude", "codex", "gemini"]).optional(),
+  accountPoolId: z.string().min(1).optional(),
+  runtimeProfileId: z.string().min(1).optional()
 });
 
 const probeRequestSchema = z.object({
@@ -53,9 +57,16 @@ export const registerProviderUsageProbeRoutes = (server: FastifyInstance): void 
       throw badRequest("Invalid provider probe history query");
     }
 
+    const historyQuery: ProviderUsageProbeHistoryQuery = {
+      limit: parsed.data.limit,
+      provider: parsed.data.provider,
+      accountPoolId: parsed.data.accountPoolId,
+      runtimeProfileId: parsed.data.runtimeProfileId
+    };
+
     return {
       ok: true,
-      runs: providerUsageProbeService.listHistory(parsed.data.limit)
+      runs: providerUsageProbeService.listHistory(historyQuery)
     };
   });
 };

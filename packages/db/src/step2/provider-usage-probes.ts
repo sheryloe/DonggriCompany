@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import type {
   FatiguePrecision,
   ProviderProbeRunView,
+  ProviderUsageProbeHistoryQuery,
   ProviderUsageProbeRunRequest,
   ProviderUsageProbeRunResponse,
   ProviderUsageProbeProvider
@@ -26,7 +27,7 @@ type ProbeCommand = {
   precision: FatiguePrecision;
 };
 
-type AdapterResult = {
+export type ProviderProbeAdapterResult = {
   provider: ProviderUsageProbeProvider;
   status: "success" | "failure" | "partial";
   commandText: string;
@@ -40,6 +41,19 @@ type AdapterResult = {
   startedAt: string;
   finishedAt: string;
   degraded: boolean;
+};
+
+export type ProbeSpawnCommand = (
+  binary: string,
+  args: string[]
+) => {
+  status: number | null;
+  stdoutText: string;
+  stderrText: string;
+};
+
+export type ProviderUsageProbeServiceOptions = {
+  probeSpawnCommand?: ProbeSpawnCommand;
 };
 
 const usageProbeRequestSchema = z.object({
@@ -146,22 +160,44 @@ const parseUsagePayload = (
   }
 };
 
-const executeProbe = (provider: ProviderUsageProbeProvider, commands: ProbeCommand[]): AdapterResult => {
+const hasSufficientParsedUsage = (parsed: {
+  usageValue: number | null;
+  limitValue: number | null;
+}): boolean => {
+  return parsed.usageValue !== null && parsed.limitValue !== null && parsed.limitValue > 0;
+};
+
+const defaultProbeSpawnCommand: ProbeSpawnCommand = (binary, args) => {
+  const result = spawnSync(binary, args, {
+    encoding: "utf8",
+    timeout: 5000
+  });
+
+  return {
+    status: result.status,
+    stdoutText: result.stdout ?? "",
+    stderrText: result.stderr ?? ""
+  };
+};
+
+const executeProbe = (
+  provider: ProviderUsageProbeProvider,
+  commands: ProbeCommand[],
+  probeSpawnCommand: ProbeSpawnCommand
+): ProviderProbeAdapterResult => {
   const startedAt = new Date().toISOString();
+  const partialCandidates: ProviderProbeAdapterResult[] = [];
 
   for (const command of commands) {
-    const result = spawnSync(command.binary, command.args, {
-      encoding: "utf8",
-      timeout: 5000
-    });
+    const result = probeSpawnCommand(command.binary, command.args);
 
-    const stdoutText = result.stdout ?? "";
-    const stderrText = result.stderr ?? "";
+    const stdoutText = result.stdoutText;
+    const stderrText = result.stderrText;
     const finishedAt = new Date().toISOString();
     const commandText = `${command.binary} ${command.args.join(" ")}`.trim();
     const parsed = parseUsagePayload(stdoutText);
 
-    if (result.status === 0 && parsed.usageValue !== null && parsed.limitValue !== null) {
+    if (result.status === 0 && hasSufficientParsedUsage(parsed)) {
       return {
         provider,
         status: "success",
@@ -180,7 +216,7 @@ const executeProbe = (provider: ProviderUsageProbeProvider, commands: ProbeComma
     }
 
     if (result.status === 0) {
-      return {
+      partialCandidates.push({
         provider,
         status: "partial",
         commandText,
@@ -190,12 +226,16 @@ const executeProbe = (provider: ProviderUsageProbeProvider, commands: ProbeComma
         usageValue: parsed.usageValue,
         limitValue: parsed.limitValue,
         unit: parsed.unit,
-        precision: "derived",
+        precision: command.precision,
         startedAt,
         finishedAt,
         degraded: true
-      };
+      });
     }
+  }
+
+  if (partialCandidates.length > 0) {
+    return partialCandidates[partialCandidates.length - 1] as ProviderProbeAdapterResult;
   }
 
   const finishedAt = new Date().toISOString();
@@ -218,26 +258,36 @@ const executeProbe = (provider: ProviderUsageProbeProvider, commands: ProbeComma
   };
 };
 
-const runProviderAdapter = (provider: ProviderUsageProbeProvider): AdapterResult => {
+const runProviderAdapter = (
+  provider: ProviderUsageProbeProvider,
+  probeSpawnCommand: ProbeSpawnCommand = defaultProbeSpawnCommand
+): ProviderProbeAdapterResult => {
   if (provider === "claude") {
     return executeProbe(provider, [
       { binary: "claude", args: ["usage", "--json"], precision: "official" },
       { binary: "claude", args: ["usage"], precision: "derived" },
       { binary: "claude", args: ["--version"], precision: "manual" }
-    ]);
+    ], probeSpawnCommand);
   }
   if (provider === "codex") {
     return executeProbe(provider, [
       { binary: "codex", args: ["usage", "--json"], precision: "official" },
       { binary: "codex", args: ["usage"], precision: "derived" },
       { binary: "codex", args: ["--version"], precision: "manual" }
-    ]);
+    ], probeSpawnCommand);
   }
   return executeProbe(provider, [
     { binary: "gemini", args: ["usage", "--json"], precision: "official" },
     { binary: "gemini", args: ["usage"], precision: "derived" },
     { binary: "gemini", args: ["--version"], precision: "manual" }
-  ]);
+  ], probeSpawnCommand);
+};
+
+export const runProviderAdapterWithSpawn = (
+  provider: ProviderUsageProbeProvider,
+  probeSpawnCommand: ProbeSpawnCommand
+): ProviderProbeAdapterResult => {
+  return runProviderAdapter(provider, probeSpawnCommand);
 };
 
 export class ProviderUsageProbeService {
@@ -247,18 +297,38 @@ export class ProviderUsageProbeService {
   private readonly fatigueEngine: FatigueEngine;
   private readonly fatigueSnapshotRepository: FatigueSnapshotRepository;
   private readonly usageNormalizer: UsageNormalizer;
+  private readonly probeSpawnCommand: ProbeSpawnCommand;
 
-  constructor(private readonly dbPath = getDbPath()) {
+  constructor(
+    private readonly dbPath = getDbPath(),
+    options: ProviderUsageProbeServiceOptions = {}
+  ) {
     this.accountPoolRepository = new AccountPoolRepository();
     this.runtimeProfileRepository = new RuntimeProfileRepository();
     this.probeRunRepository = new ProviderProbeRunRepository();
     this.fatigueSnapshotRepository = new FatigueSnapshotRepository();
     this.usageNormalizer = new UsageNormalizer();
     this.fatigueEngine = new FatigueEngine(this.fatigueSnapshotRepository, this.usageNormalizer);
+    this.probeSpawnCommand = options.probeSpawnCommand ?? defaultProbeSpawnCommand;
   }
 
-  listHistory(limit = 50): ProviderProbeRunView[] {
-    return withDatabase((db) => this.probeRunRepository.listPublic(db, limit), this.dbPath);
+  listHistory(query: ProviderUsageProbeHistoryQuery = {}): ProviderProbeRunView[] {
+    const limitCandidate = query.limit;
+    const limit =
+      typeof limitCandidate === "number" && Number.isFinite(limitCandidate) && limitCandidate > 0
+        ? Math.min(Math.floor(limitCandidate), 200)
+        : 50;
+
+    return withDatabase(
+      (db) =>
+        this.probeRunRepository.listPublic(db, {
+          limit,
+          provider: query.provider,
+          accountPoolId: query.accountPoolId,
+          runtimeProfileId: query.runtimeProfileId
+        }),
+      this.dbPath
+    );
   }
 
   run(input: ProviderUsageProbeRunRequest): ProviderUsageProbeRunResponse {
@@ -269,24 +339,43 @@ export class ProviderUsageProbeService {
 
     return withDatabase((db) => {
       let accountPoolId = parsed.data.accountPoolId ?? null;
+      const runtimeProfile = parsed.data.runtimeProfileId
+        ? this.runtimeProfileRepository.getById(db, parsed.data.runtimeProfileId)
+        : null;
+
       if (parsed.data.runtimeProfileId) {
-        const runtimeProfile = this.runtimeProfileRepository.getById(db, parsed.data.runtimeProfileId);
         if (!runtimeProfile) {
           throw dbNotFound(`Runtime profile not found: ${parsed.data.runtimeProfileId}`);
+        }
+        if (runtimeProfile.provider !== parsed.data.provider) {
+          throw dbBadRequest(
+            `Runtime profile provider mismatch: expected ${parsed.data.provider}, got ${runtimeProfile.provider}`
+          );
         }
         if (!accountPoolId) {
           accountPoolId = runtimeProfile.accountPoolId;
         }
       }
 
+      const accountPool = accountPoolId ? this.accountPoolRepository.getById(db, accountPoolId) : null;
       if (accountPoolId) {
-        const accountPool = this.accountPoolRepository.getById(db, accountPoolId);
         if (!accountPool) {
           throw dbNotFound(`Account pool not found: ${accountPoolId}`);
         }
+        if (accountPool.provider !== parsed.data.provider) {
+          throw dbBadRequest(
+            `Account pool provider mismatch: expected ${parsed.data.provider}, got ${accountPool.provider}`
+          );
+        }
       }
 
-      const adapterResult = runProviderAdapter(parsed.data.provider);
+      if (runtimeProfile && accountPoolId && runtimeProfile.accountPoolId !== accountPoolId) {
+        throw dbBadRequest(
+          `Runtime profile ${runtimeProfile.id} does not belong to account pool ${accountPoolId}`
+        );
+      }
+
+      const adapterResult = runProviderAdapter(parsed.data.provider, this.probeSpawnCommand);
       const runRecord = this.probeRunRepository.create(db, {
         id: randomUUID(),
         provider: adapterResult.provider,

@@ -1,39 +1,245 @@
 # DonggriCompany
 
-Step-2 ~ Step-4 범위(계정풀/런타임프로필/프로바이더 프로브 + Office 브리지 UI + 안정화/검증/운영문서)가 반영된 모노레포입니다.
+로컬 웹 기반 대시보드에서 여러 AI 제공자 계정을 "게임 캐릭터의 체력"처럼 운영하고, 공용 역할 기반 서브에이전트를 오케스트레이션하기 위한 개인용 AI 오피스 프로젝트입니다.
 
-## 1) 현재 구현 상태 요약
+현재 저장소는 Step-2 ~ Step-4 구현이 완료된 상태이며, 핵심은 다음입니다.
 
-- Step-2: backend contract 구현/보강 완료
+- 계정풀/런타임프로필/프로브 API의 계약 정합화 및 하드닝
+- `/dashboard` 기반 Office Bridge 운영 콘솔
+- 로딩/에러/재시도/삭제 확인 등 안정화 UX와 테스트/운영 문서
+
+## 1) 프로젝트 비전
+
+이 프로젝트는 Outworked 계열 감성의 "오피스/전술 보드"를 목표로 합니다.
+
+- 실제 계정 사용량(Usage)을 Fatigue(피로도)로 치환
+- Boss(사람 PM)가 최종 의사결정
+- Orchestra가 역할 기반 에이전트를 배분
+- Account Pool을 자원 탱크처럼 운영
+- Shared Role을 기반으로 Agent Instance를 소환/지휘
+
+## 2) 현재 구현 범위 vs 목표 범위
+
+### 현재 구현됨 (Step-2 ~ Step-4)
+
+- 백엔드
   - account pool CRUD + fatigue history
   - runtime profile CRUD
-  - provider usage probe run/history
-  - probe 무결성 검증 / fallback 동작 보강
-- Step-3: Step-2 API 브리지 UI 구현 완료
-  - `/dashboard`에서 Office 운영 콘솔 형태 UI 제공
-  - account pool / runtime profile / probe run / probe history 연동
-  - probe 상태 분류(`success | partial | stale | no-signal | error`) 적용
-- Step-4: 안정화/검증/문서화 완료
-  - loading/empty/error/retry UX 보강
-  - destructive action(삭제) 확인 단계 적용
-  - web Vitest + RTL 테스트 추가
-  - release-readiness 문서 추가
+  - provider probe run/history
+  - probe 요청 무결성 검증 및 fallback 강화
+- UI (`/dashboard`)
+  - 운영 콘솔형 화면 (폼/테이블 중심)
+  - account pool / runtime profile / probe 실행/이력
+  - probe 상태 분류: `success | partial | stale | no-signal | error`
+- 안정화
+  - loading/empty/error/retry UX
+  - destructive action(삭제) 확인 단계
+  - 테스트 강화 + release docs
+
+### 아직 목표로 남아있는 항목 (향후 Step)
+
+- 카툰형/캐릭터형 Office 보드(Boss Room, Squad View, Approval Gate 시각화)
+- 직원/워크스페이스 배치형 인터랙티브 UI
+- richer avatar/skin 시스템
+
+## 3) 시작하기 (Docker 권장)
+
+Windows/WSL 환경에서는 `better-sqlite3` 네이티브 빌드 이슈를 피하려면 Docker 방식이 가장 안전합니다.
+
+사전 조건:
+
+- Docker Desktop 또는 Rancher Desktop이 실행 중
+- Docker daemon 접근 가능한 상태
+
+실행:
+
+```bash
+docker-compose -f docker-compose.demo.yml up --build
+```
+
+접속:
+
+- 대시보드 UI: `http://localhost:3000/dashboard`
+- 백엔드 API: `http://localhost:4315/api/health`
+
+중지:
+
+```bash
+docker-compose -f docker-compose.demo.yml down
+```
 
 참고:
-- 현재 `/dashboard`는 “운영 콘솔형(텍스트/테이블 중심)” UI입니다.
-- 카툰형 직원 보드/시각화는 이 브랜치의 완료 범위가 아닙니다.
 
-## 2) 리포지토리 구조
+- 데모 파일은 `Dockerfile.demo`, `docker-compose.demo.yml`, `scripts/demo-start.sh`를 사용합니다.
+- 일부 WSL/Rancher Desktop 조합에서는 Docker 소켓 권한 문제로 실행이 막힐 수 있습니다.
+
+## 4) 로컬 직접 실행
+
+### 사전 요구사항
+
+- Node.js 20+ (Node 22 동작 확인)
+- Corepack 사용 가능
+- pnpm workspace
+
+### 설치
+
+```bash
+corepack pnpm install
+```
+
+### better-sqlite3 점검/복구
+
+점검:
+
+```bash
+corepack pnpm --filter @workspace/db exec node -e "require('better-sqlite3'); console.log('better-sqlite3:ok')"
+```
+
+복구:
+
+```bash
+corepack pnpm --filter @workspace/db rebuild better-sqlite3
+```
+
+필요 시 강제 재설치:
+
+```bash
+corepack pnpm install --force
+corepack pnpm --filter @workspace/db rebuild better-sqlite3
+```
+
+### DB 초기화
+
+기본 DB 경로: `.local/workspace.sqlite`
+
+```bash
+corepack pnpm --filter @workspace/db run db:migrate
+corepack pnpm --filter @workspace/db run db:seed
+```
+
+WSL에서 `tsx` IPC 이슈(`ENOTSUP`)가 있으면 우회:
+
+```bash
+cd packages/db
+node --import tsx src/cli/migrate.ts
+node --import tsx src/cli/seed.ts
+```
+
+### 실행
+
+터미널 1: API 서버(`4315`)
+
+```bash
+corepack pnpm --filter @workspace/server run dev
+```
+
+서버 `tsx watch` 실패 시 우회:
+
+```bash
+cd apps/server
+node --import tsx src/index.ts
+```
+
+터미널 2: 웹 (`3000`)
+
+```bash
+corepack pnpm --filter @workspace/web run dev
+```
+
+대시보드:
+
+- `http://localhost:3000/dashboard`
+
+웹을 4000 포트로 실행:
+
+```bash
+corepack pnpm --filter @workspace/web exec next dev -p 4000
+```
+
+- `http://localhost:4000/dashboard`
+
+### 헬스 체크
+
+```bash
+curl http://127.0.0.1:4315/api/health
+curl http://127.0.0.1:3000/api/health
+curl http://127.0.0.1:3000/dashboard
+```
+
+## 5) 핵심 개념
+
+- Boss (사람 PM): 최종 승인/우선순위 관리
+- Orchestra (지휘 계층): 작업 계획/분배/상태 추적
+- Account Pool: 실제 과금/쿼터가 걸린 물리 계정 자원
+- Shared Role: Reviewer, Builder, Scout 등 공용 역할
+- Agent Instance: 역할 + 자원으로 생성된 실행 단위
+- Fatigue: 계정 사용 한도 기반 자원 피로도
+- Heat: 세션 컨텍스트/부하 기반 임시 과열도
+
+## 6) 주요 사용자 플로우 (현재 UI)
+
+`/dashboard`에서 가능한 핵심 플로우:
+
+1. Provider / Account Pool 선택
+2. Runtime Profile 생성/수정/삭제 (삭제 확인 포함)
+3. Provider Probe 실행
+4. Latest Probe 상태 확인
+5. Probe History 필터/limit 조정
+6. 상태 뱃지 확인 (`success/partial/stale/no-signal/error`)
+
+## 7) API 엔드포인트
+
+### Bootstrap
+
+- `GET /api/bootstrap/state`
+- `GET /api/office/bootstrap` (alias)
+- `POST /api/bootstrap/init`
+
+### Providers
+
+- `GET /api/providers`
+- `POST /api/providers/probe`
+
+### Account Pools
+
+- `GET /api/account-pools`
+- `POST /api/account-pools`
+- `PATCH /api/account-pools/:id`
+- `GET /api/account-pools/:id/fatigue`
+
+### Runtime Profiles
+
+- `GET /api/runtime-profiles`
+- `POST /api/runtime-profiles`
+- `PATCH /api/runtime-profiles/:id`
+- `DELETE /api/runtime-profiles/:id`
+
+### Provider Probes
+
+- `POST /api/provider-probes/run`
+- `GET /api/provider-probes/history?provider=&accountPoolId=&runtimeProfileId=&limit=`
+
+## 8) 검증 명령
+
+```bash
+corepack pnpm -r --if-present run typecheck
+corepack pnpm -r --if-present run lint
+TMPDIR=/tmp corepack pnpm -r --if-present run test
+```
+
+## 9) 모노레포 구조
+
+### 현재 저장소 실제 구조
 
 ```text
 apps/
-  server/   Fastify API 서버
-  web/      Next.js UI
+  server/        Fastify API
+  web/           Next.js 대시보드
 
 packages/
-  db/       sqlite 기반 도메인/리포지토리/마이그레이션
-  shared/   공통 타입 계약
-  rolepack/ rolepack 로딩 유틸
+  db/            SQLite + 마이그레이션 + 도메인 서비스
+  shared/        공통 타입 계약
+  rolepack/      rolepack 유틸
 
 docs/
   step4_status.md
@@ -44,185 +250,56 @@ docs/
   known_risks.md
 ```
 
-## 3) 사전 요구사항
+### 목표 아키텍처(로드맵)
 
-- Node.js 20+ (현재 환경은 Node 22도 동작)
-- Corepack 사용 가능 환경
-- pnpm (Corepack 통해 사용)
+```text
+apps/
+  web/                전술 보드 / 오피스 뷰
+  orchestrator/       지휘/스케줄링 데몬
 
-## 4) 설치
-
-```bash
-corepack pnpm install
+packages/
+  core/
+  db/
+  avatar-system/
+  provider-core/
+  provider-claude/
+  provider-codex/
+  provider-gemini/
+  provider-jules/
+  role-compiler/
 ```
 
-### better-sqlite3 빠른 점검
+## 10) UI/UX 철학
 
-```bash
-corepack pnpm --filter @workspace/db exec node -e "require('better-sqlite3'); console.log('better-sqlite3:ok')"
-```
+목표 철학:
 
-실패 시 복구:
+- 채팅 로그 중심 UI가 아니라 운영판 중심 UI
+- Boss Room / Account Barracks / Squad View / Approval Gate 제공
+- 상태를 텍스트가 아니라 시각 단위(카드/바/보드)로 관리
 
-```bash
-corepack pnpm --filter @workspace/db rebuild better-sqlite3
-# 필요 시
-corepack pnpm install --force
-corepack pnpm --filter @workspace/db rebuild better-sqlite3
-```
+현재 상태:
 
-## 5) DB 준비
+- 기능 검증 중심 운영 콘솔 UI까지 구현 완료
+- 카툰형 시각 보드/아바타 오피스는 후속 구현 단계
 
-기본 DB 경로: `.local/workspace.sqlite`
+## 11) 운영 문서
 
-```bash
-corepack pnpm --filter @workspace/db run db:migrate
-corepack pnpm --filter @workspace/db run db:seed
-```
+- `docs/step4_status.md`
+- `docs/step4_signoff.md`
+- `docs/local_validation.md`
+- `docs/runbook_probe_failures.md`
+- `docs/release_checklist.md`
+- `docs/known_risks.md`
 
-일부 WSL/IPC 제한 환경에서 `tsx` watch/cli가 ENOTSUP로 실패하면 아래 우회 실행:
+## 12) 알려진 리스크
 
-```bash
-cd packages/db
-node --import tsx src/cli/migrate.ts
-node --import tsx src/cli/seed.ts
-```
+- `better-sqlite3` 네이티브 바인딩 드리프트 (로컬 환경)
+- provider CLI 출력 포맷 변화 시 probe 정확도 저하 가능 (`partial`/`no-signal`)
 
-## 6) 실행 (로컬)
+## 13) FAQ
 
-### 기본 포트
+Q. `/dashboard`가 왜 텍스트/설정 위주인가요?  
+A. 현재 브랜치는 Step-2~4 안정화 범위가 완료된 상태이며, 카툰형 Office 보드는 다음 구현 범위입니다.
 
-- API 서버: `4315`
-- 웹: `3000` (Next rewrite로 `/api/* -> 4315`)
-
-### 터미널 1: 서버
-
-```bash
-corepack pnpm --filter @workspace/server run dev
-```
-
-WSL IPC 제한 우회:
-
-```bash
-cd apps/server
-node --import tsx src/index.ts
-```
-
-### 터미널 2: 웹
-
-```bash
-corepack pnpm --filter @workspace/web run dev
-```
-
-접속:
-- `http://localhost:3000/dashboard`
-
-### 웹 포트를 4000으로 실행하고 싶을 때
-
-```bash
-corepack pnpm --filter @workspace/web exec next dev -p 4000
-```
-
-접속:
-- `http://localhost:4000/dashboard`
-
-## 7) 헬스/연결 확인
-
-```bash
-curl http://127.0.0.1:4315/api/health
-curl http://127.0.0.1:3000/api/health
-curl http://127.0.0.1:3000/dashboard
-```
-
-`/dashboard`가 처음에는 `Loading Step-3 bridge data...`를 잠깐 보일 수 있습니다(초기 fetch 중).
-
-## 8) 주요 API 엔드포인트
-
-### Bootstrap
-- `GET /api/bootstrap/state`
-- `GET /api/office/bootstrap` (alias)
-- `POST /api/bootstrap/init`
-
-### Providers
-- `GET /api/providers`
-- `POST /api/providers/probe`
-
-### Account Pools
-- `GET /api/account-pools`
-- `POST /api/account-pools`
-- `PATCH /api/account-pools/:id`
-- `GET /api/account-pools/:id/fatigue`
-
-### Runtime Profiles
-- `GET /api/runtime-profiles`
-- `POST /api/runtime-profiles`
-- `PATCH /api/runtime-profiles/:id`
-- `DELETE /api/runtime-profiles/:id`
-
-### Provider Probes
-- `POST /api/provider-probes/run`
-- `GET /api/provider-probes/history?provider=&accountPoolId=&runtimeProfileId=&limit=`
-
-## 9) 검증 명령 (권장 표준)
-
-```bash
-corepack pnpm -r --if-present run typecheck
-corepack pnpm -r --if-present run lint
-TMPDIR=/tmp corepack pnpm -r --if-present run test
-```
-
-## 10) 테스트 구성
-
-- `@workspace/db`
-  - Step-2 핵심 서비스/정규화/프로브/fallback/무결성 검증 테스트
-- `@workspace/server`
-  - bootstrap alias 경로 동작 테스트
-- `@workspace/web`
-  - Vitest + jsdom + Testing Library
-  - probe 상태 분류/패널 상태/삭제 확인 플로우 테스트
-
-## 11) Step-4 운영 문서
-
-- 상태 요약: `docs/step4_status.md`
-- 최종 사인오프: `docs/step4_signoff.md`
-- 로컬 검증 가이드: `docs/local_validation.md`
-- Probe 장애 런북: `docs/runbook_probe_failures.md`
-- 릴리스 체크리스트: `docs/release_checklist.md`
-- 잔여 리스크: `docs/known_risks.md`
-
-## 12) Docker 데모(현재 추가됨)
-
-데모용 파일:
-- `Dockerfile.demo`
-- `docker-compose.demo.yml`
-- `scripts/demo-start.sh`
-
-실행:
-
-```bash
-docker-compose -f docker-compose.demo.yml up --build
-```
-
-노출 포트:
-- `3000` (web)
-- `4315` (api)
-
-주의:
-- 일부 환경(특히 WSL + Rancher/Desktop)에서 Docker 소켓 권한 문제로 기동 실패할 수 있습니다.
-- 실패 시 먼저 Docker daemon 접근 가능 여부를 확인하세요.
-
-## 13) 알려진 운영 리스크
-
-- 로컬 환경 오염 시 `better-sqlite3` native binding drift
-- provider CLI 출력 포맷 변화 시 probe 결과가 `partial`/`no-signal`로 저하될 수 있음
-
-## 14) 빠른 데모 체크리스트
-
-1. 설치: `corepack pnpm install`
-2. DB: migrate + seed
-3. 서버(4315) 실행
-4. 웹(3000 또는 4000) 실행
-5. `/dashboard` 접속
-6. Runtime Profile create/update/delete
-7. Provider Probe run + history/filter 확인
-8. typecheck/lint/test 통과 확인
+Q. Windows에서 실행이 자주 깨집니다.  
+A. Docker 방식이 기본 권장입니다. 로컬 직접 실행 시 `better-sqlite3` 재빌드를 먼저 확인하세요.

@@ -6,8 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"  # Next.js Web Dashboard
-      - "3001:3001"  # Fastify Orchestrator
+      - "3000:3000"
+      - "3001:3001"
     volumes:
       - sqlite_data:/app/packages/db
     environment:

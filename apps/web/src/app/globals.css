@@ -319,6 +319,11 @@ button.secondary {
   gap: 16px;
 }
 
+.office-avatar-page {
+  background: linear-gradient(180deg, #fff8e8 0%, #f5f0df 45%, #ece7d8 100%);
+  border-color: #b89d67;
+}
+
 .office-top-ops {
   display: grid;
   gap: 10px;
@@ -375,6 +380,230 @@ button.secondary {
   background: #fff1f2;
 }
 
+.avatar-shell {
+  border: 1px solid #8b6a3f;
+  background: linear-gradient(135deg, #fffef9 0%, #fbf0d7 100%);
+}
+
+.avatar-shell-grid {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.agent-status {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 10px;
+}
+
+.agent-avatar {
+  position: relative;
+  width: 100%;
+  min-height: 180px;
+  border: 2px solid #1f2937;
+  border-radius: 14px;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(17, 24, 39, 0.07),
+    rgba(17, 24, 39, 0.07) 10px,
+    rgba(17, 24, 39, 0.02) 10px,
+    rgba(17, 24, 39, 0.02) 20px
+  );
+}
+
+.agent-avatar-face {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 84px;
+  height: 84px;
+  border-radius: 999px;
+  border: 3px solid #1f2937;
+  background: #ffffff;
+}
+
+.agent-avatar-face::before,
+.agent-avatar-face::after {
+  content: "";
+  position: absolute;
+  top: 28px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #111827;
+}
+
+.agent-avatar-face::before {
+  left: 20px;
+}
+
+.agent-avatar-face::after {
+  right: 20px;
+}
+
+.board-signal {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.board-signal-stable {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.board-signal-mixed {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.board-signal-dim {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.board-signal-muted {
+  background: #fde68a;
+  color: #854d0e;
+}
+
+.board-signal-warning {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.mood-calm .agent-avatar {
+  border-color: #166534;
+}
+
+.mood-cautious .agent-avatar {
+  border-color: #92400e;
+}
+
+.mood-sleepy .agent-avatar {
+  border-color: #475569;
+}
+
+.mood-disconnected .agent-avatar {
+  border-color: #854d0e;
+}
+
+.mood-alert .agent-avatar {
+  border-color: #991b1b;
+}
+
+.agent-speech {
+  border: 2px solid #1f2937;
+  border-radius: 14px;
+  padding: 14px;
+  background: #ffffff;
+  display: grid;
+  gap: 8px;
+  position: relative;
+}
+
+.agent-speech::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 32px;
+  width: 18px;
+  height: 18px;
+  background: #ffffff;
+  border-left: 2px solid #1f2937;
+  border-bottom: 2px solid #1f2937;
+  transform: rotate(45deg);
+}
+
+.agent-tone-normal {
+  box-shadow: inset 0 0 0 2px rgba(22, 101, 52, 0.1);
+}
+
+.agent-tone-caution {
+  box-shadow: inset 0 0 0 2px rgba(146, 64, 14, 0.14);
+}
+
+.agent-tone-nudge {
+  box-shadow: inset 0 0 0 2px rgba(71, 85, 105, 0.14);
+}
+
+.agent-tone-critical {
+  box-shadow: inset 0 0 0 2px rgba(153, 27, 27, 0.2);
+}
+
+.avatar-shell-fallback {
+  border-color: #b91c1c;
+  background: #fff7f7;
+}
+
+.office-board-scene {
+  display: grid;
+  gap: 12px;
+}
+
+.office-board-chrome {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.office-lamp,
+.office-memo {
+  display: inline-flex;
+  padding: 4px 10px;
+  border: 1px solid #8b6a3f;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #7c4a03;
+  background: #fff4db;
+  text-transform: uppercase;
+}
+
+.office-board-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.board-zone {
+  border: 1px solid #b89d67;
+  border-radius: 12px;
+  background: rgba(255, 252, 245, 0.92);
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.board-zone-header {
+  display: grid;
+  gap: 4px;
+}
+
+.board-zone-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #7c4a03;
+}
+
+.board-zone-header p {
+  margin: 0;
+  font-size: 12px;
+  color: #92400e;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .agent-avatar,
+  .agent-speech {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+}
+
 @media (max-width: 960px) {
   .stepper {
     grid-template-columns: 1fr 1fr;
@@ -393,6 +622,14 @@ button.secondary {
   }
 
   .office-ops-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .avatar-shell-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .office-board-grid {
     grid-template-columns: 1fr;
   }
 }

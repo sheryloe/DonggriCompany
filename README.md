@@ -2,11 +2,12 @@
 
 로컬 웹 기반 대시보드에서 여러 AI 제공자 계정을 "게임 캐릭터의 체력"처럼 운영하고, 공용 역할 기반 서브에이전트를 오케스트레이션하기 위한 개인용 AI 오피스 프로젝트입니다.
 
-현재 저장소는 Step-2 ~ Step-4 구현이 완료된 상태이며, 핵심은 다음입니다.
+현재 저장소는 Step-2 ~ Step-5 구현이 완료된 상태이며, 핵심은 다음입니다.
 
 - 계정풀/런타임프로필/프로브 API의 계약 정합화 및 하드닝
-- `/dashboard` 기반 Office Bridge 운영 콘솔
-- 로딩/에러/재시도/삭제 확인 등 안정화 UX와 테스트/운영 문서
+- `/dashboard` 아바타 중심 Office Board
+- 로딩/에러/재시도/삭제 확인 등 안정화 UX + 아바타 가이드 레이어
+- Step-5 상태 매핑/레이아웃/카피/sign-off 문서
 
 ## 1) 프로젝트 비전
 
@@ -20,7 +21,7 @@
 
 ## 2) 현재 구현 범위 vs 목표 범위
 
-### 현재 구현됨 (Step-2 ~ Step-4)
+### 현재 구현됨 (Step-2 ~ Step-5)
 
 - 백엔드
   - account pool CRUD + fatigue history
@@ -28,9 +29,10 @@
   - provider probe run/history
   - probe 요청 무결성 검증 및 fallback 강화
 - UI (`/dashboard`)
-  - 운영 콘솔형 화면 (폼/테이블 중심)
+  - 아바타 중심 오피스 보드 (Avatar Agent Shell + Board Zones)
   - account pool / runtime profile / probe 실행/이력
   - probe 상태 분류: `success | partial | stale | no-signal | error`
+  - 아바타 가이드 카피 + destructive action 안내 + fallback 패널
 - 안정화
   - loading/empty/error/retry UX
   - destructive action(삭제) 확인 단계
@@ -38,8 +40,8 @@
 
 ### 아직 목표로 남아있는 항목 (향후 Step)
 
-- 카툰형/캐릭터형 Office 보드(Boss Room, Squad View, Approval Gate 시각화)
-- 직원/워크스페이스 배치형 인터랙티브 UI
+- 멀티 아바타/역할별 상호작용 확장
+- 직원/워크스페이스 배치형 심화 인터랙티브 UI
 - richer avatar/skin 시스템
 
 ## 3) 시작하기 (Docker 권장)
@@ -185,7 +187,8 @@ curl http://127.0.0.1:3000/dashboard
 3. Provider Probe 실행
 4. Latest Probe 상태 확인
 5. Probe History 필터/limit 조정
-6. 상태 뱃지 확인 (`success/partial/stale/no-signal/error`)
+6. 상태 뱃지 + 아바타 반응 확인 (`success/partial/stale/no-signal/error`)
+7. history filter/empty/retry 안내를 아바타 카피로 확인
 
 ## 7) API 엔드포인트
 
@@ -244,6 +247,11 @@ packages/
 docs/
   step4_status.md
   step4_signoff.md
+  step5_avatar_agent_status.md
+  step5_signoff.md
+  avatar_state_mapping.md
+  avatar_copy_guide.md
+  office_board_layout.md
   local_validation.md
   runbook_probe_failures.md
   release_checklist.md
@@ -279,13 +287,18 @@ packages/
 
 현재 상태:
 
-- 기능 검증 중심 운영 콘솔 UI까지 구현 완료
-- 카툰형 시각 보드/아바타 오피스는 후속 구현 단계
+- Step-5 아바타 오피스 보드 적용 완료
+- 상태/카피/보드 구획이 `classifyProbeUiState` 기반으로 연결됨
 
 ## 11) 운영 문서
 
 - `docs/step4_status.md`
 - `docs/step4_signoff.md`
+- `docs/step5_avatar_agent_status.md`
+- `docs/step5_signoff.md`
+- `docs/avatar_state_mapping.md`
+- `docs/avatar_copy_guide.md`
+- `docs/office_board_layout.md`
 - `docs/local_validation.md`
 - `docs/runbook_probe_failures.md`
 - `docs/release_checklist.md`
@@ -299,7 +312,7 @@ packages/
 ## 13) FAQ
 
 Q. `/dashboard`가 왜 텍스트/설정 위주인가요?  
-A. 현재 브랜치는 Step-2~4 안정화 범위가 완료된 상태이며, 카툰형 Office 보드는 다음 구현 범위입니다.
+A. 현재 브랜치는 Step-5 기준으로 아바타 오피스 보드가 기본이며, 기존 운영 패널은 fallback 안전장치로 유지됩니다.
 
 Q. Windows에서 실행이 자주 깨집니다.  
 A. Docker 방식이 기본 권장입니다. 로컬 직접 실행 시 `better-sqlite3` 재빌드를 먼저 확인하세요.

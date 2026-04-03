@@ -2,16 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { UpdateRuntimeProfileRequest } from "@workspace/shared";
+import type { ProviderUsageProbeHistoryQuery, UpdateRuntimeProfileRequest } from "@workspace/shared";
 
+import { AgentShell } from "../avatar/AgentShell";
+import type { AgentGuidanceEvent } from "../avatar/agent-types";
+import { AvatarLayerBoundary } from "../avatar/AvatarLayerBoundary";
+import { HistoryBoard } from "../board/HistoryBoard";
+import { OfficeBoardScene } from "../board/OfficeBoardScene";
 import { AccountPoolWidget } from "../components/AccountPoolWidget";
 import { ProbeRunPanel } from "../components/ProbeRunPanel";
 import { RuntimeProfileWidget } from "../components/RuntimeProfileWidget";
 import { TopOpsBar } from "../components/TopOpsBar";
-import { classifyProbeUiState, useProviderProbe } from "../hooks/useProviderProbe";
+import { useProviderProbe } from "../hooks/useProviderProbe";
 import { useRuntimeProfileCrud } from "../hooks/useRuntimeProfileCrud";
 import { useStep2OpsBootstrap } from "../hooks/useStep2OpsBootstrap";
-import { toProbeHistoryQuery } from "../stores/officeOpsStore";
+import { classifyProbeUiState } from "../lib/probe-ui-state";
 
 type RuntimeProfileDraft = {
   key: string;
@@ -27,15 +32,30 @@ const emptyDraft: RuntimeProfileDraft = {
   status: ""
 };
 
+const startsWith = (value: string | null, text: string): boolean => {
+  return value ? value.startsWith(text) : false;
+};
+
 export default function OfficePage(): JSX.Element {
   const bootstrap = useStep2OpsBootstrap();
   const [createDraft, setCreateDraft] = useState<RuntimeProfileDraft>(emptyDraft);
   const [updateDraft, setUpdateDraft] = useState<RuntimeProfileDraft>(emptyDraft);
+  const [agentEvent, setAgentEvent] = useState<AgentGuidanceEvent>({ type: "bootstrap-loading" });
 
-  const getHistoryQuery = useCallback(
-    () => toProbeHistoryQuery(bootstrap.officeOpsState),
-    [bootstrap.officeOpsState]
-  );
+  const getHistoryQuery = useCallback((): ProviderUsageProbeHistoryQuery => {
+    const state = bootstrap.officeOpsState;
+    const selectedRuntimeProfile = bootstrap.profiles.find((profile) => profile.id === state.selectedRuntimeProfileId);
+    const isProviderMatch = selectedRuntimeProfile?.provider === state.selectedProvider;
+    const isPoolMatch =
+      !state.selectedAccountPoolId ||
+      selectedRuntimeProfile?.accountPoolId === state.selectedAccountPoolId;
+
+    return {
+      provider: state.selectedProvider,
+      accountPoolId: state.selectedAccountPoolId || undefined,
+      runtimeProfileId: isProviderMatch && isPoolMatch ? selectedRuntimeProfile?.id : undefined
+    };
+  }, [bootstrap.officeOpsState, bootstrap.profiles]);
 
   const probe = useProviderProbe({
     getHistoryQuery
@@ -102,17 +122,99 @@ export default function OfficePage(): JSX.Element {
     bootstrap.officeOpsState.selectedRuntimeProfileId
   ]);
 
-  const selectedRuntimeProfile =
-    bootstrap.profiles.find((profile) => profile.id === bootstrap.officeOpsState.selectedRuntimeProfileId) ?? null;
+  useEffect(() => {
+    if (bootstrap.isLoading) {
+      setAgentEvent({ type: "bootstrap-loading" });
+      return;
+    }
+
+    if (bootstrap.errorMessage) {
+      setAgentEvent({ type: "bootstrap-error", message: bootstrap.errorMessage });
+      return;
+    }
+
+    setAgentEvent((previous) => {
+      if (previous.type !== "bootstrap-loading" && previous.type !== "bootstrap-error") {
+        return previous;
+      }
+
+      return {
+        type: "bootstrap-ready",
+        provider: bootstrap.officeOpsState.selectedProvider,
+        poolCount: bootstrap.pools.length,
+        profileCount: bootstrap.profiles.length
+      };
+    });
+  }, [
+    bootstrap.isLoading,
+    bootstrap.errorMessage,
+    bootstrap.officeOpsState.selectedProvider,
+    bootstrap.pools.length,
+    bootstrap.profiles.length
+  ]);
 
   const latestProbeState = classifyProbeUiState({
     run: probe.latestRun,
     errorMessage: probe.errorMessage
   });
 
+  useEffect(() => {
+    if (runtimeCrud.errorMessage) {
+      setAgentEvent({ type: "runtime-error", message: runtimeCrud.errorMessage });
+    }
+  }, [runtimeCrud.errorMessage]);
+
+  useEffect(() => {
+    if (probe.errorMessage) {
+      setAgentEvent({ type: "probe-error", message: probe.errorMessage });
+      return;
+    }
+
+    if (startsWith(probe.actionMessage, "Probe run completed.")) {
+      setAgentEvent({
+        type: "probe-run-finish",
+        state: latestProbeState,
+        provider: bootstrap.officeOpsState.selectedProvider
+      });
+      return;
+    }
+
+    if (startsWith(probe.actionMessage, "No probe history matched current filters.")) {
+      setAgentEvent({
+        type: "history-empty",
+        provider: bootstrap.officeOpsState.selectedProvider,
+        accountPoolId: bootstrap.officeOpsState.selectedAccountPoolId,
+        runtimeProfileId: bootstrap.officeOpsState.selectedRuntimeProfileId,
+        limit: probe.historyLimit
+      });
+      return;
+    }
+
+    if (startsWith(probe.actionMessage, "Loaded ")) {
+      setAgentEvent({
+        type: "history-loaded",
+        count: probe.historyRuns.length,
+        limit: probe.historyLimit
+      });
+    }
+  }, [
+    probe.errorMessage,
+    probe.actionMessage,
+    probe.historyRuns.length,
+    probe.historyLimit,
+    bootstrap.officeOpsState.selectedProvider,
+    bootstrap.officeOpsState.selectedAccountPoolId,
+    bootstrap.officeOpsState.selectedRuntimeProfileId,
+    latestProbeState
+  ]);
+
+  const selectedRuntimeProfile =
+    bootstrap.profiles.find((profile) => profile.id === bootstrap.officeOpsState.selectedRuntimeProfileId) ?? null;
+
   const onCreateRuntimeProfile = async (): Promise<void> => {
+    const key = createDraft.key.trim();
     const created = await runtimeCrud.createProfile({
-      key: createDraft.key.trim(),
+      key,
       provider: bootstrap.officeOpsState.selectedProvider,
       accountPoolId: createDraft.accountPoolId || bootstrap.officeOpsState.selectedAccountPoolId,
       profilePath: createDraft.profilePath.trim() ? createDraft.profilePath.trim() : null,
@@ -125,6 +227,7 @@ export default function OfficePage(): JSX.Element {
         key: "",
         profilePath: ""
       }));
+      setAgentEvent({ type: "runtime-create-success", key });
     }
   };
 
@@ -147,17 +250,36 @@ export default function OfficePage(): JSX.Element {
       payload.status = updateDraft.status.trim();
     }
 
-    await runtimeCrud.updateProfile(bootstrap.officeOpsState.selectedRuntimeProfileId, payload);
+    const updated = await runtimeCrud.updateProfile(bootstrap.officeOpsState.selectedRuntimeProfileId, payload);
+    if (updated) {
+      setAgentEvent({
+        type: "runtime-update-success",
+        key: selectedRuntimeProfile?.key ?? bootstrap.officeOpsState.selectedRuntimeProfileId
+      });
+    }
   };
 
   const onDeleteRuntimeProfile = async (): Promise<boolean> => {
     if (!bootstrap.officeOpsState.selectedRuntimeProfileId) {
       return false;
     }
-    return runtimeCrud.removeProfile(bootstrap.officeOpsState.selectedRuntimeProfileId);
+
+    const deleted = await runtimeCrud.removeProfile(bootstrap.officeOpsState.selectedRuntimeProfileId);
+    if (deleted) {
+      setAgentEvent({
+        type: "runtime-delete-success",
+        key: selectedRuntimeProfile?.key ?? bootstrap.officeOpsState.selectedRuntimeProfileId
+      });
+    }
+    return deleted;
   };
 
   const onRunProbe = async (): Promise<void> => {
+    setAgentEvent({
+      type: "probe-run-start",
+      provider: bootstrap.officeOpsState.selectedProvider
+    });
+
     const completed = await probe.runProbe({
       provider: bootstrap.officeOpsState.selectedProvider,
       accountPoolId: bootstrap.officeOpsState.selectedAccountPoolId || undefined,
@@ -174,12 +296,23 @@ export default function OfficePage(): JSX.Element {
     await probe.refreshHistory();
   };
 
+  const onChangeHistoryLimit = async (nextLimit: number): Promise<void> => {
+    setAgentEvent({
+      type: "history-filter-changed",
+      provider: bootstrap.officeOpsState.selectedProvider,
+      accountPoolId: bootstrap.officeOpsState.selectedAccountPoolId,
+      runtimeProfileId: bootstrap.officeOpsState.selectedRuntimeProfileId,
+      limit: nextLimit
+    });
+    await probe.changeHistoryLimit(nextLimit);
+  };
+
   if (bootstrap.isLoading) {
     return (
       <main>
         <section className="panel">
-          <h1>Office Dashboard</h1>
-          <p>Loading Step-3 bridge data...</p>
+          <h1>Office Avatar Board</h1>
+          <p>Loading office resources for avatar board...</p>
         </section>
       </main>
     );
@@ -189,7 +322,7 @@ export default function OfficePage(): JSX.Element {
     return (
       <main>
         <section className="panel">
-          <h1>Office Dashboard</h1>
+          <h1>Office Avatar Board</h1>
           <p className="error">{bootstrap.errorMessage}</p>
           <button type="button" onClick={() => void bootstrap.refresh()}>
             Retry
@@ -201,10 +334,10 @@ export default function OfficePage(): JSX.Element {
 
   return (
     <main>
-      <section className="panel office-ops-page">
+      <section className="panel office-ops-page office-avatar-page">
         <header className="admin-header">
-          <h1>Step-3 Office Bridge</h1>
-          <p>Step-2 account pool/runtime profile/probe APIs are connected to the office layer.</p>
+          <h1>Step-5 Avatar Agent Office Board</h1>
+          <p>Avatar agent leads operations while Step-2~4 APIs and validation remain the source of truth.</p>
         </header>
 
         <TopOpsBar
@@ -215,69 +348,116 @@ export default function OfficePage(): JSX.Element {
           latestProbeState={latestProbeState}
         />
 
-        <div className="office-ops-grid">
-          <AccountPoolWidget
-            pools={bootstrap.pools}
-            selectedProvider={bootstrap.officeOpsState.selectedProvider}
-            selectedAccountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
-            onSelectProvider={(provider) =>
-              bootstrap.setOfficeOpsState((previous) => ({
-                ...previous,
-                selectedProvider: provider,
-                selectedAccountPoolId: "",
-                selectedRuntimeProfileId: ""
-              }))
-            }
-            onSelectAccountPool={(accountPoolId) =>
-              bootstrap.setOfficeOpsState((previous) => ({
-                ...previous,
-                selectedAccountPoolId: accountPoolId,
-                selectedRuntimeProfileId: ""
-              }))
-            }
-          />
+        <AvatarLayerBoundary>
+          <AgentShell probeState={latestProbeState} event={agentEvent} />
+        </AvatarLayerBoundary>
 
-          <RuntimeProfileWidget
-            profiles={bootstrap.profiles}
-            pools={bootstrap.pools}
-            selectedProvider={bootstrap.officeOpsState.selectedProvider}
-            selectedRuntimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
-            selectedRuntimeProfileKey={selectedRuntimeProfile?.key ?? null}
-            onSelectRuntimeProfile={(runtimeProfileId) =>
-              bootstrap.setOfficeOpsState((previous) => ({
-                ...previous,
-                selectedRuntimeProfileId: runtimeProfileId
-              }))
-            }
-            createDraft={createDraft}
-            updateDraft={updateDraft}
-            onChangeCreateDraft={setCreateDraft}
-            onChangeUpdateDraft={setUpdateDraft}
-            isMutating={runtimeCrud.isMutating}
-            errorMessage={runtimeCrud.errorMessage}
-            actionMessage={runtimeCrud.actionMessage}
-            onCreate={() => void onCreateRuntimeProfile()}
-            onUpdate={() => void onUpdateRuntimeProfile()}
-            onDelete={onDeleteRuntimeProfile}
-          />
-        </div>
-
-        <ProbeRunPanel
-          provider={bootstrap.officeOpsState.selectedProvider}
-          accountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
-          runtimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
-          latestProbeRun={probe.latestRun}
-          latestProbeState={latestProbeState}
-          isRunning={probe.isRunning}
-          isHistoryLoading={probe.isHistoryLoading}
-          historyLimit={probe.historyLimit}
-          historyRuns={probe.historyRuns}
-          errorMessage={probe.errorMessage}
-          actionMessage={probe.actionMessage}
-          onRun={() => void onRunProbe()}
-          onRefresh={() => void onRefreshProbe()}
-          onHistoryLimitChange={(nextLimit) => void probe.changeHistoryLimit(nextLimit)}
+        <OfficeBoardScene
+          accountPoolZone={
+            <AccountPoolWidget
+              pools={bootstrap.pools}
+              selectedProvider={bootstrap.officeOpsState.selectedProvider}
+              selectedAccountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
+              onSelectProvider={(provider) => {
+                bootstrap.setOfficeOpsState((previous) => ({
+                  ...previous,
+                  selectedProvider: provider,
+                  selectedAccountPoolId: "",
+                  selectedRuntimeProfileId: ""
+                }));
+                setAgentEvent({
+                  type: "history-filter-changed",
+                  provider,
+                  accountPoolId: "",
+                  runtimeProfileId: "",
+                  limit: probe.historyLimit
+                });
+              }}
+              onSelectAccountPool={(accountPoolId) => {
+                bootstrap.setOfficeOpsState((previous) => ({
+                  ...previous,
+                  selectedAccountPoolId: accountPoolId,
+                  selectedRuntimeProfileId: ""
+                }));
+                setAgentEvent({
+                  type: "history-filter-changed",
+                  provider: bootstrap.officeOpsState.selectedProvider,
+                  accountPoolId,
+                  runtimeProfileId: "",
+                  limit: probe.historyLimit
+                });
+              }}
+            />
+          }
+          runtimeProfileZone={
+            <RuntimeProfileWidget
+              profiles={bootstrap.profiles}
+              pools={bootstrap.pools}
+              selectedProvider={bootstrap.officeOpsState.selectedProvider}
+              selectedRuntimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
+              selectedRuntimeProfileKey={selectedRuntimeProfile?.key ?? null}
+              onSelectRuntimeProfile={(runtimeProfileId) => {
+                bootstrap.setOfficeOpsState((previous) => ({
+                  ...previous,
+                  selectedRuntimeProfileId: runtimeProfileId
+                }));
+                setAgentEvent({
+                  type: "history-filter-changed",
+                  provider: bootstrap.officeOpsState.selectedProvider,
+                  accountPoolId: bootstrap.officeOpsState.selectedAccountPoolId,
+                  runtimeProfileId,
+                  limit: probe.historyLimit
+                });
+              }}
+              createDraft={createDraft}
+              updateDraft={updateDraft}
+              onChangeCreateDraft={setCreateDraft}
+              onChangeUpdateDraft={setUpdateDraft}
+              isMutating={runtimeCrud.isMutating}
+              errorMessage={runtimeCrud.errorMessage}
+              actionMessage={runtimeCrud.actionMessage}
+              onCreate={() => void onCreateRuntimeProfile()}
+              onUpdate={() => void onUpdateRuntimeProfile()}
+              onDelete={onDeleteRuntimeProfile}
+              onDeleteIntent={(runtimeProfileKey) =>
+                setAgentEvent({ type: "runtime-delete-intent", key: runtimeProfileKey })
+              }
+              onDeleteCancel={() => setAgentEvent({ type: "idle" })}
+            />
+          }
+          probeMonitorZone={
+            <ProbeRunPanel
+              provider={bootstrap.officeOpsState.selectedProvider}
+              accountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
+              runtimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
+              latestProbeRun={probe.latestRun}
+              latestProbeState={latestProbeState}
+              isRunning={probe.isRunning}
+              errorMessage={probe.errorMessage}
+              actionMessage={probe.actionMessage}
+              onRun={() => void onRunProbe()}
+            />
+          }
+          historyBoardZone={
+            <HistoryBoard
+              provider={bootstrap.officeOpsState.selectedProvider}
+              accountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
+              runtimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
+              historyLimit={probe.historyLimit}
+              historyRuns={probe.historyRuns}
+              isHistoryLoading={probe.isHistoryLoading}
+              errorMessage={probe.errorMessage}
+              actionMessage={probe.actionMessage}
+              onRefresh={() => void onRefreshProbe()}
+              onHistoryLimitChange={(nextLimit) => void onChangeHistoryLimit(nextLimit)}
+            />
+          }
         />
+
+        <section className="card compact">
+          <strong>Fallback Guarantee</strong>
+          <p>If avatar presentation fails, account/profile/probe panels remain available for direct operations.</p>
+        </section>
       </section>
     </main>
   );

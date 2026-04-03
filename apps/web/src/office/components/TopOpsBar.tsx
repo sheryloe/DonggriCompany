@@ -5,7 +5,7 @@ import type {
   RuntimeProfileView
 } from "@workspace/shared";
 
-import type { ProbeUiState } from "../hooks/useProviderProbe";
+import type { ProbeUiState } from "../lib/probe-ui-state";
 import { ProbeStateBadge } from "./ProbeStateBadge";
 
 type TopOpsBarProps = {

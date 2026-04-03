@@ -17,10 +17,6 @@ import { validateProviderProbeRun } from "../../lib/validation/office-step2";
 type UseProviderProbeOptions = {
   getHistoryQuery: () => ProviderUsageProbeHistoryQuery;
 };
-
-export type ProbeUiState = "success" | "partial" | "stale" | "no-signal" | "error";
-
-const STALE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_HISTORY_LIMIT = 20;
 const MAX_HISTORY_LIMIT = 200;
 
@@ -36,47 +32,6 @@ const clampHistoryLimit = (value: number): number => {
     return MAX_HISTORY_LIMIT;
   }
   return normalized;
-};
-
-const getTimestamp = (run: ProviderProbeRunView): number => {
-  const candidate = run.finishedAt ?? run.startedAt;
-  const timestamp = Date.parse(candidate);
-  return Number.isFinite(timestamp) ? timestamp : Date.now();
-};
-
-const classifyProbeRunState = (
-  run: ProviderProbeRunView | null,
-  nowTimestamp: number
-): ProbeUiState => {
-  if (!run) {
-    return "no-signal";
-  }
-  if (run.status === "success") {
-    return "success";
-  }
-  if (run.status === "partial") {
-    return "partial";
-  }
-  if (nowTimestamp - getTimestamp(run) > STALE_WINDOW_MS) {
-    return "stale";
-  }
-  return "no-signal";
-};
-
-export const classifyProbeUiState = (
-  input: {
-    run: ProviderProbeRunView | null;
-    errorMessage?: string | null;
-    nowTimestamp?: number;
-  }
-): ProbeUiState => {
-  const nowTimestamp = input.nowTimestamp ?? Date.now();
-  const run = input.run;
-
-  if (input.errorMessage) {
-    return "error";
-  }
-  return classifyProbeRunState(run, nowTimestamp);
 };
 
 const toErrorMessage = (error: unknown): string => {
@@ -106,6 +61,11 @@ export const useProviderProbe = (options: UseProviderProbeOptions) => {
       });
       setHistoryRuns(history.runs);
       setLatestRun(history.runs[0] ?? null);
+      setActionMessage(
+        history.runs.length > 0
+          ? `Loaded ${history.runs.length} probe history entr${history.runs.length === 1 ? "y" : "ies"}.`
+          : "No probe history matched current filters."
+      );
       return true;
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
@@ -118,6 +78,7 @@ export const useProviderProbe = (options: UseProviderProbeOptions) => {
   const changeHistoryLimit = async (nextLimit: number): Promise<void> => {
     const clamped = clampHistoryLimit(nextLimit);
     setHistoryLimit(clamped);
+    setActionMessage(`History filter updated (limit=${clamped}).`);
     await refreshHistory(clamped);
   };
 

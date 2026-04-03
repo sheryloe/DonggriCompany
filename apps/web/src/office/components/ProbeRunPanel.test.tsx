@@ -28,52 +28,31 @@ const baseProps = {
   latestProbeRun: makeRun({ id: "latest", status: "success" }),
   latestProbeState: "success" as const,
   isRunning: false,
-  isHistoryLoading: false,
-  historyLimit: 20,
-  historyRuns: [] as ProviderProbeRunView[],
   errorMessage: null,
   actionMessage: null,
-  onRun: vi.fn(),
-  onRefresh: vi.fn(),
-  onHistoryLimitChange: vi.fn()
+  onRun: vi.fn()
 };
 
 describe("ProbeRunPanel states", () => {
-  it("renders loading and empty history states", () => {
-    const { rerender } = render(<ProbeRunPanel {...baseProps} isHistoryLoading />);
-    expect(screen.getByText("Loading probe history...")).not.toBeNull();
-
-    rerender(<ProbeRunPanel {...baseProps} isHistoryLoading={false} historyRuns={[]} />);
+  it("renders retry affordance and error message", () => {
+    render(<ProbeRunPanel {...baseProps} errorMessage="probe failed" />);
+    expect(screen.getByText("Retry Probe")).not.toBeNull();
     expect(
-      screen.getByText(
-        "No probe history for current filters. Run probe or widen filters (provider/pool/profile/limit)."
-      )
+      screen.getByText("probe failed Retry probe after checking provider/pool/profile selection.")
     ).not.toBeNull();
   });
 
-  it("renders probe error with retry affordance", () => {
-    render(<ProbeRunPanel {...baseProps} errorMessage="history unavailable" />);
-    expect(screen.getByText("Retry History")).not.toBeNull();
-    expect(screen.getByText("history unavailable Use retry to fetch probe history again.")).not.toBeNull();
-  });
-
-  it("renders classified history states through ProbeStateBadge", () => {
+  it("renders latest classified state and metadata", () => {
     render(
       <ProbeRunPanel
         {...baseProps}
-        historyRuns={[
-          makeRun({ id: "run-success", status: "success" }),
-          makeRun({
-            id: "run-stale",
-            status: "failure",
-            startedAt: "2026-03-01T00:00:00.000Z",
-            finishedAt: "2026-03-01T00:00:00.000Z"
-          })
-        ]}
+        latestProbeState="partial"
+        latestProbeRun={makeRun({ id: "latest-partial", status: "partial", precision: "derived", degraded: true })}
       />
     );
 
-    expect(screen.getAllByText("success").length).toBeGreaterThan(0);
-    expect(screen.getByText("stale")).not.toBeNull();
+    expect(screen.getByText("partial")).not.toBeNull();
+    expect(screen.getByText("precision: derived")).not.toBeNull();
+    expect(screen.getByText("degraded: true")).not.toBeNull();
   });
 });

@@ -5,7 +5,8 @@ import type {
 } from "@workspace/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { classifyProbeUiState, useProviderProbe } from "./useProviderProbe";
+import { classifyProbeUiState } from "../lib/probe-ui-state";
+import { useProviderProbe } from "./useProviderProbe";
 
 const apiMocks = vi.hoisted(() => ({
   listProviderUsageProbeHistory: vi.fn(),

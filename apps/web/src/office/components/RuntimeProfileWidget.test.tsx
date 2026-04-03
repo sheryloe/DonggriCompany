@@ -37,7 +37,10 @@ const profiles: RuntimeProfileView[] = [
   }
 ];
 
-const buildProps = (onDelete: () => Promise<boolean>) => ({
+const buildProps = (
+  onDelete: () => Promise<boolean>,
+  onDeleteIntent: ((runtimeProfileKey: string) => void) | undefined = undefined
+) => ({
   profiles,
   pools,
   selectedProvider: "codex" as const,
@@ -63,7 +66,8 @@ const buildProps = (onDelete: () => Promise<boolean>) => ({
   actionMessage: null,
   onCreate: vi.fn(),
   onUpdate: vi.fn(),
-  onDelete
+  onDelete,
+  onDeleteIntent
 });
 
 describe("RuntimeProfileWidget delete confirmation", () => {
@@ -90,5 +94,15 @@ describe("RuntimeProfileWidget delete confirmation", () => {
 
     await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("button", { name: "Confirm Delete" })).toBeNull();
+  });
+
+  it("emits delete intent callback before confirm step", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn().mockResolvedValue(false);
+    const onDeleteIntent = vi.fn();
+    render(<RuntimeProfileWidget {...buildProps(onDelete, onDeleteIntent)} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete Selected" }));
+    expect(onDeleteIntent).toHaveBeenCalledWith("codex-main");
   });
 });

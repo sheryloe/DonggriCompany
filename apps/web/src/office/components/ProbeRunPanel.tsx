@@ -1,9 +1,6 @@
 import type { ProviderProbeRunView } from "@workspace/shared";
 
-import {
-  classifyProbeUiState,
-  type ProbeUiState
-} from "../hooks/useProviderProbe";
+import type { ProbeUiState } from "../lib/probe-ui-state";
 import { ProbeStateBadge } from "./ProbeStateBadge";
 
 type ProbeRunPanelProps = {
@@ -13,14 +10,9 @@ type ProbeRunPanelProps = {
   latestProbeRun: ProviderProbeRunView | null;
   latestProbeState: ProbeUiState;
   isRunning: boolean;
-  isHistoryLoading: boolean;
-  historyLimit: number;
-  historyRuns: ProviderProbeRunView[];
   errorMessage: string | null;
   actionMessage: string | null;
   onRun: () => void;
-  onRefresh: () => void;
-  onHistoryLimitChange: (nextLimit: number) => void;
 };
 
 export function ProbeRunPanel({
@@ -30,17 +22,10 @@ export function ProbeRunPanel({
   latestProbeRun,
   latestProbeState,
   isRunning,
-  isHistoryLoading,
-  historyLimit,
-  historyRuns,
   errorMessage,
   actionMessage,
-  onRun,
-  onRefresh,
-  onHistoryLimitChange
+  onRun
 }: ProbeRunPanelProps): JSX.Element {
-  const refreshLabel = errorMessage ? "Retry History" : "Refresh History";
-
   return (
     <section className="card office-widget">
       <header>
@@ -55,35 +40,15 @@ export function ProbeRunPanel({
         <button type="button" onClick={onRun} disabled={isRunning}>
           {isRunning ? "Running..." : "Run Probe"}
         </button>
-        <button type="button" className="secondary" onClick={onRefresh} disabled={isHistoryLoading}>
-          {isHistoryLoading ? "Refreshing..." : refreshLabel}
+        <button type="button" className="secondary" onClick={onRun} disabled={isRunning}>
+          {isRunning ? "Running..." : "Retry Probe"}
         </button>
       </div>
 
       {errorMessage ? (
-        <p className="error">
-          {errorMessage} Use retry to fetch probe history again.
-        </p>
+        <p className="error">{errorMessage} Retry probe after checking provider/pool/profile selection.</p>
       ) : null}
       {actionMessage ? <p className="hint">{actionMessage}</p> : null}
-
-      <div className="form-grid two-cols">
-        <label>
-          <span>History Limit</span>
-          <select
-            aria-label="History Limit"
-            value={String(historyLimit)}
-            onChange={(event) => onHistoryLimitChange(Number(event.target.value))}
-            disabled={isHistoryLoading}
-          >
-            <option value="1">1</option>
-            <option value="5">5</option>
-            <option value="20">20</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-          </select>
-        </label>
-      </div>
 
       <div className="card compact">
         <strong>Latest Result</strong>
@@ -94,49 +59,6 @@ export function ProbeRunPanel({
         <p>precision: {latestProbeRun?.precision ?? "-"}</p>
         <p>degraded: {latestProbeRun?.degraded ? "true" : "false"}</p>
         <p className="mono">at: {latestProbeRun?.finishedAt ?? latestProbeRun?.startedAt ?? "-"}</p>
-      </div>
-
-      <div className="table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Provider</th>
-              <th>UI State</th>
-              <th>Result</th>
-              <th>Precision</th>
-              <th>Pool</th>
-              <th>Profile</th>
-              <th>Finished At</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isHistoryLoading ? (
-              <tr>
-                <td colSpan={7}>Loading probe history...</td>
-              </tr>
-            ) : historyRuns.length === 0 ? (
-              <tr>
-                <td colSpan={7}>
-                  No probe history for current filters. Run probe or widen filters (provider/pool/profile/limit).
-                </td>
-              </tr>
-            ) : (
-              historyRuns.map((run) => (
-                <tr key={run.id}>
-                  <td>{run.provider}</td>
-                  <td>
-                    <ProbeStateBadge state={classifyProbeUiState({ run })} />
-                  </td>
-                  <td>{run.status}</td>
-                  <td>{run.precision ?? "-"}</td>
-                  <td>{run.accountPoolId ?? "-"}</td>
-                  <td>{run.runtimeProfileId ?? "-"}</td>
-                  <td>{run.finishedAt ?? run.startedAt}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
       </div>
     </section>
   );

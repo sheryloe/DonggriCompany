@@ -1,4 +1,4 @@
-import type { ProbeUiState } from "../hooks/useProviderProbe";
+import type { ProbeUiState } from "../lib/probe-ui-state";
 
 type ProbeStateBadgeProps = {
   state: ProbeUiState;

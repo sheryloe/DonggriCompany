@@ -30,6 +30,8 @@ type RuntimeProfileWidgetProps = {
   onCreate: () => void;
   onUpdate: () => void;
   onDelete: () => Promise<boolean>;
+  onDeleteIntent?: (runtimeProfileKey: string) => void;
+  onDeleteCancel?: () => void;
 };
 
 export function RuntimeProfileWidget({
@@ -48,7 +50,9 @@ export function RuntimeProfileWidget({
   actionMessage,
   onCreate,
   onUpdate,
-  onDelete
+  onDelete,
+  onDeleteIntent,
+  onDeleteCancel
 }: RuntimeProfileWidgetProps): JSX.Element {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const filteredPools = pools.filter((pool) => pool.provider === selectedProvider);
@@ -62,6 +66,13 @@ export function RuntimeProfileWidget({
     const deleted = await onDelete();
     if (deleted) {
       setIsDeleteConfirmOpen(false);
+    }
+  };
+
+  const onOpenDeleteConfirm = (): void => {
+    setIsDeleteConfirmOpen(true);
+    if (selectedRuntimeProfileId) {
+      onDeleteIntent?.(selectedRuntimeProfileKey ?? selectedRuntimeProfileId);
     }
   };
 
@@ -190,7 +201,7 @@ export function RuntimeProfileWidget({
         <button
           type="button"
           className="secondary"
-          onClick={() => setIsDeleteConfirmOpen(true)}
+          onClick={onOpenDeleteConfirm}
           disabled={isMutating || !selectedRuntimeProfileId}
         >
           Delete Selected
@@ -208,7 +219,10 @@ export function RuntimeProfileWidget({
             <button
               type="button"
               className="secondary"
-              onClick={() => setIsDeleteConfirmOpen(false)}
+              onClick={() => {
+                setIsDeleteConfirmOpen(false);
+                onDeleteCancel?.();
+              }}
               disabled={isMutating}
             >
               Cancel

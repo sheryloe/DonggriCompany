@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"  # Next.js Web Dashboard
+      - "3001:3001"  # Fastify Orchestrator
+    volumes:
+      - sqlite_data:/app/packages/db
+    environment:
+      - NODE_ENV=production
+      - DB_URL=sqlite.db
+    command: >
+      sh -c "cd packages/db && pnpm run db:migrate && cd ../../ && (pnpm --filter orchestrator run start & pnpm --filter web run start)"
+
+volumes:
+  sqlite_data:

@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+.turbo
+dist
+packages/db/drizzle
+packages/db/sqlite.db
+packages/db/sqlite.db-journal

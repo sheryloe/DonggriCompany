@@ -1,50 +1,51 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PixelCharacter } from "./PixelCharacter";
 
-// 에이전트의 세계관 상태 확장
 type AgentState = 'working' | 'reporting' | 'resting' | 'meeting' | 'collaborating';
 
 interface Agent {
   id: string;
   name: string;
   role: string;
-  provider: string; // OAuth 계정 연동 식별자
-  fatigue: number;  // HP (같은 Provider면 공유됨)
+  provider: string; // OAuth 연동 식별자
+  fatigue: number;  // HP
   heat: number;     // MP
   task: string;
   state: AgentState;
-  seed: string;
+  color: string;    // 아바타 옷 색상
   x: number;
   y: number;
   assignedRoom: 'frontend' | 'backend' | 'qa';
+  isMoving: boolean;
+  direction: 'left' | 'right';
 }
 
-// 각 부서(방) 및 공용 구역 바운더리
 const ROOMS = {
   frontend: { xMin: 5, xMax: 30, yMin: 15, yMax: 40 },
   backend: { xMin: 35, xMax: 65, yMin: 15, yMax: 40 },
   qa: { xMin: 70, xMax: 95, yMin: 15, yMax: 40 },
   breakRoom: { xMin: 5, xMax: 30, yMin: 65, yMax: 85 },
-  meetingRoom: { xMin: 40, xMax: 60, yMin: 55, yMax: 70 }, // 타 부서와 협업하는 공간
-  bossOffice: { xMin: 70, xMax: 95, yMin: 65, yMax: 85 },   // 보고/업무지시 받는 공간
+  meetingRoom: { xMin: 40, xMax: 60, yMin: 55, yMax: 70 },
+  bossOffice: { xMin: 70, xMax: 95, yMin: 65, yMax: 85 },
 };
 
 export function VirtualOffice() {
   const [agents, setAgents] = useState<Agent[]>([
-    { id: '1', name: 'Albedo', role: 'UI 디자인', provider: 'Claude-Pro', fatigue: 85, heat: 60, task: '디자인 시안 작업', state: 'working', seed: 'ClaudeBot', x: 15, y: 25, assignedRoom: 'frontend' },
-    { id: '2', name: 'Reactus', role: '프론트엔드', provider: 'Claude-Pro', fatigue: 85, heat: 40, task: 'API 연동 회의', state: 'collaborating', seed: 'ReactusAgent', x: 25, y: 25, assignedRoom: 'frontend' },
-    { id: '3', name: 'Ignis', role: '백엔드', provider: 'Codex-Plus', fatigue: 60, heat: 20, task: '프론트와 회의 중', state: 'collaborating', seed: 'CodexBuilder', x: 50, y: 25, assignedRoom: 'backend' },
-    { id: '4', name: 'DataTron', role: 'DBA', provider: 'Codex-Plus', fatigue: 60, heat: 10, task: '스키마 설계', state: 'working', seed: 'DataTron', x: 60, y: 25, assignedRoom: 'backend' },
-    { id: '5', name: 'ScoutBot', role: '스카우터', provider: 'Gemini-AI', fatigue: 5, heat: 10, task: '휴식 중', state: 'resting', seed: 'GeminiScout', x: 80, y: 25, assignedRoom: 'qa' },
-    { id: '6', name: 'Jules-X', role: '테스터', provider: 'Jules-Main', fatigue: 100, heat: 5, task: '결함 발견! (보고)', state: 'reporting', seed: 'JulesAgent', x: 85, y: 35, assignedRoom: 'qa' },
-    { id: '7', name: 'Planner', role: '기획자', provider: 'Claude-Pro', fatigue: 85, heat: 50, task: '업무 지시 수령', state: 'meeting', seed: 'PlannerBot', x: 45, y: 30, assignedRoom: 'frontend' },
+    { id: '1', name: 'Albedo', role: 'UI 디자인', provider: 'Claude-Pro', fatigue: 85, heat: 60, task: '디자인 시안 작업', state: 'working', color: 'bg-orange-500', x: 15, y: 25, assignedRoom: 'frontend', isMoving: false, direction: 'right' },
+    { id: '2', name: 'Reactus', role: '프론트엔드', provider: 'Claude-Pro', fatigue: 85, heat: 40, task: 'API 연동 회의', state: 'collaborating', color: 'bg-yellow-500', x: 25, y: 25, assignedRoom: 'frontend', isMoving: false, direction: 'left' },
+    { id: '3', name: 'Ignis', role: '백엔드', provider: 'Codex-Plus', fatigue: 60, heat: 20, task: '프론트와 회의 중', state: 'collaborating', color: 'bg-green-600', x: 50, y: 25, assignedRoom: 'backend', isMoving: false, direction: 'right' },
+    { id: '4', name: 'DataTron', role: 'DBA', provider: 'Codex-Plus', fatigue: 60, heat: 10, task: '스키마 설계', state: 'working', color: 'bg-emerald-500', x: 60, y: 25, assignedRoom: 'backend', isMoving: false, direction: 'left' },
+    { id: '5', name: 'ScoutBot', role: '스카우터', provider: 'Gemini-AI', fatigue: 5, heat: 10, task: '휴식 중', state: 'resting', color: 'bg-blue-500', x: 80, y: 25, assignedRoom: 'qa', isMoving: false, direction: 'right' },
+    { id: '6', name: 'Jules-X', role: '테스터', provider: 'Jules-Main', fatigue: 100, heat: 5, task: '결함 발견! (보고)', state: 'reporting', color: 'bg-purple-600', x: 85, y: 35, assignedRoom: 'qa', isMoving: false, direction: 'left' },
+    { id: '7', name: 'Planner', role: '기획자', provider: 'Claude-Pro', fatigue: 85, heat: 50, task: '업무 지시 수령', state: 'meeting', color: 'bg-red-500', x: 45, y: 30, assignedRoom: 'frontend', isMoving: false, direction: 'right' },
   ]);
 
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [directCommand, setDirectCommand] = useState("");
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -53,96 +54,137 @@ export function VirtualOffice() {
           let bounds = ROOMS[agent.assignedRoom];
 
           if (agent.state === 'resting') bounds = ROOMS.breakRoom;
-          else if (agent.state === 'reporting') bounds = ROOMS.bossOffice; // 보스방으로 달려옴
-          else if (agent.state === 'meeting') bounds = ROOMS.bossOffice;   // 보스에게 지시받으러 옴
-          else if (agent.state === 'collaborating') bounds = ROOMS.meetingRoom; // 협업실에 모임
+          else if (agent.state === 'reporting') bounds = ROOMS.bossOffice;
+          else if (agent.state === 'meeting') bounds = ROOMS.bossOffice;
+          else if (agent.state === 'collaborating') bounds = ROOMS.meetingRoom;
 
           const moveSpeed = agent.state === 'resting' ? 2 : (agent.state === 'reporting' ? 8 : 4);
-          const jitterX = agent.x + (Math.random() * moveSpeed - (moveSpeed/2));
-          const jitterY = agent.y + (Math.random() * moveSpeed - (moveSpeed/2));
+
+          // 랜덤 50% 확률로 걷기 / 가만히 있기
+          const willMove = Math.random() > 0.5 && agent.state !== 'resting';
+
+          let nextX = agent.x;
+          let nextY = agent.y;
+          let newDirection = agent.direction;
+
+          if (willMove) {
+            const dx = (Math.random() * moveSpeed - (moveSpeed/2));
+            const dy = (Math.random() * moveSpeed - (moveSpeed/2));
+            nextX = agent.x + dx;
+            nextY = agent.y + dy;
+
+            // X 좌표의 변화량에 따라 캐릭터가 바라보는 방향 변경 (Flip)
+            if (dx > 0.5) newDirection = 'right';
+            else if (dx < -0.5) newDirection = 'left';
+          }
 
           return {
             ...agent,
-            x: Math.max(bounds.xMin, Math.min(bounds.xMax, jitterX)),
-            y: Math.max(bounds.yMin, Math.min(bounds.yMax, jitterY)),
+            isMoving: willMove,
+            direction: newDirection,
+            x: Math.max(bounds.xMin, Math.min(bounds.xMax, nextX)),
+            y: Math.max(bounds.yMin, Math.min(bounds.yMax, nextY)),
           };
         })
       );
-    }, 2000);
+    }, 2500);
     return () => clearInterval(interval);
   }, []);
 
+  const handleSendCommand = () => {
+    if (!selectedAgent || !directCommand.trim()) return;
+
+    setAgents(current =>
+      current.map(agent =>
+        agent.id === selectedAgent.id
+          ? { ...agent, task: directCommand, state: 'working' }
+          : agent
+      )
+    );
+    setDirectCommand("");
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="relative w-full h-[600px] border-8 border-black bg-gray-900 shadow-[8px_8px_0_rgba(0,0,0,1)] overflow-hidden font-pixel">
+      <div className="relative w-full h-[600px] border-[12px] border-gray-900 bg-gray-900 shadow-[12px_12px_0_rgba(0,0,0,1)] overflow-hidden font-pixel rounded-md">
 
         {/* 복도 타일 */}
-        <div className="absolute inset-0 bg-[#222] bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-40 pointer-events-none" />
+        <div className="absolute inset-0 bg-[#2b2b2b] bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-80 pointer-events-none" />
 
-        {/* --- 부서별 방 렌더링 --- */}
+        {/* --- 부서별 방 렌더링 (2.5D Isometric Feel) --- */}
 
-        {/* Frontend Dept */}
-        <div className="absolute top-[0%] left-[0%] w-[32%] h-[50%] border-r-[8px] border-b-[8px] border-black bg-orange-100 flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.1)]">
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-20 pointer-events-none" />
-          <h3 className="font-bold text-xl text-orange-900 border-b-4 border-orange-900/30 inline-block w-max z-0 bg-white/50 px-2">
+        <div className="absolute top-[0%] left-[0%] w-[32%] h-[50%] border-r-[12px] border-b-[12px] border-gray-900 bg-[#ffe8cc] flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.1),0_12px_0_rgba(0,0,0,0.5)] z-0 rounded-br-lg">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-30 pointer-events-none" />
+          <h3 className="font-bold text-xl text-orange-900 border-b-[6px] border-orange-900/30 inline-block w-max z-0 bg-white/70 px-2 drop-shadow-[2px_2px_0_rgba(255,255,255,1)]">
             🎨 프론트엔드 팀
           </h3>
-          <div className="absolute bottom-[20%] left-[20%] w-[50px] h-[30px] bg-amber-600 border-4 border-black" />
-          <div className="absolute bottom-[20%] right-[20%] w-[50px] h-[30px] bg-amber-600 border-4 border-black" />
-          <div className="absolute bottom-[-8px] right-[20%] w-[25%] h-[8px] bg-[#222]" /> {/* 문 */}
+
+          {/* 나무 무늬 입체 책상 */}
+          <div className="absolute top-[35%] left-[20%] w-[60px] h-[30px] bg-amber-600 border-[3px] border-black shadow-[0_6px_0_rgba(139,69,19,1),0_10px_0_rgba(0,0,0,1)] z-0 rounded-sm" />
+          <div className="absolute top-[35%] left-[60%] w-[60px] h-[30px] bg-amber-600 border-[3px] border-black shadow-[0_6px_0_rgba(139,69,19,1),0_10px_0_rgba(0,0,0,1)] z-0 rounded-sm" />
+          {/* 모니터 */}
+          <div className="absolute top-[30%] left-[25%] w-[20px] h-[15px] bg-cyan-100 border-[3px] border-black shadow-[0_2px_0_rgba(0,0,0,1)] z-10 rounded-sm flex items-center justify-center">
+              <div className="w-[10px] h-[2px] bg-green-500 animate-pulse" />
+          </div>
+          <div className="absolute top-[30%] left-[65%] w-[20px] h-[15px] bg-cyan-100 border-[3px] border-black shadow-[0_2px_0_rgba(0,0,0,1)] z-10 rounded-sm flex items-center justify-center">
+              <div className="w-[8px] h-[2px] bg-blue-500 animate-pulse" />
+          </div>
+          <div className="absolute bottom-[-12px] right-[20%] w-[30%] h-[12px] bg-[#2b2b2b] border-x-[3px] border-black" />
         </div>
 
-        {/* Backend Dept */}
-        <div className="absolute top-[0%] left-[33%] w-[33%] h-[50%] border-x-[8px] border-b-[8px] border-black bg-blue-100 flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.1)]">
+        <div className="absolute top-[0%] left-[33%] w-[33%] h-[50%] border-x-[12px] border-b-[12px] border-gray-900 bg-[#dbeafe] flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.1),0_12px_0_rgba(0,0,0,0.5)] z-0 rounded-b-lg">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 pointer-events-none" />
-          <h3 className="font-bold text-xl text-blue-900 border-b-4 border-blue-900/30 inline-block w-max z-0 bg-white/50 px-2">
+          <h3 className="font-bold text-xl text-blue-900 border-b-[6px] border-blue-900/30 inline-block w-max z-0 bg-white/70 px-2 drop-shadow-[2px_2px_0_rgba(255,255,255,1)]">
             ⚙️ 백엔드 / DB 팀
           </h3>
-          <div className="absolute top-[40%] left-[30%] w-[60px] h-[40px] bg-gray-500 border-4 border-black" />
-          <div className="absolute bottom-[-8px] left-[40%] w-[25%] h-[8px] bg-[#222]" />
+          <div className="absolute top-[40%] left-[30%] w-[80px] h-[40px] bg-gray-500 border-[3px] border-black shadow-[0_6px_0_rgba(75,85,99,1),0_10px_0_rgba(0,0,0,1)] rounded-sm" />
+          <div className="absolute bottom-[-12px] left-[40%] w-[30%] h-[12px] bg-[#2b2b2b] border-x-[3px] border-black" />
         </div>
 
-        {/* QA Dept */}
-        <div className="absolute top-[0%] right-[0%] w-[32%] h-[50%] border-l-[8px] border-b-[8px] border-black bg-purple-100 flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.1)]">
-          <h3 className="font-bold text-xl text-purple-900 border-b-4 border-purple-900/30 inline-block w-max z-0 bg-white/50 px-2">
+        <div className="absolute top-[0%] right-[0%] w-[32%] h-[50%] border-l-[12px] border-b-[12px] border-gray-900 bg-[#f3e8ff] flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.1),0_12px_0_rgba(0,0,0,0.5)] z-0 rounded-bl-lg">
+          <h3 className="font-bold text-xl text-purple-900 border-b-[6px] border-purple-900/30 inline-block w-max z-0 bg-white/70 px-2 drop-shadow-[2px_2px_0_rgba(255,255,255,1)]">
             🔎 QA 및 테스트 팀
           </h3>
-          <div className="absolute top-[30%] right-[20%] w-[40px] h-[60px] bg-purple-300 border-4 border-black" />
-          <div className="absolute bottom-[-8px] left-[20%] w-[25%] h-[8px] bg-[#222]" />
+          <div className="absolute top-[30%] right-[20%] w-[40px] h-[60px] bg-purple-300 border-[3px] border-black shadow-[6px_0_0_rgba(168,85,247,1),10px_0_0_rgba(0,0,0,1)] rounded-sm" />
+          <div className="absolute bottom-[-12px] left-[20%] w-[30%] h-[12px] bg-[#2b2b2b] border-x-[3px] border-black" />
         </div>
 
-        {/* Break Room (좌측 하단) */}
-        <div className="absolute bottom-[0%] left-[0%] w-[35%] h-[45%] border-r-[8px] border-t-[8px] border-black bg-green-50 flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.1)]">
-          <h3 className="font-bold text-xl text-green-900 inline-block w-max z-0 bg-white/50 px-2">
+        <div className="absolute bottom-[0%] left-[0%] w-[35%] h-[45%] border-r-[12px] border-t-[12px] border-gray-900 bg-[#dcfce7] flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.1),0_-12px_0_rgba(0,0,0,0.5)] z-0 rounded-tr-lg">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/green-dust-and-scratches.png')] opacity-30 pointer-events-none" />
+          <h3 className="font-bold text-xl text-green-900 inline-block w-max z-0 bg-white/70 px-2 drop-shadow-[2px_2px_0_rgba(255,255,255,1)]">
             ☕ 휴게실 (Zzz)
           </h3>
-          <div className="absolute bottom-[10%] left-[10%] w-[80px] h-[30px] bg-red-600 border-4 border-black text-white text-xs font-bold flex items-center justify-center">SOFA</div>
-          <div className="absolute top-[20%] right-[10%] w-[30px] h-[50px] bg-blue-400 border-4 border-black text-white text-[8px] font-bold flex items-center justify-center">VEND</div>
-          <div className="absolute top-[-8px] right-[20%] w-[25%] h-[8px] bg-[#222]" />
+          <div className="absolute bottom-[10%] left-[10%] w-[100px] h-[40px] bg-red-600 border-[3px] border-black shadow-[0_8px_0_rgba(153,27,27,1),0_12px_0_rgba(0,0,0,1)] text-white text-lg font-bold flex items-center justify-center rounded-xl tracking-widest z-0">SOFA</div>
+          <div className="absolute top-[20%] right-[10%] w-[40px] h-[70px] bg-cyan-400 border-[3px] border-black shadow-[6px_0_0_rgba(8,145,178,1),10px_0_0_rgba(0,0,0,1)] text-white text-[10px] font-bold flex flex-col items-center justify-center rounded-sm z-0">
+            <div className="w-[20px] h-[10px] bg-black/50 mb-1 border border-black"></div>
+            VEND
+          </div>
+          <div className="absolute top-[-12px] right-[20%] w-[30%] h-[12px] bg-[#2b2b2b] border-x-[3px] border-black" />
         </div>
 
-        {/* Meeting Room (중앙 하단) */}
-        <div className="absolute bottom-[10%] left-[38%] w-[24%] h-[30%] border-[8px] border-black bg-yellow-50 flex flex-col items-center justify-center shadow-[inset_4px_4px_0_rgba(0,0,0,0.1)]">
-          <h3 className="absolute top-2 font-bold text-sm text-yellow-900 bg-white/50 px-1">
+        <div className="absolute bottom-[10%] left-[38%] w-[24%] h-[30%] border-[12px] border-gray-900 bg-[#fefce8] flex flex-col items-center justify-center shadow-[inset_4px_4px_0_rgba(0,0,0,0.1),0_12px_0_rgba(0,0,0,0.5)] z-0 rounded-lg">
+          <h3 className="absolute top-2 font-bold text-sm text-yellow-900 bg-white/70 px-1 drop-shadow-[1px_1px_0_rgba(255,255,255,1)]">
             🤝 협업/회의실
           </h3>
-          <div className="w-[60%] h-[30%] bg-amber-200 border-4 border-black rounded-full" />
-          <div className="absolute top-[-8px] left-[35%] w-[30%] h-[8px] bg-[#222]" />
+          <div className="w-[60%] h-[40%] bg-amber-300 border-[4px] border-black shadow-[0_6px_0_rgba(180,83,9,1),0_10px_0_rgba(0,0,0,1)] rounded-full z-0 mt-4" />
+          <div className="absolute top-[-12px] left-[35%] w-[30%] h-[12px] bg-[#2b2b2b] border-x-[3px] border-black" />
         </div>
 
-        {/* Boss Office (우측 하단) */}
-        <div className="absolute bottom-[0%] right-[0%] w-[35%] h-[45%] border-l-[8px] border-t-[8px] border-black bg-red-900 flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.3)]">
-          <h3 className="font-bold text-2xl text-white inline-block w-max z-0 drop-shadow-[2px_2px_0_rgba(0,0,0,1)]">
+        <div className="absolute bottom-[0%] right-[0%] w-[35%] h-[45%] border-l-[12px] border-t-[12px] border-gray-900 bg-[#7f1d1d] flex flex-col p-3 shadow-[inset_8px_8px_0_rgba(0,0,0,0.3),0_-12px_0_rgba(0,0,0,0.5)] z-0 rounded-tl-lg">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/argyle.png')] opacity-20 pointer-events-none" />
+          <h3 className="font-bold text-3xl text-white inline-block w-max z-0 drop-shadow-[3px_3px_0_rgba(0,0,0,1)]">
             👑 보스 집무실
           </h3>
-          <div className="absolute top-[30%] left-[15%] w-[70%] h-[40px] bg-amber-900 border-4 border-black flex items-center justify-center">
-            <span className="text-white text-xs font-bold tracking-widest opacity-50">보고 대기선</span>
+          <div className="absolute top-[30%] left-[10%] w-[80%] h-[60px] bg-[#78350f] border-[4px] border-black shadow-[0_8px_0_rgba(69,26,3,1),0_12px_0_rgba(0,0,0,1)] flex items-center justify-center z-0">
+            <span className="text-white text-lg font-bold tracking-widest opacity-80 drop-shadow-[1px_1px_0_rgba(0,0,0,1)]">❗보고 대기선</span>
           </div>
-          <div className="absolute bottom-[15%] left-[45%] w-[40px] h-[30px] bg-black border-4 border-gray-600" />
-          <div className="absolute top-[-8px] left-[20%] w-[25%] h-[8px] bg-[#222]" />
+          <div className="absolute bottom-[10%] left-[40%] w-[60px] h-[50px] bg-gray-900 border-[4px] border-black shadow-[0_6px_0_rgba(17,24,39,1),0_10px_0_rgba(0,0,0,1)] rounded-md flex items-center justify-center z-0">
+             <span className="text-white text-[10px] font-bold">BOSS</span>
+          </div>
+          <div className="absolute top-[-12px] left-[20%] w-[30%] h-[12px] bg-[#2b2b2b] border-x-[3px] border-black" />
         </div>
 
-        {/* --- 에이전트 캐릭터 렌더링 --- */}
+        {/* --- 에이전트 캐릭터 렌더링 (순수 CSS 전신 아바타) --- */}
         {agents.map(agent => (
           <div
             key={agent.id}
@@ -151,98 +193,106 @@ export function VirtualOffice() {
             style={{ left: `${agent.x}%`, top: `${agent.y}%`, transform: 'translate(-50%, -50%)' }}
           >
             {/* 상태 뱃지/말풍선 */}
-            <div className={`mb-2 bg-white border-2 border-black px-1.5 py-0.5 shadow-[2px_2px_0_0_rgba(0,0,0,1)] text-[10px] font-bold whitespace-nowrap ${agent.state === 'reporting' ? 'text-red-600 animate-bounce' : agent.state === 'resting' ? 'text-blue-600' : 'text-black'}`}>
+            <div className={`mb-2 bg-white border-[3px] border-black px-2 py-1 shadow-[3px_3px_0_0_rgba(0,0,0,1)] text-xs font-bold whitespace-nowrap ${agent.state === 'reporting' ? 'text-red-600 animate-bounce' : agent.state === 'resting' ? 'text-blue-600' : 'text-black'}`}>
               {agent.state === 'reporting' ? '❗ ' : ''}
               {agent.state === 'meeting' ? '💬 ' : ''}
               {agent.state === 'collaborating' ? '🤝 ' : ''}
               {agent.state === 'resting' ? '💤 ' : agent.task}
+              <div className="absolute -bottom-[8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-black"></div>
+              <div className="absolute -bottom-[4px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[3px] border-r-[3px] border-t-[5px] border-l-transparent border-r-transparent border-t-white"></div>
             </div>
 
-            {/* 아바타 */}
-            <div className={`relative bg-white border-4 border-black p-0.5 shadow-[4px_4px_0_0_rgba(0,0,0,1)] ${
-              agent.state === 'reporting' ? 'ring-2 ring-red-500' : ''
-            } ${agent.state === 'resting' ? 'grayscale opacity-60' : ''} ${selectedAgent?.id === agent.id ? 'ring-4 ring-yellow-400' : ''}`}>
-              <Image
-                src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${agent.seed}`}
-                alt={agent.name}
-                width={48}
-                height={48}
-                className={`pixelated ${agent.state === 'resting' ? 'bg-gray-400' : 'bg-gray-100'}`}
+            {/* Zzzz 이펙트 */}
+            {agent.state === 'resting' && (
+              <div className="absolute top-0 -right-6 text-2xl font-bold text-blue-800 animate-pulse z-30 drop-shadow-md">
+                💤
+              </div>
+            )}
+
+            {/* 전신 아바타 렌더링 (PixelCharacter 컴포넌트 사용) */}
+            <div className={`relative px-2 pb-1 pt-2 flex justify-center ${selectedAgent?.id === agent.id ? 'bg-yellow-400/30 rounded-full border-4 border-dashed border-yellow-400' : ''}`}>
+              <PixelCharacter
+                color={agent.color}
+                isMoving={agent.isMoving}
+                scale={agent.state === 'resting' ? 0.9 : 1.2}
+                direction={agent.direction}
+                variant={agent.provider.includes('Claude') ? 'robot' : agent.provider.includes('Gemini') ? 'animal' : 'human'}
               />
-              {/* 계정 풀(Provider) 색상 인디케이터 (같은 계정을 쓰면 HP를 공유한다는 시각적 표시) */}
-              <div className={`absolute -top-3 -left-3 border-2 border-black text-[8px] text-white px-1 font-bold ${
-                agent.provider.includes('Claude') ? 'bg-orange-500' : agent.provider.includes('Codex') ? 'bg-green-600' : agent.provider.includes('Gemini') ? 'bg-blue-500' : 'bg-purple-600'
-              }`}>
+
+              {/* 계정 풀 뱃지 (아바타 우상단 조그맣게) */}
+              <div className="absolute top-0 -right-2 bg-black text-white text-[8px] px-1 py-[1px] font-bold border border-white shadow-sm z-30">
                 {agent.provider.split('-')[0]}
               </div>
-              {/* 체력바 */}
-              <div className="absolute -bottom-3 left-[-4px] right-[-4px] h-2 bg-black border-2 border-black p-[1px]">
-                <div className={`h-full ${agent.fatigue < 30 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${agent.fatigue}%` }} />
-              </div>
             </div>
 
-            <div className="mt-4 bg-black text-white text-[9px] px-1 font-bold uppercase drop-shadow-md">
+            {/* 체력바 (아바타 아래) */}
+            <div className="w-[36px] h-[5px] bg-black border-[1px] border-black p-[1px] mt-2 relative z-30 shadow-[0_2px_0_rgba(0,0,0,0.5)]">
+              <div className={`h-full ${agent.fatigue < 30 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${agent.fatigue}%` }} />
+            </div>
+
+            <div className="mt-1.5 bg-black/80 text-white text-[10px] px-1.5 font-bold uppercase drop-shadow-md">
               {agent.name}
             </div>
           </div>
         ))}
       </div>
 
-      {/* 선택된 에이전트 상세 프로필 창 (타이쿤 게임의 캐릭터 관리 창) */}
+      {/* 선택된 에이전트 상세 프로필 창 & 명령 하달 폼 */}
       {selectedAgent && (
-        <div className="retro-card p-4 bg-gray-100 border-4 border-black shadow-[4px_4px_0_0_rgba(0,0,0,1)] animate-in slide-in-from-bottom-4">
-          <div className="flex gap-6 items-start">
-            <div className="bg-white border-4 border-black p-2 shadow-[4px_4px_0_0_rgba(0,0,0,1)]">
-              <Image src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${selectedAgent.seed}`} alt="avatar" width={96} height={96} className="pixelated bg-gray-200" />
+        <div className="retro-card p-4 bg-gray-100 border-[6px] border-black shadow-[6px_6px_0_0_rgba(0,0,0,1)] animate-in slide-in-from-bottom-4 flex flex-col md:flex-row gap-6 mt-2">
+          {/* 캐릭터 상세 */}
+          <div className="flex flex-1 gap-6 items-center">
+            <div className="bg-white border-4 border-black p-6 shadow-[inset_-4px_-4px_0_rgba(0,0,0,0.1),4px_4px_0_0_rgba(0,0,0,1)] flex items-center justify-center min-w-[140px] h-[140px]">
+              <PixelCharacter
+                color={selectedAgent.color}
+                isMoving={true}
+                scale={2.5}
+                direction="right"
+                variant={selectedAgent.provider.includes('Claude') ? 'robot' : selectedAgent.provider.includes('Gemini') ? 'animal' : 'human'}
+              />
             </div>
             <div className="flex-1 space-y-3">
-              <div className="flex justify-between items-center border-b-4 border-black pb-2">
-                <h3 className="text-3xl font-bold uppercase tracking-widest">{selectedAgent.name}</h3>
+              <div className="flex justify-between items-center border-b-4 border-black pb-3">
+                <h3 className="text-4xl font-bold uppercase tracking-widest drop-shadow-[2px_2px_0_rgba(255,255,255,1)]">{selectedAgent.name}</h3>
                 <div className="flex gap-2">
-                  <Badge className="border-2 border-black rounded-none text-lg px-3 bg-white text-black">{selectedAgent.role}</Badge>
-                  <Button variant="destructive" className="retro-btn text-sm h-8" onClick={() => setSelectedAgent(null)}>X 닫기</Button>
+                  <Badge className="border-4 border-black rounded-none text-xl px-4 py-1 bg-white text-black shadow-[2px_2px_0_rgba(0,0,0,1)]">{selectedAgent.role}</Badge>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 pt-1">
                 <div>
-                  <p className="text-sm font-bold text-gray-500 uppercase mb-1">소속 부서 / 작업 공간</p>
-                  <p className="text-lg font-bold">{selectedAgent.assignedRoom.toUpperCase()} 팀</p>
+                  <p className="text-sm font-bold text-gray-500 uppercase mb-1">소속 / 공간</p>
+                  <p className="text-xl font-bold">{selectedAgent.assignedRoom.toUpperCase()} 팀</p>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-500 uppercase mb-1">연동 계정 (OAuth Pool)</p>
-                  <p className="text-lg font-bold text-blue-600">{selectedAgent.provider}</p>
-                  <p className="text-xs text-gray-500">*같은 계정 풀의 요원들은 체력을 공유합니다.</p>
-                </div>
-              </div>
-
-              <div className="space-y-2 mt-4 bg-white border-2 border-black p-3 shadow-inner">
-                <div>
-                  <div className="flex justify-between font-bold text-sm mb-1">
-                    <span>체력 (API 잔여량)</span>
-                    <span className={selectedAgent.fatigue < 30 ? 'text-red-600' : 'text-green-600'}>{selectedAgent.fatigue} / 100</span>
-                  </div>
-                  <div className="w-full h-4 border-2 border-black bg-gray-200 p-[1px]">
-                    <div className={`h-full ${selectedAgent.fatigue < 30 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${selectedAgent.fatigue}%` }} />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between font-bold text-sm mb-1">
-                    <span>과열도 (컨텍스트 토큰)</span>
-                    <span className="text-orange-600">{selectedAgent.heat} / 100</span>
-                  </div>
-                  <div className="w-full h-3 border-2 border-black bg-gray-200 p-[1px]">
-                    <div className="h-full bg-orange-500" style={{ width: `${selectedAgent.heat}%` }} />
-                  </div>
+                  <p className="text-sm font-bold text-gray-500 uppercase mb-1">연동 계정 (OAuth)</p>
+                  <p className="text-xl font-bold text-blue-600 drop-shadow-[1px_1px_0_rgba(255,255,255,1)]">{selectedAgent.provider}</p>
                 </div>
               </div>
 
-              <div className="flex gap-2 mt-4 pt-2 border-t-2 border-black border-dashed">
-                <Button className="retro-btn bg-yellow-400 text-black flex-1">휴식 지시 (쿨다운)</Button>
-                <Button className="retro-btn bg-blue-500 text-white flex-1">직무(Role) 편집</Button>
-                <Button className="retro-btn bg-purple-500 text-white flex-1">스킨/외형 변경</Button>
+              <div className="flex gap-3 mt-4 pt-4 border-t-4 border-black border-dashed">
+                <Button className="retro-btn bg-yellow-400 text-black flex-1 text-sm h-12">강제 휴식</Button>
+                <Button className="retro-btn bg-blue-500 text-white flex-1 text-sm h-12">스킨 변경</Button>
+                <Button variant="destructive" className="retro-btn bg-red-600 text-white text-sm h-12" onClick={() => setSelectedAgent(null)}>X 닫기</Button>
               </div>
             </div>
+          </div>
+
+          {/* 보스 다이렉트 커맨드 구역 */}
+          <div className="w-full md:w-1/3 flex flex-col bg-red-100 border-[6px] border-black p-4 shadow-[inset_-4px_-4px_0_rgba(0,0,0,0.1),4px_4px_0_rgba(0,0,0,1)]">
+            <h4 className="font-bold text-red-900 text-xl uppercase tracking-widest border-b-4 border-red-900/20 pb-2 mb-3 flex items-center gap-2 drop-shadow-[1px_1px_0_rgba(255,255,255,1)]">
+              <span>👑 직접 업무 지시</span>
+            </h4>
+            <p className="text-xs font-bold text-red-800/80 mb-3 leading-tight">선택한 에이전트의 현재 파이프라인을 무시하고 즉각 명령을 하달합니다.</p>
+            <textarea
+              className="flex-1 bg-white border-4 border-black p-3 font-mono text-base resize-none focus:outline-none focus:ring-4 focus:ring-red-500/50 mb-4 shadow-[inset_4px_4px_0_rgba(0,0,0,0.1)]"
+              placeholder="명령어 입력..."
+              value={directCommand}
+              onChange={(e) => setDirectCommand(e.target.value)}
+            />
+            <Button onClick={handleSendCommand} className="retro-btn bg-black text-white hover:bg-gray-800 w-full py-6 text-2xl shadow-[4px_4px_0_rgba(220,38,38,1)]">
+              지시 하달
+            </Button>
           </div>
         </div>
       )}

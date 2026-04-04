@@ -12,16 +12,18 @@ interface Agent {
   name: string;
   role: string;
   provider: string; // OAuth 연동 식별자
-  fatigue: number;  // HP
-  heat: number;     // MP
+  fatigue: number;  // HP (체력/API 할당량)
+  heat: number;     // MP (과열도/컨텍스트 부하)
   task: string;
   state: AgentState;
-  color: string;    // 아바타 옷 색상
+  color: string;
   x: number;
   y: number;
   assignedRoom: 'frontend' | 'backend' | 'qa';
   isMoving: boolean;
   direction: 'left' | 'right';
+  targetX?: number; // 이동 목표 x 좌표
+  targetY?: number; // 이동 목표 y 좌표
 }
 
 const ROOMS = {
@@ -35,33 +37,57 @@ const ROOMS = {
 
 export function VirtualOffice() {
   const [agents, setAgents] = useState<Agent[]>([
-    { id: '1', name: 'Albedo', role: 'UI 디자인', provider: 'Claude-Pro', fatigue: 85, heat: 60, task: '디자인 시안 작업', state: 'working', color: 'bg-orange-500', x: 15, y: 25, assignedRoom: 'frontend', isMoving: false, direction: 'right' },
-    { id: '2', name: 'Reactus', role: '프론트엔드', provider: 'Claude-Pro', fatigue: 85, heat: 40, task: 'API 연동 회의', state: 'collaborating', color: 'bg-yellow-500', x: 25, y: 25, assignedRoom: 'frontend', isMoving: false, direction: 'left' },
-    { id: '3', name: 'Ignis', role: '백엔드', provider: 'Codex-Plus', fatigue: 60, heat: 20, task: '프론트와 회의 중', state: 'collaborating', color: 'bg-green-600', x: 50, y: 25, assignedRoom: 'backend', isMoving: false, direction: 'right' },
-    { id: '4', name: 'DataTron', role: 'DBA', provider: 'Codex-Plus', fatigue: 60, heat: 10, task: '스키마 설계', state: 'working', color: 'bg-emerald-500', x: 60, y: 25, assignedRoom: 'backend', isMoving: false, direction: 'left' },
-    { id: '5', name: 'ScoutBot', role: '스카우터', provider: 'Gemini-AI', fatigue: 5, heat: 10, task: '휴식 중', state: 'resting', color: 'bg-blue-500', x: 80, y: 25, assignedRoom: 'qa', isMoving: false, direction: 'right' },
-    { id: '6', name: 'Jules-X', role: '테스터', provider: 'Jules-Main', fatigue: 100, heat: 5, task: '결함 발견! (보고)', state: 'reporting', color: 'bg-purple-600', x: 85, y: 35, assignedRoom: 'qa', isMoving: false, direction: 'left' },
+    { id: '1', name: 'Albedo', role: 'UI 디자인', provider: 'Claude-Pro', fatigue: 45, heat: 30, task: '디자인 시스템 구축', state: 'working', color: 'bg-orange-500', x: 15, y: 25, assignedRoom: 'frontend', isMoving: false, direction: 'right' },
+    { id: '2', name: 'Reactus', role: '프론트엔드', provider: 'Claude-Pro', fatigue: 85, heat: 40, task: 'API 스키마 회의', state: 'collaborating', color: 'bg-yellow-500', x: 45, y: 60, assignedRoom: 'frontend', isMoving: false, direction: 'left' },
+    { id: '3', name: 'Ignis', role: '백엔드', provider: 'Codex-Plus', fatigue: 60, heat: 20, task: '프론트와 회의 중', state: 'collaborating', color: 'bg-green-600', x: 55, y: 60, assignedRoom: 'backend', isMoving: false, direction: 'right' },
+    { id: '4', name: 'DataTron', role: 'DBA', provider: 'Codex-Plus', fatigue: 60, heat: 10, task: '마이그레이션 스크립트 작성', state: 'working', color: 'bg-emerald-500', x: 60, y: 25, assignedRoom: 'backend', isMoving: false, direction: 'left' },
+    { id: '5', name: 'ScoutBot', role: '스카우터', provider: 'Gemini-AI', fatigue: 5, heat: 10, task: '체력 고갈 (휴식)', state: 'resting', color: 'bg-blue-500', x: 20, y: 75, assignedRoom: 'qa', isMoving: false, direction: 'right' },
+    { id: '6', name: 'Jules-X', role: '테스터', provider: 'Jules-Main', fatigue: 100, heat: 5, task: '테스트 완료 (보고 대기)', state: 'reporting', color: 'bg-purple-600', x: 80, y: 75, assignedRoom: 'qa', isMoving: false, direction: 'left' },
     { id: '7', name: 'Planner', role: '기획자', provider: 'Claude-Pro', fatigue: 85, heat: 50, task: '업무 지시 수령', state: 'meeting', color: 'bg-red-500', x: 45, y: 30, assignedRoom: 'frontend', isMoving: false, direction: 'right' },
   ]);
 
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [directCommand, setDirectCommand] = useState("");
 
+  // 실제 AI 에이전트들의 상태 시뮬레이션
   useEffect(() => {
-    const interval = setInterval(() => {
+    const tick = setInterval(() => {
       setAgents(current =>
         current.map(agent => {
+          let newState = agent.state;
+          let newFatigue = agent.fatigue;
+          let newHeat = agent.heat;
+          let newTask = agent.task;
+
+          // 1. 상태 변이 로직 (피로도 소진/회복)
+          if (agent.state === 'working' || agent.state === 'collaborating') {
+            newFatigue = Math.max(0, agent.fatigue - Math.floor(Math.random() * 3)); // 피로도(HP) 감소
+            newHeat = Math.min(100, agent.heat + Math.floor(Math.random() * 5));     // 열기(MP) 증가
+
+            // 체력이 바닥나면 강제 휴식
+            if (newFatigue <= 0) {
+              newState = 'resting';
+              newTask = '시스템 쿨다운 (휴식 중)';
+            }
+          } else if (agent.state === 'resting') {
+            newFatigue = Math.min(100, agent.fatigue + Math.floor(Math.random() * 8)); // 휴식 시 체력 회복
+            newHeat = Math.max(0, agent.heat - Math.floor(Math.random() * 10));        // 열기 식힘
+
+            // 완전 회복 시 다시 원래 방으로 복귀하여 일 시작
+            if (newFatigue >= 90) {
+              newState = 'working';
+              newTask = '업무 복귀 (대기)';
+            }
+          }
+
+          // 2. 물리적 좌표 및 애니메이션 계산
           let bounds = ROOMS[agent.assignedRoom];
+          if (newState === 'resting') bounds = ROOMS.breakRoom;
+          else if (newState === 'reporting' || newState === 'meeting') bounds = ROOMS.bossOffice;
+          else if (newState === 'collaborating') bounds = ROOMS.meetingRoom;
 
-          if (agent.state === 'resting') bounds = ROOMS.breakRoom;
-          else if (agent.state === 'reporting') bounds = ROOMS.bossOffice;
-          else if (agent.state === 'meeting') bounds = ROOMS.bossOffice;
-          else if (agent.state === 'collaborating') bounds = ROOMS.meetingRoom;
-
-          const moveSpeed = agent.state === 'resting' ? 2 : (agent.state === 'reporting' ? 8 : 4);
-
-          // 랜덤 50% 확률로 걷기 / 가만히 있기
-          const willMove = Math.random() > 0.5 && agent.state !== 'resting';
+          const moveSpeed = newState === 'resting' ? 2 : (newState === 'reporting' ? 8 : 4);
+          const willMove = Math.random() > 0.4 && newState !== 'resting'; // 휴식 중엔 안 움직임
 
           let nextX = agent.x;
           let nextY = agent.y;
@@ -73,22 +99,30 @@ export function VirtualOffice() {
             nextX = agent.x + dx;
             nextY = agent.y + dy;
 
-            // X 좌표의 변화량에 따라 캐릭터가 바라보는 방향 변경 (Flip)
+            // X축 이동 방향에 따라 캐릭터가 앞을 보게(Flip) 만듦
             if (dx > 0.5) newDirection = 'right';
             else if (dx < -0.5) newDirection = 'left';
           }
 
+          // 방의 경계선을 넘어가지 못하게 막기
+          nextX = Math.max(bounds.xMin, Math.min(bounds.xMax, nextX));
+          nextY = Math.max(bounds.yMin, Math.min(bounds.yMax, nextY));
+
           return {
             ...agent,
+            state: newState,
+            fatigue: newFatigue,
+            heat: newHeat,
+            task: newTask,
             isMoving: willMove,
             direction: newDirection,
-            x: Math.max(bounds.xMin, Math.min(bounds.xMax, nextX)),
-            y: Math.max(bounds.yMin, Math.min(bounds.yMax, nextY)),
+            x: nextX,
+            y: nextY,
           };
         })
       );
-    }, 2500);
-    return () => clearInterval(interval);
+    }, 1500); // 부드럽고 잦은 업데이트
+    return () => clearInterval(tick);
   }, []);
 
   const handleSendCommand = () => {
@@ -97,11 +131,22 @@ export function VirtualOffice() {
     setAgents(current =>
       current.map(agent =>
         agent.id === selectedAgent.id
-          ? { ...agent, task: directCommand, state: 'working' }
+          ? { ...agent, task: directCommand, state: 'working', fatigue: 100, heat: 0 } // 보스 지시를 받으면 체력 풀충전 후 파견
           : agent
       )
     );
     setDirectCommand("");
+  };
+
+  const handleForceRest = () => {
+    if (!selectedAgent) return;
+    setAgents(current =>
+      current.map(agent =>
+        agent.id === selectedAgent.id
+          ? { ...agent, state: 'resting', task: '보스 지시로 인한 강제 휴가' }
+          : agent
+      )
+    );
   };
 
   return (
@@ -166,7 +211,9 @@ export function VirtualOffice() {
           <h3 className="absolute top-2 font-bold text-sm text-yellow-900 bg-white/70 px-1 drop-shadow-[1px_1px_0_rgba(255,255,255,1)]">
             🤝 협업/회의실
           </h3>
-          <div className="w-[60%] h-[40%] bg-amber-300 border-[4px] border-black shadow-[0_6px_0_rgba(180,83,9,1),0_10px_0_rgba(0,0,0,1)] rounded-full z-0 mt-4" />
+          <div className="w-[60%] h-[40%] bg-amber-300 border-[4px] border-black shadow-[0_6px_0_rgba(180,83,9,1),0_10px_0_rgba(0,0,0,1)] rounded-full z-0 mt-4 flex items-center justify-center">
+            <span className="text-amber-800 text-[10px] font-bold opacity-50">MEETING</span>
+          </div>
           <div className="absolute top-[-12px] left-[35%] w-[30%] h-[12px] bg-[#2b2b2b] border-x-[3px] border-black" />
         </div>
 
@@ -176,7 +223,7 @@ export function VirtualOffice() {
             👑 보스 집무실
           </h3>
           <div className="absolute top-[30%] left-[10%] w-[80%] h-[60px] bg-[#78350f] border-[4px] border-black shadow-[0_8px_0_rgba(69,26,3,1),0_12px_0_rgba(0,0,0,1)] flex items-center justify-center z-0">
-            <span className="text-white text-lg font-bold tracking-widest opacity-80 drop-shadow-[1px_1px_0_rgba(0,0,0,1)]">❗보고 대기선</span>
+            <span className="text-white text-lg font-bold tracking-widest opacity-80 drop-shadow-[1px_1px_0_rgba(0,0,0,1)]">❗결재 및 보고 대기선</span>
           </div>
           <div className="absolute bottom-[10%] left-[40%] w-[60px] h-[50px] bg-gray-900 border-[4px] border-black shadow-[0_6px_0_rgba(17,24,39,1),0_10px_0_rgba(0,0,0,1)] rounded-md flex items-center justify-center z-0">
              <span className="text-white text-[10px] font-bold">BOSS</span>
@@ -189,7 +236,7 @@ export function VirtualOffice() {
           <div
             key={agent.id}
             onClick={() => setSelectedAgent(agent)}
-            className="absolute flex flex-col items-center transition-all duration-[2000ms] ease-linear z-20 cursor-pointer hover:z-30 hover:scale-110"
+            className="absolute flex flex-col items-center transition-all duration-[1500ms] ease-linear z-20 cursor-pointer hover:z-30 hover:scale-110"
             style={{ left: `${agent.x}%`, top: `${agent.y}%`, transform: 'translate(-50%, -50%)' }}
           >
             {/* 상태 뱃지/말풍선 */}
@@ -210,7 +257,7 @@ export function VirtualOffice() {
             )}
 
             {/* 전신 아바타 렌더링 (PixelCharacter 컴포넌트 사용) */}
-            <div className={`relative px-2 pb-1 pt-2 flex justify-center ${selectedAgent?.id === agent.id ? 'bg-yellow-400/30 rounded-full border-4 border-dashed border-yellow-400' : ''}`}>
+            <div className={`relative px-2 pb-1 pt-2 flex justify-center ${selectedAgent?.id === agent.id ? 'bg-yellow-400/50 rounded-full border-4 border-dashed border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.8)]' : ''}`}>
               <PixelCharacter
                 color={agent.color}
                 isMoving={agent.isMoving}
@@ -227,7 +274,7 @@ export function VirtualOffice() {
 
             {/* 체력바 (아바타 아래) */}
             <div className="w-[36px] h-[5px] bg-black border-[1px] border-black p-[1px] mt-2 relative z-30 shadow-[0_2px_0_rgba(0,0,0,0.5)]">
-              <div className={`h-full ${agent.fatigue < 30 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${agent.fatigue}%` }} />
+              <div className={`h-full border-r-[1px] border-white/50 ${agent.fatigue < 30 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${agent.fatigue}%` }} />
             </div>
 
             <div className="mt-1.5 bg-black/80 text-white text-[10px] px-1.5 font-bold uppercase drop-shadow-md">
@@ -271,8 +318,8 @@ export function VirtualOffice() {
               </div>
 
               <div className="flex gap-3 mt-4 pt-4 border-t-4 border-black border-dashed">
-                <Button className="retro-btn bg-yellow-400 text-black flex-1 text-sm h-12">강제 휴식</Button>
-                <Button className="retro-btn bg-blue-500 text-white flex-1 text-sm h-12">스킨 변경</Button>
+                <Button onClick={handleForceRest} className="retro-btn bg-yellow-400 text-black flex-1 text-sm h-12">강제 휴식 (Break Room)</Button>
+                <Button className="retro-btn bg-blue-500 text-white flex-1 text-sm h-12">스킨 변경 (기능 예정)</Button>
                 <Button variant="destructive" className="retro-btn bg-red-600 text-white text-sm h-12" onClick={() => setSelectedAgent(null)}>X 닫기</Button>
               </div>
             </div>
@@ -283,10 +330,10 @@ export function VirtualOffice() {
             <h4 className="font-bold text-red-900 text-xl uppercase tracking-widest border-b-4 border-red-900/20 pb-2 mb-3 flex items-center gap-2 drop-shadow-[1px_1px_0_rgba(255,255,255,1)]">
               <span>👑 직접 업무 지시</span>
             </h4>
-            <p className="text-xs font-bold text-red-800/80 mb-3 leading-tight">선택한 에이전트의 현재 파이프라인을 무시하고 즉각 명령을 하달합니다.</p>
+            <p className="text-xs font-bold text-red-800/80 mb-3 leading-tight">입력 시 에이전트의 체력(HP)을 회복시키고 해당 업무로 파견합니다.</p>
             <textarea
               className="flex-1 bg-white border-4 border-black p-3 font-mono text-base resize-none focus:outline-none focus:ring-4 focus:ring-red-500/50 mb-4 shadow-[inset_4px_4px_0_rgba(0,0,0,0.1)]"
-              placeholder="명령어 입력..."
+              placeholder="ex) Auth.ts 파일의 토큰 버그 수정해줘..."
               value={directCommand}
               onChange={(e) => setDirectCommand(e.target.value)}
             />

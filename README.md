@@ -61,7 +61,7 @@ docker-compose -f docker-compose.demo.yml up --build
 
 접속:
 
-- 대시보드 UI: `http://localhost:3000/dashboard`
+- 대시보드 UI: `http://localhost:7777/dashboard`
 - 백엔드 API: `http://localhost:4315/api/health`
 
 중지:
@@ -142,7 +142,7 @@ cd apps/server
 node --import tsx src/index.ts
 ```
 
-터미널 2: 웹 (`3000`)
+터미널 2: 웹 (`7777`)
 
 ```bash
 corepack pnpm --filter @workspace/web run dev
@@ -150,22 +150,14 @@ corepack pnpm --filter @workspace/web run dev
 
 대시보드:
 
-- `http://localhost:3000/dashboard`
-
-웹을 4000 포트로 실행:
-
-```bash
-corepack pnpm --filter @workspace/web exec next dev -p 4000
-```
-
-- `http://localhost:4000/dashboard`
+- `http://localhost:7777/dashboard`
 
 ### 헬스 체크
 
 ```bash
 curl http://127.0.0.1:4315/api/health
-curl http://127.0.0.1:3000/api/health
-curl http://127.0.0.1:3000/dashboard
+curl http://127.0.0.1:7777/api/health
+curl http://127.0.0.1:7777/dashboard
 ```
 
 ## 5) 핵심 개념

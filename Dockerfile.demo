@@ -15,6 +15,6 @@ COPY scripts ./scripts
 
 RUN corepack pnpm install --frozen-lockfile
 
-EXPOSE 3000 4315
+EXPOSE 7777 4315
 
 CMD ["bash", "./scripts/demo-start.sh"]

@@ -36,6 +36,10 @@ export type AgentGuidanceEvent =
       state: ProbeUiState;
       provider: string;
     }
+  | {
+      type: "pm-report";
+      agentName: string;
+    }
   | { type: "probe-error"; message: string }
   | {
       type: "history-filter-changed";

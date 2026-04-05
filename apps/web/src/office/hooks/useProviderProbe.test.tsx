@@ -54,7 +54,7 @@ const createDeferred = <T,>(): Deferred<T> => {
 };
 
 describe("classifyProbeUiState", () => {
-  it("classifies success/partial/stale/no-signal/error consistently", () => {
+  it("classifies success/partial/error/no-signal consistently", () => {
     const successRun = makeRun({ id: "success", status: "success" });
     const partialRun = makeRun({ id: "partial", status: "partial" });
     const staleRun = makeRun({
@@ -67,7 +67,7 @@ describe("classifyProbeUiState", () => {
 
     expect(classifyProbeUiState({ run: successRun, nowTimestamp })).toBe("success");
     expect(classifyProbeUiState({ run: partialRun, nowTimestamp })).toBe("partial");
-    expect(classifyProbeUiState({ run: staleRun, nowTimestamp })).toBe("stale");
+    expect(classifyProbeUiState({ run: staleRun, nowTimestamp })).toBe("error");
     expect(classifyProbeUiState({ run: null, nowTimestamp })).toBe("no-signal");
     expect(classifyProbeUiState({ run: successRun, errorMessage: "failed", nowTimestamp })).toBe("error");
   });

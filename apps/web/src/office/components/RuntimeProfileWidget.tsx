@@ -5,6 +5,10 @@ import type {
   ProviderUsageProbeProvider,
   RuntimeProfileView
 } from "@workspace/shared";
+import {
+  createOfficeTranslator,
+  type OfficeTranslator
+} from "../i18n/office-i18n";
 
 type RuntimeProfileDraft = {
   key: string;
@@ -32,6 +36,7 @@ type RuntimeProfileWidgetProps = {
   onDelete: () => Promise<boolean>;
   onDeleteIntent?: (runtimeProfileKey: string) => void;
   onDeleteCancel?: () => void;
+  t?: OfficeTranslator;
 };
 
 export function RuntimeProfileWidget({
@@ -52,7 +57,8 @@ export function RuntimeProfileWidget({
   onUpdate,
   onDelete,
   onDeleteIntent,
-  onDeleteCancel
+  onDeleteCancel,
+  t = createOfficeTranslator("en")
 }: RuntimeProfileWidgetProps): JSX.Element {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const filteredPools = pools.filter((pool) => pool.provider === selectedProvider);
@@ -79,18 +85,18 @@ export function RuntimeProfileWidget({
   return (
     <section className="card office-widget">
       <header>
-        <h2>Runtime Profiles</h2>
+        <h2>{t("widget.runtime.title")}</h2>
       </header>
 
       <div className="form-grid two-cols">
         <label>
-          <span>Profile</span>
+          <span>{t("widget.runtime.profile")}</span>
           <select
             value={selectedRuntimeProfileId}
             onChange={(event) => onSelectRuntimeProfile(event.target.value)}
             disabled={isMutating}
           >
-            <option value="">(none)</option>
+            <option value="">{t("widget.runtime.none")}</option>
             {filteredProfiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
                 {profile.key}
@@ -102,7 +108,7 @@ export function RuntimeProfileWidget({
 
       <div className="form-grid two-cols">
         <label>
-          <span>Create Key</span>
+          <span>{t("widget.runtime.createKey")}</span>
           <input
             value={createDraft.key}
             onChange={(event) => onChangeCreateDraft({ ...createDraft, key: event.target.value })}
@@ -111,13 +117,13 @@ export function RuntimeProfileWidget({
           />
         </label>
         <label>
-          <span>Create Pool</span>
+          <span>{t("widget.runtime.createPool")}</span>
           <select
             value={createDraft.accountPoolId}
             onChange={(event) => onChangeCreateDraft({ ...createDraft, accountPoolId: event.target.value })}
             disabled={isMutating}
           >
-            <option value="">(select pool)</option>
+            <option value="">{t("widget.runtime.selectPool")}</option>
             {filteredPools.map((pool) => (
               <option key={pool.id} value={pool.id}>
                 {pool.key}
@@ -126,7 +132,7 @@ export function RuntimeProfileWidget({
           </select>
         </label>
         <label>
-          <span>Create Path</span>
+          <span>{t("widget.runtime.createPath")}</span>
           <input
             value={createDraft.profilePath}
             onChange={(event) => onChangeCreateDraft({ ...createDraft, profilePath: event.target.value })}
@@ -135,7 +141,7 @@ export function RuntimeProfileWidget({
           />
         </label>
         <label>
-          <span>Create Status</span>
+          <span>{t("widget.runtime.createStatus")}</span>
           <input
             value={createDraft.status}
             onChange={(event) => onChangeCreateDraft({ ...createDraft, status: event.target.value })}
@@ -145,13 +151,13 @@ export function RuntimeProfileWidget({
         </label>
       </div>
       <button type="button" onClick={onCreate} disabled={isMutating}>
-        {isMutating ? "Submitting..." : "Create Runtime Profile"}
+        {isMutating ? t("widget.runtime.submitting") : t("widget.runtime.create")}
       </button>
       <p className="hint">Create requires provider/pool consistency and a lower-case key.</p>
 
       <div className="form-grid two-cols">
         <label>
-          <span>Update Key</span>
+          <span>{t("widget.runtime.updateKey")}</span>
           <input
             value={updateDraft.key}
             onChange={(event) => onChangeUpdateDraft({ ...updateDraft, key: event.target.value })}
@@ -160,7 +166,7 @@ export function RuntimeProfileWidget({
           />
         </label>
         <label>
-          <span>Update Pool</span>
+          <span>{t("widget.runtime.updatePool")}</span>
           <select
             value={updateDraft.accountPoolId}
             onChange={(event) => onChangeUpdateDraft({ ...updateDraft, accountPoolId: event.target.value })}
@@ -175,7 +181,7 @@ export function RuntimeProfileWidget({
           </select>
         </label>
         <label>
-          <span>Update Path</span>
+          <span>{t("widget.runtime.updatePath")}</span>
           <input
             value={updateDraft.profilePath}
             onChange={(event) => onChangeUpdateDraft({ ...updateDraft, profilePath: event.target.value })}
@@ -184,7 +190,7 @@ export function RuntimeProfileWidget({
           />
         </label>
         <label>
-          <span>Update Status</span>
+          <span>{t("widget.runtime.updateStatus")}</span>
           <input
             value={updateDraft.status}
             onChange={(event) => onChangeUpdateDraft({ ...updateDraft, status: event.target.value })}
@@ -196,7 +202,7 @@ export function RuntimeProfileWidget({
 
       <div className="row-actions">
         <button type="button" className="secondary" onClick={onUpdate} disabled={isMutating || !selectedRuntimeProfileId}>
-          Update Selected
+          {t("widget.runtime.update")}
         </button>
         <button
           type="button"
@@ -204,13 +210,13 @@ export function RuntimeProfileWidget({
           onClick={onOpenDeleteConfirm}
           disabled={isMutating || !selectedRuntimeProfileId}
         >
-          Delete Selected
+          {t("widget.runtime.delete")}
         </button>
       </div>
 
       {isDeleteConfirmOpen ? (
         <div className="card compact danger-box">
-          <strong>Confirm Delete</strong>
+          <strong>{t("widget.runtime.confirmTitle")}</strong>
           <p>
             Delete runtime profile <code>{selectedRuntimeProfileKey ?? selectedRuntimeProfileId}</code>? This cannot be
             undone.
@@ -225,14 +231,14 @@ export function RuntimeProfileWidget({
               }}
               disabled={isMutating}
             >
-              Cancel
+              {t("widget.runtime.cancel")}
             </button>
             <button
               type="button"
               onClick={() => void onConfirmDelete()}
               disabled={isMutating}
             >
-              {isMutating ? "Deleting..." : "Confirm Delete"}
+              {isMutating ? t("widget.runtime.deleting") : t("widget.runtime.confirmDelete")}
             </button>
           </div>
         </div>
@@ -262,7 +268,7 @@ export function RuntimeProfileWidget({
             ))}
             {filteredProfiles.length === 0 ? (
               <tr>
-                <td colSpan={4}>No runtime profiles for selected provider. Create a profile above to continue.</td>
+                <td colSpan={4}>{t("widget.runtime.empty")}</td>
               </tr>
             ) : null}
           </tbody>

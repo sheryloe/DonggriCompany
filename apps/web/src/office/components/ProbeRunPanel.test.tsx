@@ -51,7 +51,7 @@ describe("ProbeRunPanel states", () => {
       />
     );
 
-    expect(screen.getByText("partial")).not.toBeNull();
+    expect(screen.getByText("VERIFY")).not.toBeNull();
     expect(screen.getByText("precision: derived")).not.toBeNull();
     expect(screen.getByText("degraded: true")).not.toBeNull();
   });

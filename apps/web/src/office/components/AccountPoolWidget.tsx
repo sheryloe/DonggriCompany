@@ -1,4 +1,8 @@
 import type { AccountPoolView, ProviderUsageProbeProvider } from "@workspace/shared";
+import {
+  createOfficeTranslator,
+  type OfficeTranslator
+} from "../i18n/office-i18n";
 
 type AccountPoolWidgetProps = {
   pools: AccountPoolView[];
@@ -6,6 +10,7 @@ type AccountPoolWidgetProps = {
   selectedAccountPoolId: string;
   onSelectProvider: (provider: ProviderUsageProbeProvider) => void;
   onSelectAccountPool: (accountPoolId: string) => void;
+  t?: OfficeTranslator;
 };
 
 const providers: ProviderUsageProbeProvider[] = ["claude", "codex", "gemini"];
@@ -15,7 +20,8 @@ export function AccountPoolWidget({
   selectedProvider,
   selectedAccountPoolId,
   onSelectProvider,
-  onSelectAccountPool
+  onSelectAccountPool,
+  t = createOfficeTranslator("en")
 }: AccountPoolWidgetProps): JSX.Element {
   const filteredPools = pools.filter((pool) => pool.provider === selectedProvider);
   const selectedPool =
@@ -26,12 +32,12 @@ export function AccountPoolWidget({
   return (
     <section className="card office-widget">
       <header>
-        <h2>Account Pools</h2>
+        <h2>{t("widget.account.title")}</h2>
       </header>
 
       <div className="form-grid two-cols">
         <label>
-          <span>Provider</span>
+          <span>{t("widget.account.provider")}</span>
           <select
             value={selectedProvider}
             onChange={(event) => onSelectProvider(event.target.value as ProviderUsageProbeProvider)}
@@ -44,12 +50,12 @@ export function AccountPoolWidget({
           </select>
         </label>
         <label>
-          <span>Pool</span>
+          <span>{t("widget.account.pool")}</span>
           <select
             value={selectedAccountPoolId}
             onChange={(event) => onSelectAccountPool(event.target.value)}
           >
-            <option value="">(none)</option>
+            <option value="">{t("widget.account.none")}</option>
             {filteredPools.map((pool) => (
               <option key={pool.id} value={pool.id}>
                 {pool.key}
@@ -60,7 +66,7 @@ export function AccountPoolWidget({
       </div>
 
       <div className="card compact">
-        <strong>Selected Pool Detail</strong>
+        <strong>{t("widget.account.detail")}</strong>
         {selectedPool ? (
           <>
             <p>key: {selectedPool.key}</p>
@@ -75,7 +81,7 @@ export function AccountPoolWidget({
             </p>
           </>
         ) : (
-          <p>No pool is selected. Choose a provider and pool to inspect fatigue details.</p>
+          <p>{t("widget.account.noSelection")}</p>
         )}
       </div>
 
@@ -83,10 +89,10 @@ export function AccountPoolWidget({
         <table className="admin-table">
           <thead>
             <tr>
-              <th>Key</th>
-              <th>Fatigue</th>
-              <th>State</th>
-              <th>Enabled</th>
+              <th>{t("widget.account.table.key")}</th>
+              <th>{t("widget.account.table.fatigue")}</th>
+              <th>{t("widget.account.table.state")}</th>
+              <th>{t("widget.account.table.enabled")}</th>
             </tr>
           </thead>
           <tbody>
@@ -95,12 +101,12 @@ export function AccountPoolWidget({
                 <td>{pool.key}</td>
                 <td>{pool.latestFatigue ? `${pool.latestFatigue.normalizedPercent.toFixed(1)}%` : "-"}</td>
                 <td>{pool.latestFatigue?.fatigueState ?? "unknown"}</td>
-                <td>{pool.isEnabled ? "enabled" : "disabled"}</td>
+                <td>{pool.isEnabled ? t("widget.account.enabled") : t("widget.account.disabled")}</td>
               </tr>
             ))}
             {filteredPools.length === 0 ? (
               <tr>
-                <td colSpan={4}>No account pools for selected provider. Add one in Admin Account Pools.</td>
+                <td colSpan={4}>{t("widget.account.empty")}</td>
               </tr>
             ) : null}
           </tbody>

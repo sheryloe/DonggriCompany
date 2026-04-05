@@ -1,5 +1,9 @@
 import type { ProviderProbeRunView } from "@workspace/shared";
 
+import {
+  createOfficeTranslator,
+  type OfficeTranslator
+} from "../i18n/office-i18n";
 import type { ProbeUiState } from "../lib/probe-ui-state";
 import { ProbeStateBadge } from "./ProbeStateBadge";
 
@@ -13,6 +17,7 @@ type ProbeRunPanelProps = {
   errorMessage: string | null;
   actionMessage: string | null;
   onRun: () => void;
+  t?: OfficeTranslator;
 };
 
 export function ProbeRunPanel({
@@ -24,24 +29,25 @@ export function ProbeRunPanel({
   isRunning,
   errorMessage,
   actionMessage,
-  onRun
+  onRun,
+  t = createOfficeTranslator("en")
 }: ProbeRunPanelProps): JSX.Element {
   return (
     <section className="card office-widget">
       <header>
-        <h2>Provider Probe</h2>
+        <h2>{t("widget.probe.title")}</h2>
       </header>
 
-      <p>provider: {provider}</p>
-      <p>account pool: {accountPoolId || "-"}</p>
-      <p>runtime profile: {runtimeProfileId || "-"}</p>
+      <p>{t("widget.probe.provider")}: {provider}</p>
+      <p>{t("widget.probe.pool")}: {accountPoolId || "-"}</p>
+      <p>{t("widget.probe.profile")}: {runtimeProfileId || "-"}</p>
 
       <div className="row-actions">
         <button type="button" onClick={onRun} disabled={isRunning}>
-          {isRunning ? "Running..." : "Run Probe"}
+          {isRunning ? t("topbar.running") : t("topbar.runProbe")}
         </button>
         <button type="button" className="secondary" onClick={onRun} disabled={isRunning}>
-          {isRunning ? "Running..." : "Retry Probe"}
+          {isRunning ? t("topbar.running") : t("widget.probe.retry")}
         </button>
       </div>
 
@@ -51,7 +57,7 @@ export function ProbeRunPanel({
       {actionMessage ? <p className="hint">{actionMessage}</p> : null}
 
       <div className="card compact">
-        <strong>Latest Result</strong>
+        <strong>{t("widget.probe.latest")}</strong>
         <p>
           <ProbeStateBadge state={latestProbeState} />
         </p>

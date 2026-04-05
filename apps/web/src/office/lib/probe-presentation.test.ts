@@ -8,18 +8,21 @@ import { mapProbeStateToPresentation } from "./probe-presentation";
 const states: ProbeUiState[] = ["success", "partial", "stale", "no-signal", "error"];
 
 describe("mapProbeStateToPresentation", () => {
-  it("maps each probe ui state to avatar/board/copy presentation", () => {
-    const mapped = states.map((state) => mapProbeStateToPresentation(state));
-    expect(mapped).toEqual([
-      { avatarMood: "calm", boardSignal: "stable", copyTone: "normal" },
-      { avatarMood: "cautious", boardSignal: "mixed", copyTone: "caution" },
-      { avatarMood: "sleepy", boardSignal: "dim", copyTone: "nudge" },
-      { avatarMood: "disconnected", boardSignal: "muted", copyTone: "caution" },
-      { avatarMood: "alert", boardSignal: "warning", copyTone: "critical" }
-    ]);
+  it("keeps semantic contract stable for all state keys", () => {
+    for (const state of states) {
+      const presentation = mapProbeStateToPresentation(state);
+      expect(presentation.stateKey).toBe(state);
+      expect(presentation.stateLabel.length).toBeGreaterThan(0);
+      expect(presentation.hudLabel.length).toBeGreaterThan(0);
+      expect(presentation.stateSummary.length).toBeGreaterThan(0);
+      expect(presentation.emote.length).toBeGreaterThan(0);
+      expect(presentation.confidenceHint).toMatch(/^(high|medium|low|none)$/);
+      expect(presentation.copyTone).toMatch(/^(normal|caution|nudge|critical)$/);
+      expect(presentation.motionPreset).toMatch(/^(steady|scan|drift|glitch|alarm)$/);
+    }
   });
 
-  it("stays consistent with classifyProbeUiState outputs", () => {
+  it("stays compatible with classifier outputs including stale failures", () => {
     const nowTimestamp = Date.parse("2026-04-03T00:00:00.000Z");
     const staleTimestamp = "2026-04-01T00:00:00.000Z";
     const runs: Array<ProviderProbeRunView | null> = [
@@ -48,7 +51,7 @@ describe("mapProbeStateToPresentation", () => {
         finishedAt: "2026-04-03T00:00:00.000Z"
       },
       {
-        id: "run-stale",
+        id: "run-stale-failure",
         provider: "codex",
         accountPoolId: "pool-1",
         runtimeProfileId: "profile-1",
@@ -67,7 +70,8 @@ describe("mapProbeStateToPresentation", () => {
         run,
         nowTimestamp
       });
-      expect(mapProbeStateToPresentation(state)).toBeDefined();
+      const presentation = mapProbeStateToPresentation(state);
+      expect(presentation.stateKey).toBe(state);
     }
   });
 });

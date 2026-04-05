@@ -1,21 +1,37 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { ProviderUsageProbeHistoryQuery, UpdateRuntimeProfileRequest } from "@workspace/shared";
+import type {
+  ProviderUsageProbeHistoryQuery,
+  UpdateRuntimeProfileRequest
+} from "@workspace/shared";
 
-import { AgentShell } from "../avatar/AgentShell";
+import { getAgentGuidanceMessage } from "../avatar/agent-copy";
 import type { AgentGuidanceEvent } from "../avatar/agent-types";
-import { AvatarLayerBoundary } from "../avatar/AvatarLayerBoundary";
+import { getMonitorEntries } from "../board/office-agents";
 import { HistoryBoard } from "../board/HistoryBoard";
 import { OfficeBoardScene } from "../board/OfficeBoardScene";
+import type { SceneSyncState } from "../board/scene-types";
 import { AccountPoolWidget } from "../components/AccountPoolWidget";
+import { AgentMonitorGrid } from "../components/AgentMonitorGrid";
+import { OfficeConversationPanel } from "../components/OfficeConversationPanel";
 import { ProbeRunPanel } from "../components/ProbeRunPanel";
 import { RuntimeProfileWidget } from "../components/RuntimeProfileWidget";
-import { TopOpsBar } from "../components/TopOpsBar";
 import { useProviderProbe } from "../hooks/useProviderProbe";
 import { useRuntimeProfileCrud } from "../hooks/useRuntimeProfileCrud";
 import { useStep2OpsBootstrap } from "../hooks/useStep2OpsBootstrap";
+import { useTycoonSimulation } from "../hooks/useTycoonSimulation";
+import {
+  DEFAULT_OFFICE_LOCALE,
+  createOfficeTranslator,
+  loadOfficeLocale,
+  resolveOfficeLocale,
+  saveOfficeLocale,
+  type OfficeLocale,
+  type OfficeSettingsTab
+} from "../i18n/office-i18n";
+import { mapProbeStateToPresentation } from "../lib/probe-presentation";
 import { classifyProbeUiState } from "../lib/probe-ui-state";
 
 type RuntimeProfileDraft = {
@@ -25,6 +41,8 @@ type RuntimeProfileDraft = {
   status: string;
 };
 
+type OfficeThemeMode = "system" | "light" | "dark";
+
 const emptyDraft: RuntimeProfileDraft = {
   key: "",
   accountPoolId: "",
@@ -32,8 +50,25 @@ const emptyDraft: RuntimeProfileDraft = {
   status: ""
 };
 
+const OFFICE_THEME_STORAGE_KEY = "donggri.office.theme";
+
 const startsWith = (value: string | null, text: string): boolean => {
   return value ? value.startsWith(text) : false;
+};
+
+const settingsTabs: OfficeSettingsTab[] = ["account", "runtime", "probe", "history"];
+
+const localeLangCode: Record<OfficeLocale, string> = {
+  ko: "ko",
+  en: "en",
+  zh: "zh-CN"
+};
+
+const resolveThemeMode = (value: string | null): OfficeThemeMode => {
+  if (value === "light" || value === "dark" || value === "system") {
+    return value;
+  }
+  return "system";
 };
 
 export default function OfficePage(): JSX.Element {
@@ -41,6 +76,49 @@ export default function OfficePage(): JSX.Element {
   const [createDraft, setCreateDraft] = useState<RuntimeProfileDraft>(emptyDraft);
   const [updateDraft, setUpdateDraft] = useState<RuntimeProfileDraft>(emptyDraft);
   const [agentEvent, setAgentEvent] = useState<AgentGuidanceEvent>({ type: "bootstrap-loading" });
+  const [lastSceneActionAt, setLastSceneActionAt] = useState<string>("boot");
+  const [activeSettingsTab, setActiveSettingsTab] = useState<OfficeSettingsTab>("account");
+  const [locale, setLocale] = useState<OfficeLocale>(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_OFFICE_LOCALE;
+    }
+    return loadOfficeLocale(window.localStorage);
+  });
+  const [themeMode, setThemeMode] = useState<OfficeThemeMode>(() => {
+    if (typeof window === "undefined") {
+      return "system";
+    }
+    return resolveThemeMode(window.localStorage.getItem(OFFICE_THEME_STORAGE_KEY));
+  });
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+  const contextKeyRef = useRef<string>("");
+  const t = useMemo(() => createOfficeTranslator(locale), [locale]);
+  const resolvedTheme = themeMode === "system" ? (systemPrefersDark ? "dark" : "light") : themeMode;
+  const tabLabelMap = useMemo(
+    () =>
+      ({
+        account: t("settings.tab.account"),
+        runtime: t("settings.tab.runtime"),
+        probe: t("settings.tab.probe"),
+        history: t("settings.tab.history")
+      }) as Record<OfficeSettingsTab, string>,
+    [t]
+  );
+
+  const markSceneAction = useCallback((reason: string): void => {
+    const nowLabel = new Date().toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+    setLastSceneActionAt(`${reason}@${nowLabel}`);
+  }, []);
 
   const getHistoryQuery = useCallback((): ProviderUsageProbeHistoryQuery => {
     const state = bootstrap.officeOpsState;
@@ -67,6 +145,36 @@ export default function OfficePage(): JSX.Element {
       await probe.refreshHistory();
     }
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    saveOfficeLocale(locale, window.localStorage);
+    document.documentElement.lang = localeLangCode[locale];
+  }, [locale]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(OFFICE_THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (event: MediaQueryListEvent): void => {
+      setSystemPrefersDark(event.matches);
+    };
+    setSystemPrefersDark(mediaQuery.matches);
+    mediaQuery.addEventListener("change", onChange);
+    return () => {
+      mediaQuery.removeEventListener("change", onChange);
+    };
+  }, []);
 
   useEffect(() => {
     const providerPoolIds = new Set(
@@ -157,6 +265,82 @@ export default function OfficePage(): JSX.Element {
     run: probe.latestRun,
     errorMessage: probe.errorMessage
   });
+  const latestProbePresentation = mapProbeStateToPresentation(latestProbeState);
+  const selectedRuntimeProfile =
+    bootstrap.profiles.find((profile) => profile.id === bootstrap.officeOpsState.selectedRuntimeProfileId) ?? null;
+  const selectedPool = bootstrap.pools.find((pool) => pool.id === bootstrap.officeOpsState.selectedAccountPoolId) ?? null;
+  const agentName = `${bootstrap.officeOpsState.selectedProvider.toUpperCase()} Agent`;
+  const selectedPoolKey = selectedPool?.key ?? "";
+  const selectedProfileKey = selectedRuntimeProfile?.key ?? "";
+  const tycoon = useTycoonSimulation({
+    probeState: latestProbeState,
+    selectedProvider: bootstrap.officeOpsState.selectedProvider
+  });
+  const resetAgentLoop = useCallback(
+    (detail = "context-switch"): void => {
+      tycoon.dispatchHudCommand("resetSimulation", {
+        phase: "committed",
+        detail
+      });
+      markSceneAction("loop-reset");
+    },
+    [markSceneAction, tycoon.dispatchHudCommand]
+  );
+  const sceneSync: SceneSyncState = {
+    loopState: tycoon.simState.loopState,
+    lastLoopEvent: tycoon.simState.lastLoopEvent,
+    activeAgents: tycoon.simState.agents.length,
+    actors: tycoon.simState.agents,
+    agentLoadById: tycoon.simState.agentLoad,
+    selectedProvider: bootstrap.officeOpsState.selectedProvider,
+    selectedPoolKey,
+    selectedProfileKey,
+    probeState: latestProbeState,
+    lastActionAt: lastSceneActionAt,
+    kpi: tycoon.kpi,
+    simSpeed: tycoon.simState.simSpeed,
+    isPaused: tycoon.simState.isPaused
+  };
+
+  const guidanceMessage = useMemo(
+    () => getAgentGuidanceMessage(agentEvent, latestProbeState),
+    [agentEvent, latestProbeState]
+  );
+  const monitorEntries = getMonitorEntries(sceneSync, agentName, t);
+
+  useEffect(() => {
+    if (bootstrap.isLoading || bootstrap.errorMessage) {
+      resetAgentLoop("bootstrap-state-change");
+    }
+  }, [bootstrap.isLoading, bootstrap.errorMessage, resetAgentLoop]);
+
+  useEffect(() => {
+    if (bootstrap.isLoading || bootstrap.errorMessage) {
+      return;
+    }
+    const nextContextKey = [
+      bootstrap.officeOpsState.selectedProvider,
+      bootstrap.officeOpsState.selectedAccountPoolId,
+      bootstrap.officeOpsState.selectedRuntimeProfileId
+    ].join("|");
+
+    if (!contextKeyRef.current) {
+      contextKeyRef.current = nextContextKey;
+      return;
+    }
+    if (contextKeyRef.current === nextContextKey) {
+      return;
+    }
+    contextKeyRef.current = nextContextKey;
+    resetAgentLoop("context-switch");
+  }, [
+    bootstrap.errorMessage,
+    bootstrap.isLoading,
+    bootstrap.officeOpsState.selectedAccountPoolId,
+    bootstrap.officeOpsState.selectedProvider,
+    bootstrap.officeOpsState.selectedRuntimeProfileId,
+    resetAgentLoop
+  ]);
 
   useEffect(() => {
     if (runtimeCrud.errorMessage) {
@@ -208,8 +392,14 @@ export default function OfficePage(): JSX.Element {
     latestProbeState
   ]);
 
-  const selectedRuntimeProfile =
-    bootstrap.profiles.find((profile) => profile.id === bootstrap.officeOpsState.selectedRuntimeProfileId) ?? null;
+  useEffect(() => {
+    if (sceneSync.loopState === "reporting" || sceneSync.loopState === "waiting_review") {
+      setAgentEvent({
+        type: "pm-report",
+        agentName
+      });
+    }
+  }, [sceneSync.loopState, agentName]);
 
   const onCreateRuntimeProfile = async (): Promise<void> => {
     const key = createDraft.key.trim();
@@ -275,10 +465,28 @@ export default function OfficePage(): JSX.Element {
   };
 
   const onRunProbe = async (): Promise<void> => {
+    if (latestProbeState === "error") {
+      tycoon.dispatchHudCommand("runProbe", {
+        phase: "committed",
+        detail: "blocked-probe-error"
+      });
+      markSceneAction("probe-run-blocked");
+      setAgentEvent({
+        type: "probe-error",
+        message: "Probe run is blocked while probe state is ERROR. Recover signal first."
+      });
+      return;
+    }
+
     setAgentEvent({
       type: "probe-run-start",
       provider: bootstrap.officeOpsState.selectedProvider
     });
+    tycoon.dispatchHudCommand("runProbe", {
+      phase: "pending",
+      detail: "backend-request"
+    });
+    markSceneAction("probe-run");
 
     const completed = await probe.runProbe({
       provider: bootstrap.officeOpsState.selectedProvider,
@@ -288,12 +496,31 @@ export default function OfficePage(): JSX.Element {
     });
 
     if (completed) {
+      tycoon.dispatchHudCommand("runProbe", {
+        phase: "committed",
+        detail: "backend-success"
+      });
       await bootstrap.refresh();
+      return;
     }
+
+    tycoon.dispatchHudCommand("runProbe", {
+      phase: "rejected",
+      detail: "backend-failed"
+    });
   };
 
   const onRefreshProbe = async (): Promise<void> => {
-    await probe.refreshHistory();
+    tycoon.dispatchHudCommand("refreshHistory", {
+      phase: "pending",
+      detail: "backend-request"
+    });
+    markSceneAction("history-refresh");
+    const refreshed = await probe.refreshHistory();
+    tycoon.dispatchHudCommand("refreshHistory", {
+      phase: refreshed ? "committed" : "rejected",
+      detail: refreshed ? "backend-success" : "backend-failed"
+    });
   };
 
   const onChangeHistoryLimit = async (nextLimit: number): Promise<void> => {
@@ -304,15 +531,131 @@ export default function OfficePage(): JSX.Element {
       runtimeProfileId: bootstrap.officeOpsState.selectedRuntimeProfileId,
       limit: nextLimit
     });
+    markSceneAction("history-limit");
     await probe.changeHistoryLimit(nextLimit);
   };
 
+  const settingsPanel = (() => {
+    if (activeSettingsTab === "account") {
+      return (
+        <AccountPoolWidget
+          pools={bootstrap.pools}
+          selectedProvider={bootstrap.officeOpsState.selectedProvider}
+          selectedAccountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
+          onSelectProvider={(provider) => {
+            bootstrap.setOfficeOpsState((previous) => ({
+              ...previous,
+              selectedProvider: provider,
+              selectedAccountPoolId: "",
+              selectedRuntimeProfileId: ""
+            }));
+            setAgentEvent({
+              type: "history-filter-changed",
+              provider,
+              accountPoolId: "",
+              runtimeProfileId: "",
+              limit: probe.historyLimit
+            });
+          }}
+          onSelectAccountPool={(accountPoolId) => {
+            bootstrap.setOfficeOpsState((previous) => ({
+              ...previous,
+              selectedAccountPoolId: accountPoolId,
+              selectedRuntimeProfileId: ""
+            }));
+            setAgentEvent({
+              type: "history-filter-changed",
+              provider: bootstrap.officeOpsState.selectedProvider,
+              accountPoolId,
+              runtimeProfileId: "",
+              limit: probe.historyLimit
+            });
+          }}
+          t={t}
+        />
+      );
+    }
+
+    if (activeSettingsTab === "runtime") {
+      return (
+        <RuntimeProfileWidget
+          profiles={bootstrap.profiles}
+          pools={bootstrap.pools}
+          selectedProvider={bootstrap.officeOpsState.selectedProvider}
+          selectedRuntimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
+          selectedRuntimeProfileKey={selectedRuntimeProfile?.key ?? null}
+          onSelectRuntimeProfile={(runtimeProfileId) => {
+            bootstrap.setOfficeOpsState((previous) => ({
+              ...previous,
+              selectedRuntimeProfileId: runtimeProfileId
+            }));
+            setAgentEvent({
+              type: "history-filter-changed",
+              provider: bootstrap.officeOpsState.selectedProvider,
+              accountPoolId: bootstrap.officeOpsState.selectedAccountPoolId,
+              runtimeProfileId,
+              limit: probe.historyLimit
+            });
+          }}
+          createDraft={createDraft}
+          updateDraft={updateDraft}
+          onChangeCreateDraft={setCreateDraft}
+          onChangeUpdateDraft={setUpdateDraft}
+          isMutating={runtimeCrud.isMutating}
+          errorMessage={runtimeCrud.errorMessage}
+          actionMessage={runtimeCrud.actionMessage}
+          onCreate={() => void onCreateRuntimeProfile()}
+          onUpdate={() => void onUpdateRuntimeProfile()}
+          onDelete={onDeleteRuntimeProfile}
+          onDeleteIntent={(runtimeProfileKey) =>
+            setAgentEvent({ type: "runtime-delete-intent", key: runtimeProfileKey })
+          }
+          onDeleteCancel={() => setAgentEvent({ type: "idle" })}
+          t={t}
+        />
+      );
+    }
+
+    if (activeSettingsTab === "probe") {
+      return (
+        <ProbeRunPanel
+          provider={bootstrap.officeOpsState.selectedProvider}
+          accountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
+          runtimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
+          latestProbeRun={probe.latestRun}
+          latestProbeState={latestProbeState}
+          isRunning={probe.isRunning}
+          errorMessage={probe.errorMessage}
+          actionMessage={probe.actionMessage}
+          onRun={() => void onRunProbe()}
+          t={t}
+        />
+      );
+    }
+
+    return (
+      <HistoryBoard
+        provider={bootstrap.officeOpsState.selectedProvider}
+        accountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
+        runtimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
+        historyLimit={probe.historyLimit}
+        historyRuns={probe.historyRuns}
+        isHistoryLoading={probe.isHistoryLoading}
+        errorMessage={probe.errorMessage}
+        actionMessage={probe.actionMessage}
+        onRefresh={() => void onRefreshProbe()}
+        onHistoryLimitChange={(nextLimit) => void onChangeHistoryLimit(nextLimit)}
+        t={t}
+      />
+    );
+  })();
+
   if (bootstrap.isLoading) {
     return (
-      <main>
-        <section className="panel">
-          <h1>Office Avatar Board</h1>
-          <p>Loading office resources for avatar board...</p>
+      <main className="office-page-main" data-office-theme={resolvedTheme}>
+        <section className="panel office-avatar-page">
+          <h1>{t("page.loadingTitle")}</h1>
+          <p>{t("page.loadingMessage")}</p>
         </section>
       </main>
     );
@@ -320,12 +663,12 @@ export default function OfficePage(): JSX.Element {
 
   if (bootstrap.errorMessage) {
     return (
-      <main>
-        <section className="panel">
-          <h1>Office Avatar Board</h1>
+      <main className="office-page-main" data-office-theme={resolvedTheme}>
+        <section className="panel office-avatar-page">
+          <h1>{t("page.loadingTitle")}</h1>
           <p className="error">{bootstrap.errorMessage}</p>
           <button type="button" onClick={() => void bootstrap.refresh()}>
-            Retry
+            {t("page.retry")}
           </button>
         </section>
       </main>
@@ -333,132 +676,141 @@ export default function OfficePage(): JSX.Element {
   }
 
   return (
-    <main>
+    <main className="office-page-main" data-office-theme={resolvedTheme}>
       <section className="panel office-ops-page office-avatar-page">
-        <header className="admin-header">
-          <h1>Step-5 Avatar Agent Office Board</h1>
-          <p>Avatar agent leads operations while Step-2~4 APIs and validation remain the source of truth.</p>
+        <header className="admin-header office-command-header">
+          <div>
+            <p className="office-command-kicker">{t("page.kicker")}</p>
+            <h1>{t("page.title")}</h1>
+            <p>{t("page.summary")}</p>
+          </div>
+          <div className="office-command-context" aria-label="Current command context">
+            <span>{bootstrap.officeOpsState.selectedProvider.toUpperCase()}</span>
+            <span>{selectedPoolKey || t("page.poolUnassigned")}</span>
+            <span>{selectedProfileKey || t("page.profileUnselected")}</span>
+            <span>{latestProbePresentation.hudLabel}</span>
+          </div>
         </header>
 
-        <TopOpsBar
-          providers={bootstrap.providers}
-          pools={bootstrap.pools}
-          profiles={bootstrap.profiles}
-          latestProbeRun={probe.latestRun}
-          latestProbeState={latestProbeState}
-        />
+        <section className="office-app-layout">
+          <aside className="office-settings-rail">
+            <header>
+              <strong>{t("layout.settingsTitle")}</strong>
+              <p className="hint">{t("layout.settingsHint")}</p>
+            </header>
+            <section className="office-settings-summary card compact">
+              <p>
+                <span>{t("widget.account.provider")}</span>
+                <strong>{bootstrap.officeOpsState.selectedProvider.toUpperCase()}</strong>
+              </p>
+              <p>
+                <span>{t("widget.account.pool")}</span>
+                <strong>{selectedPoolKey || t("page.poolUnassigned")}</strong>
+              </p>
+              <p>
+                <span>{t("widget.runtime.profile")}</span>
+                <strong>{selectedProfileKey || t("page.profileUnselected")}</strong>
+              </p>
+              <p>
+                <span>{t("topbar.confidence")}</span>
+                <strong>{latestProbePresentation.hudLabel}</strong>
+              </p>
+            </section>
+            <div className="office-settings-tab-list" role="tablist" aria-label={t("layout.settingsTitle")}>
+              {settingsTabs.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeSettingsTab === tab}
+                  className={`secondary${activeSettingsTab === tab ? " active" : ""}`}
+                  onClick={() => setActiveSettingsTab(tab)}
+                >
+                  {tabLabelMap[tab]}
+                </button>
+              ))}
+            </div>
+            <section className="office-locale-card office-locale-inline">
+              <strong>{t("settings.languageTitle")}</strong>
+              <label>
+                <span>{t("settings.languageLabel")}</span>
+                <select
+                  aria-label={t("settings.languageLabel")}
+                  value={locale}
+                  onChange={(event) => setLocale(resolveOfficeLocale(event.target.value))}
+                >
+                  <option value="ko">{t("locale.ko")}</option>
+                  <option value="en">{t("locale.en")}</option>
+                  <option value="zh">{t("locale.zh")}</option>
+                </select>
+              </label>
+              <p className="hint">{t("settings.languageHint")}</p>
+            </section>
+            <section className="office-locale-card office-theme-inline">
+              <strong>{t("settings.themeTitle")}</strong>
+              <label>
+                <span>{t("settings.themeLabel")}</span>
+                <select
+                  aria-label={t("settings.themeLabel")}
+                  value={themeMode}
+                  onChange={(event) => setThemeMode(resolveThemeMode(event.target.value))}
+                >
+                  <option value="system">{t("theme.system")}</option>
+                  <option value="light">{t("theme.light")}</option>
+                  <option value="dark">{t("theme.dark")}</option>
+                </select>
+              </label>
+              <p className="hint">{t("settings.themeHint")}</p>
+            </section>
+            <section className="office-inline-settings-panel" role="tabpanel">
+              {settingsPanel}
+            </section>
+          </aside>
 
-        <AvatarLayerBoundary>
-          <AgentShell probeState={latestProbeState} event={agentEvent} />
-        </AvatarLayerBoundary>
+          <section className="office-center-column" aria-label={t("layout.centerTitle")}>
+            <header className="office-column-header">
+              <strong>{t("layout.centerTitle")}</strong>
+              <p className="hint">{t("layout.centerHint")}</p>
+            </header>
+            <OfficeBoardScene
+              sceneSync={sceneSync}
+              agentName={agentName}
+              emphasisTarget={latestProbePresentation.emphasisTarget}
+              showStatusPanel={false}
+              onEditorAction={(action) => {
+                markSceneAction(`editor-${action.type}`);
+                tycoon.registerEditorEvent(`editor action: ${action.type}`);
+              }}
+              t={t}
+            />
+            <AgentMonitorGrid
+              entries={monitorEntries}
+              providerLabel={`${bootstrap.officeOpsState.selectedProvider.toUpperCase()} / ${selectedProfileKey || t("page.profileUnselected")}`}
+              t={t}
+            />
+          </section>
 
-        <OfficeBoardScene
-          accountPoolZone={
-            <AccountPoolWidget
-              pools={bootstrap.pools}
-              selectedProvider={bootstrap.officeOpsState.selectedProvider}
-              selectedAccountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
-              onSelectProvider={(provider) => {
-                bootstrap.setOfficeOpsState((previous) => ({
-                  ...previous,
-                  selectedProvider: provider,
-                  selectedAccountPoolId: "",
-                  selectedRuntimeProfileId: ""
-                }));
-                setAgentEvent({
-                  type: "history-filter-changed",
-                  provider,
-                  accountPoolId: "",
-                  runtimeProfileId: "",
-                  limit: probe.historyLimit
-                });
-              }}
-              onSelectAccountPool={(accountPoolId) => {
-                bootstrap.setOfficeOpsState((previous) => ({
-                  ...previous,
-                  selectedAccountPoolId: accountPoolId,
-                  selectedRuntimeProfileId: ""
-                }));
-                setAgentEvent({
-                  type: "history-filter-changed",
-                  provider: bootstrap.officeOpsState.selectedProvider,
-                  accountPoolId,
-                  runtimeProfileId: "",
-                  limit: probe.historyLimit
-                });
-              }}
+          <aside className="office-right-column" aria-label={t("layout.rightTitle")}>
+            <header className="office-column-header">
+              <strong>{t("layout.rightTitle")}</strong>
+              <p className="hint">{t("layout.rightHint")}</p>
+            </header>
+            <OfficeConversationPanel
+              events={tycoon.eventLog}
+              guidanceMessage={guidanceMessage}
+              mainAgentName={agentName}
+              contextChips={[
+                bootstrap.officeOpsState.selectedProvider.toUpperCase(),
+                selectedPool?.label ?? t("page.poolUnassigned"),
+                selectedRuntimeProfile?.key ?? t("page.profileUnselected"),
+                latestProbePresentation.stateLabel
+              ]}
+              t={t}
             />
-          }
-          runtimeProfileZone={
-            <RuntimeProfileWidget
-              profiles={bootstrap.profiles}
-              pools={bootstrap.pools}
-              selectedProvider={bootstrap.officeOpsState.selectedProvider}
-              selectedRuntimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
-              selectedRuntimeProfileKey={selectedRuntimeProfile?.key ?? null}
-              onSelectRuntimeProfile={(runtimeProfileId) => {
-                bootstrap.setOfficeOpsState((previous) => ({
-                  ...previous,
-                  selectedRuntimeProfileId: runtimeProfileId
-                }));
-                setAgentEvent({
-                  type: "history-filter-changed",
-                  provider: bootstrap.officeOpsState.selectedProvider,
-                  accountPoolId: bootstrap.officeOpsState.selectedAccountPoolId,
-                  runtimeProfileId,
-                  limit: probe.historyLimit
-                });
-              }}
-              createDraft={createDraft}
-              updateDraft={updateDraft}
-              onChangeCreateDraft={setCreateDraft}
-              onChangeUpdateDraft={setUpdateDraft}
-              isMutating={runtimeCrud.isMutating}
-              errorMessage={runtimeCrud.errorMessage}
-              actionMessage={runtimeCrud.actionMessage}
-              onCreate={() => void onCreateRuntimeProfile()}
-              onUpdate={() => void onUpdateRuntimeProfile()}
-              onDelete={onDeleteRuntimeProfile}
-              onDeleteIntent={(runtimeProfileKey) =>
-                setAgentEvent({ type: "runtime-delete-intent", key: runtimeProfileKey })
-              }
-              onDeleteCancel={() => setAgentEvent({ type: "idle" })}
-            />
-          }
-          probeMonitorZone={
-            <ProbeRunPanel
-              provider={bootstrap.officeOpsState.selectedProvider}
-              accountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
-              runtimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
-              latestProbeRun={probe.latestRun}
-              latestProbeState={latestProbeState}
-              isRunning={probe.isRunning}
-              errorMessage={probe.errorMessage}
-              actionMessage={probe.actionMessage}
-              onRun={() => void onRunProbe()}
-            />
-          }
-          historyBoardZone={
-            <HistoryBoard
-              provider={bootstrap.officeOpsState.selectedProvider}
-              accountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
-              runtimeProfileId={bootstrap.officeOpsState.selectedRuntimeProfileId}
-              historyLimit={probe.historyLimit}
-              historyRuns={probe.historyRuns}
-              isHistoryLoading={probe.isHistoryLoading}
-              errorMessage={probe.errorMessage}
-              actionMessage={probe.actionMessage}
-              onRefresh={() => void onRefreshProbe()}
-              onHistoryLimitChange={(nextLimit) => void onChangeHistoryLimit(nextLimit)}
-            />
-          }
-        />
-
-        <section className="card compact">
-          <strong>Fallback Guarantee</strong>
-          <p>If avatar presentation fails, account/profile/probe panels remain available for direct operations.</p>
+          </aside>
         </section>
       </section>
     </main>
   );
 }
+

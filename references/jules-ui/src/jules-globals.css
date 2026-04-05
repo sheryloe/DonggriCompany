@@ -1,0 +1,85 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 20% 95%; /* 약간 따뜻한 오피스 바닥 느낌 */
+    --foreground: 220 20% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
+    --primary: 260 60% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 10% 85%;
+    --secondary-foreground: 220 20% 10%;
+    --muted: 40 10% 85%;
+    --muted-foreground: 220 10% 40%;
+    --accent: 40 80% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 20% 10%;
+    --input: 220 20% 10%;
+    --ring: 220 20% 10%;
+    --radius: 0px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-[#b8b8b8] text-foreground;
+
+    font-family: var(--font-pixel), monospace;
+  }
+
+  /* 레트로 카드 스타일 (더 두껍고 입체적인 게임 프레임 형태) */
+  .retro-card {
+    @apply border-[6px] border-black bg-white;
+    box-shadow: inset -4px -4px 0px 0px rgba(0,0,0,0.15),
+                8px 8px 0px 0px rgba(0,0,0,1);
+    border-radius: 0;
+  }
+
+  /* 레트로 버튼 스타일 (눌리는 느낌 강화) */
+  .retro-btn {
+    @apply border-[4px] border-black font-bold uppercase tracking-widest text-xl bg-white;
+    box-shadow: inset -4px -4px 0px 0px rgba(0,0,0,0.2),
+                4px 4px 0px 0px rgba(0,0,0,1);
+    transition: all 0.1s;
+    border-radius: 0;
+  }
+  .retro-btn:active {
+    transform: translate(4px, 4px);
+    box-shadow: inset 4px 4px 0px 0px rgba(0,0,0,0.2),
+                0px 0px 0px 0px rgba(0,0,0,1);
+  }
+
+  /* 픽셀 바 스타일 (분절된 게이지 느낌, 3D 광원) */
+  .pixel-bar-container {
+    @apply w-full h-5 border-4 border-black bg-black p-[2px] relative overflow-hidden;
+    box-shadow: inset 0px 2px 0px 0px rgba(0,0,0,0.5);
+  }
+  .pixel-bar-fill {
+    @apply h-full transition-all duration-300;
+    box-shadow: inset 0px 4px 0px 0px rgba(255,255,255,0.4),
+                inset 0px -4px 0px 0px rgba(0,0,0,0.2);
+  }
+
+  /* 분절선 (마치 HP블록처럼) */
+  .pixel-bar-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: linear-gradient(90deg, transparent 90%, rgba(0,0,0,0.5) 90%);
+    background-size: 10% 100%;
+    pointer-events: none;
+  }
+}

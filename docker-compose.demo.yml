@@ -3,9 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.demo
-    container_name: donggri-office-demo
+    container_name: donggricompany
     ports:
-      - "3000:3000"
+      - "7777:7777"
       - "4315:4315"
     volumes:
       - ./.local:/app/.local

@@ -4,17 +4,17 @@ set -euo pipefail
 cd /app
 
 echo "[demo] migrate database"
-node --import tsx packages/db/src/cli/migrate.ts
+corepack pnpm --filter @workspace/db exec tsx src/cli/migrate.ts
 
 echo "[demo] seed database"
-node --import tsx packages/db/src/cli/seed.ts
+corepack pnpm --filter @workspace/db exec tsx src/cli/seed.ts
 
 echo "[demo] start server (:4315)"
-node --import tsx apps/server/src/index.ts &
+corepack pnpm --filter @workspace/server exec tsx src/index.ts &
 SERVER_PID=$!
 
-echo "[demo] start web (:3000)"
-corepack pnpm --filter @workspace/web run dev -- --hostname 0.0.0.0 &
+echo "[demo] start web (:7777)"
+corepack pnpm --filter @workspace/web run dev &
 WEB_PID=$!
 
 cleanup() {

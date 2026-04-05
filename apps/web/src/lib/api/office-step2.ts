@@ -1,10 +1,17 @@
 import type {
+  AgentId,
+  AgentModelAssignmentsListResponse,
   AccountPoolCreateResponse,
   AccountPoolFatigueHistoryResponse,
   AccountPoolsListResponse,
   AccountPoolUpdateResponse,
   CreateAccountPoolRequest,
   CreateRuntimeProfileRequest,
+  OAuthDisconnectRequest,
+  OAuthDisconnectResponse,
+  OAuthStartRequest,
+  OAuthStartResponse,
+  OAuthStatusResponse,
   ProviderProbeResponse,
   ProviderUsageProbeHistoryQuery,
   ProviderUsageProbeHistoryResponse,
@@ -14,10 +21,13 @@ import type {
   RuntimeProfileDeleteResponse,
   RuntimeProfilesListResponse,
   RuntimeProfileUpdateResponse,
+  UpsertAgentModelAssignmentRequest,
+  UpsertAgentModelAssignmentResponse,
   UpdateAccountPoolRequest,
   UpdateRuntimeProfileRequest,
   ProvidersListResponse,
-  ProviderKey
+  ProviderKey,
+  ProviderUsageProbeProvider
 } from "@workspace/shared";
 
 import { buildStep3Route, STEP3_ALLOWED_ROUTES } from "./allowed-routes";
@@ -118,5 +128,61 @@ export const listProviderUsageProbeHistory = async (
       runtimeProfileId: query.runtimeProfileId
     }),
     { method: "GET" }
+  );
+};
+
+export const listAgentModelAssignments = async (): Promise<AgentModelAssignmentsListResponse> => {
+  return requestJson<AgentModelAssignmentsListResponse>(STEP3_ALLOWED_ROUTES.AGENT_MODELS, {
+    method: "GET"
+  });
+};
+
+export const upsertAgentModelAssignment = async (
+  agentId: AgentId,
+  payload: UpsertAgentModelAssignmentRequest
+): Promise<UpsertAgentModelAssignmentResponse> => {
+  return requestJson<UpsertAgentModelAssignmentResponse>(
+    buildStep3Route.agentModelById(agentId),
+    {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }
+  );
+};
+
+export const startOAuth = async (
+  provider: ProviderUsageProbeProvider,
+  payload: OAuthStartRequest
+): Promise<OAuthStartResponse> => {
+  return requestJson<OAuthStartResponse>(buildStep3Route.oauthProviderStart(provider), {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+};
+
+export const getOAuthStatus = async (
+  provider: ProviderUsageProbeProvider,
+  accountPoolId?: string
+): Promise<OAuthStatusResponse> => {
+  return requestJson<OAuthStatusResponse>(
+    withQuery(buildStep3Route.oauthProviderStatus(provider), {
+      accountPoolId
+    }),
+    {
+      method: "GET"
+    }
+  );
+};
+
+export const disconnectOAuth = async (
+  provider: ProviderUsageProbeProvider,
+  payload: OAuthDisconnectRequest
+): Promise<OAuthDisconnectResponse> => {
+  return requestJson<OAuthDisconnectResponse>(
+    buildStep3Route.oauthProviderDisconnect(provider),
+    {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }
   );
 };

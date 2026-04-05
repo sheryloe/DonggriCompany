@@ -34,9 +34,9 @@ const createMemoryStorage = (seed?: Record<string, string>): Storage => {
 describe("office tilemap", () => {
   it("places a room item on a requested tile", () => {
     const initial = createDefaultRoomItems();
-    const placed = placeRoomTileItemAt(initial, "plant", "Plant A", { x: 1, y: 1 });
+    const placed = placeRoomTileItemAt(initial, "plant", "Plant A", { x: 1, y: 2 });
     expect(placed.added).not.toBeNull();
-    expect(placed.added?.tile).toEqual({ x: 1, y: 1 });
+    expect(placed.added?.tile).toEqual({ x: 1, y: 2 });
   });
 
   it("auto-places an item into the first available tile", () => {

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
+  AgentId,
+  ProviderUsageProbeProvider,
   ProviderUsageProbeHistoryQuery,
   UpdateRuntimeProfileRequest
 } from "@workspace/shared";
@@ -14,10 +16,13 @@ import { HistoryBoard } from "../board/HistoryBoard";
 import { OfficeBoardScene } from "../board/OfficeBoardScene";
 import type { SceneSyncState } from "../board/scene-types";
 import { AccountPoolWidget } from "../components/AccountPoolWidget";
+import { AgentModelWidget } from "../components/AgentModelWidget";
 import { AgentMonitorGrid } from "../components/AgentMonitorGrid";
 import { OfficeConversationPanel } from "../components/OfficeConversationPanel";
 import { ProbeRunPanel } from "../components/ProbeRunPanel";
 import { RuntimeProfileWidget } from "../components/RuntimeProfileWidget";
+import { useAgentModelAssignments } from "../hooks/useAgentModelAssignments";
+import { useOAuthSessions } from "../hooks/useOAuthSessions";
 import { useProviderProbe } from "../hooks/useProviderProbe";
 import { useRuntimeProfileCrud } from "../hooks/useRuntimeProfileCrud";
 import { useStep2OpsBootstrap } from "../hooks/useStep2OpsBootstrap";
@@ -56,7 +61,7 @@ const startsWith = (value: string | null, text: string): boolean => {
   return value ? value.startsWith(text) : false;
 };
 
-const settingsTabs: OfficeSettingsTab[] = ["account", "runtime", "probe", "history"];
+const settingsTabs: OfficeSettingsTab[] = ["account", "runtime", "agent-models", "probe", "history"];
 
 const localeLangCode: Record<OfficeLocale, string> = {
   ko: "ko",
@@ -94,6 +99,9 @@ export default function OfficePage(): JSX.Element {
     if (typeof window === "undefined") {
       return false;
     }
+    if (typeof window.matchMedia !== "function") {
+      return false;
+    }
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
   const contextKeyRef = useRef<string>("");
@@ -104,6 +112,7 @@ export default function OfficePage(): JSX.Element {
       ({
         account: t("settings.tab.account"),
         runtime: t("settings.tab.runtime"),
+        "agent-models": t("settings.tab.agentModels"),
         probe: t("settings.tab.probe"),
         history: t("settings.tab.history")
       }) as Record<OfficeSettingsTab, string>,
@@ -145,6 +154,10 @@ export default function OfficePage(): JSX.Element {
       await probe.refreshHistory();
     }
   });
+  const agentModelAssignments = useAgentModelAssignments();
+  const oauthSessions = useOAuthSessions(
+    bootstrap.officeOpsState.selectedProvider as ProviderUsageProbeProvider
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -163,6 +176,10 @@ export default function OfficePage(): JSX.Element {
 
   useEffect(() => {
     if (typeof window === "undefined") {
+      return;
+    }
+    if (typeof window.matchMedia !== "function") {
+      setSystemPrefersDark(false);
       return;
     }
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -272,6 +289,37 @@ export default function OfficePage(): JSX.Element {
   const agentName = `${bootstrap.officeOpsState.selectedProvider.toUpperCase()} Agent`;
   const selectedPoolKey = selectedPool?.key ?? "";
   const selectedProfileKey = selectedRuntimeProfile?.key ?? "";
+  const agentModelById = useMemo(() => {
+    return agentModelAssignments.assignments.reduce((accumulator, assignment) => {
+      const profile = bootstrap.profiles.find(
+        (candidate) => candidate.id === assignment.runtimeProfileId
+      );
+      const pool = bootstrap.pools.find((candidate) => candidate.id === assignment.accountPoolId);
+      if (!profile || !pool) {
+        return accumulator;
+      }
+      if (
+        profile.provider !== assignment.provider ||
+        pool.provider !== assignment.provider ||
+        profile.accountPoolId !== assignment.accountPoolId
+      ) {
+        return accumulator;
+      }
+
+      accumulator[assignment.agentId] = {
+        provider: assignment.provider,
+        accountPoolId: assignment.accountPoolId,
+        accountPoolKey: pool.key,
+        runtimeProfileId: assignment.runtimeProfileId,
+        runtimeProfileKey: profile.key,
+        modelLabel: `${assignment.provider.toUpperCase()} / ${profile.key}`
+      };
+      return accumulator;
+    }, {} as SceneSyncState["agentModelById"]);
+  }, [agentModelAssignments.assignments, bootstrap.pools, bootstrap.profiles]);
+  const monitorProviderLabel =
+    agentModelById.main?.modelLabel ??
+    `${bootstrap.officeOpsState.selectedProvider.toUpperCase()} / ${selectedProfileKey || t("page.profileUnselected")}`;
   const tycoon = useTycoonSimulation({
     probeState: latestProbeState,
     selectedProvider: bootstrap.officeOpsState.selectedProvider
@@ -295,6 +343,7 @@ export default function OfficePage(): JSX.Element {
     selectedProvider: bootstrap.officeOpsState.selectedProvider,
     selectedPoolKey,
     selectedProfileKey,
+    agentModelById,
     probeState: latestProbeState,
     lastActionAt: lastSceneActionAt,
     kpi: tycoon.kpi,
@@ -535,6 +584,46 @@ export default function OfficePage(): JSX.Element {
     await probe.changeHistoryLimit(nextLimit);
   };
 
+  const defaultAgentModelSelection = useMemo(() => {
+    const provider = bootstrap.officeOpsState.selectedProvider as ProviderUsageProbeProvider;
+    const accountPoolId =
+      bootstrap.officeOpsState.selectedAccountPoolId ||
+      bootstrap.pools.find((pool) => pool.provider === provider)?.id ||
+      "";
+    const runtimeProfileId =
+      bootstrap.officeOpsState.selectedRuntimeProfileId ||
+      bootstrap.profiles.find(
+        (profile) => profile.provider === provider && profile.accountPoolId === accountPoolId
+      )?.id ||
+      "";
+
+    return {
+      provider,
+      accountPoolId,
+      runtimeProfileId
+    };
+  }, [
+    bootstrap.officeOpsState.selectedAccountPoolId,
+    bootstrap.officeOpsState.selectedProvider,
+    bootstrap.officeOpsState.selectedRuntimeProfileId,
+    bootstrap.pools,
+    bootstrap.profiles
+  ]);
+
+  const onSaveAgentModel = async (
+    agentId: AgentId,
+    payload: {
+      provider: ProviderUsageProbeProvider;
+      accountPoolId: string;
+      runtimeProfileId: string;
+    }
+  ): Promise<void> => {
+    const saved = await agentModelAssignments.upsert(agentId, payload);
+    if (saved) {
+      markSceneAction(`agent-model-${agentId}`);
+    }
+  };
+
   const settingsPanel = (() => {
     if (activeSettingsTab === "account") {
       return (
@@ -542,6 +631,8 @@ export default function OfficePage(): JSX.Element {
           pools={bootstrap.pools}
           selectedProvider={bootstrap.officeOpsState.selectedProvider}
           selectedAccountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
+          oauthSessionByPoolId={oauthSessions.sessionByPoolId}
+          isOAuthMutating={oauthSessions.isMutating}
           onSelectProvider={(provider) => {
             bootstrap.setOfficeOpsState((previous) => ({
               ...previous,
@@ -571,6 +662,24 @@ export default function OfficePage(): JSX.Element {
               limit: probe.historyLimit
             });
           }}
+          onConnectOAuth={(accountPoolId) => void oauthSessions.connect(accountPoolId)}
+          onDisconnectOAuth={(accountPoolId) => void oauthSessions.disconnect(accountPoolId)}
+          t={t}
+        />
+      );
+    }
+
+    if (activeSettingsTab === "agent-models") {
+      return (
+        <AgentModelWidget
+          pools={bootstrap.pools}
+          profiles={bootstrap.profiles}
+          assignmentsByAgentId={agentModelAssignments.assignmentByAgentId}
+          defaultSelection={defaultAgentModelSelection}
+          isMutating={agentModelAssignments.isMutating}
+          errorMessage={agentModelAssignments.errorMessage}
+          actionMessage={agentModelAssignments.actionMessage}
+          onSave={(agentId, payload) => onSaveAgentModel(agentId, payload)}
           t={t}
         />
       );
@@ -785,7 +894,7 @@ export default function OfficePage(): JSX.Element {
             />
             <AgentMonitorGrid
               entries={monitorEntries}
-              providerLabel={`${bootstrap.officeOpsState.selectedProvider.toUpperCase()} / ${selectedProfileKey || t("page.profileUnselected")}`}
+              providerLabel={monitorProviderLabel}
               t={t}
             />
           </section>

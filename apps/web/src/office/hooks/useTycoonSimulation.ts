@@ -83,11 +83,11 @@ const mainPhaseDurations: Record<Exclude<AgentWorkLoopState, "idle" | "blocked">
 const createInitialActors = (): AgentSimActor[] => {
   return [
     { id: "actor-main", role: "main-agent", fsmState: "idle", facing: "right", tile: { x: 15, y: 9 }, path: [], taskId: null, eta: 0 },
-    { id: "actor-router", role: "router", fsmState: "idle", facing: "right", tile: { x: 5, y: 8 }, path: [], taskId: null, eta: 0 },
-    { id: "actor-runtime", role: "runtime", fsmState: "idle", facing: "right", tile: { x: 8, y: 12 }, path: [], taskId: null, eta: 0 },
-    { id: "actor-probe", role: "probe", fsmState: "idle", facing: "right", tile: { x: 14, y: 7 }, path: [], taskId: null, eta: 0 },
-    { id: "actor-history", role: "history", fsmState: "idle", facing: "right", tile: { x: 18, y: 12 }, path: [], taskId: null, eta: 0 },
-    { id: "actor-pm", role: "pm-liaison", fsmState: "idle", facing: "left", tile: { x: 22, y: 9 }, path: [], taskId: null, eta: 0 }
+    { id: "actor-router", role: "router", fsmState: "idle", facing: "right", tile: { x: 12, y: 7 }, path: [], taskId: null, eta: 0 },
+    { id: "actor-runtime", role: "runtime", fsmState: "idle", facing: "right", tile: { x: 12, y: 12 }, path: [], taskId: null, eta: 0 },
+    { id: "actor-probe", role: "probe", fsmState: "idle", facing: "right", tile: { x: 15, y: 7 }, path: [], taskId: null, eta: 0 },
+    { id: "actor-history", role: "history", fsmState: "idle", facing: "right", tile: { x: 17, y: 12 }, path: [], taskId: null, eta: 0 },
+    { id: "actor-pm", role: "pm-liaison", fsmState: "idle", facing: "left", tile: { x: 18, y: 9 }, path: [], taskId: null, eta: 0 }
   ];
 };
 

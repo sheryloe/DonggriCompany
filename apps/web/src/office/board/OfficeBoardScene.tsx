@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 
 import { mapProbeStateToPresentation } from "../lib/probe-presentation";
@@ -102,10 +102,64 @@ type ActorVisual = {
   lastTile: TileCoord;
 };
 
-const TASK_TILE: TileCoord = { x: 6, y: 4 };
-const PM_TILE: TileCoord = { x: 23, y: 4 };
+const TASK_TILE: TileCoord = { x: 12, y: 6 };
+const PM_TILE: TileCoord = { x: 18, y: 9 };
 const IDLE_TILE: TileCoord = { x: 15, y: 9 };
-const OFFICE_BACKGROUND_PATH = "/pixel-tycoon/office_room_bg.png";
+
+const toTileKey = (tile: TileCoord): string => `${tile.x}:${tile.y}`;
+
+const isWalkableTile = (tile: TileCoord, blocked: Set<string>): boolean => {
+  if (tile.x < 0 || tile.x >= GRID_COLS || tile.y < 0 || tile.y >= GRID_ROWS) {
+    return false;
+  }
+  return !blocked.has(toTileKey(tile));
+};
+
+const findNearestWalkableTile = (origin: TileCoord, blocked: Set<string>): TileCoord | null => {
+  if (isWalkableTile(origin, blocked)) {
+    return origin;
+  }
+
+  const queue: TileCoord[] = [origin];
+  const visited = new Set<string>([toTileKey(origin)]);
+  const offsets: TileCoord[] = [
+    { x: 1, y: 0 },
+    { x: -1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 0, y: -1 }
+  ];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      break;
+    }
+    for (const offset of offsets) {
+      const next = { x: current.x + offset.x, y: current.y + offset.y };
+      const key = toTileKey(next);
+      if (visited.has(key)) {
+        continue;
+      }
+      visited.add(key);
+      if (!isWalkableTile(next, blocked)) {
+        continue;
+      }
+      return next;
+    }
+    for (const offset of offsets) {
+      const next = { x: current.x + offset.x, y: current.y + offset.y };
+      if (next.x < 0 || next.x >= GRID_COLS || next.y < 0 || next.y >= GRID_ROWS) {
+        continue;
+      }
+      const key = toTileKey(next);
+      if (!visited.has(key)) {
+        queue.push(next);
+      }
+    }
+  }
+
+  return null;
+};
 
 const getLoopTargetTile = (state: AgentWorkLoopState): TileCoord => {
   switch (state) {
@@ -143,14 +197,19 @@ const cloneRoomItems = (items: RoomTileItem[]): RoomTileItem[] => {
 export const monitorActors: Array<
   Pick<NpcActorState, "id" | "name" | "role" | "tone" | "spriteId"> & { tile: TileCoord; actorRole: string }
 > = [
-  { id: "npc-router", name: officeNpcProfiles.router.displayName, role: officeNpcProfiles.router.roleLabel, tone: "mint", spriteId: officeNpcProfiles.router.spriteId, actorRole: "router", tile: { x: 5, y: 8 } },
-  { id: "npc-runtime", name: officeNpcProfiles.runtime.displayName, role: officeNpcProfiles.runtime.roleLabel, tone: "indigo", spriteId: officeNpcProfiles.runtime.spriteId, actorRole: "runtime", tile: { x: 8, y: 12 } },
-  { id: "npc-probe", name: officeNpcProfiles.probe.displayName, role: officeNpcProfiles.probe.roleLabel, tone: "violet", spriteId: officeNpcProfiles.probe.spriteId, actorRole: "probe", tile: { x: 14, y: 7 } },
-  { id: "npc-history", name: officeNpcProfiles.history.displayName, role: officeNpcProfiles.history.roleLabel, tone: "slate", spriteId: officeNpcProfiles.history.spriteId, actorRole: "history", tile: { x: 18, y: 12 } },
-  { id: "npc-review", name: officeNpcProfiles["pm-liaison"].displayName, role: officeNpcProfiles["pm-liaison"].roleLabel, tone: "rose", spriteId: officeNpcProfiles["pm-liaison"].spriteId, actorRole: "pm-liaison", tile: { x: 22, y: 9 } }
+  { id: "npc-router", name: officeNpcProfiles.router.displayName, role: officeNpcProfiles.router.roleLabel, tone: "mint", spriteId: officeNpcProfiles.router.spriteId, actorRole: "router", tile: { x: 12, y: 7 } },
+  { id: "npc-runtime", name: officeNpcProfiles.runtime.displayName, role: officeNpcProfiles.runtime.roleLabel, tone: "indigo", spriteId: officeNpcProfiles.runtime.spriteId, actorRole: "runtime", tile: { x: 12, y: 12 } },
+  { id: "npc-probe", name: officeNpcProfiles.probe.displayName, role: officeNpcProfiles.probe.roleLabel, tone: "violet", spriteId: officeNpcProfiles.probe.spriteId, actorRole: "probe", tile: { x: 15, y: 7 } },
+  { id: "npc-history", name: officeNpcProfiles.history.displayName, role: officeNpcProfiles.history.roleLabel, tone: "slate", spriteId: officeNpcProfiles.history.spriteId, actorRole: "history", tile: { x: 17, y: 12 } },
+  { id: "npc-review", name: officeNpcProfiles["pm-liaison"].displayName, role: officeNpcProfiles["pm-liaison"].roleLabel, tone: "rose", spriteId: officeNpcProfiles["pm-liaison"].spriteId, actorRole: "pm-liaison", tile: { x: 18, y: 9 } }
 ];
 
-const getNpcActors = (loopState: AgentWorkLoopState, tick: number, actorStates: SceneSyncState["actors"]): NpcActorState[] => {
+const getNpcActors = (
+  loopState: AgentWorkLoopState,
+  tick: number,
+  actorStates: SceneSyncState["actors"],
+  blocked: Set<string>
+): NpcActorState[] => {
   return monitorActors.map((npc, index) => {
     const offset = tick + index * 2;
     const actor = actorStates.find((item) => item.role === npc.actorRole);
@@ -169,11 +228,16 @@ const getNpcActors = (loopState: AgentWorkLoopState, tick: number, actorStates: 
       state = phase <= 1 ? "moving_to_task" : phase <= 3 ? "working" : phase === 4 ? "moving_to_pm" : "reporting";
     }
 
+    const rawTile = actor?.tile ?? npc.tile;
+    const safeTile = isWalkableTile(rawTile, blocked)
+      ? rawTile
+      : findNearestWalkableTile(rawTile, blocked) ?? npc.tile;
+
     return {
       ...npc,
       state: actor?.fsmState ?? state,
       facing: actor?.facing ?? (offset % 4 < 2 ? "right" : "left"),
-      tile: actor?.tile ?? npc.tile,
+      tile: safeTile,
       target: null,
       path: []
     };
@@ -258,10 +322,11 @@ export function OfficeBoardScene({
   const [historyDepth, setHistoryDepth] = useState<{ undo: number; redo: number }>({ undo: 0, redo: 0 });
 
   const selectedItem = roomItems.find((item) => item.id === selectedItemId) ?? null;
+  const blockedTiles = useMemo(() => buildBlockedTileSet(roomItems), [roomItems]);
   const loopTick = sceneSync.lastLoopEvent?.atTick ?? 0;
   const npcActors = useMemo(
-    () => getNpcActors(sceneSync.loopState, loopTick, sceneSync.actors),
-    [loopTick, sceneSync.actors, sceneSync.loopState]
+    () => getNpcActors(sceneSync.loopState, loopTick, sceneSync.actors, blockedTiles),
+    [blockedTiles, loopTick, sceneSync.actors, sceneSync.loopState]
   );
   const probePresentation = useMemo(() => mapProbeStateToPresentation(sceneSync.probeState), [sceneSync.probeState]);
   const sceneWidth = GRID_COLS * TILE_SIZE;
@@ -305,23 +370,34 @@ export function OfficeBoardScene({
   }, [roomItems, selectedItemId]);
 
   useEffect(() => {
-    const blocked = buildBlockedTileSet(roomItems);
-    const target = getLoopTargetTile(sceneSync.loopState);
+    const safeCurrent = isWalkableTile(mainAgentTile, blockedTiles)
+      ? mainAgentTile
+      : findNearestWalkableTile(mainAgentTile, blockedTiles) ?? mainAgentTile;
+    if (safeCurrent.x !== mainAgentTile.x || safeCurrent.y !== mainAgentTile.y) {
+      setMainAgentTile(safeCurrent);
+      setMainAgentPath([]);
+      return;
+    }
+
+    const rawTarget = getLoopTargetTile(sceneSync.loopState);
+    const target = isWalkableTile(rawTarget, blockedTiles)
+      ? rawTarget
+      : findNearestWalkableTile(rawTarget, blockedTiles) ?? rawTarget;
     const path = findTilePath({
-      start: mainAgentTile,
+      start: safeCurrent,
       goal: target,
-      blocked,
+      blocked: blockedTiles,
       width: GRID_COLS,
       height: GRID_ROWS
     });
     if (!path) {
       setMainAgentPath([]);
-      setIsMainPathUnreachable(mainAgentTile.x !== target.x || mainAgentTile.y !== target.y);
+      setIsMainPathUnreachable(safeCurrent.x !== target.x || safeCurrent.y !== target.y);
       return;
     }
     setIsMainPathUnreachable(false);
     setMainAgentPath(path.slice(1));
-  }, [sceneSync.loopState, roomItems]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [blockedTiles, mainAgentTile, sceneSync.loopState]);
 
   useEffect(() => {
     if (mainAgentPath.length === 0) {
@@ -637,43 +713,63 @@ export function OfficeBoardScene({
       return;
     }
     const { app, pixi: PIXI, backgroundLayer } = runtime;
-    let cancelled = false;
 
-    const renderBackground = async (): Promise<void> => {
-      const oldChildren = backgroundLayer.removeChildren() as Array<{ destroy: () => void }>;
-      oldChildren.forEach((child) => {
-        child.destroy();
-      });
+    const oldChildren = backgroundLayer.removeChildren() as Array<{ destroy: () => void }>;
+    oldChildren.forEach((child) => {
+      child.destroy();
+    });
 
-      const texture = await PIXI.Assets.load(OFFICE_BACKGROUND_PATH);
-      if (cancelled) {
-        return;
+    const floor = new PIXI.Graphics();
+    floor.rect(0, 0, sceneWidth, sceneHeight);
+    floor.fill({ color: 0x1a232d, alpha: 1 });
+    backgroundLayer.addChild(floor);
+
+    const tilePattern = new PIXI.Graphics();
+    for (let y = 0; y < GRID_ROWS; y += 1) {
+      for (let x = 0; x < GRID_COLS; x += 1) {
+        tilePattern.rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        tilePattern.fill({
+          color: (x + y) % 2 === 0 ? 0x222f3a : 0x1e2a34,
+          alpha: 0.92
+        });
       }
+    }
+    backgroundLayer.addChild(tilePattern);
 
-      const background = new PIXI.Sprite(texture);
-      background.width = sceneWidth;
-      background.height = sceneHeight;
-      background.alpha = 0.98;
-      backgroundLayer.addChild(background);
+    const roomBlocks: Array<{ from: TileCoord; to: TileCoord; tone: number }> = [
+      { from: { x: 2, y: 2 }, to: { x: 11, y: 7 }, tone: 0x2b3944 },
+      { from: { x: 18, y: 2 }, to: { x: 27, y: 7 }, tone: 0x2b3944 },
+      { from: { x: 2, y: 10 }, to: { x: 11, y: 15 }, tone: 0x283742 },
+      { from: { x: 18, y: 10 }, to: { x: 27, y: 15 }, tone: 0x283742 }
+    ];
 
-      const softLight = new PIXI.Graphics();
-      softLight.rect(0, 0, sceneWidth, sceneHeight);
-      softLight.fill({ color: 0xffffff, alpha: 0.03 });
-      backgroundLayer.addChild(softLight);
+    roomBlocks.forEach((room) => {
+      const roomFill = new PIXI.Graphics();
+      roomFill.rect(
+        room.from.x * TILE_SIZE,
+        room.from.y * TILE_SIZE,
+        (room.to.x - room.from.x + 1) * TILE_SIZE,
+        (room.to.y - room.from.y + 1) * TILE_SIZE
+      );
+      roomFill.fill({ color: room.tone, alpha: 0.95 });
+      roomFill.stroke({ color: 0x93a8b7, width: 1, alpha: 0.35 });
+      backgroundLayer.addChild(roomFill);
+    });
 
-      const vignette = new PIXI.Graphics();
-      vignette.rect(0, 0, sceneWidth, sceneHeight);
-      vignette.fill({ color: 0x0f172a, alpha: 0.06 });
-      backgroundLayer.addChild(vignette);
+    const corridor = new PIXI.Graphics();
+    corridor.rect(13 * TILE_SIZE, 0, 4 * TILE_SIZE, sceneHeight);
+    corridor.fill({ color: 0x344857, alpha: 0.65 });
+    corridor.stroke({ color: 0xa7c2d3, width: 1, alpha: 0.22 });
+    backgroundLayer.addChild(corridor);
 
-      app.renderer.render(app.stage);
-    };
+    const border = new PIXI.Graphics();
+    border.rect(0, 0, sceneWidth, sceneHeight);
+    border.stroke({ color: 0xd5e2ec, width: 1, alpha: 0.26 });
+    backgroundLayer.addChild(border);
 
-    void renderBackground();
+    app.renderer.render(app.stage);
 
-    return () => {
-      cancelled = true;
-    };
+    return;
   }, [rendererMode, sceneHeight, sceneWidth]);
 
   useEffect(() => {
@@ -1296,7 +1392,7 @@ export function OfficeBoardScene({
             >
               <strong>{item.label}</strong>
               <span>
-                {item.kind} · {getRoomPropVariant(item.kind, item.variantId).label} [{item.tile.x},{item.tile.y}]{" "}
+                {item.kind} | {getRoomPropVariant(item.kind, item.variantId).label} [{item.tile.x},{item.tile.y}]{" "}
                 {item.locked ? "locked" : "open"}
               </span>
             </button>
@@ -1443,3 +1539,4 @@ export function OfficeBoardScene({
     </section>
   );
 }
+

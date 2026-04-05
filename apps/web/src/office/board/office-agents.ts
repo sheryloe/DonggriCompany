@@ -1,4 +1,5 @@
 import type { OfficeTranslator } from "../i18n/office-i18n";
+import type { AgentId } from "@workspace/shared";
 import {
   getLeadSpriteId,
   getNpcSpriteId,
@@ -17,7 +18,7 @@ export const MAIN_ACTOR_ID = "actor-main";
 export type BossCommandRecipient = "pm" | "router" | "runtime" | "probe" | "history";
 
 type MonitorActorDescriptor = {
-  id: string;
+  id: AgentId;
   actorId: string;
   actorRole: string;
   displayName: string;
@@ -35,10 +36,10 @@ type TileZone = {
 };
 
 const tileZones: TileZone[] = [
-  { key: "work", x: [4, 11], y: [3, 7] },
-  { key: "pm", x: [21, 27], y: [3, 7] },
-  { key: "infra", x: [2, 8], y: [12, 15] },
-  { key: "history", x: [20, 26], y: [12, 15] }
+  { key: "work", x: [2, 11], y: [2, 7] },
+  { key: "pm", x: [18, 27], y: [2, 7] },
+  { key: "infra", x: [2, 11], y: [10, 15] },
+  { key: "history", x: [18, 27], y: [10, 15] }
 ];
 
 export const officeNpcProfiles: Record<string, NpcRoleProfile> = {
@@ -59,10 +60,10 @@ export const officeNpcProfiles: Record<string, NpcRoleProfile> = {
       waiting_review: 2
     },
     patrolRoute: [
-      { x: 5, y: 8 },
-      { x: 7, y: 8 },
-      { x: 8, y: 9 },
-      { x: 6, y: 10 }
+      { x: 12, y: 6 },
+      { x: 12, y: 8 },
+      { x: 10, y: 8 },
+      { x: 10, y: 6 }
     ]
   },
   runtime: {
@@ -81,7 +82,7 @@ export const officeNpcProfiles: Record<string, NpcRoleProfile> = {
       reporting: 2,
       waiting_review: 1
     },
-    patrolRoute: [{ x: 8, y: 12 }, { x: 9, y: 12 }]
+    patrolRoute: [{ x: 12, y: 12 }, { x: 10, y: 12 }]
   },
   probe: {
     role: "probe",
@@ -100,10 +101,10 @@ export const officeNpcProfiles: Record<string, NpcRoleProfile> = {
       waiting_review: 1
     },
     patrolRoute: [
-      { x: 14, y: 7 },
-      { x: 15, y: 7 },
-      { x: 15, y: 9 },
-      { x: 14, y: 9 }
+      { x: 14, y: 6 },
+      { x: 16, y: 6 },
+      { x: 16, y: 8 },
+      { x: 14, y: 8 }
     ]
   },
   history: {
@@ -122,7 +123,7 @@ export const officeNpcProfiles: Record<string, NpcRoleProfile> = {
       reporting: 2,
       waiting_review: 2
     },
-    patrolRoute: [{ x: 18, y: 12 }]
+    patrolRoute: [{ x: 17, y: 12 }]
   },
   "pm-liaison": {
     role: "pm-liaison",
@@ -140,13 +141,13 @@ export const officeNpcProfiles: Record<string, NpcRoleProfile> = {
       reporting: 3,
       waiting_review: 3
     },
-    patrolRoute: [{ x: 22, y: 9 }, { x: 23, y: 9 }]
+    patrolRoute: [{ x: 18, y: 9 }, { x: 20, y: 9 }]
   }
 };
 
 export const monitorActorDescriptors: MonitorActorDescriptor[] = [
   {
-    id: "main-agent",
+    id: "main",
     actorId: MAIN_ACTOR_ID,
     actorRole: "main-agent",
     displayName: "Main Agent",
@@ -163,7 +164,7 @@ export const monitorActorDescriptors: MonitorActorDescriptor[] = [
     displayName: officeNpcProfiles.router.displayName,
     roleLabel: officeNpcProfiles.router.roleLabel,
     defaultRoomLabel: officeNpcProfiles.router.roomLabel,
-    defaultTile: { x: 5, y: 8 },
+    defaultTile: { x: 12, y: 7 },
     defaultModelLabel: officeNpcProfiles.router.modelLabel
   },
   {
@@ -173,7 +174,7 @@ export const monitorActorDescriptors: MonitorActorDescriptor[] = [
     displayName: officeNpcProfiles.runtime.displayName,
     roleLabel: officeNpcProfiles.runtime.roleLabel,
     defaultRoomLabel: officeNpcProfiles.runtime.roomLabel,
-    defaultTile: { x: 8, y: 12 },
+    defaultTile: { x: 12, y: 12 },
     defaultModelLabel: officeNpcProfiles.runtime.modelLabel
   },
   {
@@ -183,7 +184,7 @@ export const monitorActorDescriptors: MonitorActorDescriptor[] = [
     displayName: officeNpcProfiles.probe.displayName,
     roleLabel: officeNpcProfiles.probe.roleLabel,
     defaultRoomLabel: officeNpcProfiles.probe.roomLabel,
-    defaultTile: { x: 14, y: 7 },
+    defaultTile: { x: 15, y: 7 },
     defaultModelLabel: officeNpcProfiles.probe.modelLabel
   },
   {
@@ -193,7 +194,7 @@ export const monitorActorDescriptors: MonitorActorDescriptor[] = [
     displayName: officeNpcProfiles.history.displayName,
     roleLabel: officeNpcProfiles.history.roleLabel,
     defaultRoomLabel: officeNpcProfiles.history.roomLabel,
-    defaultTile: { x: 18, y: 12 },
+    defaultTile: { x: 17, y: 12 },
     defaultModelLabel: officeNpcProfiles.history.modelLabel
   },
   {
@@ -203,10 +204,12 @@ export const monitorActorDescriptors: MonitorActorDescriptor[] = [
     displayName: officeNpcProfiles["pm-liaison"].displayName,
     roleLabel: officeNpcProfiles["pm-liaison"].roleLabel,
     defaultRoomLabel: officeNpcProfiles["pm-liaison"].roomLabel,
-    defaultTile: { x: 22, y: 9 },
+    defaultTile: { x: 18, y: 9 },
     defaultModelLabel: officeNpcProfiles["pm-liaison"].modelLabel
   }
 ];
+
+export const officeAgentIds: AgentId[] = monitorActorDescriptors.map((item) => item.id);
 
 export const bossCommandRecipients: Array<{
   value: BossCommandRecipient;
@@ -305,8 +308,10 @@ export const getMonitorEntries = (
     const loopState = actor?.fsmState ?? (descriptor.actorId === MAIN_ACTOR_ID ? sceneSync.loopState : "idle");
     const usagePercent = clampPercent(sceneSync.agentLoadById[descriptor.actorId] ?? 0);
     const tile = actor?.tile ?? descriptor.defaultTile;
-    const modelLabel =
-      descriptor.actorId === MAIN_ACTOR_ID
+    const assignedModel = sceneSync.agentModelById[descriptor.id];
+    const modelLabel = assignedModel
+      ? assignedModel.modelLabel
+      : descriptor.actorId === MAIN_ACTOR_ID
         ? `${sceneSync.selectedProvider.toUpperCase()} / ${sceneSync.selectedProfileKey || "default"}`
         : descriptor.defaultModelLabel;
 

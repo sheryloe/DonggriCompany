@@ -29,6 +29,7 @@ const baseSceneSync: SceneSyncState = {
   selectedProvider: "codex",
   selectedPoolKey: "pool-1",
   selectedProfileKey: "codex-main-a",
+  agentModelById: {},
   probeState: "success",
   lastActionAt: "boot",
   kpi: {
@@ -58,6 +59,6 @@ describe("office agent monitor mapping", () => {
     expect(getLocationLabel({ x: 22, y: 5 }, t)).toBe("PM 데스크");
     expect(getLocationLabel({ x: 3, y: 13 }, t)).toBe("인프라 베이");
     expect(getLocationLabel({ x: 20, y: 14 }, t)).toBe("히스토리 아카이브");
-    expect(getLocationLabel({ x: 15, y: 10 }, t)).toBe("이동 구간");
+    expect(getLocationLabel({ x: 15, y: 10 }, t)).toBe("이동 구역");
   });
 });

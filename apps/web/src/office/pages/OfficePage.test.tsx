@@ -81,6 +81,67 @@ const runtimeCrudMock = {
   clearMessages: vi.fn()
 };
 
+const agentModelAssignmentsMock = {
+  assignments: [
+    {
+      agentId: "main",
+      provider: "codex",
+      accountPoolId: "pool-1",
+      runtimeProfileId: "profile-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  assignmentByAgentId: {
+    main: {
+      agentId: "main",
+      provider: "codex",
+      accountPoolId: "pool-1",
+      runtimeProfileId: "profile-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    }
+  },
+  isLoading: false,
+  isMutating: false,
+  errorMessage: null,
+  actionMessage: null,
+  refresh: vi.fn(async () => undefined),
+  upsert: vi.fn(async () => null)
+};
+
+const oauthSessionsMock = {
+  sessions: [
+    {
+      provider: "codex",
+      accountPoolId: "pool-1",
+      status: "connected",
+      connected: true,
+      expiresAt: null,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      lastError: null
+    }
+  ],
+  sessionByPoolId: {
+    "pool-1": {
+      provider: "codex",
+      accountPoolId: "pool-1",
+      status: "connected",
+      connected: true,
+      expiresAt: null,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      lastError: null
+    }
+  },
+  isLoading: false,
+  isMutating: false,
+  errorMessage: null,
+  actionMessage: null,
+  refresh: vi.fn(async () => undefined),
+  connect: vi.fn(async () => true),
+  disconnect: vi.fn(async () => true)
+};
+
 const tycoonMock = {
   simState: {
     tick: 1,
@@ -136,6 +197,14 @@ vi.mock("../hooks/useProviderProbe", () => ({
 
 vi.mock("../hooks/useRuntimeProfileCrud", () => ({
   useRuntimeProfileCrud: () => runtimeCrudMock
+}));
+
+vi.mock("../hooks/useAgentModelAssignments", () => ({
+  useAgentModelAssignments: () => agentModelAssignmentsMock
+}));
+
+vi.mock("../hooks/useOAuthSessions", () => ({
+  useOAuthSessions: () => oauthSessionsMock
 }));
 
 vi.mock("../hooks/useTycoonSimulation", () => ({
@@ -257,6 +326,9 @@ describe("OfficePage MVP layout", () => {
     probeMock.changeHistoryLimit.mockClear();
     probeMock.refreshHistory.mockClear();
     probeMock.runProbe.mockClear();
+    agentModelAssignmentsMock.upsert.mockClear();
+    oauthSessionsMock.connect.mockClear();
+    oauthSessionsMock.disconnect.mockClear();
     officeBoardSceneCalls.length = 0;
   });
 
@@ -270,6 +342,7 @@ describe("OfficePage MVP layout", () => {
     expect(document.querySelector(".office-right-column")).not.toBeNull();
     expect(screen.getByRole("tab", { name: "계정 풀" })).not.toBeNull();
     expect(screen.getByText("선택 풀 상세")).not.toBeNull();
+    expect(screen.getByRole("tab", { name: "에이전트 모델" })).not.toBeNull();
 
     await user.click(screen.getByRole("tab", { name: "런타임" }));
     expect(screen.getByText("런타임 프로필")).not.toBeNull();

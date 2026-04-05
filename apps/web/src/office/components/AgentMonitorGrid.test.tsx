@@ -35,5 +35,6 @@ describe("AgentMonitorGrid", () => {
     expect(within(card).getByText("64%")).not.toBeNull();
     expect(within(card).getByText("CODEX / codex-main-a")).not.toBeNull();
     expect(within(card).getByText("작업 구역")).not.toBeNull();
+    expect(within(card).getByRole("progressbar", { name: "Usage" }).getAttribute("aria-valuenow")).toBe("64");
   });
 });

@@ -236,6 +236,76 @@ export type RuntimeProfileDeleteResponse = {
   id: string;
 };
 
+export type AgentId = "main" | "router" | "runtime" | "probe" | "history" | "pm";
+
+export type AgentModelAssignmentView = {
+  agentId: AgentId;
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  runtimeProfileId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AgentModelAssignmentsListResponse = {
+  ok: true;
+  assignments: AgentModelAssignmentView[];
+};
+
+export type UpsertAgentModelAssignmentRequest = {
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  runtimeProfileId: string;
+};
+
+export type UpsertAgentModelAssignmentResponse = {
+  ok: true;
+  assignment: AgentModelAssignmentView;
+};
+
+export type OAuthStartRequest = {
+  accountPoolId: string;
+  clientOrigin?: string;
+};
+
+export type OAuthStartResponse = {
+  ok: true;
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  authorizeUrl: string;
+  state: string;
+  expiresAt: string;
+};
+
+export type OAuthSessionStatus = "connected" | "disconnected" | "pending" | "error";
+
+export type OAuthSessionStatusView = {
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  status: OAuthSessionStatus;
+  connected: boolean;
+  expiresAt: string | null;
+  updatedAt: string;
+  lastError: string | null;
+};
+
+export type OAuthStatusResponse = {
+  ok: true;
+  provider: ProviderUsageProbeProvider;
+  sessions: OAuthSessionStatusView[];
+};
+
+export type OAuthDisconnectRequest = {
+  accountPoolId: string;
+};
+
+export type OAuthDisconnectResponse = {
+  ok: true;
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  disconnected: true;
+};
+
 export type RuntimeRouterRequest = {
   taskType?: string;
   roleKey?: string;

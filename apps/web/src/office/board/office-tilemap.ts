@@ -156,103 +156,235 @@ const normalizeRoomItem = (value: unknown, index: number): RoomTileItem | null =
 export const createDefaultRoomItems = (): RoomTileItem[] => {
   return [
     {
-      id: "room-desk-1",
+      id: "room-desk-a1",
       kind: "desk",
       variantId: getDefaultRoomPropVariantId("desk"),
-      label: "Task Desk",
-      tile: { x: 5, y: 11 },
+      label: "Room A Desk 1",
+      tile: { x: 3, y: 3 },
       width: 3,
-      height: 2,
-      zIndex: 2,
-      locked: false
-    },
-    {
-      id: "room-desk-2",
-      kind: "desk",
-      variantId: getDefaultRoomPropVariantId("desk"),
-      label: "Ops Desk",
-      tile: { x: 9, y: 12 },
-      width: 3,
-      height: 2,
-      zIndex: 2,
-      locked: false
-    },
-    {
-      id: "room-terminal-1",
-      kind: "terminal",
-      variantId: getDefaultRoomPropVariantId("terminal"),
-      label: "Probe Rack",
-      tile: { x: 11, y: 10 },
-      width: 2,
       height: 2,
       zIndex: 3,
-      locked: false
+      locked: true
     },
     {
-      id: "room-sofa-1",
+      id: "room-desk-a2",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room A Desk 2",
+      tile: { x: 7, y: 3 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-a3",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room A Desk 3",
+      tile: { x: 3, y: 5 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-a4",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room A Desk 4",
+      tile: { x: 7, y: 5 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-b1",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room B Desk 1",
+      tile: { x: 19, y: 3 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-b2",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room B Desk 2",
+      tile: { x: 23, y: 3 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-b3",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room B Desk 3",
+      tile: { x: 19, y: 5 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-b4",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room B Desk 4",
+      tile: { x: 23, y: 5 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-c1",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room C Desk 1",
+      tile: { x: 3, y: 11 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-c2",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room C Desk 2",
+      tile: { x: 7, y: 11 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-c3",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room C Desk 3",
+      tile: { x: 3, y: 13 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-c4",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room C Desk 4",
+      tile: { x: 7, y: 13 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-d1",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room D Desk 1",
+      tile: { x: 19, y: 11 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-d2",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room D Desk 2",
+      tile: { x: 23, y: 11 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-d3",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room D Desk 3",
+      tile: { x: 19, y: 13 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-desk-d4",
+      kind: "desk",
+      variantId: getDefaultRoomPropVariantId("desk"),
+      label: "Room D Desk 4",
+      tile: { x: 23, y: 13 },
+      width: 3,
+      height: 2,
+      zIndex: 3,
+      locked: true
+    },
+    {
+      id: "room-terminal-core",
+      kind: "terminal",
+      variantId: getDefaultRoomPropVariantId("terminal"),
+      label: "Core Terminal",
+      tile: { x: 13, y: 8 },
+      width: 2,
+      height: 2,
+      zIndex: 4,
+      locked: true
+    },
+    {
+      id: "room-sofa-pm",
       kind: "sofa",
       variantId: getDefaultRoomPropVariantId("sofa"),
       label: "PM Lounge",
-      tile: { x: 22, y: 11 },
+      tile: { x: 17, y: 8 },
       width: 3,
       height: 2,
       zIndex: 2,
-      locked: false
+      locked: true
     },
     {
-      id: "room-board-1",
+      id: "room-board-main",
       kind: "board",
       variantId: roomPropVariants.board[0]?.id ?? getDefaultRoomPropVariantId("board"),
-      label: "Sprint Board",
-      tile: { x: 13, y: 2 },
+      label: "Main Board",
+      tile: { x: 14, y: 1 },
       width: 2,
       height: 1,
       zIndex: 2,
-      locked: false
+      locked: true
     },
     {
-      id: "room-board-2",
-      kind: "board",
-      variantId: roomPropVariants.board[1]?.id ?? getDefaultRoomPropVariantId("board"),
-      label: "Risk Board",
-      tile: { x: 20, y: 2 },
-      width: 2,
-      height: 1,
-      zIndex: 2,
-      locked: false
-    },
-    {
-      id: "room-plant-1",
+      id: "room-plant-lobby",
       kind: "plant",
       variantId: roomPropVariants.plant[0]?.id ?? getDefaultRoomPropVariantId("plant"),
       label: "Lobby Plant",
-      tile: { x: 2, y: 13 },
+      tile: { x: 1, y: 1 },
       width: 1,
       height: 1,
       zIndex: 2,
-      locked: false
+      locked: true
     },
     {
-      id: "room-plant-2",
+      id: "room-plant-corner",
       kind: "plant",
       variantId: roomPropVariants.plant[1]?.id ?? getDefaultRoomPropVariantId("plant"),
       label: "Corner Plant",
-      tile: { x: 27, y: 14 },
+      tile: { x: 28, y: 16 },
       width: 1,
       height: 1,
       zIndex: 2,
-      locked: false
-    },
-    {
-      id: "room-plant-3",
-      kind: "plant",
-      variantId: roomPropVariants.plant[0]?.id ?? getDefaultRoomPropVariantId("plant"),
-      label: "Work Plant",
-      tile: { x: 24, y: 8 },
-      width: 1,
-      height: 1,
-      zIndex: 2,
-      locked: false
+      locked: true
     }
   ];
 };

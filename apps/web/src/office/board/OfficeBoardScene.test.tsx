@@ -26,6 +26,7 @@ const renderScene = (loopState: AgentWorkLoopState = "idle") =>
         selectedProvider: "codex",
         selectedPoolKey: "codex-plus-main",
         selectedProfileKey: "codex-plus-main-a",
+        agentModelById: {},
         probeState: "success",
         lastActionAt: "test",
         kpi: {
@@ -89,10 +90,11 @@ describe("OfficeBoardScene room editor", () => {
     renderScene();
 
     await user.click(screen.getByText("Room Editor"));
-    await user.click(screen.getByRole("button", { name: "Room item Probe Rack" }));
+    await user.click(screen.getByRole("button", { name: "Add Asset" }));
+    await user.click(screen.getByRole("button", { name: /Room item Task Desk/i }));
     await user.click(screen.getByRole("button", { name: "Remove" }));
 
-    expect(screen.queryByRole("button", { name: "Room item Probe Rack" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Room item Task Desk/i })).toBeNull();
   });
 
   it("moves selected room item with directional controls", async () => {
@@ -100,7 +102,8 @@ describe("OfficeBoardScene room editor", () => {
     renderScene();
 
     await user.click(screen.getByText("Room Editor"));
-    await user.click(screen.getByRole("button", { name: "Room item Probe Rack" }));
+    await user.click(screen.getByRole("button", { name: "Add Asset" }));
+    await user.click(screen.getByRole("button", { name: /Room item Task Desk/i }));
     const before = screen.getByText(/^Selected:/).textContent ?? "";
     await user.click(screen.getByRole("button", { name: "Right" }));
     const after = screen.getByText(/^Selected:/).textContent ?? "";

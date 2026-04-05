@@ -46,11 +46,21 @@ export function AgentMonitorGrid({
               <div className="office-monitor-meta-grid">
                 <p>
                   <span>{t("board.agentMonitorState")}</span>
-                  <strong>{entry.stateLabel}</strong>
+                  <strong className={`office-monitor-state tone-${entry.animState}`}>{entry.stateLabel}</strong>
                 </p>
                 <p>
                   <span>{t("board.agentMonitorUsage")}</span>
                   <strong>{formatUsage(entry.usagePercent)}</strong>
+                  <span
+                    className="office-monitor-usage-meter"
+                    role="progressbar"
+                    aria-label={t("board.agentMonitorUsage")}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.max(0, Math.min(100, Math.round(entry.usagePercent)))}
+                  >
+                    <span style={{ width: formatUsage(entry.usagePercent) }} />
+                  </span>
                 </p>
                 <p>
                   <span>{t("board.agentMonitorModel")}</span>

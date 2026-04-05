@@ -1,4 +1,8 @@
 import type { ProbeUiState } from "../lib/probe-ui-state";
+import type {
+  AgentId,
+  ProviderUsageProbeProvider
+} from "@workspace/shared";
 
 export type AgentWorkLoopState = "idle" | "moving_to_task" | "working" | "moving_to_pm" | "reporting" | "waiting_review" | "blocked";
 export type SimulationSpeed = "1x" | "2x" | "4x";
@@ -87,7 +91,7 @@ export type NpcActorState = {
 };
 
 export type AgentMonitorEntry = {
-  id: string;
+  id: AgentId;
   name: string;
   role: string;
   roleLabel: string;
@@ -98,6 +102,15 @@ export type AgentMonitorEntry = {
   locationLabel: string;
   spriteId: SpriteCharacterId;
   animState: SpriteAnimState;
+};
+
+export type AgentModelSelection = {
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  accountPoolKey: string;
+  runtimeProfileId: string;
+  runtimeProfileKey: string;
+  modelLabel: string;
 };
 
 export type TycoonKpi = {
@@ -164,6 +177,7 @@ export type SceneSyncState = {
   selectedProvider: string;
   selectedPoolKey: string;
   selectedProfileKey: string;
+  agentModelById: Partial<Record<AgentId, AgentModelSelection>>;
   probeState: ProbeUiState;
   lastActionAt: string;
   kpi: TycoonKpi;

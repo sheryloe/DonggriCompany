@@ -1,6 +1,6 @@
 import { STEP3_ALLOWED_ROUTES } from "./allowed-routes";
 
-export type AllowedHttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+export type AllowedHttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type Step3RouteSpec = {
   method: AllowedHttpMethod;
@@ -25,6 +25,11 @@ export const STEP3_ROUTE_MAP = {
   resolveRuntimeRouter: { method: "POST", path: STEP3_ALLOWED_ROUTES.RUNTIME_ROUTER_RESOLVE },
   runProviderUsageProbe: { method: "POST", path: STEP3_ALLOWED_ROUTES.PROVIDER_PROBES_RUN },
   listProviderUsageProbeHistory: { method: "GET", path: STEP3_ALLOWED_ROUTES.PROVIDER_PROBES_HISTORY },
+  listAgentModels: { method: "GET", path: STEP3_ALLOWED_ROUTES.AGENT_MODELS },
+  upsertAgentModel: { method: "PUT", path: STEP3_ALLOWED_ROUTES.AGENT_MODEL_BY_ID },
+  startOAuth: { method: "POST", path: STEP3_ALLOWED_ROUTES.OAUTH_PROVIDER_START },
+  getOAuthStatus: { method: "GET", path: STEP3_ALLOWED_ROUTES.OAUTH_PROVIDER_STATUS },
+  disconnectOAuth: { method: "POST", path: STEP3_ALLOWED_ROUTES.OAUTH_PROVIDER_DISCONNECT },
   getOfficeBootstrap: { method: "GET", path: STEP3_ALLOWED_ROUTES.OFFICE_BOOTSTRAP },
   listWorkspaces: { method: "GET", path: STEP3_ALLOWED_ROUTES.WORKSPACES },
   listEmployees: { method: "GET", path: STEP3_ALLOWED_ROUTES.EMPLOYEES },

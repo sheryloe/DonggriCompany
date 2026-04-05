@@ -1,4 +1,8 @@
-import type { AccountPoolView, ProviderUsageProbeProvider } from "@workspace/shared";
+import type {
+  AccountPoolView,
+  OAuthSessionStatusView,
+  ProviderUsageProbeProvider
+} from "@workspace/shared";
 import {
   createOfficeTranslator,
   type OfficeTranslator
@@ -8,8 +12,12 @@ type AccountPoolWidgetProps = {
   pools: AccountPoolView[];
   selectedProvider: ProviderUsageProbeProvider;
   selectedAccountPoolId: string;
+  oauthSessionByPoolId?: Record<string, OAuthSessionStatusView>;
+  isOAuthMutating?: boolean;
   onSelectProvider: (provider: ProviderUsageProbeProvider) => void;
   onSelectAccountPool: (accountPoolId: string) => void;
+  onConnectOAuth?: (accountPoolId: string) => void;
+  onDisconnectOAuth?: (accountPoolId: string) => void;
   t?: OfficeTranslator;
 };
 
@@ -19,8 +27,12 @@ export function AccountPoolWidget({
   pools,
   selectedProvider,
   selectedAccountPoolId,
+  oauthSessionByPoolId = {},
+  isOAuthMutating = false,
   onSelectProvider,
   onSelectAccountPool,
+  onConnectOAuth,
+  onDisconnectOAuth,
   t = createOfficeTranslator("en")
 }: AccountPoolWidgetProps): JSX.Element {
   const filteredPools = pools.filter((pool) => pool.provider === selectedProvider);
@@ -79,6 +91,28 @@ export function AccountPoolWidget({
                 ? `${selectedPool.latestFatigue.normalizedPercent.toFixed(1)}% (${selectedPool.latestFatigue.fatigueState})`
                 : "unknown"}
             </p>
+            <p>
+              oauth:{" "}
+              {oauthSessionByPoolId[selectedPool.id]?.status ?? "disconnected"}
+            </p>
+            <div className="row-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={isOAuthMutating}
+                onClick={() => onConnectOAuth?.(selectedPool.id)}
+              >
+                {t("widget.account.oauthConnect")}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={isOAuthMutating}
+                onClick={() => onDisconnectOAuth?.(selectedPool.id)}
+              >
+                {t("widget.account.oauthDisconnect")}
+              </button>
+            </div>
           </>
         ) : (
           <p>{t("widget.account.noSelection")}</p>
@@ -92,6 +126,7 @@ export function AccountPoolWidget({
               <th>{t("widget.account.table.key")}</th>
               <th>{t("widget.account.table.fatigue")}</th>
               <th>{t("widget.account.table.state")}</th>
+              <th>{t("widget.account.oauthStatus")}</th>
               <th>{t("widget.account.table.enabled")}</th>
             </tr>
           </thead>
@@ -101,12 +136,13 @@ export function AccountPoolWidget({
                 <td>{pool.key}</td>
                 <td>{pool.latestFatigue ? `${pool.latestFatigue.normalizedPercent.toFixed(1)}%` : "-"}</td>
                 <td>{pool.latestFatigue?.fatigueState ?? "unknown"}</td>
+                <td>{oauthSessionByPoolId[pool.id]?.status ?? "disconnected"}</td>
                 <td>{pool.isEnabled ? t("widget.account.enabled") : t("widget.account.disabled")}</td>
               </tr>
             ))}
             {filteredPools.length === 0 ? (
               <tr>
-                <td colSpan={4}>{t("widget.account.empty")}</td>
+                <td colSpan={5}>{t("widget.account.empty")}</td>
               </tr>
             ) : null}
           </tbody>

@@ -7,12 +7,15 @@ export { listRolePacks } from "./rolepacks.js";
 export { listProvidersWithLatestProbe, runProviderProbeAndPersist } from "./providers.js";
 export {
   AccountPoolService,
+  AgentModelAssignmentService,
   DbServiceError,
+  OAuthSessionService,
   ProviderUsageProbeService,
   RuntimeProfileService,
   RuntimeRouter,
   createAccountPoolSchema,
   createRuntimeProfileSchema,
+  upsertAgentModelAssignmentSchema,
   updateAccountPoolSchema,
   updateRuntimeProfileSchema,
   mapFatigueState,

@@ -3,12 +3,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { BOSS_COMMAND_STORAGE_KEY } from "../lib/office-console";
 import { OfficeConversationPanel } from "./OfficeConversationPanel";
 
 describe("OfficeConversationPanel", () => {
   beforeEach(() => {
-    window.localStorage.removeItem(BOSS_COMMAND_STORAGE_KEY);
+    window.localStorage.clear();
   });
 
   it("defaults to all-log tab with collapsed filter row", async () => {
@@ -33,6 +32,10 @@ describe("OfficeConversationPanel", () => {
           riskLevel: "low"
         }}
         mainAgentName="CODEX Agent"
+        threads={[]}
+        onCreateThread={async () => null}
+        onAppendFeedback={async () => null}
+        onUpdateThreadStatus={async () => null}
       />
     );
 

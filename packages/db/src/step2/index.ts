@@ -5,6 +5,7 @@ export {
 } from "./agent-model-assignment-service.js";
 export { ProviderUsageProbeService } from "./provider-usage-probes.js";
 export { OAuthSessionService } from "./oauth-session-service.js";
+export { OfficeRuntimeStoreService } from "./office-runtime-store-service.js";
 export {
   RuntimeProfileService,
   createRuntimeProfileSchema,

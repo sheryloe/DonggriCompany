@@ -1,12 +1,21 @@
 import type {
+  AddBossCommandMessageRequest,
+  AddBossCommandMessageResponse,
   AgentId,
   AgentModelAssignmentsListResponse,
+  CreateBossCommandThreadRequest,
+  CreateBossCommandThreadResponse,
   AccountPoolCreateResponse,
   AccountPoolFatigueHistoryResponse,
   AccountPoolsListResponse,
   AccountPoolUpdateResponse,
   CreateAccountPoolRequest,
   CreateRuntimeProfileRequest,
+  OfficeCommandRequest,
+  OfficeCommandResponse,
+  OfficeLogsResponse,
+  OfficeRuntimeStateResponse,
+  OfficeThreadsResponse,
   OAuthDisconnectRequest,
   OAuthDisconnectResponse,
   OAuthStartRequest,
@@ -21,6 +30,8 @@ import type {
   RuntimeProfileDeleteResponse,
   RuntimeProfilesListResponse,
   RuntimeProfileUpdateResponse,
+  UpdateBossCommandThreadStatusRequest,
+  UpdateBossCommandThreadStatusResponse,
   UpsertAgentModelAssignmentRequest,
   UpsertAgentModelAssignmentResponse,
   UpdateAccountPoolRequest,
@@ -32,6 +43,16 @@ import type {
 
 import { buildStep3Route, STEP3_ALLOWED_ROUTES } from "./allowed-routes";
 import { requestJson, withQuery } from "./client";
+
+const getOfficeWriteHeaders = (): Record<string, string> => {
+  const token = process.env.NEXT_PUBLIC_OFFICE_WRITE_TOKEN;
+  if (!token) {
+    return {};
+  }
+  return {
+    "x-office-write-token": token
+  };
+};
 
 export const listProviders = async (): Promise<ProvidersListResponse> => {
   return requestJson<ProvidersListResponse>(STEP3_ALLOWED_ROUTES.PROVIDERS, {
@@ -182,6 +203,75 @@ export const disconnectOAuth = async (
     buildStep3Route.oauthProviderDisconnect(provider),
     {
       method: "POST",
+      body: JSON.stringify(payload)
+    }
+  );
+};
+
+export const getOfficeRuntimeState = async (): Promise<OfficeRuntimeStateResponse> => {
+  return requestJson<OfficeRuntimeStateResponse>(STEP3_ALLOWED_ROUTES.OFFICE_RUNTIME_STATE, {
+    method: "GET"
+  });
+};
+
+export const sendOfficeRuntimeCommand = async (
+  payload: OfficeCommandRequest
+): Promise<OfficeCommandResponse> => {
+  return requestJson<OfficeCommandResponse>(STEP3_ALLOWED_ROUTES.OFFICE_RUNTIME_COMMAND, {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify(payload)
+  });
+};
+
+export const listOfficeLogs = async (limit = 120): Promise<OfficeLogsResponse> => {
+  return requestJson<OfficeLogsResponse>(
+    withQuery(STEP3_ALLOWED_ROUTES.OFFICE_LOGS, { limit }),
+    {
+      method: "GET"
+    }
+  );
+};
+
+export const listOfficeThreads = async (): Promise<OfficeThreadsResponse> => {
+  return requestJson<OfficeThreadsResponse>(STEP3_ALLOWED_ROUTES.OFFICE_THREADS, {
+    method: "GET"
+  });
+};
+
+export const createOfficeThread = async (
+  payload: CreateBossCommandThreadRequest
+): Promise<CreateBossCommandThreadResponse> => {
+  return requestJson<CreateBossCommandThreadResponse>(STEP3_ALLOWED_ROUTES.OFFICE_THREADS, {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify(payload)
+  });
+};
+
+export const appendOfficeThreadMessage = async (
+  threadId: string,
+  payload: AddBossCommandMessageRequest
+): Promise<AddBossCommandMessageResponse> => {
+  return requestJson<AddBossCommandMessageResponse>(
+    buildStep3Route.officeThreadMessages(threadId),
+    {
+      method: "POST",
+      headers: getOfficeWriteHeaders(),
+      body: JSON.stringify(payload)
+    }
+  );
+};
+
+export const patchOfficeThreadStatus = async (
+  threadId: string,
+  payload: UpdateBossCommandThreadStatusRequest
+): Promise<UpdateBossCommandThreadStatusResponse> => {
+  return requestJson<UpdateBossCommandThreadStatusResponse>(
+    buildStep3Route.officeThreadStatus(threadId),
+    {
+      method: "PATCH",
+      headers: getOfficeWriteHeaders(),
       body: JSON.stringify(payload)
     }
   );

@@ -1,6 +1,18 @@
 import type { AgentGuidanceMessage } from "../avatar/agent-copy";
 import type { TycoonEventLogItem } from "../board/scene-types";
-import type { BossCommandRecipient } from "../board/office-agents";
+import type {
+  BossCommandRecipient,
+  BossCommandThreadStatus,
+  BossCommandThreadView as BossCommandThread,
+  BossCommandMessageView as BossCommandMessage
+} from "@workspace/shared";
+
+export type {
+  BossCommandRecipient,
+  BossCommandThreadStatus,
+  BossCommandThread,
+  BossCommandMessage
+};
 
 export type OfficeRightTab = "all-log" | "boss-command";
 export type AgentConversationActor =
@@ -22,25 +34,6 @@ export type AgentConversationEntry = {
   body: string;
   meta: string;
   tone: "boss" | "system" | "agent" | "error";
-};
-
-export type BossCommandThreadStatus = "draft" | "sent" | "acknowledged" | "feedback" | "closed";
-
-export type BossCommandMessage = {
-  id: string;
-  sender: "boss" | BossCommandRecipient;
-  body: string;
-  createdAt: string;
-};
-
-export type BossCommandThread = {
-  id: string;
-  recipient: BossCommandRecipient;
-  summary: string;
-  status: BossCommandThreadStatus;
-  createdAt: string;
-  updatedAt: string;
-  messages: BossCommandMessage[];
 };
 
 export const BOSS_COMMAND_STORAGE_KEY = "donggri.office.boss-threads";

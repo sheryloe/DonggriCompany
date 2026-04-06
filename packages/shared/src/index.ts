@@ -306,6 +306,206 @@ export type OAuthDisconnectResponse = {
   disconnected: true;
 };
 
+export type OfficeLoopState =
+  | "idle"
+  | "moving_to_task"
+  | "working"
+  | "moving_to_pm"
+  | "reporting"
+  | "waiting_review"
+  | "blocked";
+
+export type OfficeLoopEventType =
+  | "tick"
+  | "runProbe"
+  | "refreshHistory"
+  | "setSimSpeed"
+  | "pauseSim"
+  | "resumeSim"
+  | "resetSimulation"
+  | "probeError"
+  | "probeRecovered";
+
+export type OfficeLoopEventPhase = "pending" | "committed" | "rejected";
+
+export type OfficeLoopEvent = {
+  type: OfficeLoopEventType;
+  atTick: number;
+  source: "hud" | "system";
+  phase: OfficeLoopEventPhase;
+  detail?: string;
+};
+
+export type OfficeSimSpeed = "1x" | "2x" | "4x";
+
+export type OfficeFacingDir = "left" | "right";
+
+export type OfficeTileCoord = {
+  x: number;
+  y: number;
+};
+
+export type OfficeRuntimeActorView = {
+  id: string;
+  role: string;
+  fsmState: OfficeLoopState;
+  facing: OfficeFacingDir;
+  tile: OfficeTileCoord;
+  path: OfficeTileCoord[];
+  taskId: string | null;
+  eta: number;
+};
+
+export type OfficeKpiView = {
+  throughput: number;
+  queueDepth: number;
+  slaRisk: "low" | "medium" | "high";
+  probeConfidence: "high" | "medium" | "low" | "none";
+  avgAgentLoad: number;
+};
+
+export type OfficeRuntimeStateView = {
+  tick: number;
+  seed: number;
+  simSpeed: OfficeSimSpeed;
+  isPaused: boolean;
+  loopState: OfficeLoopState;
+  phaseTicks: number;
+  jobQueue: number;
+  completedJobs: number;
+  pmReports: number;
+  lastLoopEvent: OfficeLoopEvent | null;
+  agentLoadById: Record<string, number>;
+  actors: OfficeRuntimeActorView[];
+  kpi: OfficeKpiView;
+  updatedAt: string;
+};
+
+export type OfficeRuntimeStateResponse = {
+  ok: true;
+  state: OfficeRuntimeStateView;
+};
+
+export type OfficeCommandRequest = {
+  command: Exclude<OfficeLoopEventType, "tick">;
+  speed?: OfficeSimSpeed;
+  detail?: string;
+  phase?: OfficeLoopEventPhase;
+};
+
+export type OfficeCommandResponse = {
+  ok: true;
+  state: OfficeRuntimeStateView;
+  event: OfficeLoopEvent;
+};
+
+export type OfficeEventLogCategory = "system" | "agent" | "validation" | "error";
+
+export type OfficeEventLogView = {
+  id: string;
+  tick: number;
+  category: OfficeEventLogCategory;
+  message: string;
+  actorId: string | null;
+  speaker: string | null;
+  createdAt: string;
+};
+
+export type OfficeLogsResponse = {
+  ok: true;
+  logs: OfficeEventLogView[];
+};
+
+export type BossCommandRecipient = "pm" | "router" | "runtime" | "probe" | "history";
+
+export type BossCommandThreadStatus = "draft" | "sent" | "acknowledged" | "feedback" | "closed";
+
+export type BossCommandMessageView = {
+  id: string;
+  sender: "boss" | BossCommandRecipient;
+  body: string;
+  createdAt: string;
+};
+
+export type BossCommandThreadView = {
+  id: string;
+  recipient: BossCommandRecipient;
+  summary: string;
+  status: BossCommandThreadStatus;
+  createdAt: string;
+  updatedAt: string;
+  messages: BossCommandMessageView[];
+};
+
+export type OfficeThreadsResponse = {
+  ok: true;
+  threads: BossCommandThreadView[];
+};
+
+export type CreateBossCommandThreadRequest = {
+  recipient: BossCommandRecipient;
+  summary: string;
+  body: string;
+};
+
+export type CreateBossCommandThreadResponse = {
+  ok: true;
+  thread: BossCommandThreadView;
+};
+
+export type AddBossCommandMessageRequest = {
+  sender: BossCommandRecipient;
+  body: string;
+};
+
+export type AddBossCommandMessageResponse = {
+  ok: true;
+  thread: BossCommandThreadView;
+};
+
+export type UpdateBossCommandThreadStatusRequest = {
+  status: BossCommandThreadStatus;
+};
+
+export type UpdateBossCommandThreadStatusResponse = {
+  ok: true;
+  thread: BossCommandThreadView;
+};
+
+export type OfficeRealtimeEventType =
+  | "runtime.state"
+  | "log.appended"
+  | "thread.upserted"
+  | "heartbeat";
+
+export type OfficeRealtimeEvent =
+  | {
+      id: string;
+      type: "runtime.state";
+      ts: number;
+      payload: OfficeRuntimeStateView;
+    }
+  | {
+      id: string;
+      type: "log.appended";
+      ts: number;
+      payload: OfficeEventLogView;
+    }
+  | {
+      id: string;
+      type: "thread.upserted";
+      ts: number;
+      payload: BossCommandThreadView;
+    }
+  | {
+      id: string;
+      type: "heartbeat";
+      ts: number;
+      payload: {
+        tick: number;
+      };
+    };
+
 export type RuntimeRouterRequest = {
   taskType?: string;
   roleKey?: string;

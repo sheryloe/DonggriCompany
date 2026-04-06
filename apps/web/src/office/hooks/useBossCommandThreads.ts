@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { BossCommandRecipient } from "../board/office-agents";
+import type { BossCommandRecipient } from "@workspace/shared";
 import {
   appendBossCommandFeedback,
   createBossCommandThread,

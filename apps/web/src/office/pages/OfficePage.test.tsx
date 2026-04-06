@@ -3,7 +3,6 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BOSS_COMMAND_STORAGE_KEY } from "../lib/office-console";
 import { OFFICE_LOCALE_STORAGE_KEY } from "../i18n/office-i18n";
 import OfficePage from "./OfficePage";
 
@@ -142,8 +141,8 @@ const oauthSessionsMock = {
   disconnect: vi.fn(async () => true)
 };
 
-const tycoonMock = {
-  simState: {
+const realtimeMock = {
+  runtimeState: {
     tick: 1,
     seed: 1,
     simSpeed: "1x",
@@ -154,7 +153,7 @@ const tycoonMock = {
     pmReports: 0,
     phaseTicks: 0,
     lastLoopEvent: null,
-    agentLoad: {
+    agentLoadById: {
       "actor-main": 21,
       "actor-router": 34,
       "actor-runtime": 48,
@@ -162,27 +161,44 @@ const tycoonMock = {
       "actor-history": 17,
       "actor-pm": 12
     },
-    agents: []
+    actors: [
+      { id: "actor-main", role: "main-agent", fsmState: "working", facing: "right", tile: { x: 15, y: 9 }, path: [], taskId: null, eta: 0 },
+      { id: "actor-router", role: "router", fsmState: "working", facing: "right", tile: { x: 12, y: 7 }, path: [], taskId: null, eta: 0 },
+      { id: "actor-runtime", role: "runtime", fsmState: "moving_to_pm", facing: "right", tile: { x: 12, y: 12 }, path: [], taskId: null, eta: 0 },
+      { id: "actor-probe", role: "probe", fsmState: "reporting", facing: "left", tile: { x: 15, y: 7 }, path: [], taskId: null, eta: 0 },
+      { id: "actor-history", role: "history", fsmState: "idle", facing: "left", tile: { x: 17, y: 12 }, path: [], taskId: null, eta: 0 },
+      { id: "actor-pm", role: "pm-liaison", fsmState: "waiting_review", facing: "left", tile: { x: 18, y: 9 }, path: [], taskId: null, eta: 0 }
+    ],
+    kpi: {
+      throughput: 1,
+      queueDepth: 2,
+      slaRisk: "low",
+      probeConfidence: "high",
+      avgAgentLoad: 10
+    },
+    updatedAt: "2026-01-01T00:00:00.000Z"
   },
-  kpi: {
-    throughput: 1,
-    queueDepth: 2,
-    slaRisk: "low",
-    probeConfidence: "high",
-    avgAgentLoad: 10
-  },
-  eventLog: [
+  logs: [
     {
       id: "evt-1",
       tick: 3,
       category: "system",
       message: "HUD committed: runProbe backend-success",
       actorId: "boss",
-      speaker: "Boss"
+      speaker: "Boss",
+      createdAt: "2026-01-01T00:00:03.000Z"
     }
   ],
-  dispatchHudCommand: vi.fn(),
-  registerEditorEvent: vi.fn()
+  threads: [],
+  isConnected: true,
+  isHydrating: false,
+  isMutating: false,
+  errorMessage: null,
+  refresh: vi.fn(async () => undefined),
+  sendCommand: vi.fn(async () => true),
+  createThread: vi.fn(async () => null),
+  appendThreadMessage: vi.fn(async () => null),
+  updateThreadStatus: vi.fn(async () => null)
 };
 
 const officeBoardSceneCalls = vi.hoisted(() => [] as Array<{ showStatusPanel?: boolean }>);
@@ -207,8 +223,8 @@ vi.mock("../hooks/useOAuthSessions", () => ({
   useOAuthSessions: () => oauthSessionsMock
 }));
 
-vi.mock("../hooks/useTycoonSimulation", () => ({
-  useTycoonSimulation: () => tycoonMock
+vi.mock("../hooks/useOfficeRealtimeSync", () => ({
+  useOfficeRealtimeSync: () => realtimeMock
 }));
 
 vi.mock("../board/OfficeBoardScene", () => ({
@@ -320,7 +336,6 @@ describe("OfficePage MVP layout", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.localStorage.setItem(OFFICE_LOCALE_STORAGE_KEY, "ko");
-    window.localStorage.removeItem(BOSS_COMMAND_STORAGE_KEY);
     bootstrapMock.setOfficeOpsState.mockReset();
     bootstrapMock.refresh.mockClear();
     probeMock.changeHistoryLimit.mockClear();
@@ -329,6 +344,7 @@ describe("OfficePage MVP layout", () => {
     agentModelAssignmentsMock.upsert.mockClear();
     oauthSessionsMock.connect.mockClear();
     oauthSessionsMock.disconnect.mockClear();
+    realtimeMock.sendCommand.mockClear();
     officeBoardSceneCalls.length = 0;
   });
 

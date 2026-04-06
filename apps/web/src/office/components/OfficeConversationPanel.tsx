@@ -1,15 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { AgentGuidanceMessage } from "../avatar/agent-copy";
 import { bossCommandRecipients } from "../board/office-agents";
 import type { TycoonEventLogItem } from "../board/scene-types";
-import { useBossCommandThreads } from "../hooks/useBossCommandThreads";
 import {
   buildConversationEntries,
   recipientToActorId,
   type AgentConversationActor,
+  type BossCommandThreadStatus,
   type OfficeRightTab
 } from "../lib/office-console";
 import {
@@ -17,12 +17,31 @@ import {
   type OfficeI18nKey,
   type OfficeTranslator
 } from "../i18n/office-i18n";
+import type {
+  AddBossCommandMessageRequest,
+  BossCommandThreadView,
+  CreateBossCommandThreadRequest,
+  UpdateBossCommandThreadStatusRequest
+} from "@workspace/shared";
 
 type OfficeConversationPanelProps = {
   events: TycoonEventLogItem[];
   guidanceMessage: AgentGuidanceMessage | null;
   mainAgentName: string;
   contextChips?: string[];
+  threads: BossCommandThreadView[];
+  isMutating?: boolean;
+  onCreateThread: (
+    payload: CreateBossCommandThreadRequest
+  ) => Promise<BossCommandThreadView | null>;
+  onAppendFeedback: (
+    threadId: string,
+    payload: AddBossCommandMessageRequest
+  ) => Promise<BossCommandThreadView | null>;
+  onUpdateThreadStatus: (
+    threadId: string,
+    payload: UpdateBossCommandThreadStatusRequest
+  ) => Promise<BossCommandThreadView | null>;
   t?: OfficeTranslator;
 };
 
@@ -62,6 +81,11 @@ export function OfficeConversationPanel({
   guidanceMessage,
   mainAgentName,
   contextChips = [],
+  threads,
+  isMutating = false,
+  onCreateThread,
+  onAppendFeedback,
+  onUpdateThreadStatus,
   t = createOfficeTranslator("en")
 }: OfficeConversationPanelProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<OfficeRightTab>("all-log");
@@ -71,7 +95,7 @@ export function OfficeConversationPanel({
   const [summary, setSummary] = useState("");
   const [commandBody, setCommandBody] = useState("");
   const [feedbackBody, setFeedbackBody] = useState("");
-  const commandThreads = useBossCommandThreads();
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
   const conversationEntries = useMemo(
     () => buildConversationEntries(events, guidanceMessage, mainAgentName),
@@ -85,23 +109,51 @@ export function OfficeConversationPanel({
     return conversationEntries.filter((entry) => entry.actorId === activeFilter);
   }, [activeFilter, conversationEntries]);
 
-  const onCreateThread = (): void => {
+  useEffect(() => {
+    if (threads.length === 0) {
+      setSelectedThreadId(null);
+      return;
+    }
+    if (!selectedThreadId || !threads.some((thread) => thread.id === selectedThreadId)) {
+      setSelectedThreadId(threads[0]?.id ?? null);
+    }
+  }, [selectedThreadId, threads]);
+
+  const selectedThread = useMemo(
+    () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
+    [selectedThreadId, threads]
+  );
+
+  const handleCreateThread = async (): Promise<void> => {
     const nextSummary = summary.trim();
     const nextBody = commandBody.trim();
     if (!nextSummary || !nextBody) {
       return;
     }
-    commandThreads.createThread(recipient, nextSummary, nextBody);
-    setSummary("");
-    setCommandBody("");
+    const created = await onCreateThread({
+      recipient,
+      summary: nextSummary,
+      body: nextBody
+    });
+    if (created) {
+      setSummary("");
+      setCommandBody("");
+      setSelectedThreadId(created.id);
+    }
   };
 
-  const onAddFeedback = (): void => {
-    if (!commandThreads.selectedThread || !feedbackBody.trim()) {
+  const handleAddFeedback = async (): Promise<void> => {
+    if (!selectedThread || !feedbackBody.trim()) {
       return;
     }
-    commandThreads.addFeedback(commandThreads.selectedThread.id, commandThreads.selectedThread.recipient, feedbackBody.trim());
-    setFeedbackBody("");
+    const updated = await onAppendFeedback(selectedThread.id, {
+      sender: selectedThread.recipient,
+      body: feedbackBody.trim()
+    });
+    if (updated) {
+      setFeedbackBody("");
+      setSelectedThreadId(updated.id);
+    }
   };
 
   return (
@@ -203,22 +255,22 @@ export function OfficeConversationPanel({
               <span>{t("console.commandBody")}</span>
               <textarea value={commandBody} onChange={(event) => setCommandBody(event.target.value)} rows={4} placeholder={t("console.commandPlaceholder")} />
             </label>
-            <button type="button" onClick={onCreateThread}>
+            <button type="button" onClick={() => void handleCreateThread()} disabled={isMutating}>
               {t("console.send")}
             </button>
           </section>
 
           <div className="office-command-thread-layout">
             <div className="office-command-thread-list">
-              {commandThreads.threads.length === 0 ? (
+              {threads.length === 0 ? (
                 <p className="hint">{t("console.empty.command")}</p>
               ) : (
-                commandThreads.threads.map((thread) => (
+                threads.map((thread) => (
                   <button
                     key={thread.id}
                     type="button"
-                    className={`office-thread-card${commandThreads.selectedThreadId === thread.id ? " active" : ""}`}
-                    onClick={() => commandThreads.selectThread(thread.id)}
+                    className={`office-thread-card${selectedThreadId === thread.id ? " active" : ""}`}
+                    onClick={() => setSelectedThreadId(thread.id)}
                   >
                     <div className="office-thread-card-head">
                       <strong>{thread.summary}</strong>
@@ -231,21 +283,21 @@ export function OfficeConversationPanel({
               )}
             </div>
 
-            {commandThreads.selectedThread ? (
+            {selectedThread ? (
               <section className="office-thread-detail" data-testid="boss-command-thread-detail">
                 <header>
                   <div>
-                    <h3>{commandThreads.selectedThread.summary}</h3>
+                    <h3>{selectedThread.summary}</h3>
                     <p className="hint">
-                      {t("console.threadRecipient")}: {bossCommandRecipients.find((item) => item.value === commandThreads.selectedThread?.recipient)?.label}
+                      {t("console.threadRecipient")}: {bossCommandRecipients.find((item) => item.value === selectedThread.recipient)?.label}
                     </p>
                   </div>
-                  <span className={`office-thread-status ${statusToneClass[commandThreads.selectedThread.status]}`}>
-                    {t(statusLabelKey(commandThreads.selectedThread.status))}
+                  <span className={`office-thread-status ${statusToneClass[selectedThread.status]}`}>
+                    {t(statusLabelKey(selectedThread.status))}
                   </span>
                 </header>
                 <div className="office-thread-messages">
-                  {commandThreads.selectedThread.messages.map((message) => (
+                  {selectedThread.messages.map((message) => (
                     <article
                       key={message.id}
                       className={`office-thread-message ${message.sender === "boss" ? "from-boss" : "from-agent"}`}
@@ -258,10 +310,28 @@ export function OfficeConversationPanel({
                   ))}
                 </div>
                 <div className="office-thread-actions">
-                  <button type="button" className="secondary" onClick={() => commandThreads.updateStatus(commandThreads.selectedThread!.id, "acknowledged")}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      void onUpdateThreadStatus(selectedThread.id, {
+                        status: "acknowledged" as BossCommandThreadStatus
+                      })
+                    }
+                    disabled={isMutating}
+                  >
                     {t("console.action.acknowledge")}
                   </button>
-                  <button type="button" className="secondary" onClick={() => commandThreads.updateStatus(commandThreads.selectedThread!.id, "closed")}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      void onUpdateThreadStatus(selectedThread.id, {
+                        status: "closed" as BossCommandThreadStatus
+                      })
+                    }
+                    disabled={isMutating}
+                  >
                     {t("console.action.close")}
                   </button>
                 </div>
@@ -269,7 +339,7 @@ export function OfficeConversationPanel({
                   <span>{t("console.feedback")}</span>
                   <textarea value={feedbackBody} onChange={(event) => setFeedbackBody(event.target.value)} rows={3} placeholder={t("console.feedbackPlaceholder")} />
                 </label>
-                <button type="button" className="secondary" onClick={onAddFeedback}>
+                <button type="button" className="secondary" onClick={() => void handleAddFeedback()} disabled={isMutating}>
                   {t("console.action.addFeedback")}
                 </button>
               </section>

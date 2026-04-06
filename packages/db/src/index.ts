@@ -9,6 +9,7 @@ export {
   AccountPoolService,
   AgentModelAssignmentService,
   DbServiceError,
+  OfficeRuntimeStoreService,
   OAuthSessionService,
   ProviderUsageProbeService,
   RuntimeProfileService,

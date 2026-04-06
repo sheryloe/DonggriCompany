@@ -1,5 +1,5 @@
 import type { OfficeTranslator } from "../i18n/office-i18n";
-import type { AgentId } from "@workspace/shared";
+import type { AgentId, BossCommandRecipient } from "@workspace/shared";
 import {
   getLeadSpriteId,
   getNpcSpriteId,
@@ -14,8 +14,6 @@ import type {
 } from "./scene-types";
 
 export const MAIN_ACTOR_ID = "actor-main";
-
-export type BossCommandRecipient = "pm" | "router" | "runtime" | "probe" | "history";
 
 type MonitorActorDescriptor = {
   id: AgentId;

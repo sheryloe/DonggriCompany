@@ -23,10 +23,10 @@ import { ProbeRunPanel } from "../components/ProbeRunPanel";
 import { RuntimeProfileWidget } from "../components/RuntimeProfileWidget";
 import { useAgentModelAssignments } from "../hooks/useAgentModelAssignments";
 import { useOAuthSessions } from "../hooks/useOAuthSessions";
+import { useOfficeRealtimeSync } from "../hooks/useOfficeRealtimeSync";
 import { useProviderProbe } from "../hooks/useProviderProbe";
 import { useRuntimeProfileCrud } from "../hooks/useRuntimeProfileCrud";
 import { useStep2OpsBootstrap } from "../hooks/useStep2OpsBootstrap";
-import { useTycoonSimulation } from "../hooks/useTycoonSimulation";
 import {
   DEFAULT_OFFICE_LOCALE,
   createOfficeTranslator,
@@ -38,6 +38,7 @@ import {
 } from "../i18n/office-i18n";
 import { mapProbeStateToPresentation } from "../lib/probe-presentation";
 import { classifyProbeUiState } from "../lib/probe-ui-state";
+import type { OfficeEventLogView } from "@workspace/shared";
 
 type RuntimeProfileDraft = {
   key: string;
@@ -105,6 +106,7 @@ export default function OfficePage(): JSX.Element {
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
   const contextKeyRef = useRef<string>("");
+  const previousProbeStateRef = useRef<string>("");
   const t = useMemo(() => createOfficeTranslator(locale), [locale]);
   const resolvedTheme = themeMode === "system" ? (systemPrefersDark ? "dark" : "light") : themeMode;
   const tabLabelMap = useMemo(
@@ -320,36 +322,76 @@ export default function OfficePage(): JSX.Element {
   const monitorProviderLabel =
     agentModelById.main?.modelLabel ??
     `${bootstrap.officeOpsState.selectedProvider.toUpperCase()} / ${selectedProfileKey || t("page.profileUnselected")}`;
-  const tycoon = useTycoonSimulation({
-    probeState: latestProbeState,
-    selectedProvider: bootstrap.officeOpsState.selectedProvider
-  });
+  const realtime = useOfficeRealtimeSync();
   const resetAgentLoop = useCallback(
-    (detail = "context-switch"): void => {
-      tycoon.dispatchHudCommand("resetSimulation", {
+    async (detail = "context-switch"): Promise<void> => {
+      await realtime.sendCommand({
+        command: "resetSimulation",
         phase: "committed",
         detail
       });
       markSceneAction("loop-reset");
     },
-    [markSceneAction, tycoon.dispatchHudCommand]
+    [markSceneAction, realtime]
   );
+
   const sceneSync: SceneSyncState = {
-    loopState: tycoon.simState.loopState,
-    lastLoopEvent: tycoon.simState.lastLoopEvent,
-    activeAgents: tycoon.simState.agents.length,
-    actors: tycoon.simState.agents,
-    agentLoadById: tycoon.simState.agentLoad,
+    loopState: realtime.runtimeState.loopState,
+    lastLoopEvent: realtime.runtimeState.lastLoopEvent,
+    activeAgents: realtime.runtimeState.actors.length,
+    actors: realtime.runtimeState.actors,
+    agentLoadById: realtime.runtimeState.agentLoadById,
     selectedProvider: bootstrap.officeOpsState.selectedProvider,
     selectedPoolKey,
     selectedProfileKey,
     agentModelById,
     probeState: latestProbeState,
     lastActionAt: lastSceneActionAt,
-    kpi: tycoon.kpi,
-    simSpeed: tycoon.simState.simSpeed,
-    isPaused: tycoon.simState.isPaused
+    kpi: realtime.runtimeState.kpi,
+    simSpeed: realtime.runtimeState.simSpeed,
+    isPaused: realtime.runtimeState.isPaused
   };
+
+  const conversationEvents = useMemo(
+    () =>
+      realtime.logs.map((item: OfficeEventLogView) => ({
+        id: item.id,
+        tick: item.tick,
+        category: item.category,
+        message: item.message,
+        actorId: item.actorId ?? undefined,
+        speaker: item.speaker ?? undefined
+      })),
+    [realtime.logs]
+  );
+
+  useEffect(() => {
+    const previousProbeState = previousProbeStateRef.current;
+    if (!previousProbeState) {
+      previousProbeStateRef.current = latestProbeState;
+      return;
+    }
+    if (previousProbeState === latestProbeState) {
+      return;
+    }
+    previousProbeStateRef.current = latestProbeState;
+
+    if (latestProbeState === "error") {
+      void realtime.sendCommand({
+        command: "probeError",
+        phase: "committed",
+        detail: "probe-state=error"
+      });
+      return;
+    }
+    if (previousProbeState === "error") {
+      void realtime.sendCommand({
+        command: "probeRecovered",
+        phase: "committed",
+        detail: `probe-state=${latestProbeState}`
+      });
+    }
+  }, [latestProbeState, realtime]);
 
   const guidanceMessage = useMemo(
     () => getAgentGuidanceMessage(agentEvent, latestProbeState),
@@ -359,7 +401,7 @@ export default function OfficePage(): JSX.Element {
 
   useEffect(() => {
     if (bootstrap.isLoading || bootstrap.errorMessage) {
-      resetAgentLoop("bootstrap-state-change");
+      void resetAgentLoop("bootstrap-state-change");
     }
   }, [bootstrap.isLoading, bootstrap.errorMessage, resetAgentLoop]);
 
@@ -381,7 +423,7 @@ export default function OfficePage(): JSX.Element {
       return;
     }
     contextKeyRef.current = nextContextKey;
-    resetAgentLoop("context-switch");
+    void resetAgentLoop("context-switch");
   }, [
     bootstrap.errorMessage,
     bootstrap.isLoading,
@@ -515,7 +557,8 @@ export default function OfficePage(): JSX.Element {
 
   const onRunProbe = async (): Promise<void> => {
     if (latestProbeState === "error") {
-      tycoon.dispatchHudCommand("runProbe", {
+      await realtime.sendCommand({
+        command: "runProbe",
         phase: "committed",
         detail: "blocked-probe-error"
       });
@@ -531,10 +574,6 @@ export default function OfficePage(): JSX.Element {
       type: "probe-run-start",
       provider: bootstrap.officeOpsState.selectedProvider
     });
-    tycoon.dispatchHudCommand("runProbe", {
-      phase: "pending",
-      detail: "backend-request"
-    });
     markSceneAction("probe-run");
 
     const completed = await probe.runProbe({
@@ -545,7 +584,8 @@ export default function OfficePage(): JSX.Element {
     });
 
     if (completed) {
-      tycoon.dispatchHudCommand("runProbe", {
+      await realtime.sendCommand({
+        command: "runProbe",
         phase: "committed",
         detail: "backend-success"
       });
@@ -553,20 +593,18 @@ export default function OfficePage(): JSX.Element {
       return;
     }
 
-    tycoon.dispatchHudCommand("runProbe", {
+    await realtime.sendCommand({
+      command: "runProbe",
       phase: "rejected",
       detail: "backend-failed"
     });
   };
 
   const onRefreshProbe = async (): Promise<void> => {
-    tycoon.dispatchHudCommand("refreshHistory", {
-      phase: "pending",
-      detail: "backend-request"
-    });
     markSceneAction("history-refresh");
     const refreshed = await probe.refreshHistory();
-    tycoon.dispatchHudCommand("refreshHistory", {
+    await realtime.sendCommand({
+      command: "refreshHistory",
       phase: refreshed ? "committed" : "rejected",
       detail: refreshed ? "backend-success" : "backend-failed"
     });
@@ -888,7 +926,6 @@ export default function OfficePage(): JSX.Element {
               showStatusPanel={false}
               onEditorAction={(action) => {
                 markSceneAction(`editor-${action.type}`);
-                tycoon.registerEditorEvent(`editor action: ${action.type}`);
               }}
               t={t}
             />
@@ -905,9 +942,18 @@ export default function OfficePage(): JSX.Element {
               <p className="hint">{t("layout.rightHint")}</p>
             </header>
             <OfficeConversationPanel
-              events={tycoon.eventLog}
+              events={conversationEvents}
               guidanceMessage={guidanceMessage}
               mainAgentName={agentName}
+              threads={realtime.threads}
+              isMutating={realtime.isMutating}
+              onCreateThread={async (payload) => realtime.createThread(payload)}
+              onAppendFeedback={async (threadId, payload) =>
+                realtime.appendThreadMessage(threadId, payload)
+              }
+              onUpdateThreadStatus={async (threadId, payload) =>
+                realtime.updateThreadStatus(threadId, payload)
+              }
               contextChips={[
                 bootstrap.officeOpsState.selectedProvider.toUpperCase(),
                 selectedPool?.label ?? t("page.poolUnassigned"),

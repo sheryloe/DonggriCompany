@@ -10,6 +10,7 @@ import { registerProviderUsageProbeRoutes } from "./routes/provider-usage-probes
 import { registerProviderRoutes } from "./routes/providers.js";
 import { registerRuntimeProfileRoutes } from "./routes/runtime-profiles.js";
 import { registerRuntimeRouterRoutes } from "./routes/runtime-router.js";
+import { registerOfficeRuntimeRoutes } from "./routes/office-runtime.js";
 import { registerRolePackRoutes } from "./routes/rolepacks.js";
 
 export const createServer = (): FastifyInstance => {
@@ -26,6 +27,7 @@ export const createServer = (): FastifyInstance => {
   registerProviderUsageProbeRoutes(server);
   registerAgentModelRoutes(server);
   registerOAuthRoutes(server);
+  registerOfficeRuntimeRoutes(server);
 
   return server;
 };

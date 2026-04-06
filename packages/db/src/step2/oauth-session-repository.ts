@@ -1,14 +1,14 @@
 import type {
+  OAuthProvider,
   OAuthSessionStatus,
-  OAuthSessionStatusView,
-  ProviderUsageProbeProvider
+  OAuthSessionStatusView
 } from "@workspace/shared";
 
 import type { DatabaseHandle } from "../database.js";
 
 type OAuthPkceStateRow = {
   id: string;
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   account_pool_id: string;
   state_token: string;
   code_verifier: string;
@@ -20,13 +20,16 @@ type OAuthPkceStateRow = {
 
 type OAuthSessionRow = {
   id: string;
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   account_pool_id: string;
   access_token_encrypted: string | null;
   refresh_token_encrypted: string | null;
   token_type: string | null;
   scope: string | null;
   expires_at: string | null;
+  refresh_token_expires_at: string | null;
+  last_refreshed_at: string | null;
+  refresh_fail_count: number;
   status: OAuthSessionStatus;
   last_error: string | null;
   created_at: string;
@@ -35,7 +38,7 @@ type OAuthSessionRow = {
 
 export type OAuthPkceStateInput = {
   id: string;
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   accountPoolId: string;
   stateToken: string;
   codeVerifier: string;
@@ -46,7 +49,7 @@ export type OAuthPkceStateInput = {
 
 export type OAuthPkceStateRecord = {
   id: string;
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   accountPoolId: string;
   stateToken: string;
   codeVerifier: string;
@@ -57,13 +60,16 @@ export type OAuthPkceStateRecord = {
 };
 
 export type OAuthSessionUpsertInput = {
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   accountPoolId: string;
   accessTokenEncrypted: string | null;
   refreshTokenEncrypted: string | null;
   tokenType: string | null;
   scope: string | null;
   expiresAt: string | null;
+  refreshTokenExpiresAt: string | null;
+  lastRefreshedAt: string | null;
+  refreshFailCount: number;
   status: OAuthSessionStatus;
   lastError: string | null;
 };
@@ -99,6 +105,9 @@ const mapSessionRow = (row: OAuthSessionRow): OAuthSessionInternalRecord => {
     status: row.status,
     connected: row.status === "connected",
     expiresAt: row.expires_at,
+    refreshTokenExpiresAt: row.refresh_token_expires_at,
+    lastRefreshedAt: row.last_refreshed_at,
+    refreshFailCount: row.refresh_fail_count,
     updatedAt: row.updated_at,
     lastError: row.last_error,
     accessTokenEncrypted: row.access_token_encrypted,
@@ -178,7 +187,7 @@ export class OAuthSessionRepository {
     return mapPkceStateRow(row);
   }
 
-  getPkceState(db: DatabaseHandle, provider: ProviderUsageProbeProvider, stateToken: string): OAuthPkceStateRecord | null {
+  getPkceState(db: DatabaseHandle, provider: OAuthProvider, stateToken: string): OAuthPkceStateRecord | null {
     const row = db
       .prepare(
         `
@@ -222,6 +231,9 @@ export class OAuthSessionRepository {
         token_type,
         scope,
         expires_at,
+        refresh_token_expires_at,
+        last_refreshed_at,
+        refresh_fail_count,
         status,
         last_error,
         created_at,
@@ -236,6 +248,9 @@ export class OAuthSessionRepository {
         @token_type,
         @scope,
         @expires_at,
+        @refresh_token_expires_at,
+        @last_refreshed_at,
+        @refresh_fail_count,
         @status,
         @last_error,
         @created_at,
@@ -247,6 +262,9 @@ export class OAuthSessionRepository {
         token_type = excluded.token_type,
         scope = excluded.scope,
         expires_at = excluded.expires_at,
+        refresh_token_expires_at = excluded.refresh_token_expires_at,
+        last_refreshed_at = excluded.last_refreshed_at,
+        refresh_fail_count = excluded.refresh_fail_count,
         status = excluded.status,
         last_error = excluded.last_error,
         updated_at = excluded.updated_at
@@ -260,6 +278,9 @@ export class OAuthSessionRepository {
       token_type: input.tokenType,
       scope: input.scope,
       expires_at: input.expiresAt,
+      refresh_token_expires_at: input.refreshTokenExpiresAt,
+      last_refreshed_at: input.lastRefreshedAt,
+      refresh_fail_count: input.refreshFailCount,
       status: input.status,
       last_error: input.lastError,
       created_at: nowIso,
@@ -278,6 +299,9 @@ export class OAuthSessionRepository {
           token_type,
           scope,
           expires_at,
+          refresh_token_expires_at,
+          last_refreshed_at,
+          refresh_fail_count,
           status,
           last_error,
           created_at,
@@ -297,7 +321,7 @@ export class OAuthSessionRepository {
 
   getSession(
     db: DatabaseHandle,
-    provider: ProviderUsageProbeProvider,
+    provider: OAuthProvider,
     accountPoolId: string
   ): OAuthSessionInternalRecord | null {
     const row = db
@@ -312,6 +336,9 @@ export class OAuthSessionRepository {
           token_type,
           scope,
           expires_at,
+          refresh_token_expires_at,
+          last_refreshed_at,
+          refresh_fail_count,
           status,
           last_error,
           created_at,
@@ -327,7 +354,7 @@ export class OAuthSessionRepository {
 
   listSessionsByProvider(
     db: DatabaseHandle,
-    provider: ProviderUsageProbeProvider
+    provider: OAuthProvider
   ): OAuthSessionInternalRecord[] {
     const rows = db
       .prepare(
@@ -341,6 +368,9 @@ export class OAuthSessionRepository {
           token_type,
           scope,
           expires_at,
+          refresh_token_expires_at,
+          last_refreshed_at,
+          refresh_fail_count,
           status,
           last_error,
           created_at,

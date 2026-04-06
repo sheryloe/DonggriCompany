@@ -117,6 +117,9 @@ const oauthSessionsMock = {
       status: "connected",
       connected: true,
       expiresAt: null,
+      refreshTokenExpiresAt: null,
+      lastRefreshedAt: null,
+      refreshFailCount: 0,
       updatedAt: "2026-01-01T00:00:00.000Z",
       lastError: null
     }
@@ -128,12 +131,16 @@ const oauthSessionsMock = {
       status: "connected",
       connected: true,
       expiresAt: null,
+      refreshTokenExpiresAt: null,
+      lastRefreshedAt: null,
+      refreshFailCount: 0,
       updatedAt: "2026-01-01T00:00:00.000Z",
       lastError: null
     }
   },
   isLoading: false,
   isMutating: false,
+  isProviderConfigured: true,
   errorMessage: null,
   actionMessage: null,
   refresh: vi.fn(async () => undefined),
@@ -190,6 +197,20 @@ const realtimeMock = {
     }
   ],
   threads: [],
+  kanban: {
+    departments: [{ id: "dept-runtime", key: "runtime", name: "Runtime", color: "#3b82f6", sortOrder: 2, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }],
+    tasks: []
+  },
+  meetings: [],
+  cli: {
+    runs: [],
+    logsByTaskId: {},
+    subtasksByTaskId: {}
+  },
+  runners: {
+    items: [],
+    queue: []
+  },
   isConnected: true,
   isHydrating: false,
   isMutating: false,
@@ -198,7 +219,19 @@ const realtimeMock = {
   sendCommand: vi.fn(async () => true),
   createThread: vi.fn(async () => null),
   appendThreadMessage: vi.fn(async () => null),
-  updateThreadStatus: vi.fn(async () => null)
+  updateThreadStatus: vi.fn(async () => null),
+  createKanbanTask: vi.fn(async () => null),
+  updateKanbanTask: vi.fn(async () => null),
+  createMeeting: vi.fn(async () => null),
+  startMeeting: vi.fn(async () => null),
+  completeMeeting: vi.fn(async () => null),
+  deleteMeeting: vi.fn(async () => true),
+  runCli: vi.fn(async () => null),
+  stopCli: vi.fn(async () => true),
+  loadCliLogs: vi.fn(async () => undefined),
+  loadCliSubtasks: vi.fn(async () => undefined),
+  activateRunner: vi.fn(async () => true),
+  deactivateRunner: vi.fn(async () => true)
 };
 
 const officeBoardSceneCalls = vi.hoisted(() => [] as Array<{ showStatusPanel?: boolean }>);

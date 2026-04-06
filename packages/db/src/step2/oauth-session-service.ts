@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 
 import type {
+  OAuthProvider,
   OAuthSessionStatusView,
-  ProviderUsageProbeProvider
 } from "@workspace/shared";
 import { z } from "zod";
 
@@ -11,8 +11,9 @@ import { getDbPath } from "../paths.js";
 import { AccountPoolRepository } from "./account-pool-repository.js";
 import { dbBadRequest, dbNotFound } from "./errors.js";
 import { OAuthSessionRepository, type OAuthPkceStateRecord } from "./oauth-session-repository.js";
+import type { OAuthSessionInternalRecord } from "./oauth-session-repository.js";
 
-const providerSchema = z.enum(["claude", "codex", "gemini"]);
+const providerSchema = z.enum(["claude", "codex", "gemini", "github", "google"]);
 
 const createPkceStateSchema = z.object({
   provider: providerSchema,
@@ -27,13 +28,16 @@ const createPkceStateSchema = z.object({
 type CreatePkceStateInput = z.infer<typeof createPkceStateSchema>;
 
 type UpsertConnectedSessionInput = {
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   accountPoolId: string;
   accessTokenEncrypted: string;
   refreshTokenEncrypted: string | null;
   tokenType: string | null;
   scope: string | null;
   expiresAt: string | null;
+  refreshTokenExpiresAt?: string | null;
+  lastRefreshedAt?: string | null;
+  refreshFailCount?: number;
 };
 
 export class OAuthSessionService {
@@ -54,12 +58,6 @@ export class OAuthSessionService {
       if (!accountPool) {
         throw dbNotFound(`Account pool not found: ${parsed.data.accountPoolId}`);
       }
-      if (accountPool.provider !== parsed.data.provider) {
-        throw dbBadRequest(
-          `Account pool provider mismatch: expected ${parsed.data.provider}, got ${accountPool.provider}`
-        );
-      }
-
       const nowIso = new Date().toISOString();
       this.sessionRepository.cleanupExpiredPkceStates(db, nowIso);
       return this.sessionRepository.createPkceState(
@@ -79,7 +77,7 @@ export class OAuthSessionService {
     }, this.dbPath);
   }
 
-  consumePkceState(provider: ProviderUsageProbeProvider, stateToken: string): OAuthPkceStateRecord {
+  consumePkceState(provider: OAuthProvider, stateToken: string): OAuthPkceStateRecord {
     const parsedProvider = providerSchema.safeParse(provider);
     if (!parsedProvider.success) {
       throw dbBadRequest("Invalid provider");
@@ -122,12 +120,6 @@ export class OAuthSessionService {
       if (!accountPool) {
         throw dbNotFound(`Account pool not found: ${payload.accountPoolId}`);
       }
-      if (accountPool.provider !== providerParsed.data) {
-        throw dbBadRequest(
-          `Account pool provider mismatch: expected ${providerParsed.data}, got ${accountPool.provider}`
-        );
-      }
-
       const upserted = this.sessionRepository.upsertSession(
         db,
         {
@@ -138,6 +130,9 @@ export class OAuthSessionService {
           tokenType: payload.tokenType,
           scope: payload.scope,
           expiresAt: payload.expiresAt,
+          refreshTokenExpiresAt: payload.refreshTokenExpiresAt ?? null,
+          lastRefreshedAt: payload.lastRefreshedAt ?? new Date().toISOString(),
+          refreshFailCount: payload.refreshFailCount ?? 0,
           status: "connected",
           lastError: null
         },
@@ -150,6 +145,9 @@ export class OAuthSessionService {
         status: upserted.status,
         connected: upserted.connected,
         expiresAt: upserted.expiresAt,
+        refreshTokenExpiresAt: upserted.refreshTokenExpiresAt,
+        lastRefreshedAt: upserted.lastRefreshedAt,
+        refreshFailCount: upserted.refreshFailCount,
         updatedAt: upserted.updatedAt,
         lastError: upserted.lastError
       };
@@ -157,7 +155,7 @@ export class OAuthSessionService {
   }
 
   markSessionError(
-    provider: ProviderUsageProbeProvider,
+    provider: OAuthProvider,
     accountPoolId: string,
     message: string
   ): OAuthSessionStatusView {
@@ -174,12 +172,6 @@ export class OAuthSessionService {
       if (!accountPool) {
         throw dbNotFound(`Account pool not found: ${accountPoolId}`);
       }
-      if (accountPool.provider !== providerParsed.data) {
-        throw dbBadRequest(
-          `Account pool provider mismatch: expected ${providerParsed.data}, got ${accountPool.provider}`
-        );
-      }
-
       const upserted = this.sessionRepository.upsertSession(
         db,
         {
@@ -190,6 +182,9 @@ export class OAuthSessionService {
           tokenType: null,
           scope: null,
           expiresAt: null,
+          refreshTokenExpiresAt: null,
+          lastRefreshedAt: null,
+          refreshFailCount: 0,
           status: "error",
           lastError: message
         },
@@ -202,6 +197,63 @@ export class OAuthSessionService {
         status: upserted.status,
         connected: upserted.connected,
         expiresAt: upserted.expiresAt,
+        refreshTokenExpiresAt: upserted.refreshTokenExpiresAt,
+        lastRefreshedAt: upserted.lastRefreshedAt,
+        refreshFailCount: upserted.refreshFailCount,
+        updatedAt: upserted.updatedAt,
+        lastError: upserted.lastError
+      };
+    }, this.dbPath);
+  }
+
+  recordRefreshFailure(
+    provider: OAuthProvider,
+    accountPoolId: string,
+    message: string
+  ): OAuthSessionStatusView {
+    const providerParsed = providerSchema.safeParse(provider);
+    if (!providerParsed.success) {
+      throw dbBadRequest("Invalid provider");
+    }
+    if (!accountPoolId) {
+      throw dbBadRequest("accountPoolId is required");
+    }
+
+    return withDatabase((db) => {
+      const accountPool = this.accountPoolRepository.getById(db, accountPoolId);
+      if (!accountPool) {
+        throw dbNotFound(`Account pool not found: ${accountPoolId}`);
+      }
+      const existing = this.sessionRepository.getSession(db, providerParsed.data, accountPoolId);
+      const nextFailCount = (existing?.refreshFailCount ?? 0) + 1;
+      const upserted = this.sessionRepository.upsertSession(
+        db,
+        {
+          provider: providerParsed.data,
+          accountPoolId,
+          accessTokenEncrypted: existing?.accessTokenEncrypted ?? null,
+          refreshTokenEncrypted: existing?.refreshTokenEncrypted ?? null,
+          tokenType: existing?.tokenType ?? null,
+          scope: existing?.scope ?? null,
+          expiresAt: existing?.expiresAt ?? null,
+          refreshTokenExpiresAt: existing?.refreshTokenExpiresAt ?? null,
+          lastRefreshedAt: existing?.lastRefreshedAt ?? null,
+          refreshFailCount: nextFailCount,
+          status: "error",
+          lastError: message
+        },
+        new Date().toISOString()
+      );
+
+      return {
+        provider: upserted.provider,
+        accountPoolId: upserted.accountPoolId,
+        status: upserted.status,
+        connected: upserted.connected,
+        expiresAt: upserted.expiresAt,
+        refreshTokenExpiresAt: upserted.refreshTokenExpiresAt,
+        lastRefreshedAt: upserted.lastRefreshedAt,
+        refreshFailCount: upserted.refreshFailCount,
         updatedAt: upserted.updatedAt,
         lastError: upserted.lastError
       };
@@ -209,7 +261,7 @@ export class OAuthSessionService {
   }
 
   disconnect(
-    provider: ProviderUsageProbeProvider,
+    provider: OAuthProvider,
     accountPoolId: string
   ): OAuthSessionStatusView {
     const providerParsed = providerSchema.safeParse(provider);
@@ -225,12 +277,6 @@ export class OAuthSessionService {
       if (!accountPool) {
         throw dbNotFound(`Account pool not found: ${accountPoolId}`);
       }
-      if (accountPool.provider !== providerParsed.data) {
-        throw dbBadRequest(
-          `Account pool provider mismatch: expected ${providerParsed.data}, got ${accountPool.provider}`
-        );
-      }
-
       const upserted = this.sessionRepository.upsertSession(
         db,
         {
@@ -241,6 +287,9 @@ export class OAuthSessionService {
           tokenType: null,
           scope: null,
           expiresAt: null,
+          refreshTokenExpiresAt: null,
+          lastRefreshedAt: null,
+          refreshFailCount: 0,
           status: "disconnected",
           lastError: null
         },
@@ -253,6 +302,9 @@ export class OAuthSessionService {
         status: upserted.status,
         connected: upserted.connected,
         expiresAt: upserted.expiresAt,
+        refreshTokenExpiresAt: upserted.refreshTokenExpiresAt,
+        lastRefreshedAt: upserted.lastRefreshedAt,
+        refreshFailCount: upserted.refreshFailCount,
         updatedAt: upserted.updatedAt,
         lastError: upserted.lastError
       };
@@ -260,7 +312,7 @@ export class OAuthSessionService {
   }
 
   listStatus(
-    provider: ProviderUsageProbeProvider,
+    provider: OAuthProvider,
     accountPoolId?: string
   ): OAuthSessionStatusView[] {
     const providerParsed = providerSchema.safeParse(provider);
@@ -270,9 +322,7 @@ export class OAuthSessionService {
 
     return withDatabase((db) => {
       const sessions = this.sessionRepository.listSessionsByProvider(db, providerParsed.data);
-      const pools = this.accountPoolRepository
-        .list(db)
-        .filter((pool) => pool.provider === providerParsed.data);
+      const pools = this.accountPoolRepository.list(db);
       const sessionByPoolId = new Map(sessions.map((session) => [session.accountPoolId, session]));
 
       const filteredPools = accountPoolId
@@ -292,6 +342,9 @@ export class OAuthSessionService {
             status: session.status,
             connected: session.connected,
             expiresAt: session.expiresAt,
+            refreshTokenExpiresAt: session.refreshTokenExpiresAt,
+            lastRefreshedAt: session.lastRefreshedAt,
+            refreshFailCount: session.refreshFailCount,
             updatedAt: session.updatedAt,
             lastError: session.lastError
           };
@@ -303,10 +356,30 @@ export class OAuthSessionService {
           status: "disconnected",
           connected: false,
           expiresAt: null,
+          refreshTokenExpiresAt: null,
+          lastRefreshedAt: null,
+          refreshFailCount: 0,
           updatedAt: pool.updatedAt,
           lastError: null
         };
       });
+    }, this.dbPath);
+  }
+
+  getInternalSession(
+    provider: OAuthProvider,
+    accountPoolId: string
+  ): OAuthSessionInternalRecord | null {
+    const providerParsed = providerSchema.safeParse(provider);
+    if (!providerParsed.success) {
+      throw dbBadRequest("Invalid provider");
+    }
+    if (!accountPoolId) {
+      throw dbBadRequest("accountPoolId is required");
+    }
+
+    return withDatabase((db) => {
+      return this.sessionRepository.getSession(db, providerParsed.data, accountPoolId);
     }, this.dbPath);
   }
 }

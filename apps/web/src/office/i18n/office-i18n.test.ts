@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_OFFICE_LOCALE,
@@ -17,7 +17,10 @@ describe("office-i18n", () => {
   it("translates with fallback and interpolation", () => {
     const ko = createOfficeTranslator("ko");
     const zh = createOfficeTranslator("zh");
+
     expect(ko("board.agentMonitorTitle")).toBe("에이전트 모니터");
+    expect(ko("settings.tab.kanban")).toBe("칸반");
+    expect(ko("board.fatigue.critical")).toBe("위험");
     expect(zh("widget.runtime.confirmDelete")).toBe("Confirm Delete");
     expect(zh("board.badge.grid", { cols: 30, rows: 18 })).toBe("grid 30x18");
   });
@@ -36,5 +39,3 @@ describe("office-i18n", () => {
     expect(loadOfficeLocale(storage)).toBe("zh");
   });
 });
-
-

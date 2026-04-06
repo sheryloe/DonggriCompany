@@ -9,6 +9,8 @@ import type {
   BossCommandThreadView,
   CreateBossCommandThreadRequest,
   CreateBossCommandThreadResponse,
+  OfficeCliLogView,
+  OfficeCliRunView,
   OfficeCommandRequest,
   OfficeCommandResponse,
   OfficeEventLogView,
@@ -22,6 +24,10 @@ import type {
   OfficeRuntimeStateResponse,
   OfficeRuntimeStateView,
   OfficeSimSpeed,
+  OfficeMeetingView,
+  OfficeRunnerQueueItemView,
+  OfficeRunnerStatusView,
+  TaskSummaryView,
   OfficeThreadsResponse,
   UpdateBossCommandThreadStatusRequest,
   UpdateBossCommandThreadStatusResponse
@@ -593,6 +599,33 @@ class OfficeRuntimeService {
     this.hub.broadcast("runtime.state", this.runtimeState);
   }
 
+  publishKanbanTask(task: TaskSummaryView, reason: "created" | "updated"): void {
+    this.hub.broadcast("kanban.updated", { task, reason });
+  }
+
+  publishMeeting(
+    meeting: OfficeMeetingView,
+    reason: "created" | "updated" | "deleted"
+  ): void {
+    this.hub.broadcast("meeting.updated", { meeting, reason });
+  }
+
+  publishCliRun(run: OfficeCliRunView): void {
+    this.hub.broadcast("cli.run.updated", run);
+  }
+
+  publishCliLog(log: OfficeCliLogView): void {
+    this.hub.broadcast("cli.log.appended", log);
+  }
+
+  publishRunner(runner: OfficeRunnerStatusView): void {
+    this.hub.broadcast("runner.updated", runner);
+  }
+
+  publishRunnerQueue(queueItem: OfficeRunnerQueueItemView): void {
+    this.hub.broadcast("runner.queue.updated", queueItem);
+  }
+
   private scheduleTick(): void {
     if (this.tickTimer) {
       clearTimeout(this.tickTimer);
@@ -832,6 +865,20 @@ class OfficeRuntimeService {
   }
 }
 
+let officeRuntimeServiceSingleton: OfficeRuntimeService | null = null;
+let officeRuntimeServiceInitialized = false;
+
+export const getOfficeRuntimeService = (): OfficeRuntimeService => {
+  if (!officeRuntimeServiceSingleton) {
+    officeRuntimeServiceSingleton = new OfficeRuntimeService();
+  }
+  if (!officeRuntimeServiceInitialized) {
+    officeRuntimeServiceInitialized = true;
+    void officeRuntimeServiceSingleton.initialize();
+  }
+  return officeRuntimeServiceSingleton;
+};
+
 const getWriteToken = (): string => {
   const token = (process.env.OFFICE_WRITE_TOKEN ?? "").trim();
   if (!token) {
@@ -850,10 +897,11 @@ const assertWriteToken = (request: FastifyRequest): void => {
 };
 
 export const registerOfficeRuntimeRoutes = (server: FastifyInstance): void => {
-  const runtimeService = new OfficeRuntimeService();
-  void runtimeService.initialize();
+  const runtimeService = getOfficeRuntimeService();
   server.addHook("onClose", async () => {
     runtimeService.shutdown();
+    officeRuntimeServiceInitialized = false;
+    officeRuntimeServiceSingleton = null;
   });
 
   server.get(

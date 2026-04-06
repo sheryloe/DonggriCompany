@@ -7,5 +7,12 @@ services:
     ports:
       - "7777:7777"
       - "4315:4315"
+    environment:
+      OFFICE_RUNNER_DOCKER_ENABLED: ${OFFICE_RUNNER_DOCKER_ENABLED:-0}
+      OFFICE_RUNNER_IMAGE: ${OFFICE_RUNNER_IMAGE:-node:22-bookworm}
+      OFFICE_RUNNER_MAX_ACTIVE: ${OFFICE_RUNNER_MAX_ACTIVE:-5}
+      OFFICE_RUNNER_IDLE_TTL_MS: ${OFFICE_RUNNER_IDLE_TTL_MS:-900000}
+      OFFICE_RUNNER_NETWORK: ${OFFICE_RUNNER_NETWORK:-bridge}
     volumes:
       - ./.local:/app/.local
+      - /var/run/docker.sock:/var/run/docker.sock

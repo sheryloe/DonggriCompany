@@ -6,6 +6,8 @@ import { registerAccountPoolRoutes } from "./routes/account-pools.js";
 import { registerBootstrapRoutes } from "./routes/bootstrap.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerOAuthRoutes } from "./routes/oauth.js";
+import { registerOfficeCollabRoutes } from "./routes/office-collab.js";
+import { registerOfficeRunnerRoutes } from "./routes/office-runners.js";
 import { registerProviderUsageProbeRoutes } from "./routes/provider-usage-probes.js";
 import { registerProviderRoutes } from "./routes/providers.js";
 import { registerRuntimeProfileRoutes } from "./routes/runtime-profiles.js";
@@ -28,6 +30,8 @@ export const createServer = (): FastifyInstance => {
   registerAgentModelRoutes(server);
   registerOAuthRoutes(server);
   registerOfficeRuntimeRoutes(server);
+  registerOfficeRunnerRoutes(server);
+  registerOfficeCollabRoutes(server);
 
   return server;
 };

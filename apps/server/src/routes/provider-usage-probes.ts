@@ -5,12 +5,13 @@ import type {
   ProviderUsageProbeRunRequest,
   ProviderUsageProbeRunResponse
 } from "@workspace/shared";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { badRequest } from "../errors.js";
-
-const providerUsageProbeService = new ProviderUsageProbeService();
+import { getOfficeRuntimeService } from "./office-runtime.js";
+import { OfficeRunnerOrchestrator } from "../services/office-runner-orchestrator.js";
+import { OAuthGateService } from "../services/oauth-gate.js";
 
 const historyQuerySchema = z.object({
   limit: z
@@ -30,7 +31,7 @@ const historyQuerySchema = z.object({
 
 const probeRequestSchema = z.object({
   provider: z.enum(["claude", "codex", "gemini"]),
-  accountPoolId: z.string().min(1).optional(),
+  accountPoolId: z.string().min(1),
   runtimeProfileId: z.string().min(1).optional(),
   persistSnapshot: z.boolean().optional()
 });
@@ -43,11 +44,80 @@ const parseProbeRequest = (payload: unknown): ProviderUsageProbeRunRequest => {
   return parsed.data;
 };
 
+const getWriteToken = (): string => {
+  const token = (process.env.OFFICE_WRITE_TOKEN ?? "").trim();
+  if (!token) {
+    throw badRequest("OFFICE_WRITE_TOKEN is required");
+  }
+  return token;
+};
+
+const assertWriteToken = (request: FastifyRequest): void => {
+  const expected = getWriteToken();
+  const header = request.headers["x-office-write-token"];
+  const received = Array.isArray(header) ? header[0] : header;
+  if (!received || received !== expected) {
+    throw badRequest("Invalid office write token");
+  }
+};
+
 export const registerProviderUsageProbeRoutes = (server: FastifyInstance): void => {
+  const providerUsageProbeService = new ProviderUsageProbeService();
+  const runtimeService = getOfficeRuntimeService();
+  const oauthGateService = new OAuthGateService();
+  const runnerOrchestrator = new OfficeRunnerOrchestrator();
+
   server.post(
     "/api/provider-probes/run",
     async (request): Promise<ProviderUsageProbeRunResponse> => {
-      return providerUsageProbeService.run(parseProbeRequest(request.body));
+      assertWriteToken(request);
+      const payload = parseProbeRequest(request.body);
+      await oauthGateService.ensureProviderPoolConnected(payload.provider, payload.accountPoolId);
+
+      const runner = runnerOrchestrator.activate(
+        payload.provider,
+        payload.accountPoolId,
+        JSON.stringify({
+          route: "/api/provider-probes/run",
+          runtimeProfileId: payload.runtimeProfileId ?? null
+        })
+      );
+      runtimeService.publishRunner(runner.runner);
+      if (runner.queueItem) {
+        runtimeService.publishRunnerQueue(runner.queueItem);
+      }
+      if (runner.queued) {
+        throw badRequest(
+          `Runner capacity exceeded; probe queued for ${payload.provider}/${payload.accountPoolId}`
+        );
+      }
+      if (runner.runner.status !== "active") {
+        throw badRequest(
+          `Runner activation failed for ${payload.provider}/${payload.accountPoolId}`
+        );
+      }
+      try {
+        const response = providerUsageProbeService.run(payload);
+        const touched = runnerOrchestrator.touchRunner(payload.provider, payload.accountPoolId);
+        if (touched) {
+          runtimeService.publishRunner(touched);
+        }
+        return response;
+      } catch (error) {
+        const failed = runnerOrchestrator.deactivate(
+          payload.provider,
+          payload.accountPoolId,
+          "probe-run-failed"
+        );
+        runtimeService.publishRunner(failed.runner);
+        if (failed.promotedRunner) {
+          runtimeService.publishRunner(failed.promotedRunner);
+        }
+        if (failed.promotedQueueItem) {
+          runtimeService.publishRunnerQueue(failed.promotedQueueItem);
+        }
+        throw error;
+      }
     }
   );
 

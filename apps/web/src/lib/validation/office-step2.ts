@@ -46,8 +46,8 @@ export const validateProviderProbeRun = (payload: ProviderUsageProbeRunRequest):
   if (!isKnownProvider(payload.provider)) {
     return "Provider is invalid.";
   }
-  if (payload.accountPoolId !== undefined && payload.accountPoolId.trim().length === 0) {
-    return "Account pool id cannot be empty.";
+  if (payload.accountPoolId.trim().length === 0) {
+    return "Account pool id is required.";
   }
   if (payload.runtimeProfileId !== undefined && payload.runtimeProfileId.trim().length === 0) {
     return "Runtime profile id cannot be empty.";

@@ -49,6 +49,7 @@ describe("office agent monitor mapping", () => {
     expect(entries).toHaveLength(6);
     expect(entries[0]?.name).toBe("CODEX Agent");
     expect(entries[0]?.usagePercent).toBe(33);
+    expect(entries[0]?.fatigue).toBeGreaterThan(entries[0]?.usagePercent ?? 0);
     expect(entries[0]?.modelLabel).toBe("CODEX / codex-main-a");
     expect(entries[0]?.locationLabel).toBe("작업 구역");
     expect(entries[3]?.stateLabel).toBe("보고 중");

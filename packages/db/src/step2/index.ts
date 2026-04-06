@@ -5,7 +5,19 @@ export {
 } from "./agent-model-assignment-service.js";
 export { ProviderUsageProbeService } from "./provider-usage-probes.js";
 export { OAuthSessionService } from "./oauth-session-service.js";
+export { OfficeRunnerService } from "./office-runner-service.js";
 export { OfficeRuntimeStoreService } from "./office-runtime-store-service.js";
+export {
+  KanbanTaskService,
+  createOfficeKanbanTaskSchema,
+  updateOfficeKanbanTaskSchema
+} from "./kanban-task-service.js";
+export {
+  MeetingService,
+  createOfficeMeetingSchema,
+  completeOfficeMeetingSchema
+} from "./meeting-service.js";
+export { CliExecutionService, officeCliRunSchema } from "./cli-execution-service.js";
 export {
   RuntimeProfileService,
   createRuntimeProfileSchema,

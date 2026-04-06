@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
+  OAuthProvider,
   OAuthSessionStatusView,
-  ProviderUsageProbeProvider
 } from "@workspace/shared";
 
 import {
@@ -18,6 +18,7 @@ type UseOAuthSessionsResult = {
   sessionByPoolId: Record<string, OAuthSessionStatusView>;
   isLoading: boolean;
   isMutating: boolean;
+  isProviderConfigured: boolean;
   errorMessage: string | null;
   actionMessage: string | null;
   refresh: () => Promise<void>;
@@ -34,14 +35,14 @@ const toErrorMessage = (error: unknown): string => {
 
 type OAuthPopupMessage = {
   type: "donggri-oauth-result";
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   accountPoolId: string;
   status: "connected" | "error";
   message?: string;
 };
 
 const waitForPopupResult = (
-  provider: ProviderUsageProbeProvider,
+  provider: OAuthProvider,
   accountPoolId: string,
   timeoutMs = 3 * 60_000
 ): Promise<OAuthPopupMessage | null> => {
@@ -69,11 +70,12 @@ const waitForPopupResult = (
 };
 
 export const useOAuthSessions = (
-  provider: ProviderUsageProbeProvider
+  provider: OAuthProvider
 ): UseOAuthSessionsResult => {
   const [sessions, setSessions] = useState<OAuthSessionStatusView[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isMutating, setIsMutating] = useState<boolean>(false);
+  const [isProviderConfigured, setIsProviderConfigured] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -82,8 +84,10 @@ export const useOAuthSessions = (
     try {
       const response = await getOAuthStatus(provider);
       setSessions(response.sessions);
+      setIsProviderConfigured(response.isConfigured);
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
+      setIsProviderConfigured(false);
     } finally {
       setIsLoading(false);
     }
@@ -167,6 +171,7 @@ export const useOAuthSessions = (
     sessionByPoolId,
     isLoading,
     isMutating,
+    isProviderConfigured,
     errorMessage,
     actionMessage,
     refresh,

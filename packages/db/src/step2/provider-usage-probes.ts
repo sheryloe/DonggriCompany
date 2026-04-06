@@ -58,7 +58,7 @@ export type ProviderUsageProbeServiceOptions = {
 
 const usageProbeRequestSchema = z.object({
   provider: z.enum(["claude", "codex", "gemini"]),
-  accountPoolId: z.string().min(1).optional(),
+  accountPoolId: z.string().min(1),
   runtimeProfileId: z.string().min(1).optional(),
   persistSnapshot: z.boolean().optional()
 });
@@ -338,7 +338,7 @@ export class ProviderUsageProbeService {
     }
 
     return withDatabase((db) => {
-      let accountPoolId = parsed.data.accountPoolId ?? null;
+      const accountPoolId = parsed.data.accountPoolId;
       const runtimeProfile = parsed.data.runtimeProfileId
         ? this.runtimeProfileRepository.getById(db, parsed.data.runtimeProfileId)
         : null;
@@ -352,21 +352,16 @@ export class ProviderUsageProbeService {
             `Runtime profile provider mismatch: expected ${parsed.data.provider}, got ${runtimeProfile.provider}`
           );
         }
-        if (!accountPoolId) {
-          accountPoolId = runtimeProfile.accountPoolId;
-        }
       }
 
-      const accountPool = accountPoolId ? this.accountPoolRepository.getById(db, accountPoolId) : null;
-      if (accountPoolId) {
-        if (!accountPool) {
-          throw dbNotFound(`Account pool not found: ${accountPoolId}`);
-        }
-        if (accountPool.provider !== parsed.data.provider) {
-          throw dbBadRequest(
-            `Account pool provider mismatch: expected ${parsed.data.provider}, got ${accountPool.provider}`
-          );
-        }
+      const accountPool = this.accountPoolRepository.getById(db, accountPoolId);
+      if (!accountPool) {
+        throw dbNotFound(`Account pool not found: ${accountPoolId}`);
+      }
+      if (accountPool.provider !== parsed.data.provider) {
+        throw dbBadRequest(
+          `Account pool provider mismatch: expected ${parsed.data.provider}, got ${accountPool.provider}`
+        );
       }
 
       if (runtimeProfile && accountPoolId && runtimeProfile.accountPoolId !== accountPoolId) {

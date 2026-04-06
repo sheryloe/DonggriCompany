@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   AgentId,
+  OAuthProvider,
   ProviderUsageProbeProvider,
   ProviderUsageProbeHistoryQuery,
   UpdateRuntimeProfileRequest
@@ -18,6 +19,9 @@ import type { SceneSyncState } from "../board/scene-types";
 import { AccountPoolWidget } from "../components/AccountPoolWidget";
 import { AgentModelWidget } from "../components/AgentModelWidget";
 import { AgentMonitorGrid } from "../components/AgentMonitorGrid";
+import { CliRunPanel } from "../components/CliRunPanel";
+import { KanbanBoardPanel } from "../components/KanbanBoardPanel";
+import { MeetingPanel } from "../components/MeetingPanel";
 import { OfficeConversationPanel } from "../components/OfficeConversationPanel";
 import { ProbeRunPanel } from "../components/ProbeRunPanel";
 import { RuntimeProfileWidget } from "../components/RuntimeProfileWidget";
@@ -62,7 +66,16 @@ const startsWith = (value: string | null, text: string): boolean => {
   return value ? value.startsWith(text) : false;
 };
 
-const settingsTabs: OfficeSettingsTab[] = ["account", "runtime", "agent-models", "probe", "history"];
+const settingsTabs: OfficeSettingsTab[] = [
+  "account",
+  "runtime",
+  "agent-models",
+  "probe",
+  "history",
+  "kanban",
+  "meetings",
+  "cli"
+];
 
 const localeLangCode: Record<OfficeLocale, string> = {
   ko: "ko",
@@ -84,6 +97,7 @@ export default function OfficePage(): JSX.Element {
   const [agentEvent, setAgentEvent] = useState<AgentGuidanceEvent>({ type: "bootstrap-loading" });
   const [lastSceneActionAt, setLastSceneActionAt] = useState<string>("boot");
   const [activeSettingsTab, setActiveSettingsTab] = useState<OfficeSettingsTab>("account");
+  const [selectedOAuthProvider, setSelectedOAuthProvider] = useState<OAuthProvider>("codex");
   const [locale, setLocale] = useState<OfficeLocale>(() => {
     if (typeof window === "undefined") {
       return DEFAULT_OFFICE_LOCALE;
@@ -116,7 +130,10 @@ export default function OfficePage(): JSX.Element {
         runtime: t("settings.tab.runtime"),
         "agent-models": t("settings.tab.agentModels"),
         probe: t("settings.tab.probe"),
-        history: t("settings.tab.history")
+        history: t("settings.tab.history"),
+        kanban: t("settings.tab.kanban"),
+        meetings: t("settings.tab.meetings"),
+        cli: t("settings.tab.cli")
       }) as Record<OfficeSettingsTab, string>,
     [t]
   );
@@ -157,9 +174,7 @@ export default function OfficePage(): JSX.Element {
     }
   });
   const agentModelAssignments = useAgentModelAssignments();
-  const oauthSessions = useOAuthSessions(
-    bootstrap.officeOpsState.selectedProvider as ProviderUsageProbeProvider
-  );
+  const oauthSessions = useOAuthSessions(selectedOAuthProvider);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -323,6 +338,20 @@ export default function OfficePage(): JSX.Element {
     agentModelById.main?.modelLabel ??
     `${bootstrap.officeOpsState.selectedProvider.toUpperCase()} / ${selectedProfileKey || t("page.profileUnselected")}`;
   const realtime = useOfficeRealtimeSync();
+  const runnerByPoolId = useMemo(() => {
+    return realtime.runners.items.reduce((accumulator, current) => {
+      accumulator[current.accountPoolId] = current;
+      return accumulator;
+    }, {} as Record<string, (typeof realtime.runners.items)[number]>);
+  }, [realtime.runners.items]);
+  const runnerQueueByPoolId = useMemo(() => {
+    return realtime.runners.queue.reduce((accumulator, current) => {
+      const next = accumulator[current.accountPoolId] ?? [];
+      next.push(current);
+      accumulator[current.accountPoolId] = next;
+      return accumulator;
+    }, {} as Record<string, Array<(typeof realtime.runners.queue)[number]>>);
+  }, [realtime.runners.queue]);
   const resetAgentLoop = useCallback(
     async (detail = "context-switch"): Promise<void> => {
       await realtime.sendCommand({
@@ -556,6 +585,14 @@ export default function OfficePage(): JSX.Element {
   };
 
   const onRunProbe = async (): Promise<void> => {
+    if (!bootstrap.officeOpsState.selectedAccountPoolId) {
+      setAgentEvent({
+        type: "probe-error",
+        message: "Account pool is required before running probe."
+      });
+      return;
+    }
+
     if (latestProbeState === "error") {
       await realtime.sendCommand({
         command: "runProbe",
@@ -578,7 +615,7 @@ export default function OfficePage(): JSX.Element {
 
     const completed = await probe.runProbe({
       provider: bootstrap.officeOpsState.selectedProvider,
-      accountPoolId: bootstrap.officeOpsState.selectedAccountPoolId || undefined,
+      accountPoolId: bootstrap.officeOpsState.selectedAccountPoolId,
       runtimeProfileId: bootstrap.officeOpsState.selectedRuntimeProfileId || undefined,
       persistSnapshot: true
     });
@@ -670,25 +707,31 @@ export default function OfficePage(): JSX.Element {
           selectedProvider={bootstrap.officeOpsState.selectedProvider}
           selectedAccountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
           oauthSessionByPoolId={oauthSessions.sessionByPoolId}
+          runnerByPoolId={runnerByPoolId}
+          runnerQueueByPoolId={runnerQueueByPoolId}
           isOAuthMutating={oauthSessions.isMutating}
-          onSelectProvider={(provider) => {
-            bootstrap.setOfficeOpsState((previous) => ({
-              ...previous,
-              selectedProvider: provider,
-              selectedAccountPoolId: "",
-              selectedRuntimeProfileId: ""
-            }));
-            setAgentEvent({
-              type: "history-filter-changed",
-              provider,
-              accountPoolId: "",
-              runtimeProfileId: "",
-              limit: probe.historyLimit
-            });
-          }}
-          onSelectAccountPool={(accountPoolId) => {
-            bootstrap.setOfficeOpsState((previous) => ({
-              ...previous,
+            selectedOAuthProvider={selectedOAuthProvider}
+            isOAuthProviderConfigured={oauthSessions.isProviderConfigured}
+            onSelectProvider={(provider) => {
+              bootstrap.setOfficeOpsState((previous) => ({
+                ...previous,
+                selectedProvider: provider,
+                selectedAccountPoolId: "",
+                selectedRuntimeProfileId: ""
+              }));
+              setSelectedOAuthProvider(provider);
+              setAgentEvent({
+                type: "history-filter-changed",
+                provider,
+                accountPoolId: "",
+                runtimeProfileId: "",
+                limit: probe.historyLimit
+              });
+            }}
+            onSelectOAuthProvider={setSelectedOAuthProvider}
+            onSelectAccountPool={(accountPoolId) => {
+              bootstrap.setOfficeOpsState((previous) => ({
+                ...previous,
               selectedAccountPoolId: accountPoolId,
               selectedRuntimeProfileId: ""
             }));
@@ -702,6 +745,12 @@ export default function OfficePage(): JSX.Element {
           }}
           onConnectOAuth={(accountPoolId) => void oauthSessions.connect(accountPoolId)}
           onDisconnectOAuth={(accountPoolId) => void oauthSessions.disconnect(accountPoolId)}
+          onActivateRunner={(provider, accountPoolId) =>
+            void realtime.activateRunner(provider, accountPoolId)
+          }
+          onDeactivateRunner={(provider, accountPoolId) =>
+            void realtime.deactivateRunner(provider, accountPoolId)
+          }
           t={t}
         />
       );
@@ -775,6 +824,56 @@ export default function OfficePage(): JSX.Element {
           errorMessage={probe.errorMessage}
           actionMessage={probe.actionMessage}
           onRun={() => void onRunProbe()}
+          t={t}
+        />
+      );
+    }
+
+    if (activeSettingsTab === "kanban") {
+      return (
+        <KanbanBoardPanel
+          departments={realtime.kanban.departments}
+          tasks={realtime.kanban.tasks}
+          isMutating={realtime.isMutating}
+          errorMessage={realtime.errorMessage}
+          onCreateTask={async (payload) => realtime.createKanbanTask(payload)}
+          onUpdateTask={async (taskId, payload) =>
+            realtime.updateKanbanTask(taskId, payload)
+          }
+          t={t}
+        />
+      );
+    }
+
+    if (activeSettingsTab === "meetings") {
+      return (
+        <MeetingPanel
+          meetings={realtime.meetings}
+          departments={realtime.kanban.departments}
+          isMutating={realtime.isMutating}
+          errorMessage={realtime.errorMessage}
+          onCreateMeeting={async (payload) => realtime.createMeeting(payload)}
+          onStartMeeting={async (meetingId) => realtime.startMeeting(meetingId)}
+          onCompleteMeeting={async (meetingId) => realtime.completeMeeting(meetingId)}
+          onDeleteMeeting={async (meetingId) => realtime.deleteMeeting(meetingId)}
+          t={t}
+        />
+      );
+    }
+
+    if (activeSettingsTab === "cli") {
+      return (
+        <CliRunPanel
+          runs={realtime.cli.runs}
+          logsByTaskId={realtime.cli.logsByTaskId}
+          subtasksByTaskId={realtime.cli.subtasksByTaskId}
+          selectedAccountPoolId={bootstrap.officeOpsState.selectedAccountPoolId}
+          isMutating={realtime.isMutating}
+          errorMessage={realtime.errorMessage}
+          onRun={async (payload) => realtime.runCli(payload)}
+          onStop={async (taskId) => realtime.stopCli(taskId)}
+          onLoadLogs={async (taskId) => realtime.loadCliLogs(taskId)}
+          onLoadSubtasks={async (taskId) => realtime.loadCliSubtasks(taskId)}
           t={t}
         />
       );

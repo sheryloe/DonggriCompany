@@ -261,6 +261,34 @@ const clampPercent = (value: number): number => {
   return Math.max(0, Math.min(100, Math.round(value)));
 };
 
+const roleFatigueBias: Record<string, number> = {
+  "main-agent": 10,
+  router: 7,
+  runtime: 12,
+  probe: 14,
+  history: 5,
+  "pm-liaison": 9
+};
+
+const stateFatigueBias: Record<AgentWorkLoopState, number> = {
+  idle: -3,
+  moving_to_task: 8,
+  working: 18,
+  moving_to_pm: 11,
+  reporting: 14,
+  waiting_review: 10,
+  blocked: 30
+};
+
+const computeFatigue = (
+  usagePercent: number,
+  loopState: AgentWorkLoopState,
+  actorRole: string
+): number => {
+  const base = usagePercent + stateFatigueBias[loopState] + (roleFatigueBias[actorRole] ?? 0);
+  return clampPercent(base);
+};
+
 const resolveZoneKey = (tile: TileCoord): TileZone["key"] | "transit" => {
   for (const zone of tileZones) {
     if (tile.x >= zone.x[0] && tile.x <= zone.x[1] && tile.y >= zone.y[0] && tile.y <= zone.y[1]) {
@@ -305,6 +333,7 @@ export const getMonitorEntries = (
     const actor = actorById.get(descriptor.actorId);
     const loopState = actor?.fsmState ?? (descriptor.actorId === MAIN_ACTOR_ID ? sceneSync.loopState : "idle");
     const usagePercent = clampPercent(sceneSync.agentLoadById[descriptor.actorId] ?? 0);
+    const fatigue = computeFatigue(usagePercent, loopState, descriptor.actorRole);
     const tile = actor?.tile ?? descriptor.defaultTile;
     const assignedModel = sceneSync.agentModelById[descriptor.id];
     const modelLabel = assignedModel
@@ -319,7 +348,7 @@ export const getMonitorEntries = (
       role: descriptor.roleLabel,
       roleLabel: getRoleLabel(descriptor, t),
       stateLabel: getLoopLabel(loopState, t),
-      fatigue: usagePercent,
+      fatigue,
       usagePercent,
       modelLabel,
       locationLabel: getLocationLabel(tile, t),

@@ -3890,6 +3890,193 @@ button.secondary {
   max-height: min(46vh, 360px);
 }
 
+.office-page-main .office-inline-settings-panel .office-kanban-panel,
+.office-page-main .office-inline-settings-panel .office-meeting-panel,
+.office-page-main .office-inline-settings-panel .office-cli-panel {
+  gap: 10px;
+}
+
+.office-page-main .office-kanban-columns {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.office-page-main .office-kanban-column {
+  border: 1px solid var(--office-border);
+  background: var(--office-panel-strong);
+  border-radius: 10px;
+  min-height: 140px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.office-page-main .office-kanban-column > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--office-border);
+}
+
+.office-page-main .office-kanban-task-list {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.office-page-main .office-kanban-task-card {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--office-border);
+  border-radius: 8px;
+  background: var(--office-panel);
+  padding: 8px;
+  text-align: left;
+}
+
+.office-page-main .office-kanban-task-card p {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.office-page-main .office-kanban-create-row {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.office-page-main .office-meeting-panel textarea,
+.office-page-main .office-cli-panel textarea {
+  width: 100%;
+  border: 1px solid var(--office-border);
+  border-radius: 8px;
+  background: var(--office-panel-strong);
+  color: var(--office-text);
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.office-page-main .office-meeting-list {
+  display: grid;
+  gap: 8px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.office-page-main .office-meeting-card {
+  border: 1px solid var(--office-border);
+  border-radius: 10px;
+  background: var(--office-panel-strong);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.office-page-main .office-meeting-card > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.office-page-main .office-meeting-card p {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+}
+
+.office-page-main .office-meeting-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--office-border);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.office-page-main .office-meeting-status.tone-scheduled {
+  color: var(--office-muted);
+}
+
+.office-page-main .office-meeting-status.tone-in-progress {
+  color: var(--office-accent);
+}
+
+.office-page-main .office-meeting-status.tone-completed {
+  color: var(--office-success);
+}
+
+.office-page-main .office-meeting-status.tone-cancelled {
+  color: #ef4444;
+}
+
+.office-page-main .office-cli-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 160px minmax(0, 1fr);
+}
+
+.office-page-main .office-cli-runs {
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.office-page-main .office-cli-run-card {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  border: 1px solid var(--office-border);
+  background: var(--office-panel-strong);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.office-page-main .office-cli-run-card.active {
+  border-color: var(--office-accent);
+}
+
+.office-page-main .office-cli-logs {
+  border: 1px solid var(--office-border);
+  border-radius: 10px;
+  padding: 8px;
+  background: var(--office-panel-strong);
+  display: grid;
+  gap: 6px;
+}
+
+.office-page-main .office-cli-logs pre {
+  margin: 0;
+  max-height: 210px;
+  overflow: auto;
+  border: 1px solid var(--office-border);
+  background: color-mix(in srgb, var(--office-panel-strong) 90%, #000 10%);
+  color: var(--office-text);
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.office-page-main .office-cli-subtasks {
+  display: grid;
+  gap: 4px;
+}
+
+.office-page-main .office-cli-subtasks p {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 8px;
+}
+
 .office-page-main .office-board-map {
   height: clamp(620px, calc(100vh - 210px), 760px);
 }
@@ -3955,6 +4142,37 @@ button.secondary {
   );
 }
 
+.office-page-main .office-monitor-fatigue {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--office-border);
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.office-page-main .office-monitor-fatigue.tone-fresh {
+  background: color-mix(in srgb, var(--office-success) 14%, transparent);
+  color: var(--office-success);
+}
+
+.office-page-main .office-monitor-fatigue.tone-warm {
+  background: color-mix(in srgb, #f59e0b 20%, transparent);
+  color: #b45309;
+}
+
+.office-page-main .office-monitor-fatigue.tone-hot {
+  background: color-mix(in srgb, #f97316 22%, transparent);
+  color: #c2410c;
+}
+
+.office-page-main .office-monitor-fatigue.tone-critical {
+  background: color-mix(in srgb, #ef4444 22%, transparent);
+  color: #dc2626;
+}
+
 @media (max-width: 1280px) {
   .office-page-main .office-settings-rail,
   .office-page-main .office-right-column,
@@ -3966,5 +4184,13 @@ button.secondary {
 
   .office-page-main .office-board-map {
     height: auto;
+  }
+
+  .office-page-main .office-kanban-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .office-page-main .office-cli-grid {
+    grid-template-columns: 1fr;
   }
 }

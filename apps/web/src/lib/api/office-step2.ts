@@ -11,11 +11,31 @@ import type {
   AccountPoolUpdateResponse,
   CreateAccountPoolRequest,
   CreateRuntimeProfileRequest,
+  CreateOfficeKanbanTaskRequest,
+  CreateOfficeKanbanTaskResponse,
+  CreateOfficeMeetingRequest,
+  CreateOfficeMeetingResponse,
+  ActivateOfficeRunnerRequest,
+  ActivateOfficeRunnerResponse,
+  DeactivateOfficeRunnerRequest,
+  DeactivateOfficeRunnerResponse,
   OfficeCommandRequest,
   OfficeCommandResponse,
+  OfficeCliActiveRunsResponse,
+  OfficeCliLogsResponse,
+  OfficeCliRunRequest,
+  OfficeCliRunResponse,
+  OfficeCliStopResponse,
+  OfficeCliSubtasksResponse,
+  OfficeKanbanTasksResponse,
   OfficeLogsResponse,
+  OfficeMeetingResponse,
+  OfficeMeetingsResponse,
+  OfficeRunnerListResponse,
+  OfficeRunnerQueueResponse,
   OfficeRuntimeStateResponse,
   OfficeThreadsResponse,
+  OAuthProvider,
   OAuthDisconnectRequest,
   OAuthDisconnectResponse,
   OAuthStartRequest,
@@ -30,6 +50,8 @@ import type {
   RuntimeProfileDeleteResponse,
   RuntimeProfilesListResponse,
   RuntimeProfileUpdateResponse,
+  UpdateOfficeKanbanTaskRequest,
+  UpdateOfficeKanbanTaskResponse,
   UpdateBossCommandThreadStatusRequest,
   UpdateBossCommandThreadStatusResponse,
   UpsertAgentModelAssignmentRequest,
@@ -38,7 +60,9 @@ import type {
   UpdateRuntimeProfileRequest,
   ProvidersListResponse,
   ProviderKey,
-  ProviderUsageProbeProvider
+  ProviderUsageProbeProvider,
+  DeleteOfficeMeetingResponse,
+  CompleteOfficeMeetingRequest
 } from "@workspace/shared";
 
 import { buildStep3Route, STEP3_ALLOWED_ROUTES } from "./allowed-routes";
@@ -134,6 +158,7 @@ export const runProviderUsageProbe = async (
 ): Promise<ProviderUsageProbeRunResponse> => {
   return requestJson<ProviderUsageProbeRunResponse>(STEP3_ALLOWED_ROUTES.PROVIDER_PROBES_RUN, {
     method: "POST",
+    headers: getOfficeWriteHeaders(),
     body: JSON.stringify(payload)
   });
 };
@@ -172,7 +197,7 @@ export const upsertAgentModelAssignment = async (
 };
 
 export const startOAuth = async (
-  provider: ProviderUsageProbeProvider,
+  provider: OAuthProvider,
   payload: OAuthStartRequest
 ): Promise<OAuthStartResponse> => {
   return requestJson<OAuthStartResponse>(buildStep3Route.oauthProviderStart(provider), {
@@ -182,7 +207,7 @@ export const startOAuth = async (
 };
 
 export const getOAuthStatus = async (
-  provider: ProviderUsageProbeProvider,
+  provider: OAuthProvider,
   accountPoolId?: string
 ): Promise<OAuthStatusResponse> => {
   return requestJson<OAuthStatusResponse>(
@@ -196,7 +221,7 @@ export const getOAuthStatus = async (
 };
 
 export const disconnectOAuth = async (
-  provider: ProviderUsageProbeProvider,
+  provider: OAuthProvider,
   payload: OAuthDisconnectRequest
 ): Promise<OAuthDisconnectResponse> => {
   return requestJson<OAuthDisconnectResponse>(
@@ -275,4 +300,147 @@ export const patchOfficeThreadStatus = async (
       body: JSON.stringify(payload)
     }
   );
+};
+
+export const listOfficeKanbanTasks = async (): Promise<OfficeKanbanTasksResponse> => {
+  return requestJson<OfficeKanbanTasksResponse>(STEP3_ALLOWED_ROUTES.OFFICE_KANBAN_TASKS, {
+    method: "GET"
+  });
+};
+
+export const createOfficeKanbanTask = async (
+  payload: CreateOfficeKanbanTaskRequest
+): Promise<CreateOfficeKanbanTaskResponse> => {
+  return requestJson<CreateOfficeKanbanTaskResponse>(STEP3_ALLOWED_ROUTES.OFFICE_KANBAN_TASKS, {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify(payload)
+  });
+};
+
+export const updateOfficeKanbanTask = async (
+  id: string,
+  payload: UpdateOfficeKanbanTaskRequest
+): Promise<UpdateOfficeKanbanTaskResponse> => {
+  return requestJson<UpdateOfficeKanbanTaskResponse>(buildStep3Route.officeKanbanTaskById(id), {
+    method: "PATCH",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify(payload)
+  });
+};
+
+export const listOfficeMeetings = async (): Promise<OfficeMeetingsResponse> => {
+  return requestJson<OfficeMeetingsResponse>(STEP3_ALLOWED_ROUTES.OFFICE_MEETINGS, {
+    method: "GET"
+  });
+};
+
+export const createOfficeMeeting = async (
+  payload: CreateOfficeMeetingRequest
+): Promise<CreateOfficeMeetingResponse> => {
+  return requestJson<CreateOfficeMeetingResponse>(STEP3_ALLOWED_ROUTES.OFFICE_MEETINGS, {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify(payload)
+  });
+};
+
+export const startOfficeMeeting = async (id: string): Promise<OfficeMeetingResponse> => {
+  return requestJson<OfficeMeetingResponse>(buildStep3Route.officeMeetingStart(id), {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify({})
+  });
+};
+
+export const completeOfficeMeeting = async (
+  id: string,
+  payload: CompleteOfficeMeetingRequest
+): Promise<OfficeMeetingResponse> => {
+  return requestJson<OfficeMeetingResponse>(buildStep3Route.officeMeetingComplete(id), {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify(payload)
+  });
+};
+
+export const deleteOfficeMeeting = async (id: string): Promise<DeleteOfficeMeetingResponse> => {
+  return requestJson<DeleteOfficeMeetingResponse>(buildStep3Route.officeMeetingById(id), {
+    method: "DELETE",
+    headers: getOfficeWriteHeaders()
+  });
+};
+
+export const runOfficeCli = async (
+  payload: OfficeCliRunRequest
+): Promise<OfficeCliRunResponse> => {
+  return requestJson<OfficeCliRunResponse>(STEP3_ALLOWED_ROUTES.OFFICE_CLI_RUN, {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify(payload)
+  });
+};
+
+export const stopOfficeCli = async (taskId: string): Promise<OfficeCliStopResponse> => {
+  return requestJson<OfficeCliStopResponse>(buildStep3Route.officeCliStop(taskId), {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify({})
+  });
+};
+
+export const listOfficeCliLogs = async (
+  taskId: string,
+  limit = 200
+): Promise<OfficeCliLogsResponse> => {
+  return requestJson<OfficeCliLogsResponse>(
+    withQuery(buildStep3Route.officeCliLogs(taskId), { limit }),
+    { method: "GET" }
+  );
+};
+
+export const listOfficeCliSubtasks = async (
+  taskId: string
+): Promise<OfficeCliSubtasksResponse> => {
+  return requestJson<OfficeCliSubtasksResponse>(buildStep3Route.officeCliSubtasks(taskId), {
+    method: "GET"
+  });
+};
+
+export const listOfficeCliActiveRuns = async (): Promise<OfficeCliActiveRunsResponse> => {
+  return requestJson<OfficeCliActiveRunsResponse>(STEP3_ALLOWED_ROUTES.OFFICE_CLI_ACTIVE, {
+    method: "GET"
+  });
+};
+
+export const listOfficeRunners = async (): Promise<OfficeRunnerListResponse> => {
+  return requestJson<OfficeRunnerListResponse>(STEP3_ALLOWED_ROUTES.OFFICE_RUNNERS, {
+    method: "GET"
+  });
+};
+
+export const listOfficeRunnerQueue = async (): Promise<OfficeRunnerQueueResponse> => {
+  return requestJson<OfficeRunnerQueueResponse>(STEP3_ALLOWED_ROUTES.OFFICE_RUNNERS_QUEUE, {
+    method: "GET"
+  });
+};
+
+export const activateOfficeRunner = async (
+  payload: ActivateOfficeRunnerRequest
+): Promise<ActivateOfficeRunnerResponse> => {
+  return requestJson<ActivateOfficeRunnerResponse>(STEP3_ALLOWED_ROUTES.OFFICE_RUNNERS_ACTIVATE, {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify(payload)
+  });
+};
+
+export const deactivateOfficeRunner = async (
+  payload: DeactivateOfficeRunnerRequest
+): Promise<DeactivateOfficeRunnerResponse> => {
+  return requestJson<DeactivateOfficeRunnerResponse>(STEP3_ALLOWED_ROUTES.OFFICE_RUNNERS_DEACTIVATE, {
+    method: "POST",
+    headers: getOfficeWriteHeaders(),
+    body: JSON.stringify(payload)
+  });
 };

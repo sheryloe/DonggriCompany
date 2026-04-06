@@ -15,6 +15,31 @@ const formatUsage = (value: number): string => {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
 };
 
+const getFatigueTone = (value: number): "fresh" | "warm" | "hot" | "critical" => {
+  // Aggressive thresholds tuned to reach hot/critical earlier (claw-empire style).
+  if (value >= 65) {
+    return "critical";
+  }
+  if (value >= 45) {
+    return "hot";
+  }
+  if (value >= 25) {
+    return "warm";
+  }
+  return "fresh";
+};
+
+const getFatigueLabel = (value: number, t: OfficeTranslator): string => {
+  const tone = getFatigueTone(value);
+  const keyMap = {
+    fresh: "board.fatigue.fresh",
+    warm: "board.fatigue.warm",
+    hot: "board.fatigue.hot",
+    critical: "board.fatigue.critical"
+  } as const;
+  return t(keyMap[tone]);
+};
+
 export function AgentMonitorGrid({
   entries,
   providerLabel,
@@ -61,6 +86,12 @@ export function AgentMonitorGrid({
                   >
                     <span style={{ width: formatUsage(entry.usagePercent) }} />
                   </span>
+                </p>
+                <p>
+                  <span>{t("board.agentMonitorFatigue")}</span>
+                  <strong className={`office-monitor-fatigue tone-${getFatigueTone(entry.fatigue)}`}>
+                    {formatUsage(entry.fatigue)} | {getFatigueLabel(entry.fatigue, t)}
+                  </strong>
                 </p>
                 <p>
                   <span>{t("board.agentMonitorModel")}</span>

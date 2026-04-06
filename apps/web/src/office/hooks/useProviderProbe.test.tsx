@@ -146,6 +146,7 @@ describe("useProviderProbe", () => {
     act(() => {
       runPromise = result.current.runProbe({
         provider: "codex",
+        accountPoolId: "pool-1",
         persistSnapshot: true
       });
     });

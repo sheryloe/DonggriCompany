@@ -2,27 +2,22 @@ import {
   OAuthSessionService
 } from "@workspace/db";
 import type {
+  OAuthProvider,
   OAuthDisconnectResponse,
   OAuthStartResponse,
   OAuthStatusResponse,
-  ProviderUsageProbeProvider
 } from "@workspace/shared";
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { badRequest } from "../errors.js";
+import {
+  isOAuthProviderConfigured,
+  resolveOAuthProviderConfig
+} from "../services/oauth-provider-config.js";
 
-type OAuthProviderConfig = {
-  authorizationUrl: string;
-  tokenUrl: string;
-  clientId: string;
-  clientSecret: string | null;
-  redirectUri: string;
-  scope: string | null;
-};
-
-const providerSchema = z.enum(["claude", "codex", "gemini"]);
+const providerSchema = z.enum(["claude", "codex", "gemini", "github", "google"]);
 
 const oauthStartSchema = z.object({
   accountPoolId: z.string().min(1),
@@ -54,31 +49,6 @@ const createCodeChallenge = (verifier: string): string => {
   return toBase64Url(createHash("sha256").update(verifier, "utf8").digest());
 };
 
-const resolveProviderConfig = (
-  provider: ProviderUsageProbeProvider
-): OAuthProviderConfig => {
-  const prefix = `OFFICE_OAUTH_${provider.toUpperCase()}`;
-  const authorizationUrl = process.env[`${prefix}_AUTH_URL`] ?? "";
-  const tokenUrl = process.env[`${prefix}_TOKEN_URL`] ?? "";
-  const clientId = process.env[`${prefix}_CLIENT_ID`] ?? "";
-  const redirectUri = process.env[`${prefix}_REDIRECT_URI`] ?? "";
-  const scope = process.env[`${prefix}_SCOPE`] ?? null;
-  const clientSecret = process.env[`${prefix}_CLIENT_SECRET`] ?? null;
-
-  if (!authorizationUrl || !tokenUrl || !clientId || !redirectUri) {
-    throw badRequest(`OAuth provider '${provider}' is not configured`);
-  }
-
-  return {
-    authorizationUrl,
-    tokenUrl,
-    clientId,
-    clientSecret,
-    redirectUri,
-    scope
-  };
-};
-
 const getEncryptionKey = (): Buffer => {
   const rawKey = process.env.OFFICE_OAUTH_ENCRYPTION_KEY ?? "";
   if (!rawKey) {
@@ -98,7 +68,7 @@ const encryptSecret = (plainText: string): string => {
 
 const createPopupResultHtml = (
   payload: {
-    provider: ProviderUsageProbeProvider;
+    provider: OAuthProvider;
     accountPoolId: string;
     status: "connected" | "error";
     message: string;
@@ -139,7 +109,7 @@ const createPopupResultHtml = (
 };
 
 const exchangeAuthorizationCode = async (
-  config: OAuthProviderConfig,
+  config: ReturnType<typeof resolveOAuthProviderConfig>,
   code: string,
   codeVerifier: string
 ): Promise<{
@@ -209,13 +179,13 @@ export const registerOAuthRoutes = (server: FastifyInstance): void => {
     "/api/oauth/:provider/start",
     async (request): Promise<OAuthStartResponse> => {
       const params = request.params as { provider?: string };
-      const provider = providerSchema.parse(params.provider) as ProviderUsageProbeProvider;
+      const provider = providerSchema.parse(params.provider) as OAuthProvider;
       const parsedBody = oauthStartSchema.safeParse(request.body);
       if (!parsedBody.success) {
         throw badRequest(parsedBody.error.issues[0]?.message ?? "Invalid oauth start payload");
       }
 
-      const config = resolveProviderConfig(provider);
+      const config = resolveOAuthProviderConfig(provider);
       const state = toBase64Url(randomBytes(24));
       const codeVerifier = createCodeVerifier();
       const codeChallenge = createCodeChallenge(codeVerifier);
@@ -257,7 +227,7 @@ export const registerOAuthRoutes = (server: FastifyInstance): void => {
     "/api/oauth/:provider/callback",
     async (request, reply): Promise<string> => {
       const params = request.params as { provider?: string };
-      const provider = providerSchema.parse(params.provider) as ProviderUsageProbeProvider;
+      const provider = providerSchema.parse(params.provider) as OAuthProvider;
       const parsedQuery = oauthCallbackQuerySchema.safeParse(request.query);
       if (!parsedQuery.success) {
         throw badRequest("Invalid oauth callback query");
@@ -267,7 +237,7 @@ export const registerOAuthRoutes = (server: FastifyInstance): void => {
       }
 
       const stateRecord = oauthService.consumePkceState(provider, parsedQuery.data.state);
-      const config = resolveProviderConfig(provider);
+      const config = resolveOAuthProviderConfig(provider);
 
       if (parsedQuery.data.error) {
         const message = `${parsedQuery.data.error}${parsedQuery.data.error_description ? `: ${parsedQuery.data.error_description}` : ""}`;
@@ -336,12 +306,13 @@ export const registerOAuthRoutes = (server: FastifyInstance): void => {
     "/api/oauth/:provider/status",
     async (request): Promise<OAuthStatusResponse> => {
       const params = request.params as { provider?: string };
-      const provider = providerSchema.parse(params.provider) as ProviderUsageProbeProvider;
+      const provider = providerSchema.parse(params.provider) as OAuthProvider;
       const query = request.query as { accountPoolId?: string } | undefined;
       const sessions = oauthService.listStatus(provider, query?.accountPoolId);
       return {
         ok: true,
         provider,
+        isConfigured: isOAuthProviderConfigured(provider),
         sessions
       };
     }
@@ -351,7 +322,7 @@ export const registerOAuthRoutes = (server: FastifyInstance): void => {
     "/api/oauth/:provider/disconnect",
     async (request): Promise<OAuthDisconnectResponse> => {
       const params = request.params as { provider?: string };
-      const provider = providerSchema.parse(params.provider) as ProviderUsageProbeProvider;
+      const provider = providerSchema.parse(params.provider) as OAuthProvider;
       const parsedBody = oauthDisconnectSchema.safeParse(request.body);
       if (!parsedBody.success) {
         throw badRequest(parsedBody.error.issues[0]?.message ?? "Invalid oauth disconnect payload");

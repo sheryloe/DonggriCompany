@@ -7,6 +7,7 @@ export type ApiHealthResponse = {
 export type ProviderKey = "claude" | "codex" | "gemini" | "jules";
 
 export type ProviderUsageProbeProvider = "claude" | "codex" | "gemini";
+export type OAuthProvider = ProviderUsageProbeProvider | "github" | "google";
 
 export type ProbeLoginStatus = "unknown" | "logged_in" | "logged_out";
 
@@ -270,7 +271,7 @@ export type OAuthStartRequest = {
 
 export type OAuthStartResponse = {
   ok: true;
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   accountPoolId: string;
   authorizeUrl: string;
   state: string;
@@ -280,18 +281,22 @@ export type OAuthStartResponse = {
 export type OAuthSessionStatus = "connected" | "disconnected" | "pending" | "error";
 
 export type OAuthSessionStatusView = {
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   accountPoolId: string;
   status: OAuthSessionStatus;
   connected: boolean;
   expiresAt: string | null;
+  refreshTokenExpiresAt: string | null;
+  lastRefreshedAt: string | null;
+  refreshFailCount: number;
   updatedAt: string;
   lastError: string | null;
 };
 
 export type OAuthStatusResponse = {
   ok: true;
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
+  isConfigured: boolean;
   sessions: OAuthSessionStatusView[];
 };
 
@@ -301,9 +306,272 @@ export type OAuthDisconnectRequest = {
 
 export type OAuthDisconnectResponse = {
   ok: true;
-  provider: ProviderUsageProbeProvider;
+  provider: OAuthProvider;
   accountPoolId: string;
   disconnected: true;
+};
+
+export type DepartmentView = {
+  id: string;
+  key: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const KANBAN_COLUMNS = [
+  "inbox",
+  "planned",
+  "in_progress",
+  "review",
+  "done",
+  "cancelled"
+] as const;
+
+export type OfficeTaskStatus = (typeof KANBAN_COLUMNS)[number];
+
+export type TaskSummaryView = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: OfficeTaskStatus;
+  departmentId: string | null;
+  assigneeAgentId: string | null;
+  priority: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OfficeKanbanTasksResponse = {
+  ok: true;
+  departments: DepartmentView[];
+  tasks: TaskSummaryView[];
+};
+
+export type CreateOfficeKanbanTaskRequest = {
+  title: string;
+  description?: string | null;
+  status?: OfficeTaskStatus;
+  departmentId?: string | null;
+  assigneeAgentId?: string | null;
+  priority?: number;
+};
+
+export type CreateOfficeKanbanTaskResponse = {
+  ok: true;
+  task: TaskSummaryView;
+};
+
+export type UpdateOfficeKanbanTaskRequest = {
+  title?: string;
+  description?: string | null;
+  status?: OfficeTaskStatus;
+  departmentId?: string | null;
+  assigneeAgentId?: string | null;
+  priority?: number;
+};
+
+export type UpdateOfficeKanbanTaskResponse = {
+  ok: true;
+  task: TaskSummaryView;
+};
+
+export type OfficeMeetingStatus = "scheduled" | "in_progress" | "completed" | "cancelled";
+export type OfficeMeetingType = "planned" | "ad_hoc" | "review";
+
+export type OfficeMeetingView = {
+  id: string;
+  title: string;
+  status: OfficeMeetingStatus;
+  meetingType: OfficeMeetingType;
+  taskId: string | null;
+  departmentId: string | null;
+  agenda: string | null;
+  summary: string | null;
+  scheduledAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  participants: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OfficeMeetingsResponse = {
+  ok: true;
+  meetings: OfficeMeetingView[];
+};
+
+export type CreateOfficeMeetingRequest = {
+  title: string;
+  meetingType?: OfficeMeetingType;
+  taskId?: string | null;
+  departmentId?: string | null;
+  agenda?: string | null;
+  scheduledAt?: string | null;
+  participants?: string[];
+};
+
+export type CreateOfficeMeetingResponse = {
+  ok: true;
+  meeting: OfficeMeetingView;
+};
+
+export type CompleteOfficeMeetingRequest = {
+  summary?: string | null;
+};
+
+export type OfficeMeetingResponse = {
+  ok: true;
+  meeting: OfficeMeetingView;
+};
+
+export type DeleteOfficeMeetingResponse = {
+  ok: true;
+  id: string;
+  deleted: true;
+};
+
+export type OfficeCliProvider = ProviderUsageProbeProvider;
+export type OfficeCliRunStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "stopped"
+  | "timeout";
+
+export type OfficeCliRunView = {
+  taskId: string;
+  provider: OfficeCliProvider;
+  accountPoolId: string;
+  model: string | null;
+  prompt: string;
+  projectPath: string;
+  status: OfficeCliRunStatus;
+  startedAt: string;
+  updatedAt: string;
+  endedAt: string | null;
+  exitCode: number | null;
+  errorMessage: string | null;
+};
+
+export type OfficeCliLogView = {
+  id: string;
+  taskId: string;
+  seq: number;
+  level: "info" | "error" | "system";
+  line: string;
+  createdAt: string;
+};
+
+export type OfficeCliSubtaskView = {
+  id: string;
+  taskId: string;
+  label: string;
+  status: string;
+  payloadJson: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OfficeCliRunRequest = {
+  taskId: string;
+  provider: OfficeCliProvider;
+  accountPoolId: string;
+  prompt: string;
+  projectPath: string;
+  model?: string | null;
+};
+
+export type OfficeCliRunResponse = {
+  ok: true;
+  run: OfficeCliRunView;
+};
+
+export type OfficeCliStopResponse = {
+  ok: true;
+  taskId: string;
+  stopped: boolean;
+};
+
+export type OfficeCliLogsResponse = {
+  ok: true;
+  taskId: string;
+  logs: OfficeCliLogView[];
+};
+
+export type OfficeCliSubtasksResponse = {
+  ok: true;
+  taskId: string;
+  subtasks: OfficeCliSubtaskView[];
+};
+
+export type OfficeCliActiveRunsResponse = {
+  ok: true;
+  runs: OfficeCliRunView[];
+};
+
+export type OfficeRunnerStatus = "active" | "stopped" | "error";
+
+export type OfficeRunnerQueueStatus = "queued" | "running" | "done" | "failed";
+
+export type OfficeRunnerStatusView = {
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  containerName: string;
+  status: OfficeRunnerStatus;
+  lastUsedAt: string;
+  updatedAt: string;
+  lastError: string | null;
+};
+
+export type OfficeRunnerQueueItemView = {
+  id: string;
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  requestJson: string;
+  status: OfficeRunnerQueueStatus;
+  enqueuedAt: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  errorMessage: string | null;
+};
+
+export type OfficeRunnerListResponse = {
+  ok: true;
+  runners: OfficeRunnerStatusView[];
+};
+
+export type OfficeRunnerQueueResponse = {
+  ok: true;
+  queue: OfficeRunnerQueueItemView[];
+};
+
+export type ActivateOfficeRunnerRequest = {
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  reason?: string;
+};
+
+export type ActivateOfficeRunnerResponse = {
+  ok: true;
+  runner: OfficeRunnerStatusView;
+  queued: boolean;
+  queueItem: OfficeRunnerQueueItemView | null;
+};
+
+export type DeactivateOfficeRunnerRequest = {
+  provider: ProviderUsageProbeProvider;
+  accountPoolId: string;
+  reason?: string;
+};
+
+export type DeactivateOfficeRunnerResponse = {
+  ok: true;
+  runner: OfficeRunnerStatusView;
+  promotedQueueItem: OfficeRunnerQueueItemView | null;
 };
 
 export type OfficeLoopState =
@@ -476,6 +744,12 @@ export type OfficeRealtimeEventType =
   | "runtime.state"
   | "log.appended"
   | "thread.upserted"
+  | "kanban.updated"
+  | "meeting.updated"
+  | "cli.run.updated"
+  | "cli.log.appended"
+  | "runner.updated"
+  | "runner.queue.updated"
   | "heartbeat";
 
 export type OfficeRealtimeEvent =
@@ -496,6 +770,48 @@ export type OfficeRealtimeEvent =
       type: "thread.upserted";
       ts: number;
       payload: BossCommandThreadView;
+    }
+  | {
+      id: string;
+      type: "kanban.updated";
+      ts: number;
+      payload: {
+        task: TaskSummaryView;
+        reason: "created" | "updated";
+      };
+    }
+  | {
+      id: string;
+      type: "meeting.updated";
+      ts: number;
+      payload: {
+        meeting: OfficeMeetingView;
+        reason: "created" | "updated" | "deleted";
+      };
+    }
+  | {
+      id: string;
+      type: "cli.run.updated";
+      ts: number;
+      payload: OfficeCliRunView;
+    }
+  | {
+      id: string;
+      type: "cli.log.appended";
+      ts: number;
+      payload: OfficeCliLogView;
+    }
+  | {
+      id: string;
+      type: "runner.updated";
+      ts: number;
+      payload: OfficeRunnerStatusView;
+    }
+  | {
+      id: string;
+      type: "runner.queue.updated";
+      ts: number;
+      payload: OfficeRunnerQueueItemView;
     }
   | {
       id: string;
@@ -559,7 +875,7 @@ export type NormalizedUsageInput = {
 
 export type ProviderUsageProbeRunRequest = {
   provider: ProviderUsageProbeProvider;
-  accountPoolId?: string;
+  accountPoolId: string;
   runtimeProfileId?: string;
   persistSnapshot?: boolean;
 };

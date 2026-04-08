@@ -38,6 +38,7 @@ import {
 import { createSecurityAuditTools } from "./modules/bootstrap/security-audit.ts";
 import { applyBaseSchema } from "./modules/bootstrap/schema/base-schema.ts";
 import { initializeOAuthRuntime } from "./modules/bootstrap/schema/oauth-runtime.ts";
+import { applyOAuthRunnerIsolationSchema } from "./modules/bootstrap/schema/oauth-runner-isolation.ts";
 import { applyTaskSchemaMigrations } from "./modules/bootstrap/schema/task-schema-migrations.ts";
 import { applyDefaultSeeds } from "./modules/bootstrap/schema/seeds.ts";
 
@@ -55,6 +56,7 @@ const readSettingString = createReadSettingString(db);
 
 applyBaseSchema(db);
 const oauthRuntime = initializeOAuthRuntime({ db, nowMs, runInTransaction });
+applyOAuthRunnerIsolationSchema(db);
 applyTaskSchemaMigrations(db);
 applyDefaultSeeds(db);
 

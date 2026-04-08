@@ -11,6 +11,7 @@ import { registerWorktreeAndUsageRoutes } from "./ops/worktrees-and-usage.ts";
 import { registerTaskReportRoutes } from "./ops/task-reports/routes.ts";
 import { registerModelRoutes } from "./ops/models-routes.ts";
 import { registerOAuthRoutes } from "./ops/oauth/routes.ts";
+import { registerOfficeRunnerRoutes } from "./ops/office-runner.ts";
 import { registerSkillRoutes } from "./ops/skills/routes.ts";
 import { registerApiDocsRoutes } from "./ops/api-docs.ts";
 import { registerWorkflowPackRoutes } from "./ops/workflow-packs.ts";
@@ -209,6 +210,7 @@ export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   registerTaskTerminalRoutes(__ctx);
 
   registerOAuthRoutes(__ctx);
+  registerOfficeRunnerRoutes(__ctx);
 
   registerModelRoutes(__ctx);
 

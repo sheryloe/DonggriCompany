@@ -14,10 +14,16 @@ services:
       API_AUTH_TOKEN: __CHANGE_ME__
       DB_PATH: /app/data/claw-empire.sqlite
       LOGS_DIR: /app/data/logs
+      OFFICE_RUNNER_DOCKER_ENABLED: 0
+      OFFICE_RUNNER_IMAGE: donggricompany-runner:latest
+      OFFICE_RUNNER_MAX_ACTIVE: 5
+      OFFICE_RUNNER_IDLE_TTL_MS: 900000
+      OFFICE_RUNNER_NETWORK: bridge
     ports:
       - "7777:7777"
     volumes:
       - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
     working_dir: /app
     security_opt:
       - no-new-privileges:true

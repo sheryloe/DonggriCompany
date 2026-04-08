@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CliModelInfo, CliStatusMap, CompanySettings } from "../types";
 import * as api from "../api";
-import type { DeviceCodeStart, OAuthConnectProvider, OAuthStatus } from "../api";
+import type {
+  DeviceCodeStart,
+  OAuthConnectProvider,
+  OAuthStatus,
+  OfficeExecutionProvider,
+  OfficeOAuthSessionStatus,
+  OfficeRunnerQueueItemView,
+  OfficeRunnerStatusView,
+} from "../api";
 import type { OAuthCallbackResult } from "../App";
 import { LANGUAGE_STORAGE_KEY, normalizeLanguage, useI18n } from "../i18n";
 import ApiSettingsTab from "./settings/ApiSettingsTab";
@@ -12,6 +20,8 @@ import OAuthSettingsTab from "./settings/OAuthSettingsTab";
 import SettingsTabNav from "./settings/SettingsTabNav";
 import type { AccountDraftMap, AccountDraftPatch, LocalSettings, SettingsTab } from "./settings/types";
 import { useApiProvidersState } from "./settings/useApiProvidersState";
+
+const OFFICE_EXECUTION_PROVIDERS: OfficeExecutionProvider[] = ["codex", "gemini", "jules"];
 
 interface SettingsPanelProps {
   settings: CompanySettings;
@@ -53,6 +63,21 @@ export default function SettingsPanel({
   const [deviceError, setDeviceError] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [officeOauthSessions, setOfficeOauthSessions] = useState<OfficeOAuthSessionStatus[]>([]);
+  const [officeRunners, setOfficeRunners] = useState<OfficeRunnerStatusView[]>([]);
+  const [officeRunnerQueue, setOfficeRunnerQueue] = useState<OfficeRunnerQueueItemView[]>([]);
+  const [officeRunnerBusyKey, setOfficeRunnerBusyKey] = useState<string | null>(null);
+  const [runnerMeta, setRunnerMeta] = useState<{ maxActive: number; idleTtlMs: number; dockerEnabled: boolean }>({
+    maxActive: 5,
+    idleTtlMs: 900_000,
+    dockerEnabled: false,
+  });
+  const [runnerPoolDrafts, setRunnerPoolDrafts] = useState<Record<OfficeExecutionProvider, string>>({
+    codex: "default",
+    gemini: "default",
+    jules: "default",
+  });
+
   const persistSettings = useCallback(
     (next: LocalSettings) => {
       onSave(next as unknown as CompanySettings);
@@ -87,17 +112,34 @@ export default function SettingsPanel({
     }
   }, []);
 
+  const loadOfficeRunnerState = useCallback(async () => {
+    const [sessions, runners, queue] = await Promise.all([
+      api.getOfficeOAuthSessions(),
+      api.getOfficeRunners(),
+      api.getOfficeRunnerQueue(),
+    ]);
+    setOfficeOauthSessions(sessions);
+    setOfficeRunners(runners.runners ?? []);
+    setOfficeRunnerQueue(queue);
+    setRunnerMeta({
+      maxActive: runners.maxActive ?? 5,
+      idleTtlMs: runners.idleTtlMs ?? 900_000,
+      dockerEnabled: Boolean(runners.dockerEnabled),
+    });
+  }, []);
+
   const refreshOAuthTab = useCallback(() => {
     setOauthStatus(null);
     setOauthLoading(true);
     void loadOAuthStatus().catch(console.error);
+    void loadOfficeRunnerState().catch(console.error);
     setModelsLoading(true);
     api
       .getOAuthModels(true)
       .then(setModels)
       .catch(console.error)
       .finally(() => setModelsLoading(false));
-  }, [loadOAuthStatus]);
+  }, [loadOAuthStatus, loadOfficeRunnerState]);
 
   const refreshCliTab = useCallback(() => {
     onRefreshCli();
@@ -131,6 +173,15 @@ export default function SettingsPanel({
       void loadOAuthStatus().catch(console.error);
     }
   }, [tab, oauthStatus, loadOAuthStatus]);
+
+  useEffect(() => {
+    if (tab !== "oauth") return;
+    void loadOfficeRunnerState().catch(console.error);
+    const timer = window.setInterval(() => {
+      void loadOfficeRunnerState().catch(console.error);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [tab, loadOfficeRunnerState]);
 
   useEffect(() => {
     if (tab !== "cli" || cliModels) return;
@@ -392,6 +443,78 @@ export default function SettingsPanel({
     [loadOAuthStatus, t],
   );
 
+  const updateRunnerPoolDraft = useCallback((provider: OfficeExecutionProvider, value: string) => {
+    setRunnerPoolDrafts((prev) => ({ ...prev, [provider]: value }));
+  }, []);
+
+  const resolveRunnerPoolId = useCallback(
+    (provider: OfficeExecutionProvider) => {
+      const value = runnerPoolDrafts[provider]?.trim();
+      return value && value.length > 0 ? value : "default";
+    },
+    [runnerPoolDrafts],
+  );
+
+  const handleConnectRunnerOAuth = useCallback(
+    async (provider: OfficeExecutionProvider) => {
+      const accountPoolId = resolveRunnerPoolId(provider);
+      const busyKey = `${provider}:${accountPoolId}:connect`;
+      setOfficeRunnerBusyKey(busyKey);
+      try {
+        await api.connectOfficeOAuthSession(provider, accountPoolId);
+        await loadOfficeRunnerState();
+      } finally {
+        setOfficeRunnerBusyKey(null);
+      }
+    },
+    [loadOfficeRunnerState, resolveRunnerPoolId],
+  );
+
+  const handleDisconnectRunnerOAuth = useCallback(
+    async (provider: OfficeExecutionProvider) => {
+      const accountPoolId = resolveRunnerPoolId(provider);
+      const busyKey = `${provider}:${accountPoolId}:disconnect`;
+      setOfficeRunnerBusyKey(busyKey);
+      try {
+        await api.disconnectOfficeOAuthSession(provider, accountPoolId);
+        await loadOfficeRunnerState();
+      } finally {
+        setOfficeRunnerBusyKey(null);
+      }
+    },
+    [loadOfficeRunnerState, resolveRunnerPoolId],
+  );
+
+  const handleActivateRunner = useCallback(
+    async (provider: OfficeExecutionProvider) => {
+      const accountPoolId = resolveRunnerPoolId(provider);
+      const busyKey = `${provider}:${accountPoolId}:activate`;
+      setOfficeRunnerBusyKey(busyKey);
+      try {
+        await api.activateOfficeRunner(provider, accountPoolId);
+        await loadOfficeRunnerState();
+      } finally {
+        setOfficeRunnerBusyKey(null);
+      }
+    },
+    [loadOfficeRunnerState, resolveRunnerPoolId],
+  );
+
+  const handleDeactivateRunner = useCallback(
+    async (provider: OfficeExecutionProvider) => {
+      const accountPoolId = resolveRunnerPoolId(provider);
+      const busyKey = `${provider}:${accountPoolId}:deactivate`;
+      setOfficeRunnerBusyKey(busyKey);
+      try {
+        await api.deactivateOfficeRunner(provider, accountPoolId);
+        await loadOfficeRunnerState();
+      } finally {
+        setOfficeRunnerBusyKey(null);
+      }
+    },
+    [loadOfficeRunnerState, resolveRunnerPoolId],
+  );
+
   return (
     <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
       <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: "var(--th-text-heading)" }}>
@@ -447,6 +570,18 @@ export default function SettingsPanel({
           deviceStatus={deviceStatus}
           deviceError={deviceError}
           onStartDeviceCodeFlow={startDeviceCodeFlow}
+          officeExecutionProviders={OFFICE_EXECUTION_PROVIDERS}
+          officeOauthSessions={officeOauthSessions}
+          officeRunners={officeRunners}
+          officeRunnerQueue={officeRunnerQueue}
+          officeRunnerBusyKey={officeRunnerBusyKey}
+          runnerMeta={runnerMeta}
+          runnerPoolDrafts={runnerPoolDrafts}
+          onRunnerPoolDraftChange={updateRunnerPoolDraft}
+          onConnectRunnerOAuth={handleConnectRunnerOAuth}
+          onDisconnectRunnerOAuth={handleDisconnectRunnerOAuth}
+          onActivateRunner={handleActivateRunner}
+          onDeactivateRunner={handleDeactivateRunner}
         />
       )}
 

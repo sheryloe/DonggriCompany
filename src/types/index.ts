@@ -281,6 +281,8 @@ export type WSEventType =
   | "announcement"
   | "cli_output"
   | "cli_usage_update"
+  | "runner.updated"
+  | "runner.queue.updated"
   | "subtask_update"
   | "cross_dept_delivery"
   | "ceo_office_call"

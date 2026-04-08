@@ -301,6 +301,7 @@ export interface OAuthProviderStatus {
 }
 
 export type OAuthConnectProvider = "github-copilot" | "antigravity";
+export type OfficeExecutionProvider = "codex" | "gemini" | "jules";
 
 export interface OAuthStatus {
   storageReady: boolean;
@@ -387,4 +388,156 @@ export async function getCliModels(refresh = false): Promise<Record<string, CliM
   const qs = refresh ? "?refresh=true" : "";
   const j = await request<{ models: Record<string, CliModelInfo[]> }>(`/api/cli-models${qs}`);
   return j.models;
+}
+
+export interface OfficeOAuthSessionStatus {
+  id: string;
+  provider: string;
+  account_pool_id: string;
+  status: "connected" | "expired" | "error" | "disconnected";
+  token_expires_at: number | null;
+  refresh_token_expires_at: number | null;
+  last_refreshed_at: number | null;
+  refresh_fail_count: number;
+  last_error: string | null;
+  last_error_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface OfficeRunnerStatusView {
+  provider: string;
+  accountPoolId: string;
+  runnerKey: string;
+  containerName: string;
+  status: "active" | "idle" | "stopping" | "error";
+  lastUsedAt: number;
+  updatedAt: number;
+}
+
+export interface OfficeRunnerQueueItemView {
+  id: string;
+  provider: string;
+  accountPoolId: string;
+  runnerKey: string;
+  status: "queued" | "running" | "done" | "failed" | "canceled";
+  enqueuedAt: number;
+  startedAt: number | null;
+  endedAt: number | null;
+  errorMessage: string | null;
+}
+
+export interface OfficeCliRunView {
+  id: string;
+  provider: string;
+  account_pool_id: string;
+  runner_key: string;
+  prompt: string | null;
+  project_path: string | null;
+  status: "queued" | "running" | "done" | "failed" | "canceled";
+  queue_item_id: string | null;
+  started_at: number | null;
+  ended_at: number | null;
+  error_message: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export async function getOfficeOAuthSessions(): Promise<OfficeOAuthSessionStatus[]> {
+  const response = await request<{ ok: boolean; sessions: OfficeOAuthSessionStatus[] }>("/api/office/oauth/sessions");
+  return response.sessions ?? [];
+}
+
+export async function connectOfficeOAuthSession(
+  provider: OfficeExecutionProvider,
+  accountPoolId: string,
+): Promise<OfficeOAuthSessionStatus> {
+  const response = await post<{ ok: boolean; session: OfficeOAuthSessionStatus }>("/api/office/oauth/connect", {
+    provider,
+    accountPoolId,
+  });
+  return response.session;
+}
+
+export async function disconnectOfficeOAuthSession(
+  provider: OfficeExecutionProvider,
+  accountPoolId: string,
+): Promise<OfficeOAuthSessionStatus> {
+  const response = await post<{ ok: boolean; session: OfficeOAuthSessionStatus }>("/api/office/oauth/disconnect", {
+    provider,
+    accountPoolId,
+  });
+  return response.session;
+}
+
+export async function getOfficeRunners(): Promise<{
+  maxActive: number;
+  idleTtlMs: number;
+  dockerEnabled: boolean;
+  runners: OfficeRunnerStatusView[];
+}> {
+  return request<{
+    ok: boolean;
+    maxActive: number;
+    idleTtlMs: number;
+    dockerEnabled: boolean;
+    runners: OfficeRunnerStatusView[];
+  }>("/api/office/runners");
+}
+
+export async function getOfficeRunnerQueue(): Promise<OfficeRunnerQueueItemView[]> {
+  const response = await request<{ ok: boolean; queue: OfficeRunnerQueueItemView[] }>("/api/office/runners/queue");
+  return response.queue ?? [];
+}
+
+export async function activateOfficeRunner(
+  provider: OfficeExecutionProvider,
+  accountPoolId: string,
+): Promise<{
+  status: "active" | "queued";
+  runner: OfficeRunnerStatusView | null;
+  queueItem: OfficeRunnerQueueItemView | null;
+}> {
+  return post("/api/office/runners/activate", { provider, accountPoolId }) as Promise<{
+    status: "active" | "queued";
+    runner: OfficeRunnerStatusView | null;
+    queueItem: OfficeRunnerQueueItemView | null;
+  }>;
+}
+
+export async function deactivateOfficeRunner(
+  provider: OfficeExecutionProvider,
+  accountPoolId: string,
+): Promise<OfficeRunnerStatusView> {
+  const response = await post<{ ok: boolean; runner: OfficeRunnerStatusView }>("/api/office/runners/deactivate", {
+    provider,
+    accountPoolId,
+  });
+  return response.runner;
+}
+
+export async function runOfficeCli(input: {
+  provider: OfficeExecutionProvider;
+  accountPoolId: string;
+  prompt: string;
+  projectPath?: string;
+}): Promise<{
+  status: "active" | "queued";
+  run: OfficeCliRunView | null;
+  runner: OfficeRunnerStatusView | null;
+  queueItem: OfficeRunnerQueueItemView | null;
+}> {
+  return post("/api/office/cli/run", input) as Promise<{
+    status: "active" | "queued";
+    run: OfficeCliRunView | null;
+    runner: OfficeRunnerStatusView | null;
+    queueItem: OfficeRunnerQueueItemView | null;
+  }>;
+}
+
+export async function runProviderProbe(input: {
+  provider: OfficeExecutionProvider;
+  accountPoolId: string;
+}): Promise<{ status: "active" | "queued" }> {
+  return post("/api/provider-probes/run", input) as Promise<{ status: "active" | "queued" }>;
 }

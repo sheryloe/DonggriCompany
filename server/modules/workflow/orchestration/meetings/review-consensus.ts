@@ -1,7 +1,18 @@
 import type { Lang } from "../../../../types/lang.ts";
 import { processReviewConsensusOutcome } from "./review-consensus-outcome.ts";
+import { resolveAgentWorkflowProfile } from "../../agents/workflow-profile.ts";
 
 type ReviewConsensusDeps = any;
+type StructuredVerdict = "approved" | "hold" | "rejected";
+type StructuredReviewerFeedback = {
+  lens: string;
+  pass1: string;
+  pass2: string;
+  finalVerdict: StructuredVerdict;
+  confidence: number;
+  blockingItems: string[];
+  requiresJulesAction: boolean;
+};
 
 export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
   const {
@@ -54,6 +65,100 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
     REVIEW_MAX_REVISION_SIGNALS_PER_ROUND,
   } = deps;
 
+  const REVIEWER_CONTRACT = [
+    "[2x Review Contract]",
+    "Return strict JSON only. No markdown, no preface.",
+    "Required keys:",
+    '- "pass1": first-pass judgment (string)',
+    '- "pass2": counter-check / rebuttal (string)',
+    '- "final_verdict": one of "approved" | "hold" | "rejected"',
+    '- "confidence": number in [0,1]',
+    '- "blocking_items": array of blocker strings (empty array allowed)',
+  ].join("\n");
+
+  function normalizeVerdict(value: unknown): StructuredVerdict | null {
+    const raw = String(value ?? "")
+      .trim()
+      .toLowerCase();
+    if (raw === "approved" || raw === "approve") return "approved";
+    if (raw === "hold" || raw === "needs_revision" || raw === "revision_required") return "hold";
+    if (raw === "rejected" || raw === "reject") return "rejected";
+    return null;
+  }
+
+  function normalizeConfidence(value: unknown): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0.5;
+    return Math.max(0, Math.min(1, parsed));
+  }
+
+  function normalizeBlockingItems(value: unknown): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    const pushItem = (raw: unknown) => {
+      const cleaned = String(raw ?? "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!cleaned) return;
+      const key = cleaned.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(cleaned);
+    };
+    if (Array.isArray(value)) {
+      for (const item of value) pushItem(item);
+      return out;
+    }
+    const text = String(value ?? "").trim();
+    if (!text) return out;
+    for (const part of text.split(/\n|[;,]/g)) pushItem(part);
+    return out;
+  }
+
+  function tryParseStructuredFeedback(raw: string, lens: string): StructuredReviewerFeedback | null {
+    const trimmed = String(raw ?? "").trim();
+    if (!trimmed) return null;
+    const candidates: string[] = [trimmed];
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenceMatch?.[1]) candidates.push(fenceMatch[1].trim());
+
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(candidate) as Record<string, unknown>;
+        const pass1 = String(parsed.pass1 ?? "").trim();
+        const pass2 = String(parsed.pass2 ?? "").trim();
+        const verdict = normalizeVerdict(parsed.final_verdict);
+        if (!pass1 || !pass2 || !verdict) continue;
+        const blockingItems = normalizeBlockingItems(parsed.blocking_items);
+        const requiresJulesAction = verdict !== "approved" || blockingItems.length > 0;
+        return {
+          lens: lens || "general_quality",
+          pass1,
+          pass2,
+          finalVerdict: verdict,
+          confidence: normalizeConfidence(parsed.confidence),
+          blockingItems,
+          requiresJulesAction,
+        };
+      } catch {
+        // ignore parse failures
+      }
+    }
+    return null;
+  }
+
+  function buildStructuredFeedbackPrompt(basePrompt: string, lens: string): string {
+    return [basePrompt, "", `Review lens: ${lens || "general_quality"}`, REVIEWER_CONTRACT].join("\n");
+  }
+
+  function summarizeStructuredFeedbackForMeeting(feedback: StructuredReviewerFeedback): string {
+    const blockers =
+      feedback.blockingItems.length > 0
+        ? feedback.blockingItems.map((item, index) => `${index + 1}) ${item}`).join("; ")
+        : "none";
+    return `pass1=${feedback.pass1} | pass2=${feedback.pass2} | verdict=${feedback.finalVerdict} | confidence=${feedback.confidence.toFixed(2)} | blockers=${blockers}`;
+  }
+
   function startReviewConsensusMeeting(
     taskId: string,
     taskTitle: string,
@@ -86,28 +191,29 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
           .get(taskId) as { id: string; round: number; status: string } | undefined;
         const resumeMeeting = latestMeeting?.status === "in_progress";
         const round = resumeMeeting ? (latestMeeting?.round ?? 1) : (latestMeeting?.round ?? 0) + 1;
+        const effectiveMaxReviewRounds = Math.max(1, Math.min(2, Number(REVIEW_MAX_ROUNDS ?? 2)));
         reviewRoundState.set(taskId, round);
-        if (!resumeMeeting && round > REVIEW_MAX_ROUNDS) {
+        if (!resumeMeeting && round > effectiveMaxReviewRounds) {
           const cappedLang = resolveLang(taskTitle);
           appendTaskLog(
             taskId,
             "system",
-            `Review round ${round} exceeds max_rounds=${REVIEW_MAX_ROUNDS}; forcing final decision`,
+            `Review round ${round} exceeds max_rounds=${effectiveMaxReviewRounds}; forcing final decision`,
           );
           notifyCeo(
             pickL(
               l(
                 [
-                  `[CEO OFFICE] '${taskTitle}' 리뷰 라운드가 최대치(${REVIEW_MAX_ROUNDS})를 초과해 추가 보완은 중단하고 최종 승인 판단으로 전환합니다.`,
+                  `[CEO OFFICE] '${taskTitle}' 리뷰 라운드가 최대치(${effectiveMaxReviewRounds})를 초과해 추가 보완은 중단하고 최종 승인 판단으로 전환합니다.`,
                 ],
                 [
-                  `[CEO OFFICE] '${taskTitle}' exceeded max review rounds (${REVIEW_MAX_ROUNDS}). Additional revision rounds are closed and we are moving to final approval decision.`,
+                  `[CEO OFFICE] '${taskTitle}' exceeded max review rounds (${effectiveMaxReviewRounds}). Additional revision rounds are closed and we are moving to final approval decision.`,
                 ],
                 [
-                  `[CEO OFFICE] '${taskTitle}' はレビュー上限(${REVIEW_MAX_ROUNDS}回)を超えたため、追加補完を停止して最終承認判断へ移行します。`,
+                  `[CEO OFFICE] '${taskTitle}' はレビュー上限(${effectiveMaxReviewRounds}回)を超えたため、追加補完を停止して最終承認判断へ移行します。`,
                 ],
                 [
-                  `[CEO OFFICE] '${taskTitle}' 的评审轮次已超过上限（${REVIEW_MAX_ROUNDS}）。现停止追加整改并转入最终审批判断。`,
+                  `[CEO OFFICE] '${taskTitle}' 的评审轮次已超过上限（${effectiveMaxReviewRounds}）。现停止追加整改并转入最终审批判断。`,
                 ],
               ),
               cappedLang,
@@ -121,9 +227,9 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
         }
 
         const roundMode = getReviewRoundMode(round);
-        const isRound1Remediation = roundMode === "parallel_remediation";
-        const isRound2Merge = roundMode === "merge_synthesis";
-        const isFinalDecisionRound = roundMode === "final_decision";
+        const isRound1Remediation = roundMode === "round1_review";
+        const isRound2Merge = false;
+        const isFinalDecisionRound = roundMode === "round2_final";
 
         const planningLeader = leaders.find((l: any) => l.department_id === "planning") ?? leaders[0];
         const otherLeaders = leaders.filter((l: any) => l.id !== planningLeader.id);
@@ -145,6 +251,7 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
         });
         const lang = resolveLang(taskDescription ?? taskTitle);
         const transcript: any[] = [];
+        const structuredReviewByAgent = new Map<string, StructuredReviewerFeedback>();
         const oneShotTimeoutMs = Math.max(5_000, Number(reviewMeetingOneShotTimeoutMs ?? 65_000));
         const oneShotOptions = { projectPath, timeoutMs: oneShotTimeoutMs, noTools: true };
         const isTimeoutRun = (run: { text?: string; error?: string } | null | undefined): boolean => {
@@ -183,6 +290,13 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
         meetingId = resumeMeeting
           ? (latestMeeting?.id ?? null)
           : beginMeetingMinutes(taskId, "review", round, taskTitle);
+        if (meetingId) {
+          try {
+            db.prepare("DELETE FROM review_round_feedback_items WHERE meeting_id = ? AND round = ?").run(meetingId, round);
+          } catch (err: any) {
+            appendTaskLog(taskId, "system", `Review round ${round}: feedback table cleanup skipped (${String(err?.message ?? err)})`);
+          }
+        }
         let minuteSeq = 1;
         if (meetingId) {
           const seqRow = db
@@ -316,7 +430,7 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
           turnObjective: isRound2Merge
             ? "Kick off round 2 merge-synthesis discussion and ask each leader to verify consolidated remediation output."
             : isFinalDecisionRound
-              ? "Kick off round 3 final decision discussion and confirm that no additional remediation round will be opened."
+              ? "Kick off round 2 final decision discussion and confirm that no additional remediation round will be opened."
               : "Kick off round 1 review discussion and ask each leader for all required remediation items in one pass.",
           stanceHint: isRound2Merge
             ? "Focus on consolidation and merge readiness. Convert concerns into documented residual risks instead of new subtasks."
@@ -334,6 +448,13 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
 
         for (const leader of otherLeaders) {
           if (abortIfInactive()) return;
+          const reviewerProfile = resolveAgentWorkflowProfile({
+            workflowProfileRaw: (leader as any).workflow_profile ?? null,
+            agentName: leader.name,
+            cliProvider: leader.cli_provider,
+            departmentId: leader.department_id,
+          });
+          const reviewLens = reviewerProfile.review_lenses?.[0] || "general_quality";
           const feedbackPrompt = buildMeetingPrompt(leader, {
             meetingType: "review",
             round,
@@ -353,11 +474,75 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
                 : "If revision is needed, explicitly state what must be fixed before approval.",
             lang,
           });
-          const feedbackRun = await runMeetingOneShotWithRetry(leader, feedbackPrompt, "feedback");
+          const structuredPrompt = buildStructuredFeedbackPrompt(feedbackPrompt, reviewLens);
+          const feedbackRun = await runMeetingOneShotWithRetry(leader, structuredPrompt, "feedback");
           if (abortIfInactive()) return;
-          const feedbackText = chooseSafeReply(feedbackRun, lang, "feedback", leader);
+          let feedback = tryParseStructuredFeedback(String(feedbackRun?.text ?? ""), reviewLens);
+          if (!feedback) {
+            appendTaskLog(
+              taskId,
+              "system",
+              `Review round ${round}: invalid structured review output from ${leader.id}; retry once`,
+            );
+            const retryRun = await runMeetingOneShotWithRetry(
+              leader,
+              `${structuredPrompt}\n\n[retry] Previous output was invalid. Return strict JSON only.`,
+              "feedback",
+            );
+            if (abortIfInactive()) return;
+            feedback = tryParseStructuredFeedback(String(retryRun?.text ?? ""), reviewLens);
+          }
+          if (!feedback) {
+            const fallbackText = chooseSafeReply(feedbackRun, lang, "feedback", leader);
+            feedback = {
+              lens: reviewLens,
+              pass1: fallbackText,
+              pass2: "Counter-check unavailable due to invalid structured output format.",
+              finalVerdict: "hold",
+              confidence: 0.35,
+              blockingItems: ["Structured review output contract violation"],
+              requiresJulesAction: true,
+            };
+            appendTaskLog(
+              taskId,
+              "system",
+              `Review round ${round}: fallback hold applied for ${leader.id} (structured format missing)`,
+            );
+          }
+          structuredReviewByAgent.set(leader.id, feedback);
+          if (meetingId) {
+            try {
+              db.prepare(
+                `
+                INSERT INTO review_round_feedback_items (
+                  meeting_id, task_id, round, agent_id, lens, pass1, pass2, final_verdict, confidence, blocking_items_json, requires_jules_action
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `,
+              ).run(
+                meetingId,
+                taskId,
+                round,
+                leader.id,
+                feedback.lens,
+                feedback.pass1,
+                feedback.pass2,
+                feedback.finalVerdict,
+                feedback.confidence,
+                feedback.blockingItems.length > 0 ? JSON.stringify(feedback.blockingItems) : null,
+                feedback.requiresJulesAction ? 1 : 0,
+              );
+            } catch (err: any) {
+              appendTaskLog(
+                taskId,
+                "system",
+                `Review round ${round}: failed to persist structured feedback for ${leader.id} (${String(err?.message ?? err)})`,
+              );
+            }
+          }
+          const feedbackText = summarizeStructuredFeedbackForMeeting(feedback);
           speak(leader, "chat", "agent", planningLeader.id, feedbackText);
-          if (wantsReviewRevision(feedbackText)) {
+          if (feedback.finalVerdict !== "approved" || feedback.blockingItems.length > 0) {
             needsRevision = true;
             if (!reviseOwner) reviseOwner = leader;
           }
@@ -386,8 +571,70 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
           });
           const soloRun = await runMeetingOneShotWithRetry(planningLeader, soloPrompt, "feedback");
           if (abortIfInactive()) return;
-          const soloText = chooseSafeReply(soloRun, lang, "feedback", planningLeader);
+          const planningProfile = resolveAgentWorkflowProfile({
+            workflowProfileRaw: (planningLeader as any).workflow_profile ?? null,
+            agentName: planningLeader.name,
+            cliProvider: planningLeader.cli_provider,
+            departmentId: planningLeader.department_id,
+          });
+          const planningLens = planningProfile.review_lenses?.[0] || "general_quality";
+          const soloFeedbackPrompt = buildStructuredFeedbackPrompt(soloPrompt, planningLens);
+          const soloStructuredRun = await runMeetingOneShotWithRetry(planningLeader, soloFeedbackPrompt, "feedback");
+          if (abortIfInactive()) return;
+          let soloFeedback = tryParseStructuredFeedback(String(soloStructuredRun?.text ?? ""), planningLens);
+          if (!soloFeedback) {
+            soloFeedback = {
+              lens: planningLens,
+              pass1: chooseSafeReply(soloRun, lang, "feedback", planningLeader),
+              pass2: "Counter-check unavailable due to invalid structured output format.",
+              finalVerdict: "hold",
+              confidence: 0.35,
+              blockingItems: ["Structured review output contract violation"],
+              requiresJulesAction: true,
+            };
+            appendTaskLog(
+              taskId,
+              "system",
+              `Review round ${round}: fallback hold applied for ${planningLeader.id} (single-reviewer structured format missing)`,
+            );
+          }
+          structuredReviewByAgent.set(planningLeader.id, soloFeedback);
+          if (meetingId) {
+            try {
+              db.prepare(
+                `
+                INSERT INTO review_round_feedback_items (
+                  meeting_id, task_id, round, agent_id, lens, pass1, pass2, final_verdict, confidence, blocking_items_json, requires_jules_action
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `,
+              ).run(
+                meetingId,
+                taskId,
+                round,
+                planningLeader.id,
+                soloFeedback.lens,
+                soloFeedback.pass1,
+                soloFeedback.pass2,
+                soloFeedback.finalVerdict,
+                soloFeedback.confidence,
+                soloFeedback.blockingItems.length > 0 ? JSON.stringify(soloFeedback.blockingItems) : null,
+                soloFeedback.requiresJulesAction ? 1 : 0,
+              );
+            } catch (err: any) {
+              appendTaskLog(
+                taskId,
+                "system",
+                `Review round ${round}: failed to persist structured feedback for ${planningLeader.id} (${String(err?.message ?? err)})`,
+              );
+            }
+          }
+          const soloText = summarizeStructuredFeedbackForMeeting(soloFeedback);
           speak(planningLeader, "chat", "all", null, soloText);
+          if (soloFeedback.finalVerdict !== "approved" || soloFeedback.blockingItems.length > 0) {
+            needsRevision = true;
+            if (!reviseOwner) reviseOwner = planningLeader;
+          }
           await sleepMs(randomDelay(620, 980));
           if (abortIfInactive()) return;
         }
@@ -452,7 +699,7 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
           if (abortIfInactive()) return;
           const approvalText = chooseSafeReply(approvalRun, lang, "approval", leader);
           speak(leader, "status_update", "all", null, approvalText);
-          if (wantsReviewRevision(approvalText)) {
+          if (!structuredReviewByAgent.has(leader.id) && wantsReviewRevision(approvalText)) {
             needsRevision = true;
             if (!reviseOwner) reviseOwner = leader;
           }
@@ -468,6 +715,7 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
           isRound1Remediation,
           isRound2Merge,
           isFinalDecisionRound,
+          structuredReviewByAgent,
           leaders,
           transcript,
           lang,

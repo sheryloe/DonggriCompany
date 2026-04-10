@@ -74,7 +74,7 @@ describe("buildYoloDecisionReplyPayload", () => {
     expect(payload).toEqual({ option_number: 2 });
   });
 
-  it("review_round_pick에서 summary 권장 번호를 다중 선택으로 반영한다", () => {
+  it("review_round_pick에서 apply_all_feedback를 기본 선택한다", () => {
     const payload = buildYoloDecisionReplyPayload(
       createItem({
         id: "decision-round",
@@ -85,13 +85,13 @@ describe("buildYoloDecisionReplyPayload", () => {
         meeting_id: "meeting-1",
         review_round: 1,
         options: [
-          { number: 1, action: "apply_review_pick", label: "one" },
-          { number: 2, action: "apply_review_pick", label: "two" },
-          { number: 3, action: "skip_to_next_round", label: "skip" },
+          { number: 1, action: "apply_all_feedback", label: "all" },
+          { number: 2, action: "apply_selected_feedback", label: "selected" },
+          { number: 3, action: "proceed_final_verdict", label: "final" },
         ],
       }),
     );
-    expect(payload).toEqual({ option_number: 2, selected_option_numbers: [2, 1] });
+    expect(payload).toEqual({ option_number: 1 });
   });
 
   it("task_timeout_resume은 resume 옵션을 우선 선택한다", () => {

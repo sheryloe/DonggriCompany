@@ -37,6 +37,14 @@ type LeaderSelectionDeps = {
 
 export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
   const { db, findTeamLeader, detectTargetDepartments } = deps;
+  let cachedTaskColumns: Set<string> | null = null;
+
+  function getTaskColumns(): Set<string> {
+    if (cachedTaskColumns) return cachedTaskColumns;
+    const rows = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+    cachedTaskColumns = new Set(rows.map((row) => String(row.name ?? "").trim()).filter(Boolean));
+    return cachedTaskColumns;
+  }
 
   function getLeadersByDepartmentIds(deptIds: string[], candidateAgentIds?: string[] | null): AgentRow[] {
     const out: AgentRow[] = [];
@@ -196,21 +204,38 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
     const minLeaders = opts?.minLeaders ?? 2;
     const fallbackAll = opts?.fallbackAll ?? true;
 
-    const taskMeta = db
-      .prepare(
-        "SELECT project_id, workflow_pack_key, department_id, title, description, status, assigned_agent_id FROM tasks WHERE id = ?",
-      )
-      .get(taskId) as
+    const taskColumns = getTaskColumns();
+    const selectColumns = [
+      "project_id",
+      "workflow_pack_key",
+      "department_id",
+      "title",
+      "description",
+      ...(taskColumns.has("status") ? ["status"] : []),
+      ...(taskColumns.has("assigned_agent_id") ? ["assigned_agent_id"] : []),
+    ];
+    const taskMetaRaw = db.prepare(`SELECT ${selectColumns.join(", ")} FROM tasks WHERE id = ?`).get(taskId) as
       | {
-          project_id: string | null;
-          workflow_pack_key: string | null;
-          department_id: string | null;
-          title: string;
-          description: string | null;
-          status: string;
-          assigned_agent_id: string | null;
+          project_id?: string | null;
+          workflow_pack_key?: string | null;
+          department_id?: string | null;
+          title?: string;
+          description?: string | null;
+          status?: string;
+          assigned_agent_id?: string | null;
         }
       | undefined;
+    const taskMeta = taskMetaRaw
+      ? {
+          project_id: taskMetaRaw.project_id ?? null,
+          workflow_pack_key: taskMetaRaw.workflow_pack_key ?? null,
+          department_id: taskMetaRaw.department_id ?? null,
+          title: taskMetaRaw.title ?? "",
+          description: taskMetaRaw.description ?? null,
+          status: taskMetaRaw.status ?? "",
+          assigned_agent_id: taskMetaRaw.assigned_agent_id ?? null,
+        }
+      : undefined;
     const constrainedAgentIds = resolveConstrainedAgentScopeForTask(db as any, {
       project_id: taskMeta?.project_id ?? null,
       workflow_pack_key: taskMeta?.workflow_pack_key ?? null,

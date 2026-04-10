@@ -14,6 +14,7 @@ export async function processReviewConsensusOutcome(ctx: OutcomeContext): Promis
     isRound1Remediation,
     isRound2Merge,
     isFinalDecisionRound,
+    structuredReviewByAgent,
     leaders,
     transcript,
     lang,
@@ -53,13 +54,33 @@ export async function processReviewConsensusOutcome(ctx: OutcomeContext): Promis
 
   // Final review result should follow each leader's last approval statement,
   // not stale "needs revision" flags from earlier feedback turns.
+  const structuredFeedbackMap: Map<string, any> =
+    structuredReviewByAgent instanceof Map ? structuredReviewByAgent : new Map<string, any>();
   const finalHoldLeaders: any[] = [];
   const deferredMonitoringLeaders: any[] = [];
   const deferredMonitoringNotes: string[] = [];
   const finalHoldDeptCount = new Map<string, number>();
   for (const leader of leaders as any[]) {
-    if (meetingReviewDecisionByAgent.get(leader.id) !== "hold") continue;
-    const latestDecisionLine = findLatestTranscriptContentByAgent(transcript as MeetingTranscriptEntry[], leader.id);
+    const structured = structuredFeedbackMap.get(leader.id) as
+      | {
+          pass1?: string;
+          pass2?: string;
+          finalVerdict?: string;
+          blockingItems?: string[];
+          requiresJulesAction?: boolean;
+        }
+      | undefined;
+    const hasStructuredBlocker = structured
+      ? String(structured.finalVerdict ?? "").toLowerCase() !== "approved" ||
+        (Array.isArray(structured.blockingItems) && structured.blockingItems.length > 0) ||
+        structured.requiresJulesAction === true
+      : false;
+    if (!structured && meetingReviewDecisionByAgent.get(leader.id) !== "hold") continue;
+    if (structured && !hasStructuredBlocker) continue;
+    const latestDecisionLine =
+      structured && (structured.pass2 || structured.pass1)
+        ? `${String(structured.pass2 ?? "").trim()} ${String(structured.pass1 ?? "").trim()}`.trim()
+        : findLatestTranscriptContentByAgent(transcript as MeetingTranscriptEntry[], leader.id);
     if (isDeferrableReviewHold(latestDecisionLine)) {
       const clipped = summarizeForMeetingBubble(latestDecisionLine, 160, lang as Lang);
       deferredMonitoringLeaders.push(leader);
@@ -108,6 +129,44 @@ export async function processReviewConsensusOutcome(ctx: OutcomeContext): Promis
   if (abortIfInactive()) return true;
 
   if (needsRevision) {
+    if (isFinalDecisionRound) {
+      const escalatedAt = Date.now();
+      db.prepare("UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ? AND status = 'review'").run(
+        escalatedAt,
+        taskId,
+      );
+      appendTaskLog(
+        taskId,
+        "system",
+        `Review consensus round ${round}: blocker remains in final round, reject and escalate`,
+      );
+      notifyCeo(
+        pickL(
+          l(
+            [
+              `[CEO OFFICE] '${taskTitle}' 리뷰 라운드 ${round} 종료 시 blocker가 남아 있어 승인 거절 및 에스컬레이션으로 종료합니다.`,
+            ],
+            [
+              `[CEO OFFICE] '${taskTitle}' still has blocker(s) at the end of final review round ${round}. Closing as reject + escalation.`,
+            ],
+            [
+              `[CEO OFFICE] '${taskTitle}' は最終レビューラウンド${round}終了時点で blocker が残っているため、承認拒否とエスカレーションで終了します。`,
+            ],
+            [
+              `[CEO OFFICE] '${taskTitle}' 在最终评审轮次 ${round} 结束时仍存在 blocker，按拒绝并升级处理后结束。`,
+            ],
+          ),
+          lang,
+        ),
+        taskId,
+      );
+      if (meetingId) finishMeetingMinutes(meetingId, "failed");
+      dismissLeadersFromCeoOffice(taskId, leaders);
+      reviewRoundState.delete(taskId);
+      reviewInFlight.delete(taskId);
+      return true;
+    }
+
     const rawMemoItems = collectRevisionMemoItems(
       transcript as MeetingTranscriptEntry[],
       REVIEW_MAX_MEMO_ITEMS_PER_ROUND,

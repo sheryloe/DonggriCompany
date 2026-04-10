@@ -101,7 +101,14 @@ export function buildYoloDecisionReplyPayload(item: DecisionInboxRouteItem): Yol
   }
 
   if (item.kind === "review_round_pick") {
-    const pickOptions = item.options.filter((option) => option.action === "apply_review_pick");
+    const applyAll = item.options.find((option) => option.action === "apply_all_feedback");
+    if (applyAll) {
+      return { option_number: applyAll.number };
+    }
+
+    const pickOptions = item.options.filter(
+      (option) => option.action === "apply_selected_feedback" || option.action === "apply_review_pick",
+    );
     if (pickOptions.length > 0) {
       const validNumbers = new Set(pickOptions.map((option) => option.number));
       const suggested = extractSummarySuggestedOptionNumbers(item.summary, validNumbers);
@@ -112,8 +119,10 @@ export function buildYoloDecisionReplyPayload(item: DecisionInboxRouteItem): Yol
       };
     }
 
-    const skip = item.options.find((option) => option.action === "skip_to_next_round");
-    if (skip) return { option_number: skip.number };
+    const proceed = item.options.find(
+      (option) => option.action === "proceed_final_verdict" || option.action === "skip_to_next_round",
+    );
+    if (proceed) return { option_number: proceed.number };
     return null;
   }
 

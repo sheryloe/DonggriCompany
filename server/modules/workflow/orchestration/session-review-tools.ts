@@ -95,17 +95,23 @@ export function createSessionReviewTools(deps: CreateSessionReviewToolsDeps) {
     }
   }
 
-  type ReviewRoundMode = "parallel_remediation" | "merge_synthesis" | "final_decision";
+  type ReviewRoundMode = "round1_review" | "round2_final";
 
   function getReviewRoundMode(round: number): ReviewRoundMode {
-    if (round <= 1) return "parallel_remediation";
-    if (round === 2) return "merge_synthesis";
-    return "final_decision";
+    return round <= 1 ? "round1_review" : "round2_final";
   }
 
   function scheduleNextReviewRound(taskId: string, taskTitle: string, currentRound: number, lang: Lang): void {
-    const nextRound = currentRound + 1;
-    appendTaskLog(taskId, "system", `Review round ${currentRound}: scheduling round ${nextRound} finalization meeting`);
+    if (currentRound >= 2) {
+      appendTaskLog(
+        taskId,
+        "system",
+        `Review round ${currentRound}: max rounds reached (2), skip scheduling additional review round`,
+      );
+      return;
+    }
+    const nextRound = 2;
+    appendTaskLog(taskId, "system", `Review round ${currentRound}: scheduling round ${nextRound} final review`);
     notifyCeo(
       pickL(
         l(

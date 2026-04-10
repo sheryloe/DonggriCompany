@@ -1,6 +1,38 @@
-import type { ReviewRoundDecisionItem, ReviewRoundDecisionItemDeps, ReviewRoundDecisionItems } from "./types.ts";
+import type {
+  ReviewRoundDecisionItem,
+  ReviewRoundDecisionItemDeps,
+  ReviewRoundDecisionItems,
+  ReviewRoundReviewerVerdict,
+} from "./types.ts";
 
 const DECISION_COLLECTING_STALE_MS = 20_000;
+
+function normalizeNote(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseBlockingItemsJson(raw: unknown): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(String(raw)) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const item of parsed) {
+      const note = normalizeNote(item);
+      if (!note) continue;
+      const key = note.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(note);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
 
 export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps): ReviewRoundDecisionItems {
   const {
@@ -17,13 +49,17 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
     queueReviewRoundPlanningConsolidation,
   } = deps;
 
+  function t(lang: string, ko: string, en: string, ja: string, zh: string): string {
+    return pickL(l([ko], [en], [ja], [zh]), lang);
+  }
+
   function getReviewDecisionFallbackLabel(lang: string): string {
-    return pickL(l(["기존 작업 이어서 진행"], ["Continue Existing Work"], ["既存作業を継続"], ["继续现有工作"]), lang);
+    return t(lang, "검토 항목 없음", "No review notes", "レビュー項目なし", "无审查项");
   }
 
   function getReviewDecisionNotes(taskId: string, reviewRound: number, limit = 6): string[] {
     const boundedLimit = Math.max(1, Math.min(limit, 12));
-    const rawRows = db
+    const rows = db
       .prepare(
         `
       SELECT raw_note
@@ -37,28 +73,142 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
       LIMIT ?
     `,
       )
-      .all(taskId, reviewRound, reviewRound, Math.max(boundedLimit * 3, boundedLimit)) as Array<{
-      raw_note: string | null;
-    }>;
+      .all(taskId, reviewRound, reviewRound, Math.max(boundedLimit * 3, boundedLimit)) as Array<{ raw_note: string | null }>;
     const out: string[] = [];
     const seen = new Set<string>();
-    for (const row of rawRows) {
-      const normalized = String(row.raw_note ?? "")
-        .replace(/\s+/g, " ")
-        .trim();
+    for (const row of rows) {
+      const normalized = normalizeNote(row.raw_note);
       if (!normalized) continue;
       const key = normalized.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(normalized);
-      if (out.length >= limit) break;
+      if (out.length >= boundedLimit) break;
     }
     return out;
   }
 
+  function getReviewerVerdicts(taskId: string, meetingId: string, reviewRound: number): ReviewRoundReviewerVerdict[] {
+    try {
+      const rows = db
+        .prepare(
+          `
+      SELECT
+        r.agent_id AS agent_id,
+        a.name AS agent_name,
+        a.name_ko AS agent_name_ko,
+        r.lens AS lens,
+        r.final_verdict AS final_verdict,
+        r.confidence AS confidence,
+        r.requires_jules_action AS requires_jules_action
+      FROM review_round_feedback_items r
+      LEFT JOIN agents a ON a.id = r.agent_id
+      WHERE r.task_id = ?
+        AND r.meeting_id = ?
+        AND r.round = ?
+      ORDER BY r.id ASC
+    `,
+        )
+        .all(taskId, meetingId, reviewRound) as Array<{
+        agent_id: string | null;
+        agent_name: string | null;
+        agent_name_ko: string | null;
+        lens: string | null;
+        final_verdict: string;
+        confidence: number | null;
+        requires_jules_action: number | null;
+      }>;
+      return rows.map((row) => ({
+        agent_id: row.agent_id ?? null,
+        agent_name: row.agent_name ?? null,
+        agent_name_ko: row.agent_name_ko ?? row.agent_name ?? null,
+        lens: row.lens ?? null,
+        final_verdict:
+          row.final_verdict === "approved" || row.final_verdict === "hold" || row.final_verdict === "rejected"
+            ? row.final_verdict
+            : "hold",
+        confidence: Number.isFinite(Number(row.confidence ?? NaN)) ? Number(row.confidence) : 0.5,
+        requires_jules_action: Number(row.requires_jules_action ?? 0) === 1,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  function getBlockerCount(verdicts: ReviewRoundReviewerVerdict[]): number {
+    return verdicts.filter(
+      (verdict) => verdict.final_verdict !== "approved" || verdict.requires_jules_action === true,
+    ).length;
+  }
+
+  function getPreviousRoundBlockerCount(taskId: string, reviewRound: number): number | null {
+    const prevRound = reviewRound - 1;
+    if (prevRound <= 0) return null;
+    let rows: Array<{ final_verdict: string; requires_jules_action: number | null }> = [];
+    try {
+      rows = db
+        .prepare(
+          `
+      SELECT final_verdict, requires_jules_action
+      FROM review_round_feedback_items
+      WHERE task_id = ?
+        AND round = ?
+    `,
+        )
+        .all(taskId, prevRound) as Array<{ final_verdict: string; requires_jules_action: number | null }>;
+    } catch {
+      return null;
+    }
+    if (rows.length <= 0) return null;
+    let blockers = 0;
+    for (const row of rows) {
+      const isApproved = String(row.final_verdict ?? "").toLowerCase() === "approved";
+      const requiresAction = Number(row.requires_jules_action ?? 0) === 1;
+      if (!isApproved || requiresAction) blockers += 1;
+    }
+    return blockers;
+  }
+
+  function collectRoundOptionNotes(taskId: string, meetingId: string, reviewRound: number, fallback: string[]): string[] {
+    let rows: Array<{ pass2: string | null; blocking_items_json: string | null }> = [];
+    try {
+      rows = db
+        .prepare(
+          `
+      SELECT pass2, blocking_items_json
+      FROM review_round_feedback_items
+      WHERE task_id = ?
+        AND meeting_id = ?
+        AND round = ?
+      ORDER BY id ASC
+    `,
+        )
+        .all(taskId, meetingId, reviewRound) as Array<{ pass2: string | null; blocking_items_json: string | null }>;
+    } catch {
+      return fallback.slice(0, 6);
+    }
+    const out: string[] = [];
+    const seen = new Set<string>();
+    const push = (raw: unknown) => {
+      const normalized = normalizeNote(raw);
+      if (!normalized) return;
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(normalized);
+    };
+    for (const row of rows) {
+      for (const item of parseBlockingItemsJson(row.blocking_items_json)) push(item);
+      if (out.length >= 6) break;
+      push(row.pass2);
+      if (out.length >= 6) break;
+    }
+    if (out.length > 0) return out.slice(0, 6);
+    return fallback.slice(0, 6);
+  }
+
   function buildReviewRoundDecisionItems(): ReviewRoundDecisionItem[] {
     const lang = getPreferredLanguage();
-    const t = (ko: string, en: string, ja: string, zh: string) => pickL(l([ko], [en], [ja], [zh]), lang);
     const rows = db
       .prepare(
         `
@@ -106,33 +256,44 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
 
     const out: ReviewRoundDecisionItem[] = [];
     for (const row of rows) {
-      const notesRaw = getReviewDecisionNotes(row.task_id, row.meeting_round, 6);
-      const notes = notesRaw.length > 0 ? notesRaw : [getReviewDecisionFallbackLabel(lang)];
+      const taskTitle = normalizeNote(row.task_title) || row.task_id;
+      const projectName = normalizeNote(row.project_name) || null;
+      const fallbackNotesRaw = getReviewDecisionNotes(row.task_id, row.meeting_round, 6);
+      const fallbackNotes =
+        fallbackNotesRaw.length > 0 ? fallbackNotesRaw : [getReviewDecisionFallbackLabel(lang)];
+      const optionNotes = collectRoundOptionNotes(row.task_id, row.meeting_id, row.meeting_round, fallbackNotes);
+      const reviewerVerdicts = getReviewerVerdicts(row.task_id, row.meeting_id, row.meeting_round);
+      const blockerCount = getBlockerCount(reviewerVerdicts);
+      const previousBlockerCount = getPreviousRoundBlockerCount(row.task_id, row.meeting_round);
+      const blockerDelta = previousBlockerCount === null ? null : blockerCount - previousBlockerCount;
 
-      const taskTitle = (row.task_title || row.task_id).trim();
-      const projectName = row.project_name ? row.project_name.trim() : null;
-      const nextRound = Math.max(2, row.meeting_round + 1);
-      const options = notes.map((note, index) => {
-        return {
-          number: index + 1,
-          action: "apply_review_pick",
-          label: note,
-        };
-      });
-      options.push({
-        number: notes.length + 1,
-        action: "skip_to_next_round",
-        label: t("다음 라운드로 SKIP", "Skip to Next Round", "次ラウンドへスキップ", "跳到下一轮"),
-      });
+      const options = [
+        {
+          number: 1,
+          action: "apply_all_feedback",
+          label: t(lang, "전체 반영", "Apply All", "すべて反映", "全部采纳"),
+        },
+        {
+          number: 2,
+          action: "apply_selected_feedback",
+          label: t(lang, "선택 반영", "Apply Selected", "選択反映", "选择采纳"),
+        },
+        {
+          number: 3,
+          action: "proceed_final_verdict",
+          label: t(lang, "최종판정으로 진행", "Proceed To Final Verdict", "最終判定へ進行", "进入最终判定"),
+        },
+      ];
 
       const summary = t(
-        `라운드 ${row.meeting_round} 팀장 의견이 취합되었습니다.\n작업: '${taskTitle}'\n${projectName ? `프로젝트: '${projectName}'\n` : ""}필요한 의견을 여러 개 체리피킹하고, 추가 의견도 함께 입력해 보완 작업을 진행할 수 있습니다.\n또는 '다음 라운드로 SKIP'을 선택해 라운드 ${nextRound}(으)로 바로 진행할 수 있습니다.`,
-        `Round ${row.meeting_round} team-lead opinions are consolidated.\nTask: '${taskTitle}'\n${projectName ? `Project: '${projectName}'\n` : ""}You can cherry-pick multiple opinions and include an extra note for remediation in one batch.\nOr choose 'Skip to Next Round' to move directly to round ${nextRound}.`,
-        `ラウンド${row.meeting_round}のチームリーダー意見が集約されました。\nタスク: '${taskTitle}'\n${projectName ? `プロジェクト: '${projectName}'\n` : ""}必要な意見を複数チェリーピックし、追加意見も入力して一括補完できます。\nまたは「次ラウンドへスキップ」でラウンド${nextRound}へ進めます。`,
-        `第 ${row.meeting_round} 轮组长意见已汇总。\n任务：'${taskTitle}'\n${projectName ? `项目：'${projectName}'\n` : ""}可多选意见并追加输入补充意见，一次性执行整改。\n也可选择“跳到下一轮”直接进入第 ${nextRound} 轮。`,
+        lang,
+        `리뷰 라운드 ${row.meeting_round}에서 blocker ${blockerCount}건이 감지되었습니다.\n작업: '${taskTitle}'\n${projectName ? `프로젝트: '${projectName}'\n` : ""}Jules 수정 반영 방식을 선택하세요: 전체 반영 / 선택 반영 / 최종판정 진행.`,
+        `Review round ${row.meeting_round} detected ${blockerCount} blocker(s).\nTask: '${taskTitle}'\n${projectName ? `Project: '${projectName}'\n` : ""}Choose how Jules should handle feedback: apply all, apply selected, or proceed to final verdict.`,
+        `レビューラウンド${row.meeting_round}で blocker が ${blockerCount} 件検出されました。\nタスク: '${taskTitle}'\n${projectName ? `プロジェクト: '${projectName}'\n` : ""}Jules 反映方針を選択してください: 全体反映 / 選択反映 / 最終判定進行。`,
+        `评审轮次 ${row.meeting_round} 检测到 ${blockerCount} 个 blocker。\n任务: '${taskTitle}'\n${projectName ? `项目: '${projectName}'\n` : ""}请选择 Jules 的处理方式：全部采纳 / 选择采纳 / 进入最终判定。`,
       );
 
-      const snapshotHash = buildReviewRoundSnapshotHash(row.meeting_id, row.meeting_round, notes);
+      const snapshotHash = buildReviewRoundSnapshotHash(row.meeting_id, row.meeting_round, optionNotes);
       const existingState = getReviewRoundDecisionState(row.meeting_id);
       const now = nowMs();
       const stateNeedsReset = !existingState || existingState.snapshot_hash !== snapshotHash;
@@ -141,6 +302,7 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
       } else if (existingState.status === "failed" && now - (existingState.updated_at ?? 0) > 3000) {
         upsertReviewRoundDecisionState(row.meeting_id, snapshotHash, "collecting", null, null, null);
       }
+
       const decisionState = getReviewRoundDecisionState(row.meeting_id);
       const planningLeadMeta = resolvePlanningLeadMeta(lang, decisionState);
       const collectingElapsedMs =
@@ -150,6 +312,7 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
       const useCollectingFallback = Boolean(
         decisionState && decisionState.status === "collecting" && collectingElapsedMs >= DECISION_COLLECTING_STALE_MS,
       );
+
       if (!decisionState || (decisionState.status !== "ready" && !useCollectingFallback)) {
         queueReviewRoundPlanningConsolidation({
           projectId: row.project_id,
@@ -159,66 +322,31 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
           taskTitle,
           meetingId: row.meeting_id,
           reviewRound: row.meeting_round,
-          optionNotes: notes,
+          optionNotes,
           snapshotHash,
           lang,
         });
-        const collectingSummary = t(
-          `라운드 ${row.meeting_round} 팀장 의견이 취합되었습니다.\n작업: '${taskTitle}'\n${projectName ? `프로젝트: '${projectName}'\n` : ""}기획팀장 의견 취합중...\n취합 완료 후 팀별 의견 요약과 권장 선택안이 표시됩니다.`,
-          `Round ${row.meeting_round} team-lead opinions are consolidated.\nTask: '${taskTitle}'\n${projectName ? `Project: '${projectName}'\n` : ""}Planning lead is consolidating recommendations...\nTeam summary and recommended picks will appear after consolidation.`,
-          `ラウンド${row.meeting_round}のチームリーダー意見が集約されました。\nタスク: '${taskTitle}'\n${projectName ? `プロジェクト: '${projectName}'\n` : ""}企画リードが推奨案を集約中...\n集約完了後、チーム別要約と推奨選択が表示されます。`,
-          `第 ${row.meeting_round} 轮组长意见已汇总。\n任务：'${taskTitle}'\n${projectName ? `项目：'${projectName}'\n` : ""}规划负责人正在汇总建议...\n完成后将显示各团队摘要与推荐选项。`,
-        );
-        out.push({
-          id: `review-round-pick:${row.task_id}:${row.meeting_id}`,
-          kind: "review_round_pick",
-          created_at: row.meeting_completed_at ?? row.meeting_started_at ?? now,
-          summary: collectingSummary,
-          agent_id: planningLeadMeta.agent_id,
-          agent_name: planningLeadMeta.agent_name,
-          agent_name_ko: planningLeadMeta.agent_name_ko,
-          agent_avatar: planningLeadMeta.agent_avatar,
-          project_id: row.project_id,
-          project_name: row.project_name,
-          project_path: row.project_path,
-          task_id: row.task_id,
-          task_title: row.task_title,
-          meeting_id: row.meeting_id,
-          review_round: row.meeting_round,
-          options: [],
-        });
-        continue;
       }
 
       const plannerHeader = useCollectingFallback
         ? t(
-            "기획팀장 취합 지연 - 기본 선택지로 진행",
-            "Planning consolidation delayed - proceeding with baseline options",
-            "企画リード集約遅延 - 基本選択肢で進行",
-            "规划汇总延迟 - 以基础选项继续",
+            lang,
+            "기획팀 요약 지연 - 기본 옵션으로 진행",
+            "Planning summary delayed - baseline options enabled",
+            "企画要約遅延 - 基本オプションで進行",
+            "规划摘要延迟 - 按基础选项继续",
           )
         : t(
-            "기획팀장 의견 취합 완료",
-            "Planning consolidation complete",
-            "企画リード意見集約完了",
-            "规划负责人意见汇总完成",
+            lang,
+            "기획팀 요약 완료",
+            "Planning summary ready",
+            "企画要約完了",
+            "规划摘要已完成",
           );
       const plannerSummary = useCollectingFallback
         ? ""
         : formatPlannerSummaryForDisplay(String(decisionState?.planner_summary ?? "").trim());
-      const optionGuide = options.map((option) => `${option.number}. ${option.label}`).join("\n");
-      const optionGuideBlock = optionGuide
-        ? t(
-            `현재 선택 가능한 항목:\n${optionGuide}`,
-            `Available options now:\n${optionGuide}`,
-            `現在選択可能な項目:\n${optionGuide}`,
-            `当前可选项:\n${optionGuide}`,
-          )
-        : "";
-      const combinedSummaryBase = plannerSummary
-        ? `${plannerHeader}\n${plannerSummary}\n\n${summary}`
-        : `${plannerHeader}\n\n${summary}`;
-      const combinedSummary = optionGuideBlock ? `${combinedSummaryBase}\n\n${optionGuideBlock}` : combinedSummaryBase;
+      const combinedSummary = plannerSummary ? `${plannerHeader}\n${plannerSummary}\n\n${summary}` : `${plannerHeader}\n\n${summary}`;
 
       out.push({
         id: `review-round-pick:${row.task_id}:${row.meeting_id}`,
@@ -236,9 +364,14 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
         task_title: row.task_title,
         meeting_id: row.meeting_id,
         review_round: row.meeting_round,
+        reviewer_verdicts: reviewerVerdicts,
+        blocker_count: blockerCount,
+        blocker_delta: blockerDelta,
+        jules_applied: null,
         options,
       });
     }
+
     return out;
   }
 

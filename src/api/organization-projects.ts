@@ -132,6 +132,7 @@ export async function updateAgent(
       | "cli_model"
       | "cli_reasoning_level"
       | "cli_account_pool_id"
+      | "workflow_profile"
       | "avatar_emoji"
       | "sprite_number"
       | "personality"
@@ -153,6 +154,7 @@ export async function createAgent(data: {
   role: string;
   cli_provider: string;
   cli_account_pool_id?: string | null;
+  workflow_profile?: Agent["workflow_profile"];
   avatar_emoji: string;
   sprite_number?: number | null;
   personality: string | null;

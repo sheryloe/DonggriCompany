@@ -33,6 +33,14 @@ export type CliProvider =
   | "api";
 export type MeetingReviewDecision = "reviewing" | "approved" | "hold";
 
+export type AgentWorkflowRole = "primary_author" | "reviewer";
+export interface AgentWorkflowProfile {
+  role: AgentWorkflowRole;
+  review_lenses: string[];
+  two_pass_required: boolean;
+  max_review_rounds: number | null;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -51,6 +59,7 @@ export interface Agent {
   cli_model?: string | null;
   cli_reasoning_level?: string | null;
   cli_account_pool_id?: string | null;
+  workflow_profile?: AgentWorkflowProfile | null;
   avatar_emoji: string;
   sprite_number?: number | null;
   personality: string | null;

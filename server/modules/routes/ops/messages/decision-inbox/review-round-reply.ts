@@ -1,4 +1,87 @@
-import type { DecisionOption, ReviewRoundReplyInput } from "./types.ts";
+import type { ReviewRoundReplyInput } from "./types.ts";
+
+function normalizeNote(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseBlockingItems(raw: unknown): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(String(raw)) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const item of parsed) {
+      const normalized = normalizeNote(item);
+      if (!normalized) continue;
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(normalized);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function collectRoundFeedbackNotes(
+  db: ReviewRoundReplyInput["deps"]["db"],
+  taskId: string,
+  meetingId: string,
+  reviewRound: number,
+): string[] {
+  let rows: Array<{
+    pass2: string | null;
+    final_verdict: string | null;
+    blocking_items_json: string | null;
+    requires_jules_action: number | null;
+  }> = [];
+  try {
+    rows = db
+      .prepare(
+        `
+      SELECT pass2, final_verdict, blocking_items_json, requires_jules_action
+      FROM review_round_feedback_items
+      WHERE task_id = ?
+        AND meeting_id = ?
+        AND round = ?
+      ORDER BY id ASC
+    `,
+      )
+      .all(taskId, meetingId, reviewRound) as Array<{
+      pass2: string | null;
+      final_verdict: string | null;
+      blocking_items_json: string | null;
+      requires_jules_action: number | null;
+    }>;
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (value: unknown) => {
+    const normalized = normalizeNote(value);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(normalized);
+  };
+  for (const row of rows) {
+    const verdict = String(row.final_verdict ?? "").toLowerCase();
+    const requiresAction = Number(row.requires_jules_action ?? 0) === 1;
+    const blockingItems = parseBlockingItems(row.blocking_items_json);
+    const hasBlocker = verdict !== "approved" || requiresAction || blockingItems.length > 0;
+    if (!hasBlocker) continue;
+    for (const item of blockingItems) push(item);
+    push(row.pass2);
+    if (out.length >= 12) break;
+  }
+  return out.slice(0, 12);
+}
 
 export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): boolean {
   const { req, res, currentItem, selectedOption, optionNumber, deps } = input;
@@ -83,31 +166,43 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
     res.status(409).json({ error: "meeting_not_pending", status: meeting.status });
     return true;
   }
+
   const reviewRound = Number.isFinite(meeting.round) ? Math.max(1, Math.trunc(meeting.round)) : 1;
   const lang = resolveLang(task.description ?? task.title);
   const resolvedProjectId = normalizeTextField(currentItem.project_id) ?? normalizeTextField(task.project_id);
   const decisionSnapshotHash = resolvedProjectId
     ? (getProjectReviewDecisionState(resolvedProjectId)?.snapshot_hash ?? null)
     : null;
-  const notesRaw = getReviewDecisionNotes(taskId, reviewRound, 6);
-  const notes = notesRaw.length > 0 ? notesRaw : [getReviewDecisionFallbackLabel(lang)];
 
-  const skipNumber = notes.length + 1;
-  const payloadNumbers = Array.isArray(req.body?.selected_option_numbers) ? req.body.selected_option_numbers : null;
-  const selectedNumbers = (payloadNumbers !== null ? payloadNumbers : [optionNumber])
-    .map((value: unknown) => Number(value))
-    .filter((num: number) => Number.isFinite(num))
-    .map((num: number) => Math.trunc(num));
-  const dedupedSelected: number[] = Array.from(new Set<number>(selectedNumbers));
+  const baseNotesRaw = getReviewDecisionNotes(taskId, reviewRound, 6);
+  const baseNotes = baseNotesRaw.length > 0 ? baseNotesRaw : [getReviewDecisionFallbackLabel(lang)];
+  const feedbackNotes = collectRoundFeedbackNotes(db, taskId, meetingId, reviewRound);
+  const candidateNotes = feedbackNotes.length > 0 ? feedbackNotes : baseNotes;
+
+  const selectedActionRaw = String(selectedOption.action ?? "").trim();
+  const selectedAction =
+    selectedActionRaw === "apply_review_pick"
+      ? "apply_selected_feedback"
+      : selectedActionRaw === "skip_to_next_round"
+        ? "proceed_final_verdict"
+        : selectedActionRaw;
+  const payloadNumbers: unknown[] = Array.isArray(req.body?.selected_option_numbers)
+    ? (req.body.selected_option_numbers as unknown[])
+    : [];
+  const selectedNumbersSet = new Set<number>();
+  for (const value of payloadNumbers) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) continue;
+    const normalized = Math.trunc(numeric);
+    if (normalized < 1 || normalized > candidateNotes.length) continue;
+    selectedNumbersSet.add(normalized);
+  }
+  const selectedNumbers = [...selectedNumbersSet].sort((a, b) => a - b);
   const extraNote = normalizeTextField(req.body?.note);
 
-  if (dedupedSelected.includes(skipNumber)) {
-    if (dedupedSelected.length > 1) {
-      res.status(400).json({ error: "skip_option_must_be_alone" });
-      return true;
-    }
+  if (selectedAction === "proceed_final_verdict") {
     if (extraNote) {
-      res.status(400).json({ error: "skip_option_disallows_extra_note" });
+      res.status(400).json({ error: "final_verdict_disallows_note" });
       return true;
     }
     const resolvedAt = nowMs();
@@ -118,31 +213,27 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
     appendTaskLog(
       taskId,
       "system",
-      `${REVIEW_DECISION_RESOLVED_LOG_PREFIX} (action=skip_to_next_round, round=${reviewRound}, meeting_id=${meetingId})`,
+      `${REVIEW_DECISION_RESOLVED_LOG_PREFIX} (action=proceed_final_verdict, round=${reviewRound}, meeting_id=${meetingId})`,
     );
     if (resolvedProjectId) {
-      const skipOptionLabel =
-        currentItem.options.find((option: DecisionOption) => option.number === skipNumber)?.label ||
-        selectedOption.label ||
-        "skip_to_next_round";
       recordProjectReviewDecisionEvent({
         project_id: resolvedProjectId,
         snapshot_hash: decisionSnapshotHash,
         event_type: "representative_pick",
         summary: pickL(
           l(
-            [`리뷰 라운드 ${reviewRound} 의사결정: 다음 라운드로 SKIP`],
-            [`Review round ${reviewRound} decision: skip to next round`],
-            [`レビューラウンド${reviewRound}判断: 次ラウンドへスキップ`],
-            [`评审第 ${reviewRound} 轮决策：跳到下一轮`],
+            [`리뷰 라운드 ${reviewRound} 의사결정: 최종판정으로 진행`],
+            [`Review round ${reviewRound} decision: proceed to final verdict`],
+            [`レビューラウンド${reviewRound} 意思決定: 最終判定へ進行`],
+            [`评审轮次 ${reviewRound} 决策：进入最终判定`],
           ),
           lang,
         ),
         selected_options_json: JSON.stringify([
           {
-            number: skipNumber,
-            action: "skip_to_next_round",
-            label: skipOptionLabel,
+            number: optionNumber,
+            action: "proceed_final_verdict",
+            label: selectedOption.label || "proceed_final_verdict",
             review_round: reviewRound,
           },
         ]),
@@ -150,59 +241,44 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
         meeting_id: meetingId,
       });
     }
-    try {
-      scheduleNextReviewRound(taskId, task.title, reviewRound, lang);
-    } catch (err: unknown) {
-      db.prepare("UPDATE meeting_minutes SET status = 'revision_requested', completed_at = NULL WHERE id = ?").run(
-        meetingId,
-      );
-      const msg = err instanceof Error ? err.message : String(err);
-      appendTaskLog(
-        taskId,
-        "error",
-        `Decision inbox skip rollback: next round scheduling failed (round=${reviewRound}, meeting_id=${meetingId}, reason=${msg})`,
-      );
-      res.status(500).json({ error: "schedule_next_review_round_failed", message: msg });
-      return true;
-    }
+    scheduleNextReviewRound(taskId, task.title, reviewRound, lang);
     res.json({
       ok: true,
       resolved: true,
       kind: "review_round_pick",
-      action: "skip_to_next_round",
+      action: "proceed_final_verdict",
       task_id: taskId,
       review_round: reviewRound,
+      jules_applied: false,
     });
     return true;
   }
 
-  const pickedNumbers = dedupedSelected.filter((num) => num >= 1 && num <= notes.length).sort((a, b) => a - b);
-  const pickedNotes = pickedNumbers.map((num) => notes[num - 1]).filter(Boolean);
-  const mergedNotes: string[] = [];
+  let mergedNotes: string[] = [];
+  if (selectedAction === "apply_all_feedback") {
+    mergedNotes = [...candidateNotes];
+  } else {
+    const pickedFromSelection = selectedNumbers.map((num) => candidateNotes[num - 1]).filter(Boolean);
+    mergedNotes = [...pickedFromSelection];
+  }
+  if (extraNote) mergedNotes.push(extraNote);
+
+  const dedupedNotes: string[] = [];
   const seen = new Set<string>();
-  for (const note of pickedNotes) {
-    const cleaned = String(note || "")
-      .replace(/\s+/g, " ")
-      .trim();
+  for (const note of mergedNotes) {
+    const cleaned = normalizeNote(note);
     if (!cleaned) continue;
     const key = cleaned.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    mergedNotes.push(cleaned);
+    dedupedNotes.push(cleaned);
   }
-  if (extraNote) {
-    const key = extraNote.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      mergedNotes.push(extraNote);
-    }
-  }
-  if (mergedNotes.length <= 0) {
+  if (dedupedNotes.length <= 0) {
     res.status(400).json({ error: "review_pick_or_note_required" });
     return true;
   }
 
-  const subtaskCount = seedReviewRevisionSubtasks(taskId, task.department_id, mergedNotes);
+  const subtaskCount = seedReviewRevisionSubtasks(taskId, task.department_id, dedupedNotes);
   processSubtaskDelegations(taskId);
   const resolvedAt = nowMs();
   db.prepare("UPDATE meeting_minutes SET status = 'completed', completed_at = ? WHERE id = ?").run(
@@ -212,29 +288,39 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
   appendTaskLog(
     taskId,
     "system",
-    `${REVIEW_DECISION_RESOLVED_LOG_PREFIX} (action=apply_review_pick, round=${reviewRound}, picks=${pickedNumbers.join(",") || "-"}, extra_note=${extraNote ? "yes" : "no"}, meeting_id=${meetingId}, subtasks=${subtaskCount})`,
+    `${REVIEW_DECISION_RESOLVED_LOG_PREFIX} (action=${selectedAction}, round=${reviewRound}, picks=${selectedNumbers.join(",") || "all"}, extra_note=${extraNote ? "yes" : "no"}, meeting_id=${meetingId}, subtasks=${subtaskCount})`,
   );
+
   if (resolvedProjectId) {
-    const pickedPayload = pickedNumbers.map((num) => ({
-      number: num,
-      action: "apply_review_pick",
-      label: notes[num - 1] || `option_${num}`,
-      review_round: reviewRound,
-    }));
+    const selectedPayload =
+      selectedAction === "apply_all_feedback"
+        ? [{ number: 1, action: "apply_all_feedback", label: "apply_all_feedback", review_round: reviewRound }]
+        : selectedNumbers.map((num) => ({
+            number: num,
+            action: "apply_selected_feedback",
+            label: candidateNotes[num - 1] || `option_${num}`,
+            review_round: reviewRound,
+          }));
     recordProjectReviewDecisionEvent({
       project_id: resolvedProjectId,
       snapshot_hash: decisionSnapshotHash,
       event_type: "representative_pick",
       summary: pickL(
         l(
-          [`리뷰 라운드 ${reviewRound} 의사결정: 보완 항목 선택 ${pickedNumbers.length}건`],
-          [`Review round ${reviewRound} decision: ${pickedNumbers.length} remediation pick(s)`],
-          [`レビューラウンド${reviewRound}判断: 補完項目 ${pickedNumbers.length} 件を選択`],
-          [`评审第 ${reviewRound} 轮决策：已选择 ${pickedNumbers.length} 项补充整改`],
+          [`리뷰 라운드 ${reviewRound} 의사결정: Jules 반영(${selectedAction === "apply_all_feedback" ? "전체" : "선택"})`],
+          [
+            `Review round ${reviewRound} decision: Jules applies ${selectedAction === "apply_all_feedback" ? "all" : "selected"} feedback`,
+          ],
+          [
+            `レビューラウンド${reviewRound} 意思決定: Jules が${selectedAction === "apply_all_feedback" ? "全体" : "選択"}反映`,
+          ],
+          [
+            `评审轮次 ${reviewRound} 决策：Jules ${selectedAction === "apply_all_feedback" ? "全部" : "选择"}采纳`,
+          ],
         ),
         lang,
       ),
-      selected_options_json: pickedPayload.length > 0 ? JSON.stringify(pickedPayload) : null,
+      selected_options_json: selectedPayload.length > 0 ? JSON.stringify(selectedPayload) : null,
       note: extraNote ?? null,
       task_id: taskId,
       meeting_id: meetingId,
@@ -251,13 +337,14 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
     ok: true,
     resolved: true,
     kind: "review_round_pick",
-    action: "apply_review_pick",
+    action: selectedAction,
     task_id: taskId,
-    selected_option_numbers: pickedNumbers,
+    selected_option_numbers: selectedNumbers,
     review_round: reviewRound,
     revision_subtask_count: subtaskCount,
     supplement_round_started: supplement.started,
     supplement_round_reason: supplement.reason,
+    jules_applied: true,
   });
   return true;
 }

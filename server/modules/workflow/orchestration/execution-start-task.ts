@@ -76,7 +76,89 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     startProgressTimer,
   } = deps;
 
-  function startTaskExecutionForAgent(taskId: string, execAgent: any, deptId: string | null, deptName: string): void {
+  function startTaskExecutionForAgent(
+    taskId: string,
+    requestedAgent: any,
+    deptId: string | null,
+    deptName: string,
+  ): void {
+    let execAgent = requestedAgent;
+    let effectiveDeptId = deptId;
+    let effectiveDeptName = deptName;
+    try {
+      const taskMeta = db
+        .prepare("SELECT source_task_id, project_id, workflow_pack_key, department_id, title FROM tasks WHERE id = ?")
+        .get(taskId) as
+        | {
+            source_task_id: string | null;
+            project_id: string | null;
+            workflow_pack_key: string | null;
+            department_id: string | null;
+            title: string;
+          }
+        | undefined;
+      if (taskMeta && !taskMeta.source_task_id) {
+        const constrainedAgentIds = resolveConstrainedAgentScopeForTask(db as any, {
+          project_id: taskMeta.project_id,
+          workflow_pack_key: taskMeta.workflow_pack_key,
+          department_id: taskMeta.department_id ?? effectiveDeptId ?? null,
+        });
+        const scopedIds = Array.isArray(constrainedAgentIds)
+          ? [...new Set(constrainedAgentIds.map((id) => String(id ?? "").trim()).filter(Boolean))]
+          : null;
+        if (!Array.isArray(scopedIds) || scopedIds.length > 0) {
+          const scopeClause = Array.isArray(scopedIds) ? `AND a.id IN (${scopedIds.map(() => "?").join(", ")})` : "";
+          const candidates = db
+            .prepare(
+              `
+                SELECT a.*
+                FROM agents a
+                WHERE a.status != 'offline'
+                  AND (a.status IN ('idle','break') OR a.id = ?)
+                  ${scopeClause}
+                ORDER BY
+                  CASE WHEN LOWER(COALESCE(a.cli_provider, '')) = 'jules' THEN 0 ELSE 1 END,
+                  CASE WHEN LOWER(COALESCE(a.name, '')) = 'jules' THEN 0 ELSE 1 END,
+                  a.created_at ASC
+              `,
+            )
+            .all(execAgent.id, ...(scopedIds ?? [])) as Array<Record<string, unknown>>;
+          const preferred = candidates.find((candidate) => {
+            const profile = resolveAgentWorkflowProfile({
+              workflowProfileRaw: candidate.workflow_profile ?? null,
+              agentName: candidate.name,
+              cliProvider: candidate.cli_provider,
+              departmentId: candidate.department_id,
+            });
+            return isPrimaryAuthorProfile(profile);
+          });
+          if (preferred && preferred.id && String(preferred.id) !== String(execAgent.id)) {
+            execAgent = preferred;
+            effectiveDeptId = (preferred.department_id as string | null) ?? effectiveDeptId ?? null;
+            if (effectiveDeptId) {
+              const deptRow = db.prepare("SELECT name FROM departments WHERE id = ? LIMIT 1").get(effectiveDeptId) as
+                | { name?: string | null }
+                | undefined;
+              effectiveDeptName = String(deptRow?.name ?? effectiveDeptName ?? "Unassigned");
+            }
+            appendTaskLog(
+              taskId,
+              "system",
+              `Primary-author override: ${requestedAgent.name ?? requestedAgent.id} -> ${String(preferred.name ?? preferred.id)}`,
+            );
+            db.prepare(
+              "UPDATE tasks SET assigned_agent_id = ?, department_id = COALESCE(department_id, ?), updated_at = ? WHERE id = ?",
+            ).run(String(preferred.id), effectiveDeptId, nowMs(), taskId);
+          }
+        }
+      }
+    } catch (err: any) {
+      appendTaskLog(
+        taskId,
+        "system",
+        `Primary-author override skipped (${String(err?.message ?? err)})`,
+      );
+    }
     const execName = execAgent.name_ko || execAgent.name;
     const t = nowMs();
     db.prepare(
@@ -121,7 +203,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         ? resolveVideoArtifactSpecForTask(db as any, {
             project_id: taskData.project_id,
             project_path: taskData.project_path,
-            department_id: deptId ?? taskData.department_id ?? null,
+            department_id: effectiveDeptId ?? taskData.department_id ?? null,
             workflow_pack_key: taskData.workflow_pack_key,
           })
         : null;
@@ -181,8 +263,10 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       intern: "Intern",
     };
     const roleLabel = roleLabels[execAgent.role] ?? execAgent.role;
-    const deptConstraint = deptId ? getDeptRoleConstraint(deptId, deptName) : "";
-    const deptPromptRaw = deptId ? getDepartmentPromptForPack(db as any, taskData.workflow_pack_key, deptId) : null;
+    const deptConstraint = effectiveDeptId ? getDeptRoleConstraint(effectiveDeptId, effectiveDeptName) : "";
+    const deptPromptRaw = effectiveDeptId
+      ? getDepartmentPromptForPack(db as any, taskData.workflow_pack_key, effectiveDeptId)
+      : null;
     const deptPrompt = typeof deptPromptRaw === "string" ? deptPromptRaw.trim() : "";
     const deptPromptBlock = deptPrompt ? `[Department Shared Prompt]\n${deptPrompt}` : "";
     const conversationCtx = getRecentConversationContext(execAgent.id);
@@ -236,7 +320,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         continuationCtx,
         conversationCtx,
         `\n---`,
-        `Agent: ${execAgent.name} (${roleLabel}, ${deptName})`,
+        `Agent: ${execAgent.name} (${roleLabel}, ${effectiveDeptName})`,
         execAgent.personality ? `Personality: ${execAgent.personality}` : "",
         deptConstraint,
         deptPromptBlock,
@@ -333,7 +417,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       ),
       taskId,
     );
-    startProgressTimer(taskId, taskData.title, deptId);
+    startProgressTimer(taskId, taskData.title, effectiveDeptId);
   }
 
   return {

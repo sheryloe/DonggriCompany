@@ -50,6 +50,7 @@ export function registerDecisionInboxRoutes(ctx: RuntimeContext): DecisionInboxR
 
   const PROJECT_REVIEW_TASK_SELECTED_LOG_PREFIX = "Decision inbox: project review task option selected";
   const REVIEW_DECISION_RESOLVED_LOG_PREFIX = "Decision inbox: review decision resolved";
+  const REVIEW_ROUND_DEFAULT_APPLY_TIMEOUT_MS = 90_000;
 
   const {
     buildProjectReviewSnapshotHash,
@@ -361,6 +362,30 @@ export function registerDecisionInboxRoutes(ctx: RuntimeContext): DecisionInboxR
   const yoloTimer = setInterval(runYoloAutopilot, 2500);
   (yoloTimer as NodeJS.Timeout).unref?.();
   setTimeout(runYoloAutopilot, 1200);
+
+  const runReviewRoundTimeoutDefault = () => {
+    const now = nowMs();
+    const items = getDecisionInboxItems()
+      .filter((item) => item.kind === "review_round_pick")
+      .filter((item) => now - item.created_at >= REVIEW_ROUND_DEFAULT_APPLY_TIMEOUT_MS)
+      .sort((a, b) => a.created_at - b.created_at);
+    for (const item of items) {
+      const applyAllOption =
+        item.options.find((option) => option.action === "apply_all_feedback") ??
+        item.options.find((option) => option.action === "apply_review_pick");
+      if (!applyAllOption || !item.task_id) continue;
+      const result = applyDecisionReply(item.id, { option_number: applyAllOption.number });
+      if (result.status >= 400) continue;
+      appendTaskLog(
+        item.task_id,
+        "system",
+        `Decision inbox timeout default applied (action=apply_all_feedback, decision_id=${item.id})`,
+      );
+    }
+  };
+  const reviewRoundTimeoutTimer = setInterval(runReviewRoundTimeoutDefault, 10_000);
+  (reviewRoundTimeoutTimer as NodeJS.Timeout).unref?.();
+  setTimeout(runReviewRoundTimeoutDefault, 6_000);
 
   // ---------------------------------------------------------------------------
   // Messages / Chat

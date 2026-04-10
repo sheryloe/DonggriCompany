@@ -33,6 +33,16 @@ export type DecisionInboxRouteOption = {
   label?: string;
 };
 
+export type DecisionInboxReviewerVerdict = {
+  agent_id: string | null;
+  agent_name: string | null;
+  agent_name_ko: string | null;
+  lens: string | null;
+  final_verdict: "approved" | "hold" | "rejected";
+  confidence: number;
+  requires_jules_action: boolean;
+};
+
 export type DecisionInboxRouteItem = {
   id: string;
   kind: "project_review_ready" | "task_timeout_resume" | "review_round_pick";
@@ -49,6 +59,10 @@ export type DecisionInboxRouteItem = {
   task_title: string | null;
   meeting_id?: string | null;
   review_round?: number | null;
+  reviewer_verdicts?: DecisionInboxReviewerVerdict[];
+  blocker_count?: number;
+  blocker_delta?: number | null;
+  jules_applied?: boolean | null;
   options: DecisionInboxRouteOption[];
 };
 

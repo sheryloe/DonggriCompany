@@ -301,7 +301,7 @@ export function initializeWorkflowPartC(ctx: RuntimeContext): WorkflowOrchestrat
 
   const taskExecutionSessions = new Map<string, TaskExecutionSessionState>();
 
-  type ReviewRoundMode = "parallel_remediation" | "merge_synthesis" | "final_decision";
+  type ReviewRoundMode = "round1_review" | "round2_final";
 
   function ensureTaskExecutionSession(taskId: string, agentId: string, provider: string): TaskExecutionSessionState {
     return sessionReviewTools.ensureTaskExecutionSession(taskId, agentId, provider);

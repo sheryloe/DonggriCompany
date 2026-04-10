@@ -210,7 +210,9 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
     const planningLeadName = resolvePlanningLeadName(item);
     const options = item.options.slice(0, 8).map((option) => buildDecisionOptionPreview(option));
     const defaultOption = String(item.options[0]?.number ?? options[0]?.match(/^(\d+)/)?.[1] ?? 1);
-    const isMultiPick = item.kind === "review_round_pick";
+    const isMultiPick =
+      item.kind === "review_round_pick" &&
+      item.options.some((option) => option.action === "apply_review_pick" || option.action === "apply_selected_feedback");
     const replyGuide =
       options.length > 0
         ? pickDecisionL10n(

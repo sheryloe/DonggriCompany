@@ -158,6 +158,32 @@ export function applyDefaultSeeds(db: DbLike): void {
 
     try {
       db.exec(`
+        CREATE TABLE IF NOT EXISTS review_round_feedback_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          meeting_id TEXT NOT NULL REFERENCES meeting_minutes(id) ON DELETE CASCADE,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          round INTEGER NOT NULL,
+          agent_id TEXT REFERENCES agents(id),
+          lens TEXT,
+          pass1 TEXT NOT NULL,
+          pass2 TEXT NOT NULL,
+          final_verdict TEXT NOT NULL CHECK(final_verdict IN ('approved','hold','rejected')),
+          confidence REAL NOT NULL DEFAULT 0.5,
+          blocking_items_json TEXT,
+          requires_jules_action INTEGER NOT NULL DEFAULT 0 CHECK(requires_jules_action IN (0,1)),
+          created_at INTEGER DEFAULT (unixepoch()*1000)
+        )
+      `);
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_review_round_feedback_items_meeting
+          ON review_round_feedback_items(meeting_id, round, created_at DESC)
+      `);
+    } catch {
+      // best effort
+    }
+
+    try {
+      db.exec(`
         UPDATE agents
         SET acts_as_planning_leader = CASE
           WHEN role = 'team_leader' AND department_id = 'planning' THEN 1

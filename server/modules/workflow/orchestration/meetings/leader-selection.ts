@@ -1,4 +1,8 @@
 import { resolveConstrainedAgentScopeForTask } from "../../../routes/core/tasks/execution-run-auto-assign.ts";
+import {
+  isPrimaryAuthorProfile,
+  resolveAgentWorkflowProfile,
+} from "../../agents/workflow-profile.ts";
 
 interface AgentRow {
   id: string;
@@ -16,6 +20,13 @@ interface AgentRow {
   api_model: string | null;
   cli_model: string | null;
   cli_reasoning_level: string | null;
+  cli_account_pool_id?: string | null;
+  workflow_profile?: {
+    role: "primary_author" | "reviewer";
+    review_lenses: string[];
+    two_pass_required: boolean;
+    max_review_rounds: number | null;
+  } | null;
 }
 
 type LeaderSelectionDeps = {
@@ -61,6 +72,90 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
       .all(...(scopedIds ?? [])) as unknown as AgentRow[];
   }
 
+  function listScopedActiveAgents(candidateAgentIds?: string[] | null): AgentRow[] {
+    if (Array.isArray(candidateAgentIds) && candidateAgentIds.length <= 0) return [];
+    const scopedIds = Array.isArray(candidateAgentIds)
+      ? [...new Set(candidateAgentIds.map((id) => String(id || "").trim()).filter(Boolean))]
+      : null;
+    if (Array.isArray(scopedIds) && scopedIds.length <= 0) return [];
+    const scopeClause = Array.isArray(scopedIds) ? `AND a.id IN (${scopedIds.map(() => "?").join(",")})` : "";
+    return db
+      .prepare(
+        `
+    SELECT a.*
+    FROM agents a
+    WHERE a.status != 'offline'
+      ${scopeClause}
+    ORDER BY CASE WHEN LOWER(COALESCE(a.cli_provider, '')) = 'jules' THEN 0 ELSE 1 END, a.created_at ASC, a.name ASC
+  `,
+      )
+      .all(...(scopedIds ?? [])) as AgentRow[];
+  }
+
+  function getPrimaryAuthorAndReviewers(
+    taskMeta:
+      | {
+          status: string;
+          assigned_agent_id: string | null;
+          department_id: string | null;
+        }
+      | undefined,
+    candidateAgentIds?: string[] | null,
+  ): { primaryAuthor: AgentRow | null; reviewers: AgentRow[] } {
+    if (!taskMeta || taskMeta.status !== "review") return { primaryAuthor: null, reviewers: [] };
+    const activeAgents = listScopedActiveAgents(candidateAgentIds);
+    if (activeAgents.length <= 0) return { primaryAuthor: null, reviewers: [] };
+
+    const profileById = new Map<string, ReturnType<typeof resolveAgentWorkflowProfile>>();
+    for (const agent of activeAgents) {
+      profileById.set(
+        agent.id,
+        resolveAgentWorkflowProfile({
+          workflowProfileRaw: (agent as any).workflow_profile ?? null,
+          agentName: agent.name,
+          cliProvider: agent.cli_provider,
+          departmentId: agent.department_id,
+        }),
+      );
+    }
+
+    const assignedPrimary =
+      activeAgents.find((agent) => {
+        if (agent.id !== taskMeta.assigned_agent_id) return false;
+        const profile = profileById.get(agent.id);
+        return (
+          isPrimaryAuthorProfile(profile) ||
+          String(agent.cli_provider ?? "").trim().toLowerCase() === "jules" ||
+          String(agent.name ?? "").trim().toLowerCase() === "jules"
+        );
+      }) ?? null;
+
+    const discoveredPrimary =
+      assignedPrimary ??
+      activeAgents.find((agent) => {
+        const profile = profileById.get(agent.id);
+        return (
+          isPrimaryAuthorProfile(profile) &&
+          (String(agent.cli_provider ?? "").trim().toLowerCase() === "jules" ||
+            String(agent.name ?? "").trim().toLowerCase() === "jules")
+        );
+      }) ??
+      null;
+
+    const primaryAuthor = discoveredPrimary;
+    const primaryId = primaryAuthor?.id ?? "";
+
+    const reviewers = activeAgents
+      .filter((agent) => agent.id !== primaryId)
+      .filter((agent) => {
+        const profile = profileById.get(agent.id);
+        return profile?.role === "reviewer";
+      })
+      .slice(0, 3);
+
+    return { primaryAuthor, reviewers };
+  }
+
   function getTaskRelatedDepartmentIds(
     taskId: string,
     fallbackDeptId: string | null,
@@ -102,7 +197,9 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
     const fallbackAll = opts?.fallbackAll ?? true;
 
     const taskMeta = db
-      .prepare("SELECT project_id, workflow_pack_key, department_id, title, description FROM tasks WHERE id = ?")
+      .prepare(
+        "SELECT project_id, workflow_pack_key, department_id, title, description, status, assigned_agent_id FROM tasks WHERE id = ?",
+      )
       .get(taskId) as
       | {
           project_id: string | null;
@@ -110,6 +207,8 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
           department_id: string | null;
           title: string;
           description: string | null;
+          status: string;
+          assigned_agent_id: string | null;
         }
       | undefined;
     const constrainedAgentIds = resolveConstrainedAgentScopeForTask(db as any, {
@@ -122,6 +221,11 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
       workflow_pack_key: taskMeta?.workflow_pack_key ?? null,
       department_id: taskMeta?.department_id ?? fallbackDeptId ?? null,
     });
+
+    const { reviewers: avatarReviewers } = getPrimaryAuthorAndReviewers(taskMeta, constrainedAgentIds);
+    if (avatarReviewers.length > 0) {
+      return avatarReviewers;
+    }
 
     // 프로젝트 manual 모드 확인 — 지정 직원의 부서 팀장만 참석
     if (taskMeta?.project_id) {

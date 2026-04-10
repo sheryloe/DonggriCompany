@@ -9,7 +9,7 @@ import {
 type DbLike = Pick<DatabaseSync, "prepare">;
 
 const VALID_AGENT_ROLES = new Set(["team_leader", "senior", "junior", "intern"]);
-const VALID_CLI_PROVIDERS = new Set(["claude", "codex", "gemini", "opencode", "kimi", "copilot", "antigravity", "api"]);
+const VALID_CLI_PROVIDERS = new Set(["claude", "codex", "gemini", "jules", "opencode", "kimi", "copilot", "antigravity", "api"]);
 
 function asObject(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -113,7 +113,7 @@ function normalizeOfficePackProfileAgent(raw: unknown, nowMs: number): OfficePac
     cli_provider: VALID_CLI_PROVIDERS.has(cliProviderRaw) ? cliProviderRaw : "codex",
     cli_model: normalizeOptionalText(obj.cli_model),
     cli_reasoning_level: normalizeOptionalText(obj.cli_reasoning_level),
-    avatar_emoji: normalizeText(obj.avatar_emoji) || "🤖",
+    avatar_emoji: normalizeText(obj.avatar_emoji) || "?쨼",
     sprite_number: normalizeNullablePositiveInt(obj.sprite_number),
     personality: normalizeOptionalText(obj.personality),
     created_at: normalizePositiveInt(obj.created_at, nowMs),
@@ -134,7 +134,7 @@ function normalizeOfficePackProfileDepartment(raw: unknown, nowMs: number): Offi
     name_ko: normalizeText(obj.name_ko) || name,
     name_ja: normalizeText(obj.name_ja),
     name_zh: normalizeText(obj.name_zh),
-    icon: normalizeText(obj.icon) || "🏢",
+    icon: normalizeText(obj.icon) || "?룫",
     color: normalizeText(obj.color) || "#64748b",
     description: normalizeOptionalText(obj.description),
     prompt: normalizeOptionalText(obj.prompt),
@@ -585,3 +585,4 @@ export function syncOfficePackAgentsForPack(
 
   return { departmentsSynced, agentsSynced };
 }
+

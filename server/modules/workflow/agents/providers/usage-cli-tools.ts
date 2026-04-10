@@ -109,6 +109,34 @@ export function createUsageCliTools(deps: CreateUsageCliToolsDeps) {
     const projectId = await getGeminiProjectId(token);
     if (!projectId) return { windows: [], error: "unavailable" };
 
+    const mapQuotaError = async (resp: Response): Promise<string> => {
+      if (resp.status === 401) return "unauthenticated";
+      if (resp.status === 403) {
+        try {
+          const payload = (await resp.clone().json()) as {
+            error?: {
+              status?: string;
+              details?: Array<{ reason?: string }>;
+            };
+          };
+          const detailReason = payload?.error?.details?.find((item) => item?.reason)?.reason ?? "";
+          const status = String(payload?.error?.status ?? "").toUpperCase();
+          const normalizedReason = String(detailReason).toUpperCase();
+          if (
+            normalizedReason === "ACCESS_TOKEN_SCOPE_INSUFFICIENT" ||
+            normalizedReason === "SERVICE_DISABLED" ||
+            status === "PERMISSION_DENIED"
+          ) {
+            return "usage_api_unavailable";
+          }
+        } catch {
+          // ignore parsing failure and fall through to generic handling
+        }
+        return "usage_api_unavailable";
+      }
+      return `http_${resp.status}`;
+    };
+
     try {
       const resp = await fetch("https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota", {
         method: "POST",
@@ -119,7 +147,7 @@ export function createUsageCliTools(deps: CreateUsageCliToolsDeps) {
         body: JSON.stringify({ project: projectId }),
         signal: AbortSignal.timeout(8000),
       });
-      if (!resp.ok) return { windows: [], error: `http_${resp.status}` };
+      if (!resp.ok) return { windows: [], error: await mapQuotaError(resp) };
       const data = (await resp.json()) as {
         buckets?: Array<{ modelId?: string; remainingFraction?: number; resetTime?: string }>;
       };
@@ -194,6 +222,17 @@ export function createUsageCliTools(deps: CreateUsageCliToolsDeps) {
         const appData = process.env.APPDATA;
         if (appData && jsonHasKey(path.join(appData, "gcloud", "application_default_credentials.json"), "client_id"))
           return true;
+        return false;
+      },
+    },
+    {
+      name: "jules",
+      authHint: "Run: jules login --no-launch-browser",
+      checkAuth: () => {
+        const home = os.homedir();
+        if (fileExistsNonEmpty(path.join(home, ".jules", "auth.json"))) return true;
+        if (fileExistsNonEmpty(path.join(home, ".jules", "credentials.json"))) return true;
+        if (fileExistsNonEmpty(path.join(home, ".jules", "cache", "oauth_creds.json"))) return true;
         return false;
       },
     },

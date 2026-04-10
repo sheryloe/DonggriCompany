@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import {
   BUILTIN_GITHUB_CLIENT_ID,
@@ -21,8 +23,115 @@ type OAuthStateRow = {
   created_at: number;
 };
 
+type GoogleOAuthEnvSnapshot = {
+  clientId: string;
+  clientSecret: string;
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: number | null;
+  scope: string | null;
+  email: string | null;
+};
+
 export function createOAuthRouteHelpers(ctx: RuntimeContext) {
   const { db, nowMs, getNextOAuthLabel, normalizeOAuthProvider, setActiveOAuthAccount, ensureOAuthActiveAccount } = ctx;
+  const oauthRuntimeEnvPath = (() => {
+    const explicit = (process.env.OAUTH_RUNTIME_ENV_PATH ?? "").trim().replace(/^['"]|['"]$/g, "");
+    if (explicit) return explicit;
+    const dbPath = (process.env.DB_PATH ?? "").trim().replace(/^['"]|['"]$/g, "");
+    if (dbPath) return path.join(path.dirname(dbPath), ".env.oauth");
+    return path.resolve(process.cwd(), "data", ".env.oauth");
+  })();
+
+  function readSettingString(key: string): string {
+    const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get(key) as
+      | { value?: unknown }
+      | undefined;
+    if (!row) return "";
+    const raw = String(row.value ?? "")
+      .replace(/^"|"$/g, "")
+      .trim();
+    const lowered = raw.toLowerCase();
+    if (!raw || lowered === "null" || lowered === "undefined") return "";
+    if (raw === "__CHANGE_ME__") return "";
+    if (raw.startsWith("YOUR_")) return "";
+    return raw;
+  }
+
+  function readEnvString(key: string): string {
+    const raw = String(process.env[key] ?? "")
+      .replace(/^"|"$/g, "")
+      .trim();
+    const lowered = raw.toLowerCase();
+    if (!raw || lowered === "null" || lowered === "undefined") return "";
+    if (raw === "__CHANGE_ME__") return "";
+    if (raw.startsWith("YOUR_")) return "";
+    return raw;
+  }
+
+  function loadEnvMap(filePath: string): Map<string, string> {
+    const map = new Map<string, string>();
+    if (!fs.existsSync(filePath)) return map;
+    const raw = fs.readFileSync(filePath, "utf8");
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq <= 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      const value = trimmed.slice(eq + 1).trim();
+      if (!key) continue;
+      map.set(key, value);
+    }
+    return map;
+  }
+
+  function saveEnvMap(filePath: string, map: Map<string, string>): void {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const payload =
+      [...map.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k}=${v}`)
+        .join("\n") + "\n";
+    const tmp = `${filePath}.tmp`;
+    fs.writeFileSync(tmp, payload, { encoding: "utf8", mode: 0o600 });
+    fs.renameSync(tmp, filePath);
+  }
+
+  function persistGoogleOAuthRuntimeEnv(snapshot: GoogleOAuthEnvSnapshot): void {
+    try {
+      const map = loadEnvMap(oauthRuntimeEnvPath);
+      map.set("OAUTH_GOOGLE_CLIENT_ID", snapshot.clientId);
+      map.set("OAUTH_GOOGLE_CLIENT_SECRET", snapshot.clientSecret);
+      map.set("OAUTH_GOOGLE_ACCESS_TOKEN", snapshot.accessToken);
+      if (snapshot.refreshToken) {
+        map.set("OAUTH_GOOGLE_REFRESH_TOKEN", snapshot.refreshToken);
+      }
+      if (snapshot.expiresAt) {
+        map.set("OAUTH_GOOGLE_EXPIRES_AT", String(snapshot.expiresAt));
+      }
+      if (snapshot.scope) {
+        map.set("OAUTH_GOOGLE_SCOPE", snapshot.scope);
+      }
+      if (snapshot.email) {
+        map.set("OAUTH_GOOGLE_EMAIL", snapshot.email);
+      }
+      map.set("OAUTH_GOOGLE_UPDATED_AT", String(Date.now()));
+      saveEnvMap(oauthRuntimeEnvPath, map);
+
+      // Apply immediately without restart
+      process.env.OAUTH_GOOGLE_CLIENT_ID = snapshot.clientId;
+      process.env.OAUTH_GOOGLE_CLIENT_SECRET = snapshot.clientSecret;
+      process.env.OAUTH_GOOGLE_ACCESS_TOKEN = snapshot.accessToken;
+      if (snapshot.refreshToken) process.env.OAUTH_GOOGLE_REFRESH_TOKEN = snapshot.refreshToken;
+      if (snapshot.expiresAt) process.env.OAUTH_GOOGLE_EXPIRES_AT = String(snapshot.expiresAt);
+      if (snapshot.scope) process.env.OAUTH_GOOGLE_SCOPE = snapshot.scope;
+      if (snapshot.email) process.env.OAUTH_GOOGLE_EMAIL = snapshot.email;
+      process.env.OAUTH_GOOGLE_UPDATED_AT = String(Date.now());
+    } catch (err) {
+      console.warn("[oauth] failed to persist Google OAuth runtime env:", err);
+    }
+  }
 
   function consumeOAuthState(
     stateId: string,
@@ -176,7 +285,8 @@ export function createOAuthRouteHelpers(ctx: RuntimeContext) {
   }
 
   function startGitHubOAuth(redirectTo: string | undefined, callbackPath: string): string {
-    const clientId = process.env.OAUTH_GITHUB_CLIENT_ID ?? BUILTIN_GITHUB_CLIENT_ID;
+    const customClientId = readSettingString("github_oauth_client_id");
+    const clientId = customClientId || BUILTIN_GITHUB_CLIENT_ID || readEnvString("OAUTH_GITHUB_CLIENT_ID");
     if (!clientId) throw new Error("missing_OAUTH_GITHUB_CLIENT_ID");
     const stateId = randomUUID();
     const safeRedirect = sanitizeOAuthRedirect(redirectTo);
@@ -193,7 +303,8 @@ export function createOAuthRouteHelpers(ctx: RuntimeContext) {
   }
 
   function startGoogleAntigravityOAuth(redirectTo: string | undefined, callbackPath: string): string {
-    const clientId = process.env.OAUTH_GOOGLE_CLIENT_ID ?? BUILTIN_GOOGLE_CLIENT_ID;
+    const customClientId = readSettingString("google_oauth_client_id");
+    const clientId = customClientId || BUILTIN_GOOGLE_CLIENT_ID || readEnvString("OAUTH_GOOGLE_CLIENT_ID");
     if (!clientId) throw new Error("missing_OAUTH_GOOGLE_CLIENT_ID");
     const stateId = randomUUID();
     const verifier = pkceVerifier();
@@ -230,8 +341,9 @@ export function createOAuthRouteHelpers(ctx: RuntimeContext) {
     if (!stateRow) throw new Error("Invalid or expired state");
 
     const redirectTo = stateRow.redirect_to || "/";
-    const clientId = process.env.OAUTH_GITHUB_CLIENT_ID ?? BUILTIN_GITHUB_CLIENT_ID;
-    const clientSecret = process.env.OAUTH_GITHUB_CLIENT_SECRET;
+    const customClientId = readSettingString("github_oauth_client_id");
+    const clientId = customClientId || BUILTIN_GITHUB_CLIENT_ID || readEnvString("OAUTH_GITHUB_CLIENT_ID");
+    const clientSecret = readEnvString("OAUTH_GITHUB_CLIENT_SECRET");
 
     const tokenBody: Record<string, string> = {
       client_id: clientId,
@@ -297,31 +409,47 @@ export function createOAuthRouteHelpers(ctx: RuntimeContext) {
     if (!stateRow) throw new Error("Invalid or expired state");
 
     const redirectTo = stateRow.redirect_to || "/";
-    const clientId = process.env.OAUTH_GOOGLE_CLIENT_ID ?? BUILTIN_GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.OAUTH_GOOGLE_CLIENT_SECRET ?? BUILTIN_GOOGLE_CLIENT_SECRET;
+    const customClientId = readSettingString("google_oauth_client_id");
+    const customClientSecret = readSettingString("google_oauth_client_secret");
+    const clientId = customClientId || BUILTIN_GOOGLE_CLIENT_ID || readEnvString("OAUTH_GOOGLE_CLIENT_ID");
+    const clientSecret = customClientSecret || BUILTIN_GOOGLE_CLIENT_SECRET || readEnvString("OAUTH_GOOGLE_CLIENT_SECRET");
+    if (!clientId) throw new Error("missing_OAUTH_GOOGLE_CLIENT_ID");
     const verifier = decryptSecret(stateRow.verifier_enc);
+    const tokenBody = new URLSearchParams({
+      client_id: clientId,
+      code,
+      redirect_uri: `${OAUTH_BASE_URL}${callbackPath}`,
+      grant_type: "authorization_code",
+      code_verifier: verifier,
+    });
+    if (clientSecret) tokenBody.set("client_secret", clientSecret);
 
     const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code,
-        redirect_uri: `${OAUTH_BASE_URL}${callbackPath}`,
-        grant_type: "authorization_code",
-        code_verifier: verifier,
-      }),
+      body: tokenBody,
       signal: AbortSignal.timeout(10000),
     });
-    const tokenData = (await tokenResp.json()) as {
+    const tokenRaw = await tokenResp.text();
+    let tokenData: {
       access_token?: string;
       refresh_token?: string;
       expires_in?: number;
       error?: string;
+      error_description?: string;
       scope?: string;
     };
-    if (!tokenData.access_token) throw new Error(tokenData.error || "No access token received");
+    try {
+      tokenData = JSON.parse(tokenRaw) as typeof tokenData;
+    } catch {
+      tokenData = {};
+    }
+    if (!tokenData.access_token) {
+      const details = [tokenData.error || "unknown_error", tokenData.error_description || "", `status=${tokenResp.status}`]
+        .filter(Boolean)
+        .join(" | ");
+      throw new Error(`google_token_exchange_failed: ${details}`);
+    }
 
     let email: string | null = null;
     try {
@@ -338,15 +466,25 @@ export function createOAuthRouteHelpers(ctx: RuntimeContext) {
     }
 
     const expiresAt = tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : null;
+    const scope = tokenData.scope || "openid email profile";
 
     upsertOAuthCredential({
       provider: "google_antigravity",
       source: "web-oauth",
       email,
-      scope: tokenData.scope || "openid email profile",
+      scope,
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token || null,
       expires_at: expiresAt,
+    });
+    persistGoogleOAuthRuntimeEnv({
+      clientId,
+      clientSecret,
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token || null,
+      expiresAt,
+      scope,
+      email,
     });
 
     return {

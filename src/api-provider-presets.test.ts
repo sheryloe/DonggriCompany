@@ -41,6 +41,16 @@ describe("api provider preset client", () => {
             api_key_placeholder: "sk-...",
             fallback_models: ["glm-5", "kimi-k2.5"],
           },
+          "google-stitch-image": {
+            label: "Google Stitch / Gemini Image",
+            description: "Google preset",
+            type: "google",
+            base_url: "https://generativelanguage.googleapis.com/v1beta",
+            docs_url: "https://ai.google.dev/gemini-api/docs/image-generation",
+            api_key_hint: "Use a Google AI Studio API key for Gemini image generation.",
+            api_key_placeholder: "AIza...",
+            fallback_models: ["gemini-2.5-flash-image"],
+          },
         },
       }),
     );
@@ -54,6 +64,11 @@ describe("api provider preset client", () => {
       type: "openai",
       base_url: "https://opencode.ai/zen/go/v1",
       fallback_models: ["glm-5", "kimi-k2.5"],
+    });
+    expect(catalog.official_presets["google-stitch-image"]).toMatchObject({
+      type: "google",
+      base_url: "https://generativelanguage.googleapis.com/v1beta",
+      fallback_models: ["gemini-2.5-flash-image"],
     });
   });
 });

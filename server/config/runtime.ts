@@ -28,8 +28,20 @@ function loadEnvFile(filePath: string, override = false): void {
   }
 }
 
+function normalizeEnvPath(raw: string | undefined): string {
+  return (raw ?? "").trim().replace(/^['"]|['"]$/g, "");
+}
+
 const rootEnvFilePath = path.resolve(SERVER_DIRNAME, "..", "..", ".env");
 loadEnvFile(rootEnvFilePath);
+const oauthRuntimeEnvPath = (() => {
+  const explicit = normalizeEnvPath(process.env.OAUTH_RUNTIME_ENV_PATH);
+  if (explicit) return explicit;
+  const dbPath = normalizeEnvPath(process.env.DB_PATH);
+  if (dbPath) return path.join(path.dirname(dbPath), ".env.oauth");
+  return path.resolve(SERVER_DIRNAME, "..", "..", "data", ".env.oauth");
+})();
+loadEnvFile(oauthRuntimeEnvPath, true);
 
 // ---------------------------------------------------------------------------
 // Constants

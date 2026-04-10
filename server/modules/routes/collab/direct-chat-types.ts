@@ -19,6 +19,13 @@ export interface AgentRow {
   api_model: string | null;
   cli_model: string | null;
   cli_reasoning_level: string | null;
+  cli_account_pool_id?: string | null;
+  workflow_profile?: {
+    role: "primary_author" | "reviewer";
+    review_lenses: string[];
+    two_pass_required: boolean;
+    max_review_rounds: number | null;
+  } | null;
 }
 
 export type L10n = Record<Lang, string[]>;

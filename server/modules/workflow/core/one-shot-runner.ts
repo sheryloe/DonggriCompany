@@ -2,8 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import type { AgentRow, OneShotRunOptions, OneShotRunResult } from "./conversation-types.ts";
+import { resolveCliAccountPoolEnv } from "../agents/cli-account-pool-env.ts";
+import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
 
 type CreateOneShotRunnerDeps = {
+  db: any;
   logsDir: string;
   broadcast: (event: string, payload: unknown) => void;
   getProviderModelConfig: () => Record<string, { model?: string; reasoningLevel?: string }>;
@@ -22,6 +25,7 @@ type CreateOneShotRunnerDeps = {
 
 export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
   const {
+    db,
     logsDir,
     broadcast,
     getProviderModelConfig,
@@ -38,6 +42,7 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
     withCliPathFallback,
   } = deps;
   const NO_TOOLS_POLICY_ERROR = "tool_use_blocked_by_no_tools_policy";
+  const JULES_ONE_SHOT_UNSUPPORTED_ERROR = "jules_not_supported_for_one_shot";
   const CLI_TOOL_SIGNAL_REGEX =
     /"type"\s*:\s*"(?:tool_use|tool_result|command_execution|function_call|tool_call|mcp_tool_call)"|"tool_use_id"\s*:|"toolName"\s*:/i;
 
@@ -83,7 +88,13 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
     prompt: string,
     opts: OneShotRunOptions = {},
   ): Promise<OneShotRunResult> {
-    const provider = agent.cli_provider || "claude";
+    const requestedProvider = agent.cli_provider || "claude";
+    const requestedRuntimeKind = resolveProviderRuntimeKind(requestedProvider);
+    if (!requestedRuntimeKind) {
+      return { text: "", error: `unsupported_provider:${requestedProvider}` };
+    }
+    const julesOneShotFallback = requestedRuntimeKind === "async_session";
+    const provider = julesOneShotFallback ? "gemini" : requestedProvider;
     const timeoutMs = opts.timeoutMs ?? 180_000;
     const projectPath = opts.projectPath || process.cwd();
     const streamTaskId = opts.streamTaskId ?? null;
@@ -138,6 +149,11 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
     };
 
     try {
+      if (julesOneShotFallback) {
+        safeWrite(
+          `[one-shot] provider=jules is task-only(async_session). Falling back to provider=${provider} for direct reply.\n`,
+        );
+      }
       if (provider === "api") {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -192,6 +208,18 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
         }
         if (!rawOutput.trim() && fs.existsSync(logPath)) rawOutput = fs.readFileSync(logPath, "utf8");
       } else {
+        const poolEnv = resolveCliAccountPoolEnv({
+          db,
+          provider,
+          cliAccountPoolId: julesOneShotFallback ? null : ((agent as any).cli_account_pool_id ?? null),
+          platform: process.platform,
+        });
+        if (!poolEnv.ok) {
+          if (julesOneShotFallback) {
+            throw new Error(`${JULES_ONE_SHOT_UNSUPPORTED_ERROR}:${poolEnv.reason}`);
+          }
+          throw new Error(`cli account pool error: ${poolEnv.reason}`);
+        }
         const modelConfig = getProviderModelConfig();
         const model = agent.cli_model || modelConfig[provider]?.model || undefined;
         const reasoningLevel =
@@ -209,6 +237,11 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
           cleanEnv.FORCE_COLOR = "0";
           cleanEnv.CI = "1";
           if (!cleanEnv.TERM) cleanEnv.TERM = "dumb";
+          Object.assign(cleanEnv, poolEnv.envPatch);
+          const effectiveHome = String(cleanEnv.HOME ?? "").trim();
+          safeWrite(
+            `[one-shot] CLI account env: provider=${provider} pool=${poolEnv.poolId ?? "default"} selected_by=${poolEnv.selectedBy} home=${effectiveHome || "(empty)"}\n`,
+          );
 
           const child = spawn(args[0], args.slice(1), {
             cwd: projectPath,
@@ -262,6 +295,12 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
       }
     } catch (err: any) {
       const message = err?.message ? String(err.message) : String(err);
+      if (message.startsWith(`${JULES_ONE_SHOT_UNSUPPORTED_ERROR}:`)) {
+        return { text: "", error: JULES_ONE_SHOT_UNSUPPORTED_ERROR };
+      }
+      if (julesOneShotFallback && /spawn .* ENOENT|unsupported CLI provider|unsupported_provider/i.test(message)) {
+        return { text: "", error: JULES_ONE_SHOT_UNSUPPORTED_ERROR };
+      }
       if (message === NO_TOOLS_POLICY_ERROR) {
         if (opts.rawOutput) {
           const raw = rawOutput.trim();

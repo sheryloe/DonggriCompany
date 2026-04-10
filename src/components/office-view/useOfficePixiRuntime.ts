@@ -103,7 +103,7 @@ export function useOfficePixiRuntime({
       const loads: Promise<void>[] = [];
       const spriteNums = new Set<number>();
 
-      for (let i = 1; i <= 13; i++) spriteNums.add(i);
+      for (let i = 1; i <= 44; i++) spriteNums.add(i);
       for (const num of spriteMap.values()) spriteNums.add(num);
 
       for (const spriteNum of spriteNums) {

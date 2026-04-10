@@ -25,14 +25,45 @@ type CreateOAuthToolsDeps = {
 export function createOAuthTools(deps: CreateOAuthToolsDeps) {
   const { db, nowMs, ensureOAuthActiveAccount, getActiveOAuthAccountIds } = deps;
 
+  function readSettingString(key: string): string {
+    const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get(key) as
+      | { value?: unknown }
+      | undefined;
+    if (!row) return "";
+    const raw = String(row.value ?? "")
+      .replace(/^"|"$/g, "")
+      .trim();
+    const lowered = raw.toLowerCase();
+    if (!raw || lowered === "null" || lowered === "undefined") return "";
+    if (raw === "__CHANGE_ME__") return "";
+    if (raw.startsWith("YOUR_")) return "";
+    return raw;
+  }
+
+  function readEnvString(key: string): string {
+    const raw = String(process.env[key] ?? "")
+      .replace(/^"|"$/g, "")
+      .trim();
+    const lowered = raw.toLowerCase();
+    if (!raw || lowered === "null" || lowered === "undefined") return "";
+    if (raw === "__CHANGE_ME__") return "";
+    if (raw.startsWith("YOUR_")) return "";
+    return raw;
+  }
+
   const ANTIGRAVITY_ENDPOINTS = [
     "https://cloudcode-pa.googleapis.com",
     "https://daily-cloudcode-pa.sandbox.googleapis.com",
     "https://autopush-cloudcode-pa.sandbox.googleapis.com",
   ];
-  const ANTIGRAVITY_DEFAULT_PROJECT = "rising-fact-p41fc";
+  const ANTIGRAVITY_DEFAULT_PROJECT =
+    readSettingString("antigravity_project_id") || readEnvString("ANTIGRAVITY_PROJECT_ID");
   let copilotTokenCache: { token: string; baseUrl: string; expiresAt: number; sourceHash: string } | null = null;
   let antigravityProjectCache: { projectId: string; tokenHash: string } | null = null;
+
+  function resolveAntigravityPlatform(): "PLATFORM_UNSPECIFIED" {
+    return "PLATFORM_UNSPECIFIED";
+  }
 
   function oauthProviderPrefix(provider: string): string {
     return provider === "github" ? "Copi" : "Anti";
@@ -253,17 +284,23 @@ export function createOAuthTools(deps: CreateOAuthToolsDeps) {
     if (!credential.refreshToken) {
       throw new Error("Google OAuth token expired and no refresh_token available");
     }
-    const clientId = process.env.OAUTH_GOOGLE_CLIENT_ID ?? BUILTIN_GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.OAUTH_GOOGLE_CLIENT_SECRET ?? BUILTIN_GOOGLE_CLIENT_SECRET;
+    const customClientId = readSettingString("google_oauth_client_id");
+    const customClientSecret = readSettingString("google_oauth_client_secret");
+    const clientId = customClientId || BUILTIN_GOOGLE_CLIENT_ID || readEnvString("OAUTH_GOOGLE_CLIENT_ID");
+    const clientSecret = customClientSecret || BUILTIN_GOOGLE_CLIENT_SECRET || readEnvString("OAUTH_GOOGLE_CLIENT_SECRET");
+    if (!clientId) {
+      throw new Error("missing_OAUTH_GOOGLE_CLIENT_ID");
+    }
+    const tokenBody = new URLSearchParams({
+      client_id: clientId,
+      refresh_token: credential.refreshToken,
+      grant_type: "refresh_token",
+    });
+    if (clientSecret) tokenBody.set("client_secret", clientSecret);
     const resp = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: credential.refreshToken,
-        grant_type: "refresh_token",
-      }),
+      body: tokenBody,
     });
     if (!resp.ok) {
       const text = await resp.text();
@@ -327,9 +364,17 @@ export function createOAuthTools(deps: CreateOAuthToolsDeps) {
 
   async function loadCodeAssistProject(accessToken: string, signal?: AbortSignal): Promise<string> {
     const tokenHash = createHash("sha256").update(accessToken).digest("hex").slice(0, 16);
+
+    // If operator pinned a project, always prefer it over auto-discovery.
+    if (ANTIGRAVITY_DEFAULT_PROJECT) {
+      antigravityProjectCache = { projectId: ANTIGRAVITY_DEFAULT_PROJECT, tokenHash };
+      return ANTIGRAVITY_DEFAULT_PROJECT;
+    }
+
     if (antigravityProjectCache && antigravityProjectCache.tokenHash === tokenHash) {
       return antigravityProjectCache.projectId;
     }
+    const platform = resolveAntigravityPlatform();
     for (const endpoint of ANTIGRAVITY_ENDPOINTS) {
       try {
         const resp = await fetch(`${endpoint}/v1internal:loadCodeAssist`, {
@@ -341,14 +386,14 @@ export function createOAuthTools(deps: CreateOAuthToolsDeps) {
             "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
             "Client-Metadata": JSON.stringify({
               ideType: "ANTIGRAVITY",
-              platform: process.platform === "win32" ? "WINDOWS" : "MACOS",
+              platform,
               pluginType: "GEMINI",
             }),
           },
           body: JSON.stringify({
             metadata: {
               ideType: "ANTIGRAVITY",
-              platform: process.platform === "win32" ? "WINDOWS" : "MACOS",
+              platform,
               pluginType: "GEMINI",
             },
           }),
@@ -365,8 +410,35 @@ export function createOAuthTools(deps: CreateOAuthToolsDeps) {
         /* try next endpoint */
       }
     }
-    antigravityProjectCache = { projectId: ANTIGRAVITY_DEFAULT_PROJECT, tokenHash };
-    return ANTIGRAVITY_DEFAULT_PROJECT;
+
+    try {
+      const resp = await fetch("https://cloudresourcemanager.googleapis.com/v1/projects?pageSize=1", {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+          "User-Agent": "climpire",
+        },
+        signal,
+      });
+      if (resp.ok) {
+        const data = (await resp.json()) as {
+          projects?: Array<{ projectId?: string; lifecycleState?: string }>;
+        };
+        const firstActiveProjectId = data.projects?.find(
+          (p) => p?.lifecycleState === "ACTIVE" && typeof p?.projectId === "string" && p.projectId,
+        )?.projectId;
+        if (firstActiveProjectId) {
+          antigravityProjectCache = { projectId: firstActiveProjectId, tokenHash };
+          return firstActiveProjectId;
+        }
+      }
+    } catch {
+      /* ignore discovery fallback errors */
+    }
+
+    throw new Error(
+      "Unable to resolve Antigravity project. Set ANTIGRAVITY_PROJECT_ID (or settings.antigravity_project_id) to a project you can access.",
+    );
   }
 
   return {

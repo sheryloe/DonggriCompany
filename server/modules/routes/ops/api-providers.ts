@@ -20,7 +20,7 @@ type ApiProviderType =
   | "cerebras"
   | "custom";
 
-type OfficialApiProviderType = Extract<ApiProviderType, "openai" | "anthropic">;
+type OfficialApiProviderType = Extract<ApiProviderType, "openai" | "anthropic" | "google">;
 
 type OfficialApiProviderPreset = {
   label: string;
@@ -139,6 +139,20 @@ const OFFICIAL_API_PROVIDER_PRESETS = {
       "glm-4.7",
     ],
     required_api_key_prefix: "sk-sp-",
+  },
+  "google-stitch-image": {
+    label: "Google Stitch / Gemini Image",
+    description: "Google AI Studio preset for Stitch-style image generation workflows.",
+    type: "google",
+    base_url: "https://generativelanguage.googleapis.com/v1beta",
+    docs_url: "https://ai.google.dev/gemini-api/docs/image-generation",
+    api_key_hint: "Use a Google AI Studio API key for Gemini image generation.",
+    api_key_placeholder: "AIza...",
+    fallback_models: [
+      "gemini-2.5-flash-image",
+      "gemini-3.1-flash-image-preview",
+      "gemini-3-pro-image-preview",
+    ],
   },
 } as const satisfies Record<string, OfficialApiProviderPreset>;
 

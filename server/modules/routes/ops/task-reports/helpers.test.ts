@@ -120,4 +120,61 @@ describe("task report helpers document extraction", () => {
     expect(titles).toContain("index.html");
     expect(titles).toContain("2026-03-01-report-deck.pptx");
   });
+
+  it("captures generated image files referenced in task logs", () => {
+    const db = setupDb();
+    dbs.push(db);
+    const tmpProject = fs.mkdtempSync(path.join(os.tmpdir(), "claw-report-images-"));
+    tempDirs.push(tmpProject);
+
+    const imageDir = path.join(tmpProject, ".claw-empire", "generated-images", "task-1");
+    fs.mkdirSync(imageDir, { recursive: true });
+    const imagePath = path.join(imageDir, "gemini-2.5-flash-image-01.png");
+    fs.writeFileSync(imagePath, "PNG_BINARY", "utf8");
+
+    db.prepare("INSERT INTO task_logs (id, task_id, kind, message, created_at) VALUES (?, ?, ?, ?, ?)").run(
+      "log-1",
+      "task-1",
+      "stdout",
+      `Saved image: ${imagePath}`,
+      10,
+    );
+
+    const { buildTaskSection } = createTaskReportHelpers({
+      db: db as unknown as any,
+      nowMs: () => 1_700_000_000_000,
+    });
+
+    const section = buildTaskSection(
+      {
+        id: "task-1",
+        title: "Image generation",
+        description: "",
+        project_path: tmpProject,
+        result: "",
+        source_task_id: null,
+        status: "done",
+        department_id: "design",
+        created_at: 1,
+        started_at: 2,
+        completed_at: 3,
+        agent_name: "Pixel",
+        agent_name_ko: "Pixel",
+        agent_role: "team_leader",
+        dept_name: "Design",
+        dept_name_ko: "Design",
+      },
+      [],
+    );
+
+    const docs = (section.documents ?? []) as Array<Record<string, unknown>>;
+    expect(docs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "gemini-2.5-flash-image-01.png",
+          mime: "image/png",
+        }),
+      ]),
+    );
+  });
 });

@@ -44,12 +44,14 @@ CREATE TABLE IF NOT EXISTS agents (
   workflow_pack_key TEXT NOT NULL DEFAULT 'development',
   role TEXT NOT NULL CHECK(role IN ('team_leader','senior','junior','intern')),
   acts_as_planning_leader INTEGER NOT NULL DEFAULT 0 CHECK(acts_as_planning_leader IN (0,1)),
-  cli_provider TEXT CHECK(cli_provider IN ('claude','codex','gemini','opencode','kimi','copilot','antigravity','api')),
+  cli_provider TEXT CHECK(cli_provider IN ('claude','codex','gemini','jules','opencode','kimi','copilot','antigravity','api')),
   oauth_account_id TEXT,
   api_provider_id TEXT,
   api_model TEXT,
   cli_model TEXT,
   cli_reasoning_level TEXT,
+  cli_account_pool_id TEXT,
+  workflow_profile TEXT,
   avatar_emoji TEXT NOT NULL DEFAULT '🤖',
   sprite_number INTEGER,
   personality TEXT,
@@ -317,10 +319,26 @@ CREATE TABLE IF NOT EXISTS review_round_decision_states (
   updated_at INTEGER DEFAULT (unixepoch()*1000)
 );
 
+CREATE TABLE IF NOT EXISTS review_round_feedback_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  meeting_id TEXT NOT NULL REFERENCES meeting_minutes(id) ON DELETE CASCADE,
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  round INTEGER NOT NULL,
+  agent_id TEXT REFERENCES agents(id),
+  lens TEXT,
+  pass1 TEXT NOT NULL,
+  pass2 TEXT NOT NULL,
+  final_verdict TEXT NOT NULL CHECK(final_verdict IN ('approved','hold','rejected')),
+  confidence REAL NOT NULL DEFAULT 0.5,
+  blocking_items_json TEXT,
+  requires_jules_action INTEGER NOT NULL DEFAULT 0 CHECK(requires_jules_action IN (0,1)),
+  created_at INTEGER DEFAULT (unixepoch()*1000)
+);
+
 CREATE TABLE IF NOT EXISTS skill_learning_history (
   id TEXT PRIMARY KEY,
   job_id TEXT NOT NULL,
-  provider TEXT NOT NULL CHECK(provider IN ('claude','codex','gemini','opencode','kimi','copilot','antigravity','api')),
+  provider TEXT NOT NULL CHECK(provider IN ('claude','codex','gemini','jules','opencode','kimi','copilot','antigravity','api')),
   repo TEXT NOT NULL,
   skill_id TEXT NOT NULL,
   skill_label TEXT NOT NULL,
@@ -342,6 +360,8 @@ CREATE INDEX IF NOT EXISTS idx_project_review_decision_events_project
   ON project_review_decision_events(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_review_round_decision_states_updated
   ON review_round_decision_states(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_review_round_feedback_items_meeting
+  ON review_round_feedback_items(meeting_id, round, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(assigned_agent_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_dept ON tasks(department_id);
@@ -377,3 +397,4 @@ CREATE TABLE IF NOT EXISTS api_providers (
 );
 `);
 }
+

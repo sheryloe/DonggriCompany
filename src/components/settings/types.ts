@@ -2,8 +2,13 @@ import type { Dispatch, SetStateAction } from "react";
 import type {
   ApiProvider,
   ApiProviderOfficialPreset,
+  CliAccountPoolView,
+  CliAccountVerifyResponse,
   ApiProviderType,
   DeviceCodeStart,
+  OfficeExecutionProvider,
+  OfficeRunnerQueueItemView,
+  OfficeRunnerStatusView,
   OAuthConnectProvider,
   OAuthStatus,
 } from "../../api";
@@ -66,10 +71,29 @@ export interface CliSettingsTabProps {
   cliStatus: CliStatusMap | null;
   cliModels: Record<string, CliModelInfo[]> | null;
   cliModelsLoading: boolean;
+  officeExecutionProviders: OfficeExecutionProvider[];
+  cliAccountPools: CliAccountPoolView[];
+  officeRunners: OfficeRunnerStatusView[];
+  officeRunnerQueue: OfficeRunnerQueueItemView[];
+  runnerMeta: {
+    maxActive: number;
+    idleTtlMs: number;
+    dockerEnabled: boolean;
+  };
+  cliAuthBusyKey: string | null;
+  selectedPoolByProvider: Record<OfficeExecutionProvider, string>;
   form: LocalSettings;
   setForm: SetLocalSettings;
   persistSettings: (next: LocalSettings) => void;
   onRefresh: () => void;
+  onPoolSelect: (provider: OfficeExecutionProvider, accountPoolId: string) => void;
+  onCreatePool: (provider: OfficeExecutionProvider) => Promise<void>;
+  onUpdatePool: (provider: OfficeExecutionProvider, accountPoolId: string, patch: { label?: string }) => Promise<void>;
+  onDeletePool: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<void>;
+  onVerifyPool: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<CliAccountVerifyResponse>;
+  onCopyLoginCommand: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<void>;
+  onActivateRunner: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<void>;
+  onDeactivateRunner: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<void>;
 }
 
 export interface OAuthCommonProps {
@@ -137,6 +161,7 @@ export interface ApiStateBundle {
   handleApiEditStart: (provider: ApiProvider) => void;
   handleApiModelAssign: (providerId: string, model: string) => Promise<void>;
   handleApiAssignToAgent: (agentId: string) => Promise<void>;
+  handleApiAssignToDepartment: (departmentId: string, workflowPackKey: WorkflowPackKey) => Promise<void>;
 }
 
 export interface ChannelSettingsTabProps {

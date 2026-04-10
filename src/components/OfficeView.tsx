@@ -293,7 +293,8 @@ export default function OfficeView({
     });
   }, []);
 
-  const { cliStatus, cliUsage, cliUsageRef, refreshing, handleRefreshUsage } = useCliUsage(tasks);
+  const { cliStatus, cliUsage, cliPoolUsage, cliSessionUsage, cliUsageRef, refreshing, handleRefreshUsage } =
+    useCliUsage(tasks);
 
   const tickerContext = useMemo(
     () => ({
@@ -411,6 +412,8 @@ export default function OfficeView({
       <CliUsagePanel
         cliStatus={cliStatus}
         cliUsage={cliUsage}
+        cliPoolUsage={cliPoolUsage}
+        cliSessionUsage={cliSessionUsage}
         language={language}
         refreshing={refreshing}
         onRefreshUsage={handleRefreshUsage}

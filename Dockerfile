@@ -16,6 +16,7 @@ RUN npm install -g \
   @anthropic-ai/claude-code \
   @openai/codex \
   @google/gemini-cli \
+  @google/jules \
   opencode-ai
 
 # Create unprivileged runtime user
@@ -31,7 +32,7 @@ COPY . .
 RUN pnpm build
 
 # Ensure runtime paths are writable by non-root user
-RUN mkdir -p /app/data /home/app/.claude /home/app/.codex /home/app/.gemini /home/app/.local/share/opencode \
+RUN mkdir -p /app/data /home/app/.claude /home/app/.codex /home/app/.gemini /home/app/.jules /home/app/.local/share/opencode \
   && chown -R app:app /app /home/app
 
 ENV HOME=/home/app
@@ -40,3 +41,4 @@ USER app
 EXPOSE 7777
 
 CMD ["pnpm", "start:tailscale"]
+

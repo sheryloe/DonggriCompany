@@ -49,6 +49,7 @@ export function initializeWorkflow(
     fetchClaudeUsage: runtime.fetchClaudeUsage,
     fetchCodexUsage: runtime.fetchCodexUsage,
     fetchGeminiUsage: runtime.fetchGeminiUsage,
+    getGeminiProjectId: runtime.getGeminiProjectId,
     finishReview: runtime.finishReview,
     generateProjectContext: runtime.generateProjectContext,
     getAgentDisplayName: runtime.getAgentDisplayName,

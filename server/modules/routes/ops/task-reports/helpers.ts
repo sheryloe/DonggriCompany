@@ -23,7 +23,7 @@ const TEXT_DOC_EXTENSIONS = new Set([
   ".xml",
   ".sql",
 ]);
-const BINARY_DOC_EXTENSIONS = new Set([".pdf", ".ppt", ".pptx", ".doc", ".docx"]);
+const BINARY_DOC_EXTENSIONS = new Set([".pdf", ".ppt", ".pptx", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".webp"]);
 
 type HelperDeps = {
   db: RuntimeContext["db"];
@@ -65,7 +65,8 @@ export function createTaskReportHelpers(deps: HelperDeps) {
 
   function extractDocumentPathCandidates(texts: string[]): string[] {
     const out = new Set<string>();
-    const pattern = /(?:[A-Za-z]:\\|\/)?[^\s"'`<>|]+?\.(?:md|markdown|txt|json|ya?ml|csv|log|html?|pdf|pptx?|docx?)/gi;
+    const pattern =
+      /(?:[A-Za-z]:\\|\/)?[^\s"'`<>|]+?\.(?:md|markdown|txt|json|ya?ml|csv|log|html?|pdf|pptx?|docx?|png|jpe?g|webp)/gi;
     for (const rawText of texts) {
       if (!rawText) continue;
       const matches = rawText.match(pattern) ?? [];
@@ -103,8 +104,14 @@ export function createTaskReportHelpers(deps: HelperDeps) {
           mime:
             ext === ".pdf"
               ? "application/pdf"
-              : ext === ".ppt" || ext === ".pptx"
-                ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              : ext === ".png"
+                ? "image/png"
+                : ext === ".jpg" || ext === ".jpeg"
+                  ? "image/jpeg"
+                  : ext === ".webp"
+                    ? "image/webp"
+                : ext === ".ppt" || ext === ".pptx"
+                  ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 : "application/octet-stream",
           size_bytes: stat.size,
           updated_at: stat.mtimeMs,

@@ -41,6 +41,32 @@ export function registerOAuthRoutes(ctx: RuntimeContext): void {
 
   const { buildOAuthStatus } = createOAuthStatusBuilder(ctx);
 
+  const readSettingString = (key: string): string => {
+    const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get(key) as
+      | { value?: unknown }
+      | undefined;
+    if (!row) return "";
+    const raw = String(row.value ?? "")
+      .replace(/^"|"$/g, "")
+      .trim();
+    const lowered = raw.toLowerCase();
+    if (!raw || lowered === "null" || lowered === "undefined") return "";
+    if (raw === "__CHANGE_ME__") return "";
+    if (raw.startsWith("YOUR_")) return "";
+    return raw;
+  };
+
+  const readEnvString = (key: string): string => {
+    const raw = String(process.env[key] ?? "")
+      .replace(/^"|"$/g, "")
+      .trim();
+    const lowered = raw.toLowerCase();
+    if (!raw || lowered === "null" || lowered === "undefined") return "";
+    if (raw === "__CHANGE_ME__") return "";
+    if (raw.startsWith("YOUR_")) return "";
+    return raw;
+  };
+
   app.get("/api/oauth/status", async (_req, res) => {
     try {
       const providers = await buildOAuthStatus();
@@ -122,14 +148,11 @@ export function registerOAuthRoutes(ctx: RuntimeContext): void {
       return res.status(400).json({ error: "missing_OAUTH_ENCRYPTION_SECRET" });
     }
 
-    const customClientId = (
-      db.prepare("SELECT value FROM settings WHERE key = 'github_oauth_client_id'").get() as
-        | { value: string }
-        | undefined
-    )?.value
-      ?.replace(/^"|"$/g, "")
-      .trim();
-    const clientId = customClientId || process.env.OAUTH_GITHUB_CLIENT_ID || BUILTIN_GITHUB_CLIENT_ID;
+    const customClientId = readSettingString("github_oauth_client_id");
+    const clientId = customClientId || BUILTIN_GITHUB_CLIENT_ID || readEnvString("OAUTH_GITHUB_CLIENT_ID");
+    if (!clientId) {
+      return res.status(400).json({ error: "missing_OAUTH_GITHUB_CLIENT_ID" });
+    }
     try {
       const resp = await fetch("https://github.com/login/device/code", {
         method: "POST",
@@ -138,6 +161,8 @@ export function registerOAuthRoutes(ctx: RuntimeContext): void {
         signal: AbortSignal.timeout(10000),
       });
       if (!resp.ok) {
+        const detail = await resp.text();
+        console.error("[oauth] GitHub device-start failed:", resp.status, detail);
         return res.status(502).json({ error: "github_device_code_failed", status: resp.status });
       }
 
@@ -195,14 +220,11 @@ export function registerOAuthRoutes(ctx: RuntimeContext): void {
       return res.status(500).json({ error: "decrypt_failed" });
     }
 
-    const customClientId = (
-      db.prepare("SELECT value FROM settings WHERE key = 'github_oauth_client_id'").get() as
-        | { value: string }
-        | undefined
-    )?.value
-      ?.replace(/^"|"$/g, "")
-      .trim();
-    const clientId = customClientId || process.env.OAUTH_GITHUB_CLIENT_ID || BUILTIN_GITHUB_CLIENT_ID;
+    const customClientId = readSettingString("github_oauth_client_id");
+    const clientId = customClientId || BUILTIN_GITHUB_CLIENT_ID || readEnvString("OAUTH_GITHUB_CLIENT_ID");
+    if (!clientId) {
+      return res.status(400).json({ error: "missing_OAUTH_GITHUB_CLIENT_ID" });
+    }
     try {
       const resp = await fetch("https://github.com/login/oauth/access_token", {
         method: "POST",

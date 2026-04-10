@@ -104,6 +104,7 @@ function makeApiState(): ApiStateBundle {
     handleApiEditStart: vi.fn(),
     handleApiModelAssign: vi.fn(),
     handleApiAssignToAgent: vi.fn(),
+    handleApiAssignToDepartment: vi.fn(),
   };
 }
 

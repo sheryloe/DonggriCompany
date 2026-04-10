@@ -164,6 +164,7 @@ export function initializeWorkflowAgentProviders(ctx: RuntimeContext): any {
     fetchClaudeUsage,
     fetchCodexUsage,
     fetchGeminiUsage,
+    getGeminiProjectId,
     CLI_TOOLS,
     execWithTimeout,
     detectAllCli,

@@ -196,10 +196,10 @@ const LOCALE_TEXT = {
     zh: "刷新用量数据",
   },
   cliNotSignedIn: {
-    ko: "로그인되지 않음",
-    en: "not signed in",
-    ja: "未サインイン",
-    zh: "未登录",
+    ko: "로그인 필요",
+    en: "sign-in required",
+    ja: "sign-in required",
+    zh: "sign-in required",
   },
   cliNoApi: {
     ko: "사용량 API 없음",
@@ -208,10 +208,10 @@ const LOCALE_TEXT = {
     zh: "无用量 API",
   },
   cliUnavailable: {
-    ko: "사용 불가",
-    en: "unavailable",
-    ja: "利用不可",
-    zh: "不可用",
+    ko: "사용량 조회 불가",
+    en: "usage unavailable",
+    ja: "usage unavailable",
+    zh: "usage unavailable",
   },
   cliLoading: {
     ko: "불러오는 중...",

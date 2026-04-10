@@ -55,7 +55,7 @@ export function renderDeskAgentAndSubClones({
   nextSubSnapshot,
   themeAccent,
 }: RenderDeskAgentAndSubClonesParams): void {
-  const spriteNum = spriteMap.get(agent.id) ?? (hashStr(agent.id) % 13) + 1;
+  const spriteNum = spriteMap.get(agent.id) ?? (hashStr(agent.id) % 44) + 1;
   const charContainer = new Container();
   charContainer.position.set(ax, charFeetY);
   charContainer.eventMode = "static";
@@ -118,6 +118,12 @@ export function renderDeskAgentAndSubClones({
 
   const particles = new Container();
   room.addChild(particles);
+  const normalizedCliProvider = String(agent.cli_provider ?? "").trim();
+  const normalizedPoolId = String(agent.cli_account_pool_id ?? "").trim();
+  const cliUsageKey =
+    normalizedCliProvider && normalizedPoolId
+      ? `${normalizedCliProvider}:${normalizedPoolId}`
+      : normalizedCliProvider || undefined;
   animItemsRef.current.push({
     sprite: charContainer,
     status: agent.status,
@@ -126,6 +132,7 @@ export function renderDeskAgentAndSubClones({
     particles,
     agentId: agent.id,
     cliProvider: agent.cli_provider,
+    cliUsageKey,
     deskG,
     bedG,
     blanketG,
@@ -174,7 +181,7 @@ export function renderDeskAgentAndSubClones({
       aura.ellipse(0, 2.0, 8.1, 2.7).fill({ color: 0x1f2937, alpha: 0.12 });
       cloneContainer.addChild(aura);
 
-      const cloneSpriteNum = (hashStr(`${sub.id}:clone`) % 13) + 1;
+      const cloneSpriteNum = (hashStr(`${sub.id}:clone`) % 44) + 1;
       const cloneFrames: Texture[] = [];
       for (let frame = 1; frame <= 3; frame++) {
         const key = `${cloneSpriteNum}-D-${frame}`;

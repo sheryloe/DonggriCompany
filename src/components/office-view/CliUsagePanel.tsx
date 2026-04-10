@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { CliUsageEntry, CliUsageWindow } from "../../api";
+import type { CliPoolUsageEntry, CliSessionUsageEntry, CliUsageEntry, CliUsageWindow } from "../../api";
 import type { UiLanguage } from "../../i18n";
 import type { CliStatusMap } from "../../types";
 import { formatReset } from "./drawing-furniture-b";
@@ -10,6 +10,8 @@ type TFunction = (messages: Record<UiLanguage, string>) => string;
 interface CliUsagePanelProps {
   cliStatus: CliStatusMap | null;
   cliUsage: Record<string, CliUsageEntry> | null;
+  cliPoolUsage: CliPoolUsageEntry[];
+  cliSessionUsage: CliSessionUsageEntry[];
   language: UiLanguage;
   refreshing: boolean;
   onRefreshUsage: () => void;
@@ -72,6 +74,13 @@ const CLI_DISPLAY: Array<{ key: string; name: string; icon: ReactNode; color: st
     bgColor: "bg-blue-500/15 border-blue-400/30",
   },
   {
+    key: "jules",
+    name: "Jules",
+    icon: "J",
+    color: "text-cyan-300",
+    bgColor: "bg-cyan-500/15 border-cyan-400/30",
+  },
+  {
     key: "copilot",
     name: "Copilot",
     icon: "🚀",
@@ -87,30 +96,149 @@ const CLI_DISPLAY: Array<{ key: string; name: string; icon: ReactNode; color: st
   },
 ];
 
+type CliCardItem = {
+  key: string;
+  title: string;
+  subtitle?: string;
+  icon: ReactNode;
+  color: string;
+  bgColor: string;
+  usage?: CliUsageEntry;
+  sessionUsage?: CliSessionUsageEntry;
+  statusAuthenticated?: boolean;
+};
+
+type RankedCliCardItem = CliCardItem & {
+  windows: CliUsageWindow[];
+  signedIn: boolean;
+  inUse: boolean;
+  maxUtilization: number;
+  hasUsageData: boolean;
+  sessionActivityScore: number;
+};
+
+function sortUsageWindows(windows: CliUsageWindow[]): CliUsageWindow[] {
+  return [...windows].sort((a, b) => b.utilization - a.utilization || a.label.localeCompare(b.label));
+}
+
+function buildRankedCard(card: CliCardItem): RankedCliCardItem {
+  const windows = sortUsageWindows(card.usage?.windows ?? []);
+  const sessionCounts = card.sessionUsage?.sessions;
+  const sessionActivityScore = (sessionCounts?.in_progress ?? 0) * 1000 + (sessionCounts?.awaiting ?? 0) * 100;
+  const maxUtilization = windows.length > 0 ? Math.max(...windows.map((windowEntry) => windowEntry.utilization)) : 0;
+  const signedIn =
+    (card.usage?.error ?? card.sessionUsage?.error) === "unauthenticated"
+      ? false
+      : typeof card.statusAuthenticated === "boolean"
+        ? card.statusAuthenticated
+        : Boolean((card.usage && !card.usage.error) || (card.sessionUsage && !card.sessionUsage.error));
+  const inUse = maxUtilization > 0 || (sessionCounts?.in_progress ?? 0) > 0 || (sessionCounts?.awaiting ?? 0) > 0;
+  return {
+    ...card,
+    windows,
+    signedIn,
+    inUse,
+    maxUtilization,
+    hasUsageData: windows.length > 0 || (sessionCounts?.total ?? 0) > 0,
+    sessionActivityScore,
+  };
+}
+
+function compareRankedCard(a: RankedCliCardItem, b: RankedCliCardItem): number {
+  if (a.inUse !== b.inUse) return Number(b.inUse) - Number(a.inUse);
+  if (a.signedIn !== b.signedIn) return Number(b.signedIn) - Number(a.signedIn);
+  if (a.hasUsageData !== b.hasUsageData) return Number(b.hasUsageData) - Number(a.hasUsageData);
+  if (a.sessionActivityScore !== b.sessionActivityScore) return b.sessionActivityScore - a.sessionActivityScore;
+  if (a.maxUtilization !== b.maxUtilization) return b.maxUtilization - a.maxUtilization;
+  return a.title.localeCompare(b.title) || a.key.localeCompare(b.key);
+}
+
 export default function CliUsagePanel({
   cliStatus,
   cliUsage,
+  cliPoolUsage,
+  cliSessionUsage,
   language,
   refreshing,
   onRefreshUsage,
   t,
 }: CliUsagePanelProps) {
-  const connectedClis = CLI_DISPLAY.filter((cli) => {
+  const poolProviders = new Set(
+    [...cliPoolUsage, ...cliSessionUsage]
+      .map((pool) => String(pool.provider || "").trim())
+      .filter((provider): provider is string => provider.length > 0),
+  );
+  const providerCards = CLI_DISPLAY.flatMap((cli): CliCardItem[] => {
+    if (poolProviders.has(cli.key)) return [];
     const status = cliStatus?.[cli.key as keyof CliStatusMap];
-    return status?.installed && status?.authenticated;
+    const usage = cliUsage?.[cli.key];
+    if (!(status?.installed || usage)) return [];
+    return [
+      {
+        key: cli.key,
+        title: cli.name,
+        icon: cli.icon,
+        color: cli.color,
+        bgColor: cli.bgColor,
+        usage,
+        statusAuthenticated: status?.authenticated,
+      },
+    ];
+  });
+  const poolCards: CliCardItem[] = cliPoolUsage.map((pool) => {
+    const display = CLI_DISPLAY.find((cli) => cli.key === pool.provider);
+    const baseLabel = String(pool.label || pool.accountPoolId).trim() || pool.accountPoolId;
+    const displayLabel = baseLabel === pool.accountPoolId ? baseLabel : `${baseLabel} (${pool.accountPoolId})`;
+    return {
+      key: pool.key,
+      title:
+        display?.name ??
+        String(pool.provider || "CLI")
+          .trim()
+          .replace(/^\w/, (char) => char.toUpperCase()),
+      subtitle: displayLabel,
+      icon: display?.icon ?? <ChatGPTLogo />,
+      color: display?.color ?? "text-slate-300",
+      bgColor: display?.bgColor ?? "bg-slate-700/30 border-slate-500/40",
+      usage: pool.usage,
+      statusAuthenticated: pool.usage.error !== "unauthenticated",
+    };
   });
 
-  if (connectedClis.length === 0) return null;
+  const sessionCards: CliCardItem[] = cliSessionUsage.map((session) => {
+    const display = CLI_DISPLAY.find((cli) => cli.key === session.provider);
+    const baseLabel = String(session.label || session.accountPoolId).trim() || session.accountPoolId;
+    const displayLabel = baseLabel === session.accountPoolId ? baseLabel : `${baseLabel} (${session.accountPoolId})`;
+    return {
+      key: `${session.key}:session`,
+      title:
+        display?.name ??
+        String(session.provider || "CLI")
+          .trim()
+          .replace(/^\w/, (char) => char.toUpperCase()),
+      subtitle: displayLabel,
+      icon: display?.icon ?? "J",
+      color: display?.color ?? "text-slate-300",
+      bgColor: display?.bgColor ?? "bg-slate-700/30 border-slate-500/40",
+      sessionUsage: session,
+      statusAuthenticated: session.error !== "unauthenticated",
+    };
+  });
+
+  const rankedCards = [...providerCards, ...poolCards, ...sessionCards].map(buildRankedCard).sort(compareRankedCard);
+  const totalConnected = rankedCards.length;
+
+  if (totalConnected === 0) return null;
 
   return (
-    <div className="mt-4 px-2">
-      <div className="rounded-2xl border border-slate-700/60 bg-slate-900/80 p-4 backdrop-blur-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/20">
+    <div className="mt-3 px-2">
+      <div className="rounded-xl border border-slate-700/60 bg-slate-900/80 p-3 backdrop-blur-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-cyan-500/20">
               <svg
-                width="14"
-                height="14"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -126,18 +254,18 @@ export default function CliUsagePanel({
             {t(LOCALE_TEXT.cliUsageTitle)}
           </h3>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
-              {connectedClis.length} {t(LOCALE_TEXT.cliConnected)}
+            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[9px] text-slate-400">
+              {totalConnected} {t(LOCALE_TEXT.cliConnected)}
             </span>
             <button
               onClick={onRefreshUsage}
               disabled={refreshing}
-              className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200 disabled:opacity-50"
+              className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-800 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200 disabled:opacity-50"
               title={t(LOCALE_TEXT.cliRefreshTitle)}
             >
               <svg
-                width="14"
-                height="14"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -152,48 +280,58 @@ export default function CliUsagePanel({
             </button>
           </div>
         </div>
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {connectedClis.map((cli) => {
-            const usage = cliUsage?.[cli.key];
+        <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {rankedCards.map((card) => {
+            const usage = card.usage;
+            const sessionUsage = card.sessionUsage;
+            const errorCode = usage?.error ?? sessionUsage?.error ?? null;
+            const statusDotClass = card.inUse
+              ? "bg-emerald-400"
+              : card.signedIn
+                ? "bg-cyan-400"
+                : "bg-slate-500";
             return (
               <div
-                key={cli.key}
-                className={`group rounded-xl border ${cli.bgColor} p-3 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg`}
+                key={card.key}
+                className={`group rounded-lg border ${card.bgColor} p-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg`}
               >
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-[18px] w-[18px] items-center justify-center text-base">{cli.icon}</span>
-                    <span className={`text-sm font-semibold ${cli.color}`}>{cli.name}</span>
+                <div className="mb-1.5 flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-start gap-2">
+                    <span className="mt-0.5 flex h-[16px] w-[16px] items-center justify-center text-sm">{card.icon}</span>
+                    <div className="min-w-0">
+                      <div className={`truncate text-xs font-semibold ${card.color}`}>{card.title}</div>
+                      {card.subtitle && <div className="truncate text-[9px] text-slate-400">{card.subtitle}</div>}
+                    </div>
                   </div>
+                  <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${statusDotClass}`} />
                 </div>
 
-                {usage?.error === "unauthenticated" && (
-                  <p className="text-[11px] text-slate-500 italic">{t(LOCALE_TEXT.cliNotSignedIn)}</p>
+                {errorCode === "unauthenticated" && (
+                  <p className="text-[10px] text-slate-500 italic">{t(LOCALE_TEXT.cliNotSignedIn)}</p>
                 )}
-                {usage?.error === "not_implemented" && (
-                  <p className="text-[11px] text-slate-500 italic">{t(LOCALE_TEXT.cliNoApi)}</p>
+                {errorCode === "not_implemented" && (
+                  <p className="text-[10px] text-slate-500 italic">{t(LOCALE_TEXT.cliNoApi)}</p>
                 )}
-                {usage?.error && usage.error !== "unauthenticated" && usage.error !== "not_implemented" && (
-                  <p className="text-[11px] text-slate-500 italic">{t(LOCALE_TEXT.cliUnavailable)}</p>
+                {errorCode && errorCode !== "unauthenticated" && errorCode !== "not_implemented" && (
+                  <p className="text-[10px] text-slate-500 italic">{t(LOCALE_TEXT.cliUnavailable)}</p>
                 )}
 
-                {!usage && <p className="text-[11px] text-slate-500 italic">{t(LOCALE_TEXT.cliLoading)}</p>}
+                {!usage && !sessionUsage && <p className="text-[10px] text-slate-500 italic">{t(LOCALE_TEXT.cliLoading)}</p>}
 
-                {usage && !usage.error && usage.windows.length > 0 && (
-                  <div
-                    className={
-                      usage.windows.length > 3 ? "grid grid-cols-1 gap-1.5 sm:grid-cols-2" : "flex flex-col gap-1.5"
-                    }
-                  >
-                    {usage.windows.map((windowEntry: CliUsageWindow) => {
+                {usage && !usage.error && card.windows.length > 0 && (
+                  <div className="space-y-1.5">
+                    {card.windows.map((windowEntry: CliUsageWindow) => {
                       const percentage = Math.round(windowEntry.utilization * 100);
                       const barColor =
                         percentage >= 80 ? "bg-red-500" : percentage >= 50 ? "bg-amber-400" : "bg-emerald-400";
+                      const resetText = windowEntry.resetsAt
+                        ? `${t(LOCALE_TEXT.cliResets)} ${formatReset(windowEntry.resetsAt, language)}`
+                        : "";
                       return (
                         <div key={windowEntry.label}>
-                          <div className="mb-0.5 flex items-center justify-between text-[10px]">
-                            <span className="text-slate-400">{windowEntry.label}</span>
-                            <span className="flex items-center gap-1.5">
+                          <div className="mb-0.5 flex items-center justify-between text-[9px]">
+                            <span className="truncate text-slate-400">{windowEntry.label}</span>
+                            <span title={resetText || undefined} className="flex items-center gap-1">
                               <span
                                 className={
                                   percentage >= 80
@@ -205,14 +343,9 @@ export default function CliUsagePanel({
                               >
                                 {percentage}%
                               </span>
-                              {windowEntry.resetsAt && (
-                                <span className="text-slate-500">
-                                  {t(LOCALE_TEXT.cliResets)} {formatReset(windowEntry.resetsAt, language)}
-                                </span>
-                              )}
                             </span>
                           </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-slate-700/60">
+                          <div className="h-1.5 overflow-hidden rounded-full bg-slate-700/60">
                             <div
                               className={`h-full rounded-full ${barColor} transition-all duration-700`}
                               style={{ width: `${Math.min(100, percentage)}%` }}
@@ -225,7 +358,31 @@ export default function CliUsagePanel({
                 )}
 
                 {usage && !usage.error && usage.windows.length === 0 && (
-                  <p className="text-[11px] text-slate-500 italic">{t(LOCALE_TEXT.cliNoData)}</p>
+                  <p className="text-[10px] text-slate-500 italic">{t(LOCALE_TEXT.cliNoData)}</p>
+                )}
+
+                {sessionUsage && !sessionUsage.error && (
+                  <div className="space-y-1 text-[9px] text-slate-300">
+                    <div className="flex items-center justify-between">
+                      <span>In Progress</span>
+                      <span className="font-semibold text-emerald-300">{sessionUsage.sessions.in_progress}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Awaiting</span>
+                      <span className="font-semibold text-amber-300">{sessionUsage.sessions.awaiting}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Completed</span>
+                      <span className="text-cyan-300">{sessionUsage.sessions.completed}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Failed</span>
+                      <span className="text-rose-300">{sessionUsage.sessions.failed}</span>
+                    </div>
+                    {sessionUsage.lastActive && (
+                      <div className="truncate text-[8px] text-slate-500">Last active: {formatReset(sessionUsage.lastActive, language)}</div>
+                    )}
+                  </div>
                 )}
               </div>
             );

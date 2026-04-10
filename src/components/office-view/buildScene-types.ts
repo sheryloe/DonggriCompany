@@ -28,6 +28,7 @@ export interface AnimItem {
   particles: Container;
   agentId?: string;
   cliProvider?: string;
+  cliUsageKey?: string;
   deskG?: Graphics;
   bedG?: Graphics;
   blanketG?: Graphics;

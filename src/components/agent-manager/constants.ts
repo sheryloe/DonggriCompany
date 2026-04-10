@@ -6,6 +6,7 @@ export const CLI_PROVIDERS: CliProvider[] = [
   "claude",
   "codex",
   "gemini",
+  "jules",
   "opencode",
   "kimi",
   "copilot",
@@ -34,7 +35,7 @@ export const STATUS_DOT: Record<string, string> = {
   idle: "bg-slate-500",
 };
 
-export const ICON_SPRITE_POOL = Array.from({ length: 13 }, (_, i) => i + 1);
+export const ICON_SPRITE_POOL = Array.from({ length: 44 }, (_, i) => i + 1);
 
 export const EMOJI_GROUPS: { label: string; labelEn: string; emojis: string[] }[] = [
   {
@@ -67,6 +68,7 @@ export const BLANK: FormData = {
   department_id: "",
   role: "junior",
   cli_provider: "claude",
+  cli_account_pool_id: "",
   avatar_emoji: "🤖",
   sprite_number: null,
   personality: "",

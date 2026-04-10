@@ -57,6 +57,7 @@ function createHarness(): { db: DatabaseSync; routes: Map<string, RouteHandler> 
       api_model TEXT,
       cli_model TEXT,
       cli_reasoning_level TEXT,
+      cli_account_pool_id TEXT,
       avatar_emoji TEXT NOT NULL DEFAULT '🤖',
       sprite_number INTEGER,
       personality TEXT,
@@ -65,6 +66,20 @@ function createHarness(): { db: DatabaseSync; routes: Map<string, RouteHandler> 
       stats_tasks_done INTEGER NOT NULL DEFAULT 0,
       stats_xp INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE cli_account_pools (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      account_pool_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      profile_home TEXT NOT NULL,
+      status TEXT NOT NULL,
+      last_verified_at INTEGER,
+      last_error TEXT,
+      created_at INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(provider, account_pool_id)
     );
   `);
 
@@ -253,6 +268,185 @@ describe("agent CRUD seed filter", () => {
         { id: "video_preprod-seed-1", acts: 0 },
         { id: "video_preprod-seed-2", acts: 1 },
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents saves valid codex cli_account_pool_id", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare(
+        `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
+         VALUES (?, 'codex', 'codex-main', 'Main Codex', '/tmp/codex-main', 'connected', 1, 1)`,
+      ).run("pool-1");
+
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Codex Main Agent",
+            name_ko: "Codex Main",
+            role: "junior",
+            cli_provider: "codex",
+            cli_account_pool_id: "codex-main",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(201);
+      const payload = res.payload as { agent?: { cli_account_pool_id?: string | null } };
+      expect(payload.agent?.cli_account_pool_id).toBe("codex-main");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents returns 400 when codex cli_account_pool_id does not exist", () => {
+    const { db, routes } = createHarness();
+    try {
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Codex Missing Pool",
+            role: "junior",
+            cli_provider: "codex",
+            cli_account_pool_id: "missing-pool",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect((res.payload as { error?: string }).error).toBe("cli_account_pool_not_found");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("PATCH /api/agents/:id clears cli_account_pool_id when provider changes away from codex", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare(
+        `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
+         VALUES (?, 'codex', 'codex-main', 'Main Codex', '/tmp/codex-main', 'connected', 1, 1)`,
+      ).run("pool-1");
+      db.prepare(
+        `INSERT INTO agents (id, name, role, cli_provider, cli_account_pool_id, created_at)
+         VALUES ('agent-1', 'Agent One', 'junior', 'codex', 'codex-main', 1)`,
+      ).run();
+
+      const handler = routes.get("PATCH /api/agents/:id");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          params: { id: "agent-1" },
+          body: { cli_provider: "claude" },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const row = db.prepare("SELECT cli_provider, cli_account_pool_id FROM agents WHERE id = ?").get("agent-1") as
+        | { cli_provider: string | null; cli_account_pool_id: string | null }
+        | undefined;
+      expect(row).toEqual({ cli_provider: "claude", cli_account_pool_id: null });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents accepts jules provider", () => {
+    const { db, routes } = createHarness();
+    try {
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Jules Agent",
+            role: "junior",
+            cli_provider: "jules",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(201);
+      const payload = res.payload as { agent?: { cli_provider?: string; cli_account_pool_id?: string | null } };
+      expect(payload.agent?.cli_provider).toBe("jules");
+      expect(payload.agent?.cli_account_pool_id ?? null).toBe(null);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents saves valid gemini cli_account_pool_id", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare(
+        `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
+         VALUES (?, 'gemini', 'gemini-main', 'Main Gemini', '/tmp/gemini-main', 'connected', 1, 1)`,
+      ).run("pool-gemini");
+
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Gemini Agent",
+            role: "junior",
+            cli_provider: "gemini",
+            cli_account_pool_id: "gemini-main",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(201);
+      const payload = res.payload as { agent?: { cli_provider?: string; cli_account_pool_id?: string | null } };
+      expect(payload.agent?.cli_provider).toBe("gemini");
+      expect(payload.agent?.cli_account_pool_id).toBe("gemini-main");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents returns 400 when jules cli_account_pool_id does not exist", () => {
+    const { db, routes } = createHarness();
+    try {
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Jules Missing Pool",
+            role: "junior",
+            cli_provider: "jules",
+            cli_account_pool_id: "missing-jules-pool",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect((res.payload as { error?: string }).error).toBe("cli_account_pool_not_found");
     } finally {
       db.close();
     }

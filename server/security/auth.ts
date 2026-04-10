@@ -27,6 +27,24 @@ export function isLoopbackRequest(req: { socket?: { remoteAddress?: string } }):
   return isLoopbackAddress(req.socket?.remoteAddress);
 }
 
+export function normalizeHostHeader(raw: string | undefined): string {
+  if (!raw) return "";
+  const first = raw
+    .split(",")[0]
+    ?.trim()
+    .replace(/^['"]|['"]$/g, "");
+  if (!first) return "";
+  if (first.startsWith("[")) {
+    const end = first.indexOf("]");
+    if (end > 1) return first.slice(1, end).toLowerCase();
+  }
+  const maybePortIdx = first.lastIndexOf(":");
+  if (maybePortIdx > 0 && first.indexOf(":") === maybePortIdx) {
+    return first.slice(0, maybePortIdx).toLowerCase();
+  }
+  return first.toLowerCase();
+}
+
 export function isTrustedOrigin(origin: string): boolean {
   try {
     const u = new URL(origin);
@@ -37,6 +55,36 @@ export function isTrustedOrigin(origin: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function isTrustedHostHeader(hostHeader: string | undefined): boolean {
+  const normalizedHost = normalizeHostHeader(hostHeader);
+  if (!normalizedHost) return false;
+  if (isLoopbackHostname(normalizedHost)) return true;
+  return isTrustedOrigin(`http://${normalizedHost}`) || isTrustedOrigin(`https://${normalizedHost}`);
+}
+
+export function isTrustedSessionBootstrapRequest(req: Request): boolean {
+  if (isLoopbackRequest(req)) return true;
+  const origin = req.header("origin");
+  if (origin && isTrustedOrigin(origin)) return true;
+
+  const referer = req.header("referer");
+  if (referer) {
+    try {
+      if (isTrustedOrigin(new URL(referer).origin)) return true;
+    } catch {
+      // ignore invalid referer
+    }
+  }
+
+  if (isTrustedHostHeader(req.header("x-forwarded-host"))) return true;
+  if (isTrustedHostHeader(req.header("host"))) return true;
+
+  const hostname = typeof req.hostname === "string" ? req.hostname.trim().toLowerCase() : "";
+  if (!hostname) return false;
+  if (isLoopbackHostname(hostname)) return true;
+  return isTrustedOrigin(`http://${hostname}`) || isTrustedOrigin(`https://${hostname}`);
 }
 
 export function parseCookies(headerValue: string | undefined): Record<string, string> {
@@ -202,7 +250,7 @@ export function installSecurityMiddleware(app: Express): void {
   app.get("/api/auth/session", (req, res) => {
     const bearer = bearerToken(req);
     const hasBearerAuth = bearer === SESSION_AUTH_TOKEN;
-    if (!isLoopbackRequest(req) && !hasBearerAuth) {
+    if (!hasBearerAuth && !isTrustedSessionBootstrapRequest(req)) {
       return res.status(401).json({ error: "unauthorized" });
     }
     issueSessionCookie(req, res);

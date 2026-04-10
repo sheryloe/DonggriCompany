@@ -73,6 +73,9 @@ function classifyWorkflowPack(text: string): WorkflowRouteResult {
 
   const matcher = (re: RegExp): boolean => re.test(normalized) || re.test(lower);
 
+  if (matcher(/(donggri|dongri|unified\s*pack|hybrid\s*pack|combined\s*workflow|fusion\s*workflow)/i))
+    addScore("donggri", 0.9);
+
   if (matcher(/(웹\s*서치|web\s*search|research|리서치|자료\s*조사|market\s*research|fact\s*check)/i))
     addScore("web_research_report", 0.78);
   if (matcher(/(보고서|리포트|brief|summary\s*report|status\s*report|executive\s*summary)/i)) addScore("report", 0.74);
@@ -115,11 +118,12 @@ export function registerWorkflowPackRoutes(
       ORDER BY
         CASE key
           WHEN 'development' THEN 1
-          WHEN 'report' THEN 2
-          WHEN 'web_research_report' THEN 3
-          WHEN 'roleplay' THEN 4
-          WHEN 'novel' THEN 5
-          WHEN 'video_preprod' THEN 6
+          WHEN 'donggri' THEN 2
+          WHEN 'report' THEN 3
+          WHEN 'web_research_report' THEN 4
+          WHEN 'roleplay' THEN 5
+          WHEN 'novel' THEN 6
+          WHEN 'video_preprod' THEN 7
           ELSE 99
         END,
         key

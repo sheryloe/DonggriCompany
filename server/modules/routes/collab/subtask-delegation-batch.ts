@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { resolveProviderRuntimeKind } from "../../workflow/agents/provider-runtime-kind.ts";
 
 import type { Lang } from "../../../types/lang.ts";
 import { resolveWorkflowPackKeyForTask } from "../../workflow/packs/task-pack-resolver.ts";
@@ -79,6 +80,7 @@ interface BatchDeps {
     logFilePath: string,
     model?: string,
     reasoningLevel?: string,
+    cliAccountPoolId?: string | null,
   ) => {
     on: (event: "close", listener: (code: number | null) => void) => void;
   };
@@ -395,7 +397,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
           parentTask.project_id,
         );
       }
-      appendTaskLog(delegatedTaskId, "system", `Subtask delegation from '${parentTask.title}' → ${targetDeptName}`);
+      appendTaskLog(delegatedTaskId, "system", `Subtask delegation from '${parentTask.title}' ??${targetDeptName}`);
       broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(delegatedTaskId));
 
       const ct2 = nowMs();
@@ -406,7 +408,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
         delegatedTaskId,
         execAgent.id,
       );
-      appendTaskLog(delegatedTaskId, "system", `${crossCoordinatorName} → ${execName}`);
+      appendTaskLog(delegatedTaskId, "system", `${crossCoordinatorName} ??${execName}`);
 
       broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(delegatedTaskId));
       broadcast("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(execAgent.id));
@@ -444,7 +446,8 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
       };
 
       const execProvider = execAgent.cli_provider || "claude";
-      if (["claude", "codex", "gemini", "opencode", "kimi", "copilot", "antigravity", "api"].includes(execProvider)) {
+      const runtimeKind = resolveProviderRuntimeKind(execProvider);
+      if (runtimeKind) {
         let delegatedProcessStarted = false;
         try {
           const projPath = resolveProjectPath({
@@ -515,12 +518,12 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
                 "[Prior Department Deliverables]",
                 "The following directories contain completed work from other departments on this project.",
                 "You MUST read and reference these files to ensure consistency with prior deliverables.",
-                "These are READ-ONLY references — do NOT modify files in these paths.",
+                "These are READ-ONLY references ??do NOT modify files in these paths.",
                 ...validSiblings,
               ].join("\n");
             }
           } catch {
-            // best effort — do not block delegation on sibling lookup failure
+            // best effort ??do not block delegation on sibling lookup failure
           }
 
           const sessionPrompt = [
@@ -584,7 +587,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
             });
           };
 
-          if (execProvider === "api") {
+          if (runtimeKind === "api") {
             try {
               wrapCallbackForHttpProvider();
               const controller = new AbortController();
@@ -604,7 +607,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
               failDelegatedLaunch(error, "api_provider_bootstrap");
               return;
             }
-          } else if (execProvider === "copilot" || execProvider === "antigravity") {
+          } else if (runtimeKind === "http_stream") {
             try {
               wrapCallbackForHttpProvider();
               const controller = new AbortController();
@@ -643,6 +646,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
                 logFilePath,
                 delegateModel,
                 delegateReasoningLevel,
+                execAgent.cli_account_pool_id ?? null,
               );
             } catch (error) {
               failDelegatedLaunch(error, "cli_spawn");
@@ -689,3 +693,4 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
 
   return { delegateSubtaskBatch };
 }
+

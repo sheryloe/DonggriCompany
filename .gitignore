@@ -68,3 +68,10 @@ Thumbs.db
 
 # Playwright artifacts
 test-results/
+
+# Codex optimization gate (2026-04-10)
+tools/ollama-image-local/.venv/
+tools/ollama-image-local/outputs/
+* (1).*
+.env (1)
+* (1)

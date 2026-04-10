@@ -159,6 +159,7 @@ export default function GeneralSettingsTab({ t, form, setForm, saved, onSave }: 
             <option value="claude">Claude Code</option>
             <option value="codex">Codex CLI</option>
             <option value="gemini">Gemini CLI</option>
+            <option value="jules">Jules CLI</option>
             <option value="opencode">OpenCode</option>
           </select>
         </div>

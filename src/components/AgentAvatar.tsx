@@ -2,6 +2,9 @@ import { useMemo } from "react";
 import type { CSSProperties } from "react";
 import type { Agent } from "../types";
 
+const AUTO_SPRITE_START = 1;
+const AUTO_SPRITE_COUNT = 44;
+
 /** Map agent IDs to sprite numbers (stable order, same as OfficeView) */
 export function buildSpriteMap(agents: Agent[]): Map<string, number> {
   const map = new Map<string, number>();
@@ -14,7 +17,7 @@ export function buildSpriteMap(agents: Agent[]): Map<string, number> {
   if (doro && !map.has(doro.id)) map.set(doro.id, 13);
   // 3) 나머지: 자동 할당 (1-12 순환)
   const rest = [...agents].filter((a) => !map.has(a.id)).sort((a, b) => a.id.localeCompare(b.id));
-  rest.forEach((a, i) => map.set(a.id, (i % 12) + 1));
+  rest.forEach((a, i) => map.set(a.id, AUTO_SPRITE_START + (i % AUTO_SPRITE_COUNT)));
   return map;
 }
 
@@ -33,7 +36,7 @@ function hashIdToSprite(id: string): number {
   for (let i = 0; i < id.length; i += 1) {
     hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
   }
-  return (hash % 12) + 1;
+  return AUTO_SPRITE_START + (hash % AUTO_SPRITE_COUNT);
 }
 
 function resolveSpriteNum(agent: Agent | undefined, spriteMap: Map<string, number>): number | undefined {

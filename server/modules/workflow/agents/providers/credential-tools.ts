@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 export interface GeminiCreds {
   access_token: string;
@@ -74,6 +75,16 @@ export function createCredentialTools() {
   const GEMINI_OAUTH_CLIENT_ID = process.env.GEMINI_OAUTH_CLIENT_ID ?? process.env.OAUTH_GOOGLE_CLIENT_ID ?? "";
   const GEMINI_OAUTH_CLIENT_SECRET =
     process.env.GEMINI_OAUTH_CLIENT_SECRET ?? process.env.OAUTH_GOOGLE_CLIENT_SECRET ?? "";
+  const GEMINI_DEFAULT_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com";
+  const GEMINI_DEFAULT_CLIENT_SECRET = "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";
+
+  function normalizeOAuthClientValue(value: string): string {
+    const normalized = value.trim();
+    if (!normalized) return "";
+    if (normalized === "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com") return "";
+    if (normalized === "YOUR_GOOGLE_CLIENT_SECRET") return "";
+    return normalized;
+  }
 
   function readGeminiCredsFromKeychain(): GeminiCreds | null {
     if (process.platform !== "darwin") return null;
@@ -126,14 +137,15 @@ export function createCredentialTools() {
     if (!creds) return null;
     if (creds.expiry_date > Date.now() + 300_000) return creds.access_token;
     if (!creds.refresh_token) return creds.access_token;
-    if (!GEMINI_OAUTH_CLIENT_ID || !GEMINI_OAUTH_CLIENT_SECRET) return null;
+    const clientId = normalizeOAuthClientValue(GEMINI_OAUTH_CLIENT_ID) || GEMINI_DEFAULT_CLIENT_ID;
+    const clientSecret = normalizeOAuthClientValue(GEMINI_OAUTH_CLIENT_SECRET) || GEMINI_DEFAULT_CLIENT_SECRET;
     try {
       const resp = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          client_id: GEMINI_OAUTH_CLIENT_ID,
-          client_secret: GEMINI_OAUTH_CLIENT_SECRET,
+          client_id: clientId,
+          client_secret: clientSecret,
           refresh_token: creds.refresh_token,
           grant_type: "refresh_token",
         }),
@@ -160,22 +172,28 @@ export function createCredentialTools() {
     }
   }
 
-  let geminiProjectCache: { id: string; fetchedAt: number } | null = null;
+  let geminiProjectCache: { id: string; fetchedAt: number; tokenHash: string } | null = null;
   const GEMINI_PROJECT_TTL = 300_000; // 5 minutes
 
   async function getGeminiProjectId(token: string): Promise<string | null> {
+    const tokenHash = createHash("sha256").update(token).digest("hex").slice(0, 16);
     const envProject = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
     if (envProject) return envProject;
 
     try {
       const settingsPath = path.join(os.homedir(), ".gemini", "settings.json");
       const j = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-      if (j?.cloudaicompanionProject) return j.cloudaicompanionProject;
+      const settingsProject = j?.cloudaicompanionProject?.id ?? j?.cloudaicompanionProject;
+      if (typeof settingsProject === "string" && settingsProject) return settingsProject;
     } catch {
       /* ignore */
     }
 
-    if (geminiProjectCache && Date.now() - geminiProjectCache.fetchedAt < GEMINI_PROJECT_TTL) {
+    if (
+      geminiProjectCache &&
+      geminiProjectCache.tokenHash === tokenHash &&
+      Date.now() - geminiProjectCache.fetchedAt < GEMINI_PROJECT_TTL
+    ) {
       return geminiProjectCache.id;
     }
 
@@ -185,21 +203,61 @@ export function createCredentialTools() {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          "User-Agent": "google-api-nodejs-client/9.15.1",
+          "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
+          "Client-Metadata": JSON.stringify({
+            ideType: "ANTIGRAVITY",
+            platform: "PLATFORM_UNSPECIFIED",
+            pluginType: "GEMINI",
+          }),
         },
         body: JSON.stringify({
-          metadata: { ideType: "GEMINI_CLI", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
+          metadata: { ideType: "ANTIGRAVITY", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI" },
         }),
         signal: AbortSignal.timeout(8000),
       });
       if (!resp.ok) return null;
-      const data = (await resp.json()) as { cloudaicompanionProject?: string };
-      if (data.cloudaicompanionProject) {
-        geminiProjectCache = { id: data.cloudaicompanionProject, fetchedAt: Date.now() };
+      const data = (await resp.json()) as {
+        cloudaicompanionProject?: string | { id?: string | null } | null;
+      };
+      const discoveredProject =
+        typeof data?.cloudaicompanionProject === "string"
+          ? data.cloudaicompanionProject
+          : (data?.cloudaicompanionProject?.id ?? "");
+      if (discoveredProject) {
+        geminiProjectCache = { id: discoveredProject, fetchedAt: Date.now(), tokenHash };
         return geminiProjectCache.id;
       }
     } catch {
       /* ignore */
     }
+
+    try {
+      const resp = await fetch("https://cloudresourcemanager.googleapis.com/v1/projects?pageSize=1", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "User-Agent": "climpire",
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (resp.ok) {
+        const data = (await resp.json()) as {
+          projects?: Array<{ projectId?: string; lifecycleState?: string }>;
+        };
+        const firstActiveProjectId = data.projects?.find(
+          (project) =>
+            project?.lifecycleState === "ACTIVE" && typeof project?.projectId === "string" && project.projectId,
+        )?.projectId;
+        if (firstActiveProjectId) {
+          geminiProjectCache = { id: firstActiveProjectId, fetchedAt: Date.now(), tokenHash };
+          return firstActiveProjectId;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
     return null;
   }
 

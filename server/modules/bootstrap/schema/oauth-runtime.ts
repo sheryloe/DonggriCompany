@@ -69,6 +69,11 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
     /* already exists */
   }
   try {
+    db.exec("ALTER TABLE agents ADD COLUMN cli_account_pool_id TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
     db.exec("ALTER TABLE agents ADD COLUMN sprite_number INTEGER");
   } catch {
     /* already exists */
@@ -127,10 +132,11 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
   try {
     const agentSql =
       (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='agents'").get() as any)?.sql ?? "";
-    if (agentSql && !agentSql.includes("'kimi'")) {
+    if (agentSql && (!agentSql.includes("'kimi'") || !agentSql.includes("'jules'"))) {
       const workflowPackExpr = hasColumn("agents", "workflow_pack_key")
         ? "COALESCE(workflow_pack_key, 'development')"
         : "'development'";
+      const cliAccountPoolExpr = hasColumn("agents", "cli_account_pool_id") ? "cli_account_pool_id" : "NULL";
       runInTransaction(() => {
         db.exec(`
         DROP TABLE IF EXISTS agents_new;
@@ -144,12 +150,13 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
           workflow_pack_key TEXT NOT NULL DEFAULT 'development',
           role TEXT NOT NULL CHECK(role IN ('team_leader','senior','junior','intern')),
           acts_as_planning_leader INTEGER NOT NULL DEFAULT 0 CHECK(acts_as_planning_leader IN (0,1)),
-          cli_provider TEXT CHECK(cli_provider IN ('claude','codex','gemini','opencode','kimi','copilot','antigravity','api')),
+          cli_provider TEXT CHECK(cli_provider IN ('claude','codex','gemini','jules','opencode','kimi','copilot','antigravity','api')),
           oauth_account_id TEXT,
           api_provider_id TEXT,
           api_model TEXT,
           cli_model TEXT,
           cli_reasoning_level TEXT,
+          cli_account_pool_id TEXT,
           avatar_emoji TEXT NOT NULL DEFAULT '🤖',
           sprite_number INTEGER,
           personality TEXT,
@@ -162,7 +169,7 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
         INSERT INTO agents_new (
           id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key,
           role, acts_as_planning_leader, cli_provider, oauth_account_id,
-          api_provider_id, api_model, cli_model, cli_reasoning_level,
+          api_provider_id, api_model, cli_model, cli_reasoning_level, cli_account_pool_id,
           avatar_emoji, sprite_number, personality, status, current_task_id,
           stats_tasks_done, stats_xp, created_at
         )
@@ -182,6 +189,7 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
           api_model,
           cli_model,
           cli_reasoning_level,
+          ${cliAccountPoolExpr},
           avatar_emoji,
           sprite_number,
           personality,
@@ -203,14 +211,14 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
     const historySql =
       (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='skill_learning_history'").get() as any)
         ?.sql ?? "";
-    if (historySql && !historySql.includes("'kimi'")) {
+    if (historySql && (!historySql.includes("'kimi'") || !historySql.includes("'jules'"))) {
       runInTransaction(() => {
         db.exec(`
         DROP TABLE IF EXISTS skill_learning_history_new;
         CREATE TABLE skill_learning_history_new (
           id TEXT PRIMARY KEY,
           job_id TEXT NOT NULL,
-          provider TEXT NOT NULL CHECK(provider IN ('claude','codex','gemini','opencode','kimi','copilot','antigravity','api')),
+          provider TEXT NOT NULL CHECK(provider IN ('claude','codex','gemini','jules','opencode','kimi','copilot','antigravity','api')),
           repo TEXT NOT NULL,
           skill_id TEXT NOT NULL,
           skill_label TEXT NOT NULL,

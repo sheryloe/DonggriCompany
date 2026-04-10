@@ -42,6 +42,7 @@ export type AutoAssignSelectionResult = {
 
 const PACK_DEPARTMENT_PRIORITIES: Record<WorkflowPackKey, string[]> = {
   development: ["dev", "qa", "devsecops", "operations", "planning", "design"],
+  donggri: ["planning", "dev", "qa", "design", "operations", "devsecops"],
   report: ["planning", "qa", "design", "dev", "operations", "devsecops"],
   web_research_report: ["dev", "planning", "qa", "design", "operations", "devsecops"],
   video_preprod: ["design", "planning", "dev", "operations", "qa", "devsecops"],
@@ -50,7 +51,7 @@ const PACK_DEPARTMENT_PRIORITIES: Record<WorkflowPackKey, string[]> = {
 };
 
 const VALID_AGENT_ROLES = new Set(["team_leader", "senior", "junior", "intern"]);
-const VALID_CLI_PROVIDERS = new Set(["claude", "codex", "gemini", "opencode", "kimi", "copilot", "antigravity", "api"]);
+const VALID_CLI_PROVIDERS = new Set(["claude", "codex", "gemini", "jules", "opencode", "kimi", "copilot", "antigravity", "api"]);
 
 type OfficePackProfileAgent = {
   id: string;
@@ -126,7 +127,7 @@ function normalizeOfficePackProfileDepartment(raw: unknown): OfficePackProfileDe
     name_ko: normalizeText(obj.name_ko) || normalizeText(obj.name) || id,
     name_ja: normalizeText(obj.name_ja),
     name_zh: normalizeText(obj.name_zh),
-    icon: normalizeText(obj.icon) || "🏢",
+    icon: normalizeText(obj.icon) || "?룫",
     color: normalizeText(obj.color) || "#64748b",
     description: normalizeOptionalText(obj.description),
     prompt: normalizeOptionalText(obj.prompt),
@@ -158,7 +159,7 @@ function normalizeOfficePackProfileAgent(raw: unknown): OfficePackProfileAgent |
     department_id: normalizeOptionalText(obj.department_id),
     role,
     cli_provider,
-    avatar_emoji: normalizeText(obj.avatar_emoji) || "🤖",
+    avatar_emoji: normalizeText(obj.avatar_emoji) || "?쨼",
     personality: normalizeOptionalText(obj.personality),
     created_at: normalizePositiveInt(obj.created_at, now),
   };
@@ -444,3 +445,4 @@ export function selectAutoAssignableAgentForTask(
 
   return { packKey, agent: fallbackCandidate };
 }
+

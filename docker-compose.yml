@@ -12,6 +12,12 @@ services:
       PORT: 7777
       HOST: 0.0.0.0
       API_AUTH_TOKEN: __CHANGE_ME__
+      OAUTH_ENCRYPTION_SECRET: ${OAUTH_ENCRYPTION_SECRET}
+      OAUTH_BASE_URL: ${OAUTH_BASE_URL}
+      OAUTH_GITHUB_CLIENT_ID: ${OAUTH_GITHUB_CLIENT_ID}
+      OAUTH_GITHUB_CLIENT_SECRET: ${OAUTH_GITHUB_CLIENT_SECRET}
+      OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID}
+      OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET}
       DB_PATH: /app/data/claw-empire.sqlite
       LOGS_DIR: /app/data/logs
       OFFICE_RUNNER_DOCKER_ENABLED: 0
@@ -19,11 +25,16 @@ services:
       OFFICE_RUNNER_MAX_ACTIVE: 5
       OFFICE_RUNNER_IDLE_TTL_MS: 900000
       OFFICE_RUNNER_NETWORK: bridge
+      CLAW_AGENT_AUTO_TOPUP: 0
     ports:
       - "7777:7777"
+      - "8790:7777"
     volumes:
       - ./data:/app/data
+      - ./data/office-accounts:/app/.office-accounts
       - /var/run/docker.sock:/var/run/docker.sock
     working_dir: /app
     security_opt:
       - no-new-privileges:true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

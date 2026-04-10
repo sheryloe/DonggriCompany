@@ -97,6 +97,7 @@ function TestHarness({
     },
     handleApiModelAssign: async () => {},
     handleApiAssignToAgent: async () => {},
+    handleApiAssignToDepartment: async () => {},
   };
 
   return <ApiSettingsTab t={t} localeTag="en-US" apiState={apiState} />;
@@ -242,6 +243,7 @@ describe("ApiSettingsTab", () => {
       handleApiEditStart: () => {},
       handleApiModelAssign: async () => {},
       handleApiAssignToAgent: async () => {},
+      handleApiAssignToDepartment: async () => {},
     };
 
     render(<ApiSettingsTab t={t} localeTag="en-US" apiState={apiState} />);

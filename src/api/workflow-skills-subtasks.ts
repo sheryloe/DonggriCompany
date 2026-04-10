@@ -82,12 +82,57 @@ export interface CliUsageEntry {
   error: string | null; // "unauthenticated" | "unavailable" | "not_implemented" | null
 }
 
-export async function getCliUsage(): Promise<{ ok: boolean; usage: Record<string, CliUsageEntry> }> {
-  return request<{ ok: boolean; usage: Record<string, CliUsageEntry> }>("/api/cli-usage");
+export interface CliPoolUsageEntry {
+  key: string;
+  provider: string;
+  accountPoolId: string;
+  label: string;
+  usage: CliUsageEntry;
 }
 
-export async function refreshCliUsage(): Promise<{ ok: boolean; usage: Record<string, CliUsageEntry> }> {
-  return post("/api/cli-usage/refresh") as Promise<{ ok: boolean; usage: Record<string, CliUsageEntry> }>;
+export interface CliSessionUsageEntry {
+  key: string;
+  provider: "jules";
+  accountPoolId: string;
+  label: string;
+  sessions: {
+    in_progress: number;
+    awaiting: number;
+    completed: number;
+    failed: number;
+    unknown: number;
+    total: number;
+  };
+  lastActive: string | null;
+  error: string | null;
+}
+
+export async function getCliUsage(): Promise<{
+  ok: boolean;
+  usage: Record<string, CliUsageEntry>;
+  poolUsage?: CliPoolUsageEntry[];
+  sessionUsage?: CliSessionUsageEntry[];
+}> {
+  return request<{
+    ok: boolean;
+    usage: Record<string, CliUsageEntry>;
+    poolUsage?: CliPoolUsageEntry[];
+    sessionUsage?: CliSessionUsageEntry[];
+  }>("/api/cli-usage");
+}
+
+export async function refreshCliUsage(): Promise<{
+  ok: boolean;
+  usage: Record<string, CliUsageEntry>;
+  poolUsage?: CliPoolUsageEntry[];
+  sessionUsage?: CliSessionUsageEntry[];
+}> {
+  return post("/api/cli-usage/refresh") as Promise<{
+    ok: boolean;
+    usage: Record<string, CliUsageEntry>;
+    poolUsage?: CliPoolUsageEntry[];
+    sessionUsage?: CliSessionUsageEntry[];
+  }>;
 }
 
 // Skills

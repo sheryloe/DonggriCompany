@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import type { CliAccountPoolView } from "../api";
 import type { Agent, Department } from "../types";
 import { useI18n } from "../i18n";
 import * as api from "../api";
@@ -12,6 +13,8 @@ import DepartmentsTab from "./agent-manager/DepartmentsTab";
 import { StackedSpriteIcon } from "./agent-manager/EmojiPicker";
 import type { AgentManagerProps, FormData } from "./agent-manager/types";
 import { pickRandomSpritePair } from "./agent-manager/utils";
+
+const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "gemini", "jules"];
 
 export default function AgentManager({
   agents,
@@ -36,6 +39,8 @@ export default function AgentManager({
   const [form, setForm] = useState<FormData>({ ...BLANK });
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [cliAccountPools, setCliAccountPools] = useState<CliAccountPoolView[]>([]);
+  const [cliAccountPoolsLoading, setCliAccountPoolsLoading] = useState(false);
 
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [editDept, setEditDept] = useState<Department | null>(null);
@@ -65,6 +70,29 @@ export default function AgentManager({
     setDragOverDeptId(null);
     setDragOverPosition(null);
   }, [departments]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCliAccountPoolsLoading(true);
+    api
+      .getCliAccountPools()
+      .then((pools) => {
+        if (cancelled) return;
+        setCliAccountPools(pools);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("Failed to load CLI account pools:", err);
+          setCliAccountPools([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCliAccountPoolsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const spriteMap = buildSpriteMap(agents);
   const randomIconSprites = useMemo(
@@ -116,6 +144,7 @@ export default function AgentManager({
         department_id: agent.department_id || "",
         role: agent.role,
         cli_provider: agent.cli_provider,
+        cli_account_pool_id: agent.cli_account_pool_id ?? "",
         avatar_emoji: agent.avatar_emoji,
         sprite_number: computed,
         personality: agent.personality || "",
@@ -135,6 +164,15 @@ export default function AgentManager({
     setSaving(true);
     try {
       const departmentId = form.department_id.trim();
+      const providerPools = cliAccountPools.filter((pool) => pool.provider === form.cli_provider);
+      const normalizedCliAccountPoolId =
+        CLI_POOL_PROVIDERS.includes(form.cli_provider)
+          ? form.cli_account_pool_id.trim() || providerPools[0]?.accountPoolId || null
+          : null;
+      if (CLI_POOL_PROVIDERS.includes(form.cli_provider) && !normalizedCliAccountPoolId) {
+        setSaving(false);
+        return;
+      }
       const basePayload = {
         name: form.name.trim(),
         name_ko: form.name_ko.trim(),
@@ -142,10 +180,18 @@ export default function AgentManager({
         name_zh: form.name_zh.trim(),
         role: form.role,
         cli_provider: form.cli_provider,
+        cli_account_pool_id: normalizedCliAccountPoolId,
         avatar_emoji: form.avatar_emoji || "🤖",
         sprite_number: form.sprite_number,
         personality: form.personality.trim() || null,
       };
+      const codexResetPatch =
+        form.cli_provider === "codex"
+          ? {
+              cli_model: null as string | null,
+              cli_reasoning_level: null as string | null,
+            }
+          : {};
       if (isIsolatedPack) {
         if (useDbBackedPack) {
           if (modalAgent) {
@@ -153,6 +199,7 @@ export default function AgentManager({
               ...basePayload,
               department_id: departmentId || null,
               workflow_pack_key: officePackKey,
+              ...codexResetPatch,
             });
             const nextAgents = agents.map((agent) =>
               agent.id === modalAgent.id
@@ -160,6 +207,12 @@ export default function AgentManager({
                     ...agent,
                     ...basePayload,
                     department_id: departmentId || null,
+                    ...(form.cli_provider === "codex"
+                      ? {
+                          cli_model: null,
+                          cli_reasoning_level: null,
+                        }
+                      : {}),
                   }
                 : agent,
             );
@@ -181,6 +234,12 @@ export default function AgentManager({
                       ...agent,
                       ...basePayload,
                       department_id: departmentId || null,
+                      ...(form.cli_provider === "codex"
+                        ? {
+                            cli_model: null,
+                            cli_reasoning_level: null,
+                          }
+                        : {}),
                     }
                   : agent,
               )
@@ -193,6 +252,12 @@ export default function AgentManager({
                       : `agent-${Date.now()}`,
                   ...basePayload,
                   department_id: departmentId || null,
+                  ...(form.cli_provider === "codex"
+                    ? {
+                        cli_model: null,
+                        cli_reasoning_level: null,
+                      }
+                    : {}),
                   status: "idle" as const,
                   current_task_id: null,
                   stats_tasks_done: 0,
@@ -207,6 +272,7 @@ export default function AgentManager({
           await api.updateAgent(modalAgent.id, {
             ...basePayload,
             department_id: departmentId || null,
+            ...codexResetPatch,
           });
         } else {
           await api.createAgent({
@@ -225,6 +291,7 @@ export default function AgentManager({
   }, [
     agents,
     closeModal,
+    cliAccountPools,
     departments,
     form,
     isIsolatedPack,
@@ -579,6 +646,8 @@ export default function AgentManager({
           tr={tr}
           form={form}
           setForm={setForm}
+          cliAccountPools={cliAccountPools}
+          cliAccountPoolsLoading={cliAccountPoolsLoading}
           departments={departments}
           isEdit={!!modalAgent}
           saving={saving}

@@ -3,8 +3,8 @@ import type { DatabaseSync } from "node:sqlite";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
 
-export type ExecutionProvider = "codex" | "gemini" | "jules";
-const EXECUTION_PROVIDERS = new Set<ExecutionProvider>(["codex", "gemini", "jules"]);
+export type ExecutionProvider = "codex" | "gemini" | "claude" | "jules";
+const EXECUTION_PROVIDERS = new Set<ExecutionProvider>(["codex", "gemini", "claude", "jules"]);
 
 export function isExecutionProvider(value: string): value is ExecutionProvider {
   return EXECUTION_PROVIDERS.has(value as ExecutionProvider);

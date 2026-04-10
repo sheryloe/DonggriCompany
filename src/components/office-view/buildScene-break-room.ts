@@ -146,7 +146,7 @@ export function buildBreakRoom({
 
     agentPosRef.current.set(agent.id, { x: spotX, y: spotY });
 
-    const spriteNum = spriteMap.get(agent.id) ?? (seed % 13) + 1;
+    const spriteNum = spriteMap.get(agent.id) ?? (seed % 44) + 1;
     const charContainer = new Container();
     charContainer.position.set(spotX, spotY);
     charContainer.eventMode = "static";

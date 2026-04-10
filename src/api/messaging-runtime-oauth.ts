@@ -301,7 +301,20 @@ export interface OAuthProviderStatus {
 }
 
 export type OAuthConnectProvider = "github-copilot" | "antigravity";
-export type OfficeExecutionProvider = "codex" | "gemini" | "jules";
+export type OfficeExecutionProvider = "codex" | "gemini" | "claude" | "jules";
+
+export interface OfficeOAuthSessionStatus {
+  provider: string;
+  account_pool_id: string;
+  status: "connected" | "expired" | "error" | "disconnected";
+  token_expires_at: number | null;
+  refresh_token_expires_at?: number | null;
+  last_refreshed_at?: number | null;
+  refresh_fail_count?: number;
+  last_error?: string | null;
+  last_error_at?: number | null;
+  updated_at: number;
+}
 
 export interface OAuthStatus {
   storageReady: boolean;
@@ -353,6 +366,26 @@ export async function deleteOAuthAccount(provider: OAuthConnectProvider, account
   return post("/api/oauth/disconnect", { provider, account_id: accountId }) as Promise<{ ok: boolean }>;
 }
 
+// Deprecated office OAuth routes (kept for compatibility, server returns 410)
+export async function getOfficeOAuthSessions(): Promise<OfficeOAuthSessionStatus[]> {
+  const response = await request<{ ok: boolean; sessions: OfficeOAuthSessionStatus[] }>("/api/office/oauth/sessions");
+  return response.sessions ?? [];
+}
+
+export async function connectOfficeOAuthSession(
+  provider: OfficeExecutionProvider,
+  accountPoolId: string,
+): Promise<void> {
+  await post("/api/office/oauth/connect", { provider, accountPoolId });
+}
+
+export async function disconnectOfficeOAuthSession(
+  provider: OfficeExecutionProvider,
+  accountPoolId: string,
+): Promise<void> {
+  await post("/api/office/oauth/disconnect", { provider, accountPoolId });
+}
+
 // GitHub Device Code Flow
 export interface DeviceCodeStart {
   stateId: string;
@@ -390,19 +423,38 @@ export async function getCliModels(refresh = false): Promise<Record<string, CliM
   return j.models;
 }
 
-export interface OfficeOAuthSessionStatus {
+export type CliAccountPoolStatus = "connected" | "auth_required" | "install_required" | "profile_error";
+
+export interface CliAccountPoolView {
   id: string;
-  provider: string;
-  account_pool_id: string;
-  status: "connected" | "expired" | "error" | "disconnected";
-  token_expires_at: number | null;
-  refresh_token_expires_at: number | null;
-  last_refreshed_at: number | null;
-  refresh_fail_count: number;
-  last_error: string | null;
-  last_error_at: number | null;
-  created_at: number;
-  updated_at: number;
+  provider: OfficeExecutionProvider;
+  accountPoolId: string;
+  label: string;
+  profileHome: string;
+  status: CliAccountPoolStatus;
+  lastVerifiedAt: number | null;
+  lastError: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CliAccountVerifyResponse {
+  pool: CliAccountPoolView;
+  binaryInstalled: boolean;
+  authArtifactFound: boolean;
+}
+
+export interface CliAccountLoginCommandResponse {
+  provider: OfficeExecutionProvider;
+  accountPoolId: string;
+  profileHome: string;
+  binaryInstalled: boolean;
+  command: string;
+  note: string | null;
+}
+
+export interface CliAccountListResponse {
+  pools: CliAccountPoolView[];
 }
 
 export interface OfficeRunnerStatusView {
@@ -443,31 +495,62 @@ export interface OfficeCliRunView {
   updated_at: number;
 }
 
-export async function getOfficeOAuthSessions(): Promise<OfficeOAuthSessionStatus[]> {
-  const response = await request<{ ok: boolean; sessions: OfficeOAuthSessionStatus[] }>("/api/office/oauth/sessions");
-  return response.sessions ?? [];
+export async function getCliAccountPools(): Promise<CliAccountPoolView[]> {
+  const response = await request<{ ok: boolean; pools: CliAccountPoolView[] }>("/api/office/cli-accounts");
+  return response.pools ?? [];
 }
 
-export async function connectOfficeOAuthSession(
+export async function createCliAccountPool(
   provider: OfficeExecutionProvider,
   accountPoolId: string,
-): Promise<OfficeOAuthSessionStatus> {
-  const response = await post<{ ok: boolean; session: OfficeOAuthSessionStatus }>("/api/office/oauth/connect", {
+  label?: string,
+): Promise<CliAccountPoolView> {
+  const response = await post<{ ok: boolean; pool: CliAccountPoolView }>("/api/office/cli-accounts", {
     provider,
     accountPoolId,
+    label,
   });
-  return response.session;
+  return response.pool;
 }
 
-export async function disconnectOfficeOAuthSession(
+export async function updateCliAccountPool(
   provider: OfficeExecutionProvider,
   accountPoolId: string,
-): Promise<OfficeOAuthSessionStatus> {
-  const response = await post<{ ok: boolean; session: OfficeOAuthSessionStatus }>("/api/office/oauth/disconnect", {
-    provider,
-    accountPoolId,
+  patch: { label?: string },
+): Promise<CliAccountPoolView> {
+  const response = await request<{ ok: boolean; pool: CliAccountPoolView }>(
+    `/api/office/cli-accounts/${encodeURIComponent(provider)}/${encodeURIComponent(accountPoolId)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    },
+  );
+  return response.pool;
+}
+
+export async function deleteCliAccountPool(provider: OfficeExecutionProvider, accountPoolId: string): Promise<void> {
+  await request<{ ok: boolean }>(`/api/office/cli-accounts/${encodeURIComponent(provider)}/${encodeURIComponent(accountPoolId)}`, {
+    method: "DELETE",
   });
-  return response.session;
+}
+
+export async function verifyCliAccountPool(
+  provider: OfficeExecutionProvider,
+  accountPoolId: string,
+): Promise<CliAccountVerifyResponse> {
+  return post<CliAccountVerifyResponse>(
+    `/api/office/cli-accounts/${encodeURIComponent(provider)}/${encodeURIComponent(accountPoolId)}/verify`,
+  );
+}
+
+export async function getCliAccountLoginCommand(
+  provider: OfficeExecutionProvider,
+  accountPoolId: string,
+): Promise<CliAccountLoginCommandResponse> {
+  return request<CliAccountLoginCommandResponse>(
+    `/api/office/cli-accounts/${encodeURIComponent(provider)}/${encodeURIComponent(accountPoolId)}/login-command`,
+  );
 }
 
 export async function getOfficeRunners(): Promise<{

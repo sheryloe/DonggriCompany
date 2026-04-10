@@ -3,6 +3,7 @@ import { notifyTaskStatus } from "../../../../gateway/client.ts";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { AgentRow } from "../../shared/types.ts";
 import { resolveConstrainedAgentScopeForTask, selectAutoAssignableAgentForTask } from "./execution-run-auto-assign.ts";
+import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
 import { buildWorkflowPackExecutionGuidance } from "../../../workflow/packs/execution-guidance.ts";
 import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-artifact.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/core/video-skill-bootstrap.ts";
@@ -196,6 +197,7 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
           api_model: string | null;
           cli_model: string | null;
           cli_reasoning_level: string | null;
+          cli_account_pool_id: string | null;
           personality: string | null;
           department_id: string | null;
           department_name: string | null;
@@ -232,6 +234,7 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
             api_model: string | null;
             cli_model: string | null;
             cli_reasoning_level: string | null;
+            cli_account_pool_id: string | null;
             personality: string | null;
             department_id: string | null;
             department_name: string | null;
@@ -260,6 +263,7 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
             api_model: string | null;
             cli_model: string | null;
             cli_reasoning_level: string | null;
+            cli_account_pool_id: string | null;
             personality: string | null;
             department_id: string | null;
             department_name: string | null;
@@ -284,7 +288,8 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
     }
 
     const provider = agent.cli_provider || "claude";
-    if (!["claude", "codex", "gemini", "opencode", "kimi", "copilot", "antigravity", "api"].includes(provider)) {
+    const runtimeKind = resolveProviderRuntimeKind(provider);
+    if (!runtimeKind) {
       return res.status(400).json({ error: "unsupported_provider", provider });
     }
     ensureVideoPreprodRemotionBestPracticesSkill({
@@ -337,21 +342,21 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
     const continuationInstruction = continuationCtx
       ? pickL(
           l(
-            ["연속 실행: 동일 소유 컨텍스트를 유지하고, 불필요한 파일 재탐색 없이 미해결 항목만 반영하세요."],
+            ["?곗냽 ?ㅽ뻾: ?숈씪 ?뚯쑀 而⑦뀓?ㅽ듃瑜??좎??섍퀬, 遺덊븘?뷀븳 ?뚯씪 ?ы깘???놁씠 誘명빐寃???ぉ留?諛섏쁺?섏꽭??"],
             [
               "Continuation run: keep the same ownership context, avoid re-reading unrelated files, and apply only unresolved deltas.",
             ],
-            ["継続実行: 同一オーナーシップを維持し、不要な再探索を避けて未解決差分のみ反映してください。"],
-            ["连续执行：保持同一责任上下文，避免重复阅读无关文件，仅处理未解决差异。"],
+            ["Continuation run: keep the same ownership context, avoid re-reading unrelated files, and apply only unresolved deltas."],
+            ["Continuation run: keep the same ownership context, avoid re-reading unrelated files, and apply only unresolved deltas."],
           ),
           taskLang,
         )
       : pickL(
           l(
-            ["반복적인 착수 멘트 없이 바로 실행하세요."],
+            ["諛섎났?곸씤 李⑹닔 硫섑듃 ?놁씠 諛붾줈 ?ㅽ뻾?섏꽭??"],
             ["Execute directly without repeated kickoff narration."],
-            ["繰り返しの開始ナレーションなしで直ちに実行してください。"],
-            ["无需重复开场说明，直接执行。"],
+            ["Execute directly without repeated kickoff narration."],
+            ["Execute directly without repeated kickoff narration."],
           ),
           taskLang,
         );
@@ -365,14 +370,14 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
       ? `\n\n${pickL(
           l(
             [
-              `[작업 계획 출력 규칙]
-작업을 시작하기 전에 아래 JSON 형식으로 계획을 출력하세요:
+              `[?묒뾽 怨꾪쉷 異쒕젰 洹쒖튃]
+?묒뾽???쒖옉?섍린 ?꾩뿉 ?꾨옒 JSON ?뺤떇?쇰줈 怨꾪쉷??異쒕젰?섏꽭??
 \`\`\`json
-{"subtasks": [{"title": "서브태스크 제목1"}, {"title": "서브태스크 제목2"}]}
+{"subtasks": [{"title": "?쒕툕?쒖뒪???쒕ぉ1"}, {"title": "?쒕툕?쒖뒪???쒕ぉ2"}]}
 \`\`\`
-각 서브태스크를 완료할 때마다 아래 형식으로 보고하세요:
+媛??쒕툕?쒖뒪?щ? ?꾨즺???뚮쭏???꾨옒 ?뺤떇?쇰줈 蹂닿퀬?섏꽭??
 \`\`\`json
-{"subtask_done": "완료된 서브태스크 제목"}
+{"subtask_done": "?꾨즺???쒕툕?쒖뒪???쒕ぉ"}
 \`\`\``,
             ],
             [
@@ -387,25 +392,25 @@ Whenever you complete a subtask, report it in this format:
 \`\`\``,
             ],
             [
-              `[作業計画の出力ルール]
-作業開始前に、次の JSON 形式で計画を出力してください:
+              `[鵝쒏?鼇덄뵽??눣?쎼꺂?쇈꺂]
+鵝쒏??뗥쭓?띲겓?곫А??JSON 壤℡폀?㎬쮫?삠굮?뷴뒟?쀣겍?뤵걽?뺛걚:
 \`\`\`json
-{"subtasks": [{"title": "サブタスク1"}, {"title": "サブタスク2"}]}
+{"subtasks": [{"title": "?듐깣?욍궧??"}, {"title": "?듐깣?욍궧??"}]}
 \`\`\`
-各サブタスクを完了するたびに、次の形式で報告してください:
+?꾠궢?뽧궭?밤궚?믣츑雅녴걲?뗣걼?녈겓?곫А??숱凉뤵겎?긷몜?쀣겍?뤵걽?뺛걚:
 \`\`\`json
-{"subtask_done": "完了したサブタスク"}
+{"subtask_done": "done subtask title"}
 \`\`\``,
             ],
             [
-              `[任务计划输出规则]
-开始工作前，请按下述 JSON 格式输出计划:
+              `[餓삣뒦溫▼닋渦볟눣鰲꾢닕]
+凉冶뗥램鵝쒎뎺竊뚩??됦툔瓦?JSON ?쇔폀渦볟눣溫▼닋:
 \`\`\`json
-{"subtasks": [{"title": "子任务1"}, {"title": "子任务2"}]}
+{"subtasks": [{"title": "耶먧뻣??"}, {"title": "耶먧뻣??"}]}
 \`\`\`
-每完成一个子任务，请按下述格式汇报:
+驪뤷츑?먧?訝ゅ춴餓삣뒦竊뚩??됦툔瓦경졏凉뤸콋??
 \`\`\`json
-{"subtask_done": "已完成的子任务"}
+{"subtask_done": "done subtask title"}
 \`\`\``,
             ],
           ),
@@ -428,16 +433,16 @@ Whenever you complete a subtask, report it in this format:
     const runInstruction = pickL(
       l(
         [
-          "위 작업을 충분히 완수하세요. 위 대화 맥락과 프로젝트 구조를 참고해도 좋지만, 프로젝트 구조 탐색에 시간을 쓰지 마세요. 필요한 구조는 이미 제공되었습니다.",
+          "???묒뾽??異⑸텇???꾩닔?섏꽭?? ?????留λ씫怨??꾨줈?앺듃 援ъ“瑜?李멸퀬?대룄 醫뗭?留? ?꾨줈?앺듃 援ъ“ ?먯깋???쒓컙???곗? 留덉꽭?? ?꾩슂??援ъ“???대? ?쒓났?섏뿀?듬땲??",
         ],
         [
           "Please complete the task above thoroughly. Use the continuation brief, conversation context, and project structure above if relevant. Do NOT spend time exploring the project structure again unless required by unresolved checklist items.",
         ],
         [
-          "上記タスクを丁寧に完了してください。必要に応じて継続要約・会話コンテキスト・プロジェクト構成を参照できますが、未解決チェックリストに必要な場合を除き、構成探索に時間を使わないでください。",
+          "Please complete the task above thoroughly. Use the continuation brief, conversation context, and project structure above if relevant. Do NOT spend time exploring the project structure again unless required by unresolved checklist items.",
         ],
         [
-          "请完整地完成上述任务。可按需参考连续执行摘要、会话上下文和项目结构，但除非未解决清单确有需要，不要再次花时间探索项目结构。",
+          "Please complete the task above thoroughly. Use the continuation brief, conversation context, and project structure above if relevant. Do NOT spend time exploring the project structure again unless required by unresolved checklist items.",
         ],
       ),
       taskLang,
@@ -502,7 +507,7 @@ Whenever you complete a subtask, report it in this format:
 
     appendTaskLog(id, "system", `RUN start (agent=${agent.name}, provider=${provider})`);
 
-    if (provider === "api") {
+    if (runtimeKind === "api") {
       const controller = new AbortController();
       const fakePid = getNextHttpAgentPid();
 
@@ -521,20 +526,20 @@ Whenever you complete a subtask, report it in this format:
       const assigneeName = getAgentDisplayName(agent as unknown as AgentRow, taskLang);
       const worktreeNote = pickL(
         l(
-          [` (격리 브랜치: climpire/${id.slice(0, 8)})`],
+          [` (寃⑸━ 釉뚮옖移? climpire/${id.slice(0, 8)})`],
           [` (isolated branch: climpire/${id.slice(0, 8)})`],
-          [` (分離ブランチ: climpire/${id.slice(0, 8)})`],
-          [`（隔离分支: climpire/${id.slice(0, 8)}）`],
+          [` (?녽썴?뽧꺀?녈긽: climpire/${id.slice(0, 8)})`],
+          [` (isolated branch: climpire/${id.slice(0, 8)})`],
         ),
         taskLang,
       );
       notifyCeo(
         pickL(
           l(
-            [`${assigneeName}가 '${task.title}' 작업을 시작했습니다.${worktreeNote}`],
+            [`${assigneeName}媛 '${task.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
             [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-            [`${assigneeName}が '${task.title}' の作業を開始しました。${worktreeNote}`],
-            [`${assigneeName} 已开始处理 '${task.title}'。${worktreeNote}`],
+            [`${assigneeName}??'${task.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],
+            [`${assigneeName} 藥꿨?冶뗥쨪??'${task.title}'??{worktreeNote}`],
           ),
           taskLang,
         ),
@@ -559,7 +564,7 @@ Whenever you complete a subtask, report it in this format:
       return res.json({ ok: true, pid: fakePid, logPath, cwd: agentCwd, worktree: !!worktreePath });
     }
 
-    if (provider === "copilot" || provider === "antigravity") {
+    if (runtimeKind === "http_stream") {
       const controller = new AbortController();
       const fakePid = getNextHttpAgentPid();
 
@@ -578,20 +583,20 @@ Whenever you complete a subtask, report it in this format:
       const assigneeName = getAgentDisplayName(agent as unknown as AgentRow, taskLang);
       const worktreeNote = pickL(
         l(
-          [` (격리 브랜치: climpire/${id.slice(0, 8)})`],
+          [` (寃⑸━ 釉뚮옖移? climpire/${id.slice(0, 8)})`],
           [` (isolated branch: climpire/${id.slice(0, 8)})`],
-          [` (分離ブランチ: climpire/${id.slice(0, 8)})`],
-          [`（隔离分支: climpire/${id.slice(0, 8)}）`],
+          [` (?녽썴?뽧꺀?녈긽: climpire/${id.slice(0, 8)})`],
+          [` (isolated branch: climpire/${id.slice(0, 8)})`],
         ),
         taskLang,
       );
       notifyCeo(
         pickL(
           l(
-            [`${assigneeName}가 '${task.title}' 작업을 시작했습니다.${worktreeNote}`],
+            [`${assigneeName}媛 '${task.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
             [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-            [`${assigneeName}が '${task.title}' の作業を開始しました。${worktreeNote}`],
-            [`${assigneeName} 已开始处理 '${task.title}'。${worktreeNote}`],
+            [`${assigneeName}??'${task.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],
+            [`${assigneeName} 藥꿨?冶뗥쨪??'${task.title}'??{worktreeNote}`],
           ),
           taskLang,
         ),
@@ -607,7 +612,16 @@ Whenever you complete a subtask, report it in this format:
       return res.json({ ok: true, pid: fakePid, logPath, cwd: agentCwd, worktree: !!worktreePath });
     }
 
-    const child = spawnCliAgent(id, provider, prompt, agentCwd, logPath, mainModel, mainReasoningLevel);
+    const child = spawnCliAgent(
+      id,
+      provider,
+      prompt,
+      agentCwd,
+      logPath,
+      mainModel,
+      mainReasoningLevel,
+      agent.cli_account_pool_id ?? null,
+    );
 
     child.on("close", (code: number | null) => {
       handleTaskRunComplete(id, code ?? 1);
@@ -628,20 +642,20 @@ Whenever you complete a subtask, report it in this format:
     const assigneeName = getAgentDisplayName(agent as unknown as AgentRow, taskLang);
     const worktreeNote = pickL(
       l(
-        [` (격리 브랜치: climpire/${id.slice(0, 8)})`],
+        [` (寃⑸━ 釉뚮옖移? climpire/${id.slice(0, 8)})`],
         [` (isolated branch: climpire/${id.slice(0, 8)})`],
-        [` (分離ブランチ: climpire/${id.slice(0, 8)})`],
-        [`（隔离分支: climpire/${id.slice(0, 8)}）`],
+        [` (?녽썴?뽧꺀?녈긽: climpire/${id.slice(0, 8)})`],
+        [` (isolated branch: climpire/${id.slice(0, 8)})`],
       ),
       taskLang,
     );
     notifyCeo(
       pickL(
         l(
-          [`${assigneeName}가 '${task.title}' 작업을 시작했습니다.${worktreeNote}`],
+          [`${assigneeName}媛 '${task.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
           [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-          [`${assigneeName}が '${task.title}' の作業を開始しました。${worktreeNote}`],
-          [`${assigneeName} 已开始处理 '${task.title}'。${worktreeNote}`],
+          [`${assigneeName}??'${task.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],
+          [`${assigneeName} 藥꿨?冶뗥쨪??'${task.title}'??{worktreeNote}`],
         ),
         taskLang,
       ),

@@ -95,6 +95,70 @@ describe("useApiProvidersState preset loading", () => {
     expect(apiMocks.getApiProviderPresets).toHaveBeenCalledTimes(2);
     expect(result.current.apiOfficialPresets["opencode-go-openai"]?.label).toBe("OpenCode Go (OpenAI)");
   });
+
+  it("assigns an API model to every agent in the selected department", async () => {
+    apiMocks.getAgents.mockResolvedValueOnce([
+      { id: "design-lead", department_id: "design", workflow_pack_key: "development", cli_provider: "claude" },
+      { id: "design-junior", department_id: "design", workflow_pack_key: "development", cli_provider: "gemini" },
+      { id: "dev-senior", department_id: "dev", workflow_pack_key: "development", cli_provider: "codex" },
+    ]);
+    apiMocks.getDepartments.mockResolvedValue([
+      { id: "design", name: "Design", name_ko: "디자인", workflow_pack_key: "development" },
+      { id: "dev", name: "Development", name_ko: "개발", workflow_pack_key: "development" },
+    ]);
+    apiMocks.updateAgent.mockResolvedValue({ ok: true });
+
+    const { result } = renderHook(() =>
+      useApiProvidersState({
+        tab: "api",
+        t,
+        settings: makeSettings(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.getApiProviders).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      await result.current.handleApiModelAssign("provider-google", "gemini-2.5-flash-image");
+    });
+
+    await act(async () => {
+      await result.current.handleApiAssignToDepartment("design", "development");
+    });
+
+    expect(apiMocks.updateAgent).toHaveBeenCalledTimes(2);
+    expect(apiMocks.updateAgent).toHaveBeenNthCalledWith(1, "design-lead", {
+      cli_provider: "api",
+      api_provider_id: "provider-google",
+      api_model: "gemini-2.5-flash-image",
+    });
+    expect(apiMocks.updateAgent).toHaveBeenNthCalledWith(2, "design-junior", {
+      cli_provider: "api",
+      api_provider_id: "provider-google",
+      api_model: "gemini-2.5-flash-image",
+    });
+    expect(result.current.apiAssignAgents).toEqual([
+      {
+        id: "design-lead",
+        department_id: "design",
+        workflow_pack_key: "development",
+        cli_provider: "api",
+        api_provider_id: "provider-google",
+        api_model: "gemini-2.5-flash-image",
+      },
+      {
+        id: "design-junior",
+        department_id: "design",
+        workflow_pack_key: "development",
+        cli_provider: "api",
+        api_provider_id: "provider-google",
+        api_model: "gemini-2.5-flash-image",
+      },
+      { id: "dev-senior", department_id: "dev", workflow_pack_key: "development", cli_provider: "codex" },
+    ]);
+  });
 });
 
 describe("useApiProvidersState model assignment", () => {

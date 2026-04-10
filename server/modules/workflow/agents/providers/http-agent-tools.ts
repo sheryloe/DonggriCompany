@@ -88,6 +88,10 @@ export function createHttpAgentTools(deps: CreateHttpAgentToolsDeps) {
     return model;
   }
 
+  function resolveAntigravityPlatform(): "PLATFORM_UNSPECIFIED" {
+    return "PLATFORM_UNSPECIFIED";
+  }
+
   async function executeCopilotAgent(
     prompt: string,
     projectPath: string,
@@ -254,6 +258,7 @@ export function createHttpAgentTools(deps: CreateHttpAgentToolsDeps) {
 
         const baseEndpoint = ANTIGRAVITY_ENDPOINTS[0];
         const url = `${baseEndpoint}/v1internal:streamGenerateContent?alt=sse`;
+        const platform = resolveAntigravityPlatform();
         const resp = await fetch(url, {
           method: "POST",
           headers: {
@@ -262,9 +267,10 @@ export function createHttpAgentTools(deps: CreateHttpAgentToolsDeps) {
             Accept: "text/event-stream",
             "User-Agent": `antigravity/1.15.8 ${process.platform === "darwin" ? "darwin/arm64" : "linux/amd64"}`,
             "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
+            "X-Goog-User-Project": projectId,
             "Client-Metadata": JSON.stringify({
               ideType: "ANTIGRAVITY",
-              platform: process.platform === "win32" ? "WINDOWS" : "MACOS",
+              platform,
               pluginType: "GEMINI",
             }),
           },
@@ -283,6 +289,11 @@ export function createHttpAgentTools(deps: CreateHttpAgentToolsDeps) {
 
         if (!resp.ok) {
           const text = await resp.text();
+          if (resp.status === 403) {
+            throw new Error(
+              `Antigravity API error (403): ${text}\nHint: account '${accountName}' cannot access project '${projectId}' or model '${model}'.`,
+            );
+          }
           throw new Error(`Antigravity API error (${resp.status}): ${text}`);
         }
 

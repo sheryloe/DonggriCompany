@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Department } from "../../types";
+import type { CliAccountPoolView } from "../../api";
 import { localeName, useI18n } from "../../i18n";
 import * as api from "../../api";
 import { CLI_PROVIDERS, ROLE_BADGE, ROLE_LABEL, ROLES } from "./constants";
 import EmojiPicker from "./EmojiPicker";
 import type { FormData } from "./types";
+
+const CLI_POOL_PROVIDERS: FormData["cli_provider"][] = ["codex", "gemini", "jules"];
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -21,6 +24,8 @@ export default function AgentFormModal({
   tr,
   form,
   setForm,
+  cliAccountPools,
+  cliAccountPoolsLoading,
   departments,
   isEdit,
   saving,
@@ -32,6 +37,8 @@ export default function AgentFormModal({
   tr: (ko: string, en: string) => string;
   form: FormData;
   setForm: (f: FormData) => void;
+  cliAccountPools: CliAccountPoolView[];
+  cliAccountPoolsLoading: boolean;
   departments: Department[];
   isEdit: boolean;
   saving: boolean;
@@ -46,6 +53,11 @@ export default function AgentFormModal({
   const [spriteNum, setSpriteNum] = useState(form.sprite_number ?? 0);
   const [registering, setRegistering] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const requiresCliPool = CLI_POOL_PROVIDERS.includes(form.cli_provider);
+  const selectedProviderPools = useMemo(
+    () => cliAccountPools.filter((pool) => pool.provider === form.cli_provider),
+    [cliAccountPools, form.cli_provider],
+  );
 
   // ESC 키로 닫기
   useEffect(() => {
@@ -56,6 +68,37 @@ export default function AgentFormModal({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  useEffect(() => {
+    if (!requiresCliPool) {
+      if (form.cli_account_pool_id) {
+        setForm({ ...form, cli_account_pool_id: "" });
+      }
+      return;
+    }
+    if (selectedProviderPools.length === 0) return;
+    const hasSelected = selectedProviderPools.some((pool) => pool.accountPoolId === form.cli_account_pool_id);
+    if (hasSelected) return;
+    setForm({
+      ...form,
+      cli_account_pool_id: selectedProviderPools[0].accountPoolId,
+    });
+  }, [requiresCliPool, selectedProviderPools, form, setForm]);
+
+  const selectedProviderPoolLabelCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const pool of selectedProviderPools) {
+      const base = String(pool.label || pool.accountPoolId).trim() || pool.accountPoolId;
+      counts.set(base, (counts.get(base) ?? 0) + 1);
+    }
+    return counts;
+  }, [selectedProviderPools]);
+
+  const formatPoolOption = (pool: CliAccountPoolView): string => {
+    const base = String(pool.label || pool.accountPoolId).trim() || pool.accountPoolId;
+    const duplicated = (selectedProviderPoolLabelCounts.get(base) ?? 0) > 1;
+    return duplicated ? `${base} (${pool.accountPoolId})` : base;
+  };
+
   const inputCls =
     "w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-colors";
   const inputStyle = {
@@ -63,6 +106,7 @@ export default function AgentFormModal({
     borderColor: "var(--th-input-border)",
     color: "var(--th-text-primary)",
   };
+  const canSave = Boolean(form.name.trim()) && (!requiresCliPool || Boolean(form.cli_account_pool_id));
 
   return (
     <div
@@ -292,7 +336,17 @@ export default function AgentFormModal({
                   return (
                     <button
                       key={p}
-                      onClick={() => setForm({ ...form, cli_provider: p })}
+                      onClick={() => {
+                        const nextPools = cliAccountPools.filter((pool) => pool.provider === p);
+                        const nextPoolId = CLI_POOL_PROVIDERS.includes(p)
+                          ? form.cli_account_pool_id || nextPools[0]?.accountPoolId || ""
+                          : "";
+                        setForm({
+                          ...form,
+                          cli_provider: p,
+                          cli_account_pool_id: nextPoolId,
+                        });
+                      }}
                       className={`px-2.5 py-1.5 rounded-lg text-[11px] font-mono border transition-all ${
                         active ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : ""
                       }`}
@@ -306,6 +360,34 @@ export default function AgentFormModal({
                 })}
               </div>
             </div>
+            {requiresCliPool && (
+              <div>
+                <label className="block text-xs mb-1.5 font-medium" style={{ color: "var(--th-text-secondary)" }}>
+                  {tr("CLI 계정풀", "CLI Account Pool")}
+                </label>
+                <select
+                  value={form.cli_account_pool_id}
+                  onChange={(e) => setForm({ ...form, cli_account_pool_id: e.target.value })}
+                  className={inputCls + " cursor-pointer"}
+                  style={inputStyle}
+                  disabled={cliAccountPoolsLoading || selectedProviderPools.length === 0}
+                >
+                  {selectedProviderPools.length === 0 ? (
+                    <option value="">
+                      {cliAccountPoolsLoading
+                        ? tr("계정풀 불러오는 중...", "Loading account pools...")
+                        : tr("연결된 계정풀 없음", "No connected account pool")}
+                    </option>
+                  ) : (
+                    selectedProviderPools.map((pool) => (
+                      <option key={pool.id} value={pool.accountPoolId}>
+                        {formatPoolOption(pool)}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            )}
             {/* 성격/프롬프트 */}
             <div>
               <label className="block text-xs mb-1.5 font-medium" style={{ color: "var(--th-text-secondary)" }}>
@@ -483,7 +565,7 @@ export default function AgentFormModal({
         <div className="flex gap-2 mt-5 pt-4" style={{ borderTop: "1px solid var(--th-card-border)" }}>
           <button
             onClick={onSave}
-            disabled={saving || !form.name.trim()}
+            disabled={saving || !canSave}
             className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white disabled:opacity-40 shadow-sm shadow-blue-600/20"
           >
             {saving

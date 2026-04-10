@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { OAuthStatus } from "../api";
+import type { CliAccountPoolView, OAuthStatus } from "../api";
 import * as api from "../api";
 import { localeName, useI18n } from "../i18n";
 import type {
   Agent,
   CliModelInfo,
   Department,
-  ReasoningLevelOption,
   SubAgent,
   SubTask,
   Task,
@@ -32,13 +31,8 @@ interface AgentDetailProps {
   onAgentUpdated?: () => void;
 }
 
-const CLI_MODEL_OVERRIDE_PROVIDERS: Agent["cli_provider"][] = ["claude", "codex", "gemini", "opencode", "kimi"];
-const CODEX_REASONING_FALLBACK_OPTIONS: ReasoningLevelOption[] = [
-  { effort: "low", description: "Faster, lower depth" },
-  { effort: "medium", description: "Balanced default" },
-  { effort: "high", description: "Higher reasoning depth" },
-  { effort: "xhigh", description: "Maximum reasoning depth" },
-];
+const CLI_MODEL_OVERRIDE_PROVIDERS: Agent["cli_provider"][] = ["claude", "gemini", "opencode", "kimi"];
+const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "gemini", "jules"];
 
 export default function AgentDetail({
   agent,
@@ -63,7 +57,9 @@ export default function AgentDetail({
   const [selectedApiProviderId, setSelectedApiProviderId] = useState(agent.api_provider_id ?? "");
   const [selectedApiModel, setSelectedApiModel] = useState(agent.api_model ?? "");
   const [selectedCliModel, setSelectedCliModel] = useState(agent.cli_model ?? "");
-  const [selectedCliReasoningLevel, setSelectedCliReasoningLevel] = useState(agent.cli_reasoning_level ?? "");
+  const [selectedCliAccountPoolId, setSelectedCliAccountPoolId] = useState(agent.cli_account_pool_id ?? "");
+  const [cliAccountPools, setCliAccountPools] = useState<CliAccountPoolView[]>([]);
+  const [cliAccountPoolsLoading, setCliAccountPoolsLoading] = useState(false);
   const [savingCli, setSavingCli] = useState(false);
   const [oauthStatus, setOauthStatus] = useState<OAuthStatus | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
@@ -94,42 +90,65 @@ export default function AgentDetail({
   }, [oauthProviderKey, oauthStatus]);
   const requiresOAuthAccount = selectedCli === "copilot" || selectedCli === "antigravity";
   const requiresApiProvider = selectedCli === "api";
+  const requiresCliPool = CLI_POOL_PROVIDERS.includes(selectedCli);
   const supportsCliModelOverride = CLI_MODEL_OVERRIDE_PROVIDERS.includes(selectedCli);
   const selectedCliModelOptions = useMemo(() => cliModels[selectedCli] ?? [], [cliModels, selectedCli]);
-  const selectedCliModelMeta = useMemo(
-    () => selectedCliModelOptions.find((model) => model.slug === selectedCliModel),
-    [selectedCliModelOptions, selectedCliModel],
+  const selectedCliAccountPools = useMemo(
+    () => cliAccountPools.filter((pool) => pool.provider === selectedCli),
+    [cliAccountPools, selectedCli],
   );
-  const codexReasoningOptions = useMemo(() => {
-    if (selectedCli !== "codex") return [];
-    if (selectedCliModelMeta?.reasoningLevels && selectedCliModelMeta.reasoningLevels.length > 0) {
-      return selectedCliModelMeta.reasoningLevels;
+  const poolLabelCountsByProvider = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    for (const pool of cliAccountPools) {
+      const base = String(pool.label || pool.accountPoolId).trim() || pool.accountPoolId;
+      const provider = String(pool.provider || "").trim();
+      if (!provider) continue;
+      const providerCounts = map.get(provider) ?? new Map<string, number>();
+      providerCounts.set(base, (providerCounts.get(base) ?? 0) + 1);
+      map.set(provider, providerCounts);
     }
-    return CODEX_REASONING_FALLBACK_OPTIONS;
-  }, [selectedCli, selectedCliModelMeta]);
-  const canSaveCli = requiresApiProvider ? false : !requiresOAuthAccount || Boolean(selectedOAuthAccountId);
-  const getReasoningDescription = useCallback(
-    (effort: string, fallback?: string) => {
-      switch (effort) {
-        case "low":
-          return t({ ko: "빠름, 낮은 깊이", en: "Faster, lower depth", ja: "高速・浅い推論", zh: "更快，较浅推理" });
-        case "medium":
-          return t({ ko: "균형 기본값", en: "Balanced default", ja: "バランス既定", zh: "均衡默认" });
-        case "high":
-          return t({ ko: "높은 추론 깊이", en: "Higher reasoning depth", ja: "高い推論深度", zh: "更高推理深度" });
-        case "xhigh":
-          return t({
-            ko: "최대 추론 깊이",
-            en: "Maximum reasoning depth",
-            ja: "最大推論深度",
-            zh: "最高推理深度",
-          });
-        default:
-          return fallback || "";
-      }
+    return map;
+  }, [cliAccountPools]);
+  const formatPoolLabel = useCallback(
+    (pool: CliAccountPoolView) => {
+      const base = String(pool.label || pool.accountPoolId).trim() || pool.accountPoolId;
+      const providerCounts = poolLabelCountsByProvider.get(String(pool.provider || "").trim());
+      return (providerCounts?.get(base) ?? 0) > 1 ? `${base} (${pool.accountPoolId})` : base;
     },
-    [t],
+    [poolLabelCountsByProvider],
   );
+  const poolSummaryLabel = useMemo(() => {
+    const fallback = t({
+      ko: "Pool 미지정",
+      en: "Pool not set",
+      ja: "Pool not set",
+      zh: "Pool not set",
+    });
+    if (!CLI_POOL_PROVIDERS.includes(agent.cli_provider)) return fallback;
+    const poolId = String(agent.cli_account_pool_id ?? "").trim();
+    if (!poolId) return fallback;
+    const matched = cliAccountPools.find(
+      (pool) => pool.provider === agent.cli_provider && pool.accountPoolId === poolId,
+    );
+    return matched ? formatPoolLabel(matched) : poolId;
+  }, [agent.cli_account_pool_id, agent.cli_provider, cliAccountPools, formatPoolLabel, t]);
+  const cliSummaryText = useMemo(() => {
+    if (agent.cli_provider === "api" && agent.api_model) {
+      return `API: ${agent.api_model}`;
+    }
+    if (CLI_POOL_PROVIDERS.includes(agent.cli_provider)) {
+      const providerLabel = CLI_LABELS[agent.cli_provider] ?? agent.cli_provider;
+      return `${providerLabel} · ${poolSummaryLabel}`;
+    }
+    const providerLabel = CLI_LABELS[agent.cli_provider] ?? agent.cli_provider;
+    if (agent.cli_model && CLI_MODEL_OVERRIDE_PROVIDERS.includes(agent.cli_provider) && agent.cli_provider !== "api") {
+      return `${providerLabel} · ${agent.cli_model}`;
+    }
+    return providerLabel;
+  }, [agent.api_model, agent.cli_model, agent.cli_provider, poolSummaryLabel]);
+  const canSaveCli =
+    (requiresApiProvider ? false : !requiresOAuthAccount || Boolean(selectedOAuthAccountId)) &&
+    (!requiresCliPool || Boolean(selectedCliAccountPoolId));
 
   const xpLevel = Math.floor(agent.stats_xp / 100) + 1;
   const xpProgress = agent.stats_xp % 100;
@@ -140,7 +159,7 @@ export default function AgentDetail({
     setSelectedApiProviderId(agent.api_provider_id ?? "");
     setSelectedApiModel(agent.api_model ?? "");
     setSelectedCliModel(agent.cli_model ?? "");
-    setSelectedCliReasoningLevel(agent.cli_reasoning_level ?? "");
+    setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
     setActsAsPlanningLead(Number(agent.acts_as_planning_leader ?? 0) === 1);
   }, [
     agent.id,
@@ -149,7 +168,7 @@ export default function AgentDetail({
     agent.api_provider_id,
     agent.api_model,
     agent.cli_model,
-    agent.cli_reasoning_level,
+    agent.cli_account_pool_id,
     agent.acts_as_planning_leader,
   ]);
 
@@ -183,6 +202,26 @@ export default function AgentDetail({
   }, [editingCli, supportsCliModelOverride, cliModels]);
 
   useEffect(() => {
+    if (!editingCli && !CLI_POOL_PROVIDERS.includes(agent.cli_provider)) return;
+    if (editingCli && !requiresCliPool) return;
+    let cancelled = false;
+    setCliAccountPoolsLoading(true);
+    api
+      .getCliAccountPools()
+      .then((pools) => {
+        if (cancelled) return;
+        setCliAccountPools(pools);
+      })
+      .catch((err) => console.error("Failed to load CLI account pools:", err))
+      .finally(() => {
+        if (!cancelled) setCliAccountPoolsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editingCli, selectedCli, agent.cli_provider, requiresCliPool]);
+
+  useEffect(() => {
     if (!requiresOAuthAccount) {
       if (selectedOAuthAccountId) setSelectedOAuthAccountId("");
       return;
@@ -200,15 +239,15 @@ export default function AgentDetail({
   }, [supportsCliModelOverride, selectedCliModel]);
 
   useEffect(() => {
-    if (selectedCli !== "codex" && selectedCliReasoningLevel) {
-      setSelectedCliReasoningLevel("");
+    if (!requiresCliPool) {
+      if (selectedCliAccountPoolId) setSelectedCliAccountPoolId("");
       return;
     }
-    if (selectedCli === "codex" && selectedCliReasoningLevel) {
-      const isValid = codexReasoningOptions.some((level) => level.effort === selectedCliReasoningLevel);
-      if (!isValid) setSelectedCliReasoningLevel("");
-    }
-  }, [selectedCli, selectedCliReasoningLevel, codexReasoningOptions]);
+    if (selectedCliAccountPools.length === 0) return;
+    const exists = selectedCliAccountPools.some((pool) => pool.accountPoolId === selectedCliAccountPoolId);
+    if (exists) return;
+    setSelectedCliAccountPoolId(selectedCliAccountPools[0].accountPoolId);
+  }, [requiresCliPool, selectedCliAccountPoolId, selectedCliAccountPools]);
 
   const handleSaveCli = useCallback(async () => {
     setSavingCli(true);
@@ -218,8 +257,10 @@ export default function AgentDetail({
         oauth_account_id: requiresOAuthAccount ? selectedOAuthAccountId || null : null,
         api_provider_id: requiresApiProvider ? selectedApiProviderId || null : null,
         api_model: requiresApiProvider ? selectedApiModel || null : null,
-        cli_model: supportsCliModelOverride ? selectedCliModel || null : null,
-        cli_reasoning_level: selectedCli === "codex" ? selectedCliReasoningLevel || null : null,
+        cli_model: selectedCli === "codex" ? null : supportsCliModelOverride ? selectedCliModel || null : null,
+        cli_reasoning_level: null,
+        cli_account_pool_id:
+          requiresCliPool ? selectedCliAccountPoolId || selectedCliAccountPools[0]?.accountPoolId || null : null,
       });
       onAgentUpdated?.();
       setEditingCli(false);
@@ -238,7 +279,9 @@ export default function AgentDetail({
     selectedApiModel,
     supportsCliModelOverride,
     selectedCliModel,
-    selectedCliReasoningLevel,
+    requiresCliPool,
+    selectedCliAccountPoolId,
+    selectedCliAccountPools,
     onAgentUpdated,
   ]);
 
@@ -249,14 +292,14 @@ export default function AgentDetail({
     setSelectedApiProviderId(agent.api_provider_id ?? "");
     setSelectedApiModel(agent.api_model ?? "");
     setSelectedCliModel(agent.cli_model ?? "");
-    setSelectedCliReasoningLevel(agent.cli_reasoning_level ?? "");
+    setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
   }, [
     agent.cli_provider,
     agent.oauth_account_id,
     agent.api_provider_id,
     agent.api_model,
     agent.cli_model,
-    agent.cli_reasoning_level,
+    agent.cli_account_pool_id,
   ]);
 
   const resolvePackLabel = useCallback(
@@ -429,7 +472,7 @@ export default function AgentDetail({
               )}
               <div className="text-xs text-slate-500 mt-0.5">
                 {editingCli ? (
-                  selectedCli === "codex" ? (
+                  requiresCliPool ? (
                     <div className="space-y-1">
                       <div className="flex w-full min-w-0 items-center gap-1 pb-0.5">
                         <span className="shrink-0">🔧</span>
@@ -438,7 +481,7 @@ export default function AgentDetail({
                           onChange={(event) => {
                             setSelectedCli(event.target.value as Agent["cli_provider"]);
                             setSelectedCliModel("");
-                            setSelectedCliReasoningLevel("");
+                            setSelectedCliAccountPoolId("");
                           }}
                           className="w-[94px] shrink-0 bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                         >
@@ -448,86 +491,42 @@ export default function AgentDetail({
                             </option>
                           ))}
                         </select>
-                        {cliModelsLoading ? (
+                        {cliAccountPoolsLoading ? (
                           <span className="text-[10px] text-slate-400">
                             {t({
-                              ko: "모델 로딩...",
-                              en: "Loading models...",
-                              ja: "モデル読み込み中...",
-                              zh: "正在加载模型...",
+                              ko: "계정풀 로딩...",
+                              en: "Loading pools...",
+                              ja: "Loading pools...",
+                              zh: "Loading pools...",
                             })}
                           </span>
-                        ) : selectedCliModelOptions.length > 0 ? (
-                          <>
-                            <select
-                              value={selectedCliModel}
-                              onChange={(event) => {
-                                const nextModel = event.target.value;
-                                setSelectedCliModel(nextModel);
-                                const nextMeta = selectedCliModelOptions.find((model) => model.slug === nextModel);
-                                setSelectedCliReasoningLevel(nextMeta?.defaultReasoningLevel || "");
-                              }}
-                              className="w-0 min-w-0 flex-1 bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
-                            >
+                        ) : (
+                          <select
+                            value={selectedCliAccountPoolId}
+                            onChange={(event) => setSelectedCliAccountPoolId(event.target.value)}
+                            className="w-0 min-w-0 flex-1 bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
+                            disabled={selectedCliAccountPools.length === 0}
+                          >
+                            {selectedCliAccountPools.length === 0 ? (
                               <option value="">
                                 {t({
-                                  ko: "기본값(설정창 모델)",
-                                  en: "Default (Settings model)",
-                                  ja: "デフォルト（設定モデル）",
-                                  zh: "默认（设置中的模型）",
+                                  ko: "연결된 계정풀 없음",
+                                  en: "No connected account pool",
+                                  ja: "No connected account pool",
+                                  zh: "No connected account pool",
                                 })}
                               </option>
-                              {selectedCliModelOptions.map((model) => (
-                                <option key={model.slug} value={model.slug}>
-                                  {model.displayName || model.slug}
+                            ) : (
+                              selectedCliAccountPools.map((pool) => (
+                                <option key={pool.id} value={pool.accountPoolId}>
+                                  {formatPoolLabel(pool)}
                                 </option>
-                              ))}
-                            </select>
-                            {codexReasoningOptions.length > 0 && (
-                              <select
-                                value={selectedCliReasoningLevel}
-                                onChange={(event) => setSelectedCliReasoningLevel(event.target.value)}
-                                className="w-0 min-w-0 flex-1 bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
-                              >
-                                <option value="">
-                                  {t({
-                                    ko: "기본값(설정창 추론)",
-                                    en: "Default (Settings reasoning)",
-                                    ja: "デフォルト（設定推論）",
-                                    zh: "默认（设置中的推理）",
-                                  })}
-                                </option>
-                                {codexReasoningOptions.map((level) => (
-                                  <option key={level.effort} value={level.effort}>
-                                    {level.effort}
-                                    {getReasoningDescription(level.effort, level.description)
-                                      ? ` (${getReasoningDescription(level.effort, level.description)})`
-                                      : ""}
-                                  </option>
-                                ))}
-                              </select>
+                              ))
                             )}
-                          </>
-                        ) : (
-                          <span className="text-[10px] text-slate-400">
-                            {t({
-                              ko: "모델 목록이 없습니다",
-                              en: "No model list available",
-                              ja: "モデル一覧がありません",
-                              zh: "暂无模型列表",
-                            })}
-                          </span>
+                          </select>
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-1">
-                        <span className="text-[10px] text-slate-400">
-                          {t({
-                            ko: "알바생 모델은 설정창 값을 따릅니다",
-                            en: "Sub-agent model follows Settings",
-                            ja: "サブエージェントモデルは設定値を使用",
-                            zh: "子代理模型沿用设置值",
-                          })}
-                        </span>
                         <button
                           disabled={savingCli || !canSaveCli}
                           onClick={() => {
@@ -553,7 +552,7 @@ export default function AgentDetail({
                         onChange={(event) => {
                           setSelectedCli(event.target.value as Agent["cli_provider"]);
                           setSelectedCliModel("");
-                          setSelectedCliReasoningLevel("");
+                          setSelectedCliAccountPoolId("");
                         }}
                         className="bg-slate-700 text-slate-200 text-xs rounded px-1.5 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                       >
@@ -687,15 +686,7 @@ export default function AgentDetail({
                     })}
                   >
                     🔧{" "}
-                    {agent.cli_provider === "api" && agent.api_model
-                      ? `API: ${agent.api_model}`
-                      : agent.cli_model &&
-                          CLI_MODEL_OVERRIDE_PROVIDERS.includes(agent.cli_provider) &&
-                          agent.cli_provider !== "api"
-                        ? `${CLI_LABELS[agent.cli_provider] ?? agent.cli_provider} · ${agent.cli_model}${agent.cli_provider === "codex" && agent.cli_reasoning_level ? ` (${agent.cli_reasoning_level})` : ""}`
-                        : agent.cli_provider === "codex" && agent.cli_reasoning_level
-                          ? `${CLI_LABELS[agent.cli_provider] ?? agent.cli_provider} · (${agent.cli_reasoning_level})`
-                          : (CLI_LABELS[agent.cli_provider] ?? agent.cli_provider)}
+                    {cliSummaryText}
                     <span className="text-[9px] text-slate-600 ml-0.5">✏️</span>
                   </button>
                 )}

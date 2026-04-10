@@ -75,6 +75,23 @@ CREATE INDEX IF NOT EXISTS idx_office_runner_queue_status_enqueued
   ON office_runner_queue(status, enqueued_at ASC);
 CREATE INDEX IF NOT EXISTS idx_office_cli_runs_provider_pool_created
   ON office_cli_runs(provider, account_pool_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS cli_account_pools (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  account_pool_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  profile_home TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('connected','auth_required','install_required','profile_error')),
+  last_verified_at INTEGER,
+  last_error TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()*1000),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch()*1000),
+  UNIQUE(provider, account_pool_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cli_account_pools_provider_status
+  ON cli_account_pools(provider, status, updated_at DESC);
 `);
 
   try {

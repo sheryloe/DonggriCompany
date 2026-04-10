@@ -11,7 +11,7 @@ describe("initializeOAuthRuntime", () => {
     db = null;
   });
 
-  it("upgrades legacy provider checks to include kimi for agents and skill history", () => {
+  it("upgrades legacy provider checks to include kimi/jules for agents and skill history", () => {
     db = new DatabaseSync(":memory:");
     db.exec(`
       CREATE TABLE oauth_credentials (
@@ -117,7 +117,9 @@ describe("initializeOAuthRuntime", () => {
     ).sql;
 
     expect(agentSql).toContain("'kimi'");
+    expect(agentSql).toContain("'jules'");
     expect(historySql).toContain("'kimi'");
+    expect(historySql).toContain("'jules'");
   });
 
   it("upgrades legacy agents without workflow_pack_key before task migrations run", () => {
@@ -211,7 +213,9 @@ describe("initializeOAuthRuntime", () => {
     expect(transactionRuns).toBeGreaterThan(0);
     expect(agentSql).toContain("workflow_pack_key");
     expect(agentSql).toContain("'kimi'");
+    expect(agentSql).toContain("'jules'");
     expect(historySql).toContain("'kimi'");
+    expect(historySql).toContain("'jules'");
     expect(row).toEqual({
       workflow_pack_key: "development",
       cli_provider: "claude",

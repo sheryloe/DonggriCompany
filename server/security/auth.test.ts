@@ -22,8 +22,11 @@ import {
   isLoopbackHostname,
   isLoopbackRequest,
   isPublicApiPath,
+  isTrustedHostHeader,
   isTrustedOrigin,
+  isTrustedSessionBootstrapRequest,
   issueSessionCookie,
+  normalizeHostHeader,
   parseCookies,
   safeSecretEquals,
   shouldRequireCsrf,
@@ -82,6 +85,10 @@ describe("auth helpers", () => {
     expect(isTrustedOrigin("https://dev.ts.net")).toBe(true);
     expect(isTrustedOrigin("file://tmp/test")).toBe(false);
     expect(isTrustedOrigin("not-a-url")).toBe(false);
+    expect(normalizeHostHeader("localhost:8790")).toBe("localhost");
+    expect(normalizeHostHeader("127.0.0.1:8790, proxy.local")).toBe("127.0.0.1");
+    expect(isTrustedHostHeader("localhost:8790")).toBe(true);
+    expect(isTrustedHostHeader("evil.example")).toBe(false);
 
     expect(isPublicApiPath("/api/health")).toBe(true);
     expect(isPublicApiPath("/api/auth/session")).toBe(true);
@@ -100,6 +107,24 @@ describe("auth helpers", () => {
       secure: true,
     } as Request;
     expect(shouldUseSecureCookie(secureReq)).toBe(true);
+
+    const trustedBootstrapReq = {
+      ...mockRequest({
+        host: "localhost:8790",
+      }),
+      socket: { remoteAddress: "172.20.0.10" },
+      hostname: "localhost",
+    } as unknown as Request;
+    expect(isTrustedSessionBootstrapRequest(trustedBootstrapReq)).toBe(true);
+
+    const untrustedBootstrapReq = {
+      ...mockRequest({
+        host: "evil.example:8790",
+      }),
+      socket: { remoteAddress: "172.20.0.10" },
+      hostname: "evil.example",
+    } as unknown as Request;
+    expect(isTrustedSessionBootstrapRequest(untrustedBootstrapReq)).toBe(false);
   });
 
   it("session cookie 발급 시 append를 호출하고 중복 발급은 방지한다", () => {

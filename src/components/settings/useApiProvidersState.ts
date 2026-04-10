@@ -21,6 +21,7 @@ const DEFAULT_API_FORM: ApiFormState = {
 
 const VALID_WORKFLOW_PACK_KEYS = new Set<WorkflowPackKey>([
   "development",
+  "donggri",
   "novel",
   "report",
   "video_preprod",
@@ -233,6 +234,26 @@ export function useApiProvidersState({
     [settings],
   );
 
+  const markAgentsWithAssignedApiModel = useCallback(
+    (agentIds: string[]) => {
+      if (!apiAssignTarget || agentIds.length === 0) return;
+      const targetIds = new Set(agentIds);
+      setApiAssignAgents((prev) =>
+        prev.map((agent) =>
+          targetIds.has(agent.id)
+            ? {
+                ...agent,
+                cli_provider: "api",
+                api_provider_id: apiAssignTarget.providerId,
+                api_model: apiAssignTarget.model,
+              }
+            : agent,
+        ),
+      );
+    },
+    [apiAssignTarget],
+  );
+
   const handleApiAssignToAgent = useCallback(
     async (agentId: string) => {
       if (!apiAssignTarget) return;
@@ -243,25 +264,45 @@ export function useApiProvidersState({
           api_provider_id: apiAssignTarget.providerId,
           api_model: apiAssignTarget.model,
         });
-        setApiAssignAgents((prev) =>
-          prev.map((agent) =>
-            agent.id === agentId
-              ? {
-                  ...agent,
-                  cli_provider: "api",
-                  api_provider_id: apiAssignTarget.providerId,
-                  api_model: apiAssignTarget.model,
-                }
-              : agent,
-          ),
-        );
+        markAgentsWithAssignedApiModel([agentId]);
       } catch (error) {
         console.error("Failed to assign API model to agent:", error);
       } finally {
         setApiAssigning(false);
       }
     },
-    [apiAssignTarget],
+    [apiAssignTarget, markAgentsWithAssignedApiModel],
+  );
+
+  const handleApiAssignToDepartment = useCallback(
+    async (departmentId: string, workflowPackKey: WorkflowPackKey) => {
+      if (!apiAssignTarget) return;
+
+      const targetAgents = apiAssignAgents.filter(
+        (agent) =>
+          agent.department_id === departmentId && normalizeWorkflowPackKey(agent.workflow_pack_key) === workflowPackKey,
+      );
+      if (targetAgents.length === 0) return;
+
+      setApiAssigning(true);
+      try {
+        await Promise.all(
+          targetAgents.map((agent) =>
+            api.updateAgent(agent.id, {
+              cli_provider: "api",
+              api_provider_id: apiAssignTarget.providerId,
+              api_model: apiAssignTarget.model,
+            }),
+          ),
+        );
+        markAgentsWithAssignedApiModel(targetAgents.map((agent) => agent.id));
+      } catch (error) {
+        console.error("Failed to assign API model to department:", error);
+      } finally {
+        setApiAssigning(false);
+      }
+    },
+    [apiAssignAgents, apiAssignTarget, markAgentsWithAssignedApiModel],
   );
 
   return {
@@ -296,6 +337,7 @@ export function useApiProvidersState({
     handleApiEditStart,
     handleApiModelAssign,
     handleApiAssignToAgent,
+    handleApiAssignToDepartment,
   };
 }
 

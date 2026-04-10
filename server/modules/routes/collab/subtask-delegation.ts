@@ -73,6 +73,7 @@ interface SubtaskDelegationDeps {
     logFilePath: string,
     model?: string,
     reasoningLevel?: string,
+    cliAccountPoolId?: string | null,
   ) => {
     on: (event: "close", listener: (code: number | null) => void) => void;
   };

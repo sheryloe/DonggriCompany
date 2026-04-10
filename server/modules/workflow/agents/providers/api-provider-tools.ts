@@ -116,12 +116,124 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
     return url;
   }
 
+  function isGoogleImageModel(model: string): boolean {
+    return /(?:^|[-.])(image|imagen)(?:[-.]|$)/i.test(model);
+  }
+
+  function sanitizeFileSegment(value: string): string {
+    return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "artifact";
+  }
+
+  function extensionForMimeType(mimeType: string): string {
+    const normalized = mimeType.trim().toLowerCase();
+    if (normalized === "image/png") return "png";
+    if (normalized === "image/jpeg" || normalized === "image/jpg") return "jpg";
+    if (normalized === "image/webp") return "webp";
+    if (normalized === "image/gif") return "gif";
+    return "bin";
+  }
+
+  function resolveGoogleImageOutputDir(projectPath: string, taskId?: string): string {
+    const taskSlug = sanitizeFileSegment(taskId ?? "adhoc-task");
+    const preferredBase =
+      projectPath && fs.existsSync(projectPath) && fs.statSync(projectPath).isDirectory()
+        ? path.join(projectPath, ".claw-empire", "generated-images")
+        : path.join(logsDir, "generated-images");
+    return path.join(preferredBase, taskSlug);
+  }
+
+  function parseGoogleCandidateParts(payload: unknown): Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> {
+    const root = payload as {
+      candidates?: Array<{ content?: { parts?: Array<Record<string, unknown>> } }>;
+      response?: { candidates?: Array<{ content?: { parts?: Array<Record<string, unknown>> } }> };
+    };
+    const candidates = Array.isArray(root.candidates)
+      ? root.candidates
+      : Array.isArray(root.response?.candidates)
+        ? root.response.candidates
+        : [];
+
+    const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+    for (const candidate of candidates) {
+      const candidateParts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+      for (const part of candidateParts) {
+        const text = typeof part.text === "string" ? part.text : undefined;
+        const inlineDataRaw =
+          part.inline_data && typeof part.inline_data === "object"
+            ? (part.inline_data as Record<string, unknown>)
+            : part.inlineData && typeof part.inlineData === "object"
+              ? (part.inlineData as Record<string, unknown>)
+              : null;
+        const mimeType =
+          typeof inlineDataRaw?.mime_type === "string"
+            ? inlineDataRaw.mime_type
+            : typeof inlineDataRaw?.mimeType === "string"
+              ? inlineDataRaw.mimeType
+              : "";
+        const data =
+          typeof inlineDataRaw?.data === "string"
+            ? inlineDataRaw.data
+            : typeof inlineDataRaw?.bytesBase64Encoded === "string"
+              ? inlineDataRaw.bytesBase64Encoded
+              : "";
+
+        if (text) {
+          parts.push({ text });
+        }
+        if (mimeType && data) {
+          parts.push({ inlineData: { mimeType, data } });
+        }
+      }
+    }
+    return parts;
+  }
+
+  function persistGoogleImageResponse(params: {
+    payload: unknown;
+    model: string;
+    projectPath: string;
+    safeWrite: (text: string) => boolean;
+    taskId?: string;
+  }): void {
+    const { payload, model, projectPath, safeWrite, taskId } = params;
+    const parts = parseGoogleCandidateParts(payload);
+    const textParts = parts
+      .map((part) => (part.text ? normalizeStreamChunk(part.text) : ""))
+      .filter((text) => text.length > 0);
+    const imageParts = parts.filter((part) => part.inlineData);
+
+    for (const text of textParts) {
+      safeWrite(text);
+      if (taskId) {
+        broadcast("cli_output", { task_id: taskId, stream: "stdout", data: text });
+      }
+    }
+
+    if (imageParts.length === 0) return;
+
+    const outputDir = resolveGoogleImageOutputDir(projectPath, taskId);
+    fs.mkdirSync(outputDir, { recursive: true });
+    const modelSlug = sanitizeFileSegment(model);
+
+    imageParts.forEach((part, index) => {
+      const inlineData = part.inlineData!;
+      const extension = extensionForMimeType(inlineData.mimeType);
+      const filePath = path.join(outputDir, `${modelSlug}-${String(index + 1).padStart(2, "0")}.${extension}`);
+      fs.writeFileSync(filePath, Buffer.from(inlineData.data, "base64"));
+      const message = normalizeStreamChunk(`\n[api:google] Saved image: ${filePath}\n`);
+      safeWrite(message);
+      if (taskId) {
+        broadcast("cli_output", { task_id: taskId, stream: "stderr", data: message });
+      }
+    });
+  }
+
   function buildApiProviderRequest(
     provider: ApiProviderRow,
     model: string,
     prompt: string,
     projectPath: string,
-  ): { url: string; headers: Record<string, string>; body: string } {
+  ): { url: string; headers: Record<string, string>; body: string; mode: "stream" | "google-image" } {
     const apiKey = provider.api_key_enc ? decryptSecret(provider.api_key_enc) : "";
     const baseUrl = normalizeApiBaseUrl(provider.base_url);
 
@@ -141,12 +253,16 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
           messages: [{ role: "user", content: prompt }],
           system: `You are a coding assistant. Project path: ${projectPath}`,
         }),
+        mode: "stream",
       };
     }
 
     if (provider.type === "google") {
       const googleBase = baseUrl.endsWith("/v1beta") ? baseUrl : `${baseUrl}/v1beta`;
-      const url = `${googleBase}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+      const isImageModel = isGoogleImageModel(model);
+      const url = isImageModel
+        ? `${googleBase}/models/${model}:generateContent?key=${apiKey}`
+        : `${googleBase}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
       return {
         url,
         headers: {
@@ -155,7 +271,15 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           systemInstruction: { parts: [{ text: `You are a coding assistant. Project path: ${projectPath}` }] },
+          ...(isImageModel
+            ? {
+                generationConfig: {
+                  responseModalities: ["TEXT", "IMAGE"],
+                },
+              }
+            : {}),
         }),
+        mode: isImageModel ? "google-image" : "stream",
       };
     }
 
@@ -182,6 +306,7 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
         ],
         stream: true,
       }),
+      mode: "stream",
     };
   }
 
@@ -228,7 +353,16 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
       throw new Error(`API provider '${provider.name}' error (${resp.status}): ${text}`);
     }
 
-    if (provider.type === "anthropic") {
+    if (req.mode === "google-image") {
+      const payload = await resp.json();
+      persistGoogleImageResponse({
+        payload,
+        model,
+        projectPath,
+        safeWrite,
+        taskId,
+      });
+    } else if (provider.type === "anthropic") {
       await parseAnthropicSSEStream(resp.body!, signal, safeWrite, taskId);
     } else if (provider.type === "google") {
       await parseGeminiSSEStream(resp.body!, signal, safeWrite, taskId);

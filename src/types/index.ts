@@ -21,7 +21,16 @@ export interface Department {
 // Agent roles
 export type AgentRole = "team_leader" | "senior" | "junior" | "intern";
 export type AgentStatus = "idle" | "working" | "break" | "offline";
-export type CliProvider = "claude" | "codex" | "gemini" | "opencode" | "kimi" | "copilot" | "antigravity" | "api";
+export type CliProvider =
+  | "claude"
+  | "codex"
+  | "gemini"
+  | "jules"
+  | "opencode"
+  | "kimi"
+  | "copilot"
+  | "antigravity"
+  | "api";
 export type MeetingReviewDecision = "reviewing" | "approved" | "hold";
 
 export interface Agent {
@@ -41,6 +50,7 @@ export interface Agent {
   api_model?: string | null;
   cli_model?: string | null;
   cli_reasoning_level?: string | null;
+  cli_account_pool_id?: string | null;
   avatar_emoji: string;
   sprite_number?: number | null;
   personality: string | null;
@@ -99,6 +109,7 @@ export type TaskStatus =
 export type TaskType = "general" | "development" | "design" | "analysis" | "presentation" | "documentation";
 export const WORKFLOW_PACK_KEYS = [
   "development",
+  "donggri",
   "novel",
   "report",
   "video_preprod",

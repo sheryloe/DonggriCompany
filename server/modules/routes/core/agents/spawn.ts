@@ -4,6 +4,7 @@ import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import { buildWorkflowPackExecutionGuidance } from "../../../workflow/packs/execution-guidance.ts";
 import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-artifact.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/core/video-skill-bootstrap.ts";
+import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
 
 export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
   const {
@@ -47,6 +48,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
           api_model: string | null;
           cli_model: string | null;
           cli_reasoning_level: string | null;
+          cli_account_pool_id: string | null;
           personality: string | null;
           department_id: string | null;
           department_name: string | null;
@@ -83,6 +85,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
             api_model: string | null;
             cli_model: string | null;
             cli_reasoning_level: string | null;
+            cli_account_pool_id: string | null;
             personality: string | null;
             department_id: string | null;
             department_name: string | null;
@@ -112,6 +115,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
             api_model: string | null;
             cli_model: string | null;
             cli_reasoning_level: string | null;
+            cli_account_pool_id: string | null;
             personality: string | null;
             department_id: string | null;
             department_name: string | null;
@@ -124,7 +128,8 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
     if (!agent) return res.status(404).json({ error: "not_found" });
 
     const provider = agent.cli_provider || "claude";
-    if (!["claude", "codex", "gemini", "opencode", "kimi", "copilot", "antigravity", "api"].includes(provider)) {
+    const runtimeKind = resolveProviderRuntimeKind(provider);
+    if (!runtimeKind) {
       return res.status(400).json({ error: "unsupported_provider", provider });
     }
 
@@ -213,10 +218,10 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
         departmentPromptBlock,
         pickL(
           l(
-            ["위 작업을 충분히 완수하세요."],
             ["Please complete the task above thoroughly."],
-            ["上記タスクを丁寧に完了してください。"],
-            ["请完整地完成上述任务。"],
+            ["Please complete the task above thoroughly."],
+            ["Please complete the task above thoroughly."],
+            ["Please complete the task above thoroughly."],
           ),
           taskLang,
         ),
@@ -235,7 +240,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
         ? agent.cli_reasoning_level || spawnModelConfig[provider]?.reasoningLevel || undefined
         : spawnModelConfig[provider]?.reasoningLevel || undefined;
 
-    if (provider === "api") {
+    if (runtimeKind === "api") {
       const controller = new AbortController();
       const fakePid = getNextHttpAgentPid();
       db.prepare("UPDATE agents SET status = 'working' WHERE id = ?").run(id);
@@ -261,7 +266,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
       return res.json({ ok: true, pid: fakePid, logPath, cwd: agentCwd });
     }
 
-    if (provider === "copilot" || provider === "antigravity") {
+    if (runtimeKind === "http_stream") {
       const controller = new AbortController();
       const fakePid = getNextHttpAgentPid();
       db.prepare("UPDATE agents SET status = 'working' WHERE id = ?").run(id);
@@ -278,7 +283,16 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
       return res.json({ ok: true, pid: fakePid, logPath, cwd: agentCwd });
     }
 
-    const child = spawnCliAgent(taskId, provider, prompt, agentCwd, logPath, spawnModel, spawnReasoningLevel);
+    const child = spawnCliAgent(
+      taskId,
+      provider,
+      prompt,
+      agentCwd,
+      logPath,
+      spawnModel,
+      spawnReasoningLevel,
+      agent.cli_account_pool_id ?? null,
+    );
     child.on("close", (code: number | null) => {
       handleTaskRunComplete(taskId, code ?? 1);
     });

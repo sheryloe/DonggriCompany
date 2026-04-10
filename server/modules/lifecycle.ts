@@ -54,6 +54,8 @@ export function startLifecycle(ctx: RuntimeContext): void {
   // Production: serve React UI from dist/
   // ---------------------------------------------------------------------------
   if (isProduction) {
+    // Always serve sprites from public/ so local sprite generation works without rebuilding dist/.
+    app.use("/sprites", express.static(path.join(process.cwd(), "public", "sprites")));
     app.use(express.static(distDir));
     // SPA fallback: serve index.html for non-API routes (Express 5 named wildcard)
     app.get(

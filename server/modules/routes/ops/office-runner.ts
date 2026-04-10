@@ -2,11 +2,11 @@ import { randomUUID } from "node:crypto";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import {
   OAuthGateError,
-  OAuthGateService,
   ensureRunnerBodyProviderAndPool,
   isExecutionProvider,
 } from "../../services/oauth-gate-service.ts";
 import { OfficeRunnerOrchestrator, type ActivateRunnerRequestPayload } from "../../services/runner-orchestrator.ts";
+import { CliAccountGateError, CliAccountGateService } from "../../services/cli-account-gate-service.ts";
 
 type CliRunRow = {
   id: string;
@@ -26,7 +26,7 @@ type CliRunRow = {
 
 export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
   const { app, db, nowMs, broadcast } = ctx;
-  const oauthGateService = new OAuthGateService({ db, nowMs });
+  const cliAccountGateService = new CliAccountGateService({ db, nowMs });
   const runnerOrchestrator = new OfficeRunnerOrchestrator({ db, nowMs, broadcast });
 
   const pruneInterval = Math.min(Math.max(runnerOrchestrator.getConfig().idleTtlMs, 60_000), 300_000);
@@ -59,33 +59,78 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
   });
 
   app.get("/api/office/oauth/sessions", (_req, res) => {
+    res.status(410).json({ error: "oauth_rolled_back", message: "OAuth office routes are deprecated for CLI multi-account mode" });
+  });
+
+  app.post("/api/office/oauth/connect", (_req, res) => {
+    res.status(410).json({ error: "oauth_rolled_back", message: "OAuth office routes are deprecated for CLI multi-account mode" });
+  });
+
+  app.post("/api/office/oauth/disconnect", (_req, res) => {
+    res.status(410).json({ error: "oauth_rolled_back", message: "OAuth office routes are deprecated for CLI multi-account mode" });
+  });
+
+  app.get("/api/office/cli-accounts", (_req, res) => {
     res.json({
       ok: true,
-      sessions: oauthGateService.listSessions(),
+      pools: cliAccountGateService.listPools(),
     });
   });
 
-  app.post("/api/office/oauth/connect", (req, res) => {
+  app.post("/api/office/cli-accounts", (req, res) => {
     try {
-      const { provider, accountPoolId } = ensureRunnerBodyProviderAndPool(req.body);
-      if (!isExecutionProvider(provider)) {
-        return res.status(400).json({ error: "unsupported_provider", provider });
-      }
-      const session = oauthGateService.connectSession(provider, accountPoolId);
-      res.json({ ok: true, session });
+      const payload = (req.body ?? {}) as Record<string, unknown>;
+      const provider = typeof payload.provider === "string" ? payload.provider : "";
+      const accountPoolId = typeof payload.accountPoolId === "string" ? payload.accountPoolId : "";
+      const label = typeof payload.label === "string" ? payload.label : undefined;
+      const pool = cliAccountGateService.createPool(provider, accountPoolId, label);
+      res.json({ ok: true, pool });
     } catch (error) {
       handleRunnerRouteError(res, error);
     }
   });
 
-  app.post("/api/office/oauth/disconnect", (req, res) => {
+  app.patch("/api/office/cli-accounts/:provider/:accountPoolId", (req, res) => {
     try {
-      const { provider, accountPoolId } = ensureRunnerBodyProviderAndPool(req.body);
-      if (!isExecutionProvider(provider)) {
-        return res.status(400).json({ error: "unsupported_provider", provider });
-      }
-      const session = oauthGateService.disconnectSession(provider, accountPoolId);
-      res.json({ ok: true, session });
+      const provider = String(req.params.provider ?? "");
+      const accountPoolId = String(req.params.accountPoolId ?? "");
+      const payload = (req.body ?? {}) as Record<string, unknown>;
+      const label = typeof payload.label === "string" ? payload.label : undefined;
+      const pool = cliAccountGateService.updatePool(provider, accountPoolId, { label });
+      res.json({ ok: true, pool });
+    } catch (error) {
+      handleRunnerRouteError(res, error);
+    }
+  });
+
+  app.delete("/api/office/cli-accounts/:provider/:accountPoolId", (req, res) => {
+    try {
+      const provider = String(req.params.provider ?? "");
+      const accountPoolId = String(req.params.accountPoolId ?? "");
+      cliAccountGateService.deletePool(provider, accountPoolId);
+      res.json({ ok: true });
+    } catch (error) {
+      handleRunnerRouteError(res, error);
+    }
+  });
+
+  app.post("/api/office/cli-accounts/:provider/:accountPoolId/verify", (req, res) => {
+    try {
+      const provider = String(req.params.provider ?? "");
+      const accountPoolId = String(req.params.accountPoolId ?? "");
+      const result = cliAccountGateService.verifyPool(provider, accountPoolId);
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      handleRunnerRouteError(res, error);
+    }
+  });
+
+  app.get("/api/office/cli-accounts/:provider/:accountPoolId/login-command", (req, res) => {
+    try {
+      const provider = String(req.params.provider ?? "");
+      const accountPoolId = String(req.params.accountPoolId ?? "");
+      const result = cliAccountGateService.getLoginCommand(provider, accountPoolId);
+      res.json({ ok: true, ...result });
     } catch (error) {
       handleRunnerRouteError(res, error);
     }
@@ -124,7 +169,7 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
       if (!isExecutionProvider(provider)) {
         return res.status(400).json({ error: "unsupported_provider", provider });
       }
-      await oauthGateService.ensureProviderPoolConnected(provider, accountPoolId);
+      cliAccountGateService.ensureProviderPoolReady(provider, accountPoolId);
 
       const prompt = typeof payload.prompt === "string" ? payload.prompt.trim() : "";
       const projectPath = typeof payload.projectPath === "string" ? payload.projectPath.trim() : "";
@@ -165,7 +210,7 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
       if (!isExecutionProvider(provider)) {
         return res.status(400).json({ error: "unsupported_provider", provider });
       }
-      await oauthGateService.ensureProviderPoolConnected(provider, accountPoolId);
+      cliAccountGateService.ensureProviderPoolReady(provider, accountPoolId);
       const result = runnerOrchestrator.requestRunner(provider, accountPoolId, {
         kind: "probe_run",
         payload,
@@ -195,7 +240,15 @@ function handleRunnerRouteError(
   },
   error: unknown,
 ): void {
+  if (error instanceof CliAccountGateError) {
+    res.status(error.status).json({ error: error.code, message: error.message });
+    return;
+  }
   if (error instanceof OAuthGateError) {
+    if (error.status === 400) {
+      res.status(400).json({ error: "account_pool_required", message: error.message });
+      return;
+    }
     res.status(error.status).json({ error: error.code, message: error.message });
     return;
   }

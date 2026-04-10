@@ -35,7 +35,7 @@ export interface ApiProviderPreset {
 export interface ApiProviderOfficialPreset {
   label: string;
   description: string;
-  type: Extract<ApiProviderType, "openai" | "anthropic">;
+  type: Extract<ApiProviderType, "openai" | "anthropic" | "google">;
   base_url: string;
   docs_url: string;
   api_key_hint: string;

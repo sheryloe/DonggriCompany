@@ -5,7 +5,7 @@ import { isExecutionProvider } from "./oauth-gate-service.ts";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
 
-export type RunnerProvider = "codex" | "gemini" | "jules";
+export type RunnerProvider = "codex" | "gemini" | "claude" | "jules";
 export type RunnerStatus = "active" | "idle" | "stopping" | "error";
 export type RunnerQueueStatus = "queued" | "running" | "done" | "failed" | "canceled";
 

@@ -68,7 +68,7 @@ export function useMeetingPresenceSync({
         continue;
       }
 
-      const spriteNum = spriteMapRef.current.get(row.agent_id) ?? (hashStr(row.agent_id) % 13) + 1;
+    const spriteNum = spriteMapRef.current.get(row.agent_id) ?? (hashStr(row.agent_id) % 44) + 1;
       const actor = new Container();
       const frames: Texture[] = [];
 
@@ -183,7 +183,7 @@ export function useCrossDeptDeliveryAnimations({
       }
 
       const actor = new Container();
-      const spriteNum = spriteMapRef.current.get(delivery.fromAgentId) ?? (hashStr(delivery.fromAgentId) % 13) + 1;
+      const spriteNum = spriteMapRef.current.get(delivery.fromAgentId) ?? (hashStr(delivery.fromAgentId) % 44) + 1;
       const frames: Texture[] = [];
       for (let frame = 1; frame <= 3; frame++) {
         const key = `${spriteNum}-D-${frame}`;
@@ -384,7 +384,7 @@ export function useCeoOfficeCallAnimations({
 
       trackProcessedId(processedCeoOfficeRef.current, call.id);
       const actor = new Container();
-      const spriteNum = spriteMapRef.current.get(call.fromAgentId) ?? (hashStr(call.fromAgentId) % 13) + 1;
+      const spriteNum = spriteMapRef.current.get(call.fromAgentId) ?? (hashStr(call.fromAgentId) % 44) + 1;
       const frames: Texture[] = [];
 
       for (let frame = 1; frame <= 3; frame++) {

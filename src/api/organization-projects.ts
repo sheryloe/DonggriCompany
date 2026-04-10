@@ -131,6 +131,7 @@ export async function updateAgent(
       | "api_model"
       | "cli_model"
       | "cli_reasoning_level"
+      | "cli_account_pool_id"
       | "avatar_emoji"
       | "sprite_number"
       | "personality"
@@ -151,6 +152,7 @@ export async function createAgent(data: {
   department_id: string | null;
   role: string;
   cli_provider: string;
+  cli_account_pool_id?: string | null;
   avatar_emoji: string;
   sprite_number?: number | null;
   personality: string | null;

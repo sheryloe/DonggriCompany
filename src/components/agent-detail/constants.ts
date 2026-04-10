@@ -28,7 +28,7 @@ function hashSubAgentId(value: string): number {
 }
 
 export function getSubAgentSpriteNum(subAgentId: string): number {
-  return (hashSubAgentId(`${subAgentId}:clone`) % 13) + 1;
+  return (hashSubAgentId(`${subAgentId}:clone`) % 44) + 1;
 }
 
 export const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -46,6 +46,7 @@ export const CLI_LABELS: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex CLI",
   gemini: "Gemini CLI",
+  jules: "Jules CLI",
   opencode: "OpenCode",
   kimi: "Kimi Code",
   copilot: "GitHub Copilot",

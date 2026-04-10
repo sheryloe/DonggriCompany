@@ -2,6 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
+import { resolveCliAccountPoolEnv } from "./cli-account-pool-env.ts";
+import { resolveProviderRuntimeKind } from "./provider-runtime-kind.ts";
 
 type CliRuntimeDeps = {
   db: any;
@@ -19,6 +21,8 @@ type CliRuntimeDeps = {
   createSubtaskFromCli: (taskId: string, toolUseId: string, title: string) => void;
   completeSubtaskFromCli: (toolUseId: string) => void;
 };
+
+type JsonRecord = Record<string, unknown>;
 
 export function createCliRuntimeTools(deps: CliRuntimeDeps) {
   const {
@@ -217,6 +221,290 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
     return parts.join(path.delimiter);
   }
 
+  const JULES_ASYNC_RUNNER_SCRIPT_NAME = "__claw_jules_async_runner.cjs";
+  let cachedJulesAsyncRunnerScriptPath: string | null = null;
+
+  function getJulesAsyncRunnerSource(): string {
+    return [
+      "\"use strict\";",
+      "const fs = require(\"node:fs\");",
+      "const { spawn } = require(\"node:child_process\");",
+      "",
+      "const promptPath = process.env.CLAW_JULES_PROMPT_PATH || \"\";",
+      "const pollIntervalMs = Number(process.env.CLAW_JULES_POLL_INTERVAL_MS || \"5000\");",
+      "const maxPolls = Number(process.env.CLAW_JULES_MAX_POLLS || \"180\");",
+      "",
+      "let sessionId = null;",
+      "let currentStatus = \"unknown\";",
+      "",
+      "const doneStatuses = new Set([\"completed\", \"succeeded\", \"done\", \"ready\", \"applied\"]);",
+      "const failStatuses = new Set([\"failed\", \"error\", \"cancelled\", \"canceled\", \"timed_out\", \"timeout\"]);",
+      "",
+      "function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }",
+      "",
+      "function normalizeStatus(raw) {",
+      "  return String(raw || \"\")",
+      "    .trim()",
+      "    .toLowerCase()",
+      "    .replace(/[^a-z0-9]+/g, \"_\")",
+      "    .replace(/^_+|_+$/g, \"\");",
+      "}",
+      "",
+      "function collectJsonObjects(text) {",
+      "  const out = [];",
+      "  const lines = String(text || \"\").split(/\\r?\\n/);",
+      "  for (const line of lines) {",
+      "    const trimmed = line.trim();",
+      "    if (!trimmed) continue;",
+      "    if (!(trimmed.startsWith(\"{\") || trimmed.startsWith(\"[\"))) continue;",
+      "    try {",
+      "      const parsed = JSON.parse(trimmed);",
+      "      if (Array.isArray(parsed)) {",
+      "        for (const item of parsed) if (item && typeof item === \"object\") out.push(item);",
+      "      } else if (parsed && typeof parsed === \"object\") {",
+      "        out.push(parsed);",
+      "      }",
+      "    } catch {",
+      "      // ignore",
+      "    }",
+      "  }",
+      "  return out;",
+      "}",
+      "",
+      "function findSessionId(text) {",
+      "  const combined = String(text || \"\");",
+      "  const objects = collectJsonObjects(combined);",
+      "  for (const obj of objects) {",
+      "    const candidate = obj.session_id || obj.sessionId || obj.id || obj.session;",
+      "    if (typeof candidate === \"string\" && candidate.trim()) return candidate.trim();",
+      "  }",
+      "  const uuidMatch = combined.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);",
+      "  if (uuidMatch?.[0]) return uuidMatch[0];",
+      "  const genericMatch = combined.match(/\\bsession[_\\s-]*id\\s*[:=]\\s*([A-Za-z0-9._-]{8,})/i);",
+      "  if (genericMatch?.[1]) return genericMatch[1];",
+      "  return null;",
+      "}",
+      "",
+      "function extractStatusFromList(text, targetSessionId) {",
+      "  const combined = String(text || \"\");",
+      "  const normalizedTarget = String(targetSessionId || \"\").trim();",
+      "  const objects = collectJsonObjects(combined);",
+      "  for (const obj of objects) {",
+      "    const oid = String(obj.session_id || obj.sessionId || obj.id || obj.session || \"\").trim();",
+      "    if (!oid || (normalizedTarget && oid !== normalizedTarget)) continue;",
+      "    const rawStatus = obj.status || obj.state || obj.lifecycle || obj.phase || \"\";",
+      "    const status = normalizeStatus(rawStatus);",
+      "    if (status) return status;",
+      "  }",
+      "  const lines = combined.split(/\\r?\\n/);",
+      "  for (const line of lines) {",
+      "    if (normalizedTarget && !line.includes(normalizedTarget)) continue;",
+      "    const statusMatch = line.match(/\\b(status|state|phase)\\s*[:=]\\s*([A-Za-z0-9_-]+)/i);",
+      "    if (statusMatch?.[2]) return normalizeStatus(statusMatch[2]);",
+      "    const tokenMatch = line.match(/\\b(completed|succeeded|done|ready|applied|running|in[_-]?progress|processing|pending|queued|awaiting|failed|error|cancelled|canceled|timed[_-]?out|timeout)\\b/i);",
+      "    if (tokenMatch?.[1]) return normalizeStatus(tokenMatch[1]);",
+      "  }",
+      "  return \"\";",
+      "}",
+      "",
+      "function classifyStatus(status) {",
+      "  if (!status) return \"waiting\";",
+      "  if (doneStatuses.has(status)) return \"done\";",
+      "  if (failStatuses.has(status)) return \"failed\";",
+      "  return \"waiting\";",
+      "}",
+      "",
+      "function runJules(args, label, allowFailure = false) {",
+      "  return new Promise((resolve, reject) => {",
+      "    const child = spawn(\"jules\", args, {",
+      "      cwd: process.cwd(),",
+      "      env: process.env,",
+      "      shell: process.platform === \"win32\",",
+      "      stdio: [\"ignore\", \"pipe\", \"pipe\"],",
+      "      windowsHide: true,",
+      "      detached: false,",
+      "    });",
+      "    let stdout = \"\";",
+      "    let stderr = \"\";",
+      "    child.stdout?.on(\"data\", (chunk) => {",
+      "      const text = String(chunk);",
+      "      stdout += text;",
+      "      process.stdout.write(text);",
+      "    });",
+      "    child.stderr?.on(\"data\", (chunk) => {",
+      "      const text = String(chunk);",
+      "      stderr += text;",
+      "      process.stderr.write(text);",
+      "    });",
+      "    child.on(\"error\", (err) => reject(err));",
+      "    child.on(\"close\", (code) => {",
+      "      const result = { code: code ?? 1, stdout, stderr, combined: [stdout, stderr].filter(Boolean).join(\"\\n\") };",
+      "      if (result.code !== 0 && !allowFailure) {",
+      "        const reason = result.combined.trim() || `${label}_exit_code_${result.code}`;",
+      "        reject(new Error(reason));",
+      "        return;",
+      "      }",
+      "      resolve(result);",
+      "    });",
+      "  });",
+      "}",
+      "",
+      "(async () => {",
+      "  const prompt = fs.readFileSync(promptPath, \"utf8\").trim();",
+      "  if (!prompt) throw new Error(\"prompt_empty\");",
+      "",
+      "  console.log(\"[Jules] step=remote_new\");",
+      "  const created = await runJules([\"remote\", \"new\", \"--session\", prompt], \"remote_new\");",
+      "  sessionId = findSessionId(created.combined);",
+      "  if (!sessionId) throw new Error(\"session_id_not_found\");",
+      "  currentStatus = \"created\";",
+      "  console.log(`[Jules] session_id=${sessionId} status=${currentStatus}`);",
+      "",
+      "  for (let attempt = 1; attempt <= maxPolls; attempt += 1) {",
+      "    const listed = await runJules([\"remote\", \"list\", \"--session\"], \"remote_list\", true);",
+      "    const status = extractStatusFromList(listed.combined, sessionId);",
+      "    if (status) currentStatus = status;",
+      "    console.log(`[Jules] session_id=${sessionId} poll=${attempt}/${maxPolls} status=${currentStatus}`);",
+      "    const state = classifyStatus(currentStatus);",
+      "    if (state === \"done\") break;",
+      "    if (state === \"failed\") throw new Error(`session_failed:${currentStatus}`);",
+      "    if (attempt >= maxPolls) throw new Error(\"session_timeout\");",
+      "    await sleep(pollIntervalMs);",
+      "  }",
+      "",
+      "  console.log(`[Jules] step=remote_pull session_id=${sessionId}`);",
+      "  await runJules([\"remote\", \"pull\", \"--session\", sessionId, \"--apply\"], \"remote_pull\");",
+      "  console.log(`[Jules] completed session_id=${sessionId} status=${currentStatus}`);",
+      "  process.exit(0);",
+      "})().catch((error) => {",
+      "  const message = error instanceof Error ? error.message : String(error);",
+      "  console.error(`[Jules] failed session_id=${sessionId || \"(unknown)\"} status=${currentStatus} reason=${message}`);",
+      "  process.exit(1);",
+      "});",
+      "",
+    ].join("\n");
+  }
+
+  function ensureJulesAsyncRunnerScript(): string {
+    if (cachedJulesAsyncRunnerScriptPath && fs.existsSync(cachedJulesAsyncRunnerScriptPath)) {
+      return cachedJulesAsyncRunnerScriptPath;
+    }
+    const scriptPath = path.join(logsDir, JULES_ASYNC_RUNNER_SCRIPT_NAME);
+    fs.writeFileSync(scriptPath, getJulesAsyncRunnerSource(), "utf8");
+    cachedJulesAsyncRunnerScriptPath = scriptPath;
+    return scriptPath;
+  }
+
+  function readJsonObject(filePath: string): JsonRecord | null {
+    try {
+      const raw = fs.readFileSync(filePath, "utf8");
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      return parsed as JsonRecord;
+    } catch {
+      return null;
+    }
+  }
+
+  function resolveConnectedCliProfileHome(provider: string): string | null {
+    try {
+      const row = db
+        .prepare(
+          `SELECT profile_home
+           FROM cli_account_pools
+           WHERE provider = ? AND status = 'connected'
+           ORDER BY COALESCE(last_verified_at, updated_at, created_at) DESC
+           LIMIT 1`,
+        )
+        .get(provider) as { profile_home?: string } | undefined;
+      const value = String(row?.profile_home ?? "").trim();
+      return value || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function ensureGeminiRunProfile(taskId: string, cleanEnv: NodeJS.ProcessEnv, safeWrite: (text: string) => boolean): void {
+    try {
+      const sharedHome = (process.env.HOME || os.homedir() || "").trim() || os.homedir();
+      const connectedPoolHome = resolveConnectedCliProfileHome("gemini");
+      const sourceHomeCandidates = [connectedPoolHome, sharedHome].filter((v): v is string => Boolean(v));
+      const sourceGeminiDirs = sourceHomeCandidates.map((home) => path.join(home, ".gemini"));
+
+      const dataRoot = path.dirname(logsDir);
+      const runHome = path.join(dataRoot, ".cli-homes", "gemini", taskId);
+      const runGeminiDir = path.join(runHome, ".gemini");
+      fs.mkdirSync(runGeminiDir, { recursive: true });
+      fs.mkdirSync(path.join(runGeminiDir, "tmp"), { recursive: true });
+      fs.mkdirSync(path.join(runGeminiDir, "history"), { recursive: true });
+
+      const copyIfPresent = (src: string, dest: string) => {
+        try {
+          if (!fs.existsSync(src) || fs.existsSync(dest)) return;
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.copyFileSync(src, dest);
+        } catch {
+          // best effort
+        }
+      };
+
+      const copyFirstFound = (relativePath: string, destinationPath: string, roots: string[]) => {
+        for (const root of roots) {
+          const src = path.join(root, relativePath);
+          if (!fs.existsSync(src)) continue;
+          copyIfPresent(src, destinationPath);
+          if (fs.existsSync(destinationPath)) break;
+        }
+      };
+
+      copyFirstFound("oauth_creds.json", path.join(runGeminiDir, "oauth_creds.json"), sourceGeminiDirs);
+      copyFirstFound("settings.json", path.join(runGeminiDir, "settings.json"), sourceGeminiDirs);
+      copyFirstFound("projects.json", path.join(runGeminiDir, "projects.json"), sourceGeminiDirs);
+      copyFirstFound(
+        path.join(".config", "gcloud", "application_default_credentials.json"),
+        path.join(runHome, ".config", "gcloud", "application_default_credentials.json"),
+        sourceHomeCandidates,
+      );
+
+      const projectsPath = path.join(runGeminiDir, "projects.json");
+      if (!fs.existsSync(projectsPath)) {
+        fs.writeFileSync(projectsPath, JSON.stringify({ projects: {} }, null, 2), { encoding: "utf8", mode: 0o600 });
+      }
+
+      const oauthCreds = readJsonObject(path.join(runGeminiDir, "oauth_creds.json"));
+      const hasOAuthToken =
+        (typeof oauthCreds?.access_token === "string" && oauthCreds.access_token.length > 0) ||
+        (oauthCreds?.token &&
+          typeof oauthCreds.token === "object" &&
+          typeof (oauthCreds.token as JsonRecord).accessToken === "string" &&
+          ((oauthCreds.token as JsonRecord).accessToken as string).length > 0);
+
+      if (hasOAuthToken) {
+        const settingsPath = path.join(runGeminiDir, "settings.json");
+        const settings = readJsonObject(settingsPath) ?? {};
+        const currentSelectedType = (settings.security as JsonRecord | undefined)?.auth
+          ? (((settings.security as JsonRecord).auth as JsonRecord).selectedType as string | undefined)
+          : undefined;
+
+        if (!currentSelectedType) {
+          const nextSettings: JsonRecord = { ...settings };
+          const security = (nextSettings.security as JsonRecord | undefined) ?? {};
+          const auth = (security.auth as JsonRecord | undefined) ?? {};
+          auth.selectedType = "oauth-personal";
+          security.auth = auth;
+          nextSettings.security = security;
+          fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2), { encoding: "utf8", mode: 0o600 });
+          safeWrite("[Claw-Empire] Gemini auth mode auto-set to oauth-personal for this task run.\n");
+        }
+      }
+
+      cleanEnv.HOME = runHome;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      safeWrite(`[Claw-Empire] Gemini profile prep warning: ${msg}\n`);
+    }
+  }
+
   function spawnCliAgent(
     taskId: string,
     provider: string,
@@ -225,13 +513,13 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
     logPath: string,
     model?: string,
     reasoningLevel?: string,
+    cliAccountPoolId?: string | null,
   ): ChildProcess {
     clearCliOutputDedup(taskId);
     // Save prompt for debugging
     const promptPath = path.join(logsDir, `${taskId}.prompt.txt`);
     fs.writeFileSync(promptPath, prompt, "utf8");
-
-    const args = buildAgentArgs(provider, model, reasoningLevel);
+    const runtimeKind = resolveProviderRuntimeKind(provider);
     const logStream = fs.createWriteStream(logPath, { flags: "a" });
     const { safeWrite, safeEnd } = createSafeLogStreamOps(logStream);
     safeWrite(`\n===== task run start ${new Date().toISOString()} | provider=${provider} =====\n`);
@@ -245,15 +533,103 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
     cleanEnv.FORCE_COLOR = "0";
     cleanEnv.CI = "1";
     if (!cleanEnv.TERM) cleanEnv.TERM = "dumb";
+    if (provider === "gemini" && runtimeKind === "cli_stream") {
+      ensureGeminiRunProfile(taskId, cleanEnv, safeWrite);
+    }
 
-    const child = spawn(args[0], args.slice(1), {
-      cwd: projectPath,
-      env: cleanEnv,
-      shell: process.platform === "win32",
-      stdio: ["pipe", "pipe", "pipe"],
-      detached: process.platform !== "win32",
-      windowsHide: true,
+    const poolEnv = resolveCliAccountPoolEnv({
+      db,
+      provider,
+      cliAccountPoolId: cliAccountPoolId ?? null,
+      platform: process.platform,
+      policy:
+        runtimeKind === "async_session"
+          ? {
+              requireExplicitSelection: true,
+              requireConnectedStatus: true,
+            }
+          : undefined,
     });
+    let shouldWritePrompt = runtimeKind === "cli_stream";
+    let child: ChildProcess;
+    if (!runtimeKind) {
+      const reason = `[Claw-Empire] RUN FAILED (provider): unsupported provider '${provider}'`;
+      safeWrite(`${reason}\n`);
+      appendTaskLog(taskId, "error", reason);
+      shouldWritePrompt = false;
+      child = spawn(process.execPath, ["-e", "process.exit(1)"], {
+        cwd: projectPath,
+        env: cleanEnv,
+        shell: false,
+        stdio: ["pipe", "pipe", "pipe"],
+        detached: process.platform !== "win32",
+        windowsHide: true,
+      });
+    } else if (!poolEnv.ok) {
+      const reason = `[Claw-Empire] RUN FAILED (cli account pool): ${poolEnv.reason}`;
+      safeWrite(`${reason}\n`);
+      appendTaskLog(taskId, "error", reason);
+      shouldWritePrompt = false;
+      child = spawn(process.execPath, ["-e", "process.exit(1)"], {
+        cwd: projectPath,
+        env: cleanEnv,
+        shell: false,
+        stdio: ["pipe", "pipe", "pipe"],
+        detached: process.platform !== "win32",
+        windowsHide: true,
+      });
+    } else {
+      Object.assign(cleanEnv, poolEnv.envPatch);
+      const effectiveHome = String(cleanEnv.HOME ?? "").trim();
+      safeWrite(
+        `[Claw-Empire] CLI account env: provider=${provider} kind=${runtimeKind} pool=${poolEnv.poolId ?? "default"} selected_by=${poolEnv.selectedBy} home=${effectiveHome || "(empty)"}\n`,
+      );
+      if (runtimeKind === "cli_stream") {
+        const args = buildAgentArgs(provider, model, reasoningLevel);
+        child = spawn(args[0], args.slice(1), {
+          cwd: projectPath,
+          env: cleanEnv,
+          shell: process.platform === "win32",
+          stdio: ["pipe", "pipe", "pipe"],
+          detached: process.platform !== "win32",
+          windowsHide: true,
+        });
+      } else if (runtimeKind === "async_session") {
+        const runnerScriptPath = ensureJulesAsyncRunnerScript();
+        const pollIntervalRaw = Number(process.env.JULES_ASYNC_POLL_INTERVAL_MS ?? 5_000);
+        const maxPollsRaw = Number(process.env.JULES_ASYNC_MAX_POLLS ?? 180);
+        const pollIntervalMs = Number.isFinite(pollIntervalRaw) ? pollIntervalRaw : 5_000;
+        const maxPolls = Number.isFinite(maxPollsRaw) ? maxPollsRaw : 180;
+        cleanEnv.CLAW_JULES_PROMPT_PATH = promptPath;
+        cleanEnv.CLAW_JULES_POLL_INTERVAL_MS = String(Math.max(1_000, Math.trunc(pollIntervalMs)));
+        cleanEnv.CLAW_JULES_MAX_POLLS = String(Math.max(12, Math.trunc(maxPolls)));
+        safeWrite(
+          `[Claw-Empire] Jules async session runner: script=${runnerScriptPath} poll_ms=${cleanEnv.CLAW_JULES_POLL_INTERVAL_MS} max_polls=${cleanEnv.CLAW_JULES_MAX_POLLS}\n`,
+        );
+        shouldWritePrompt = false;
+        child = spawn(process.execPath, [runnerScriptPath], {
+          cwd: projectPath,
+          env: cleanEnv,
+          shell: false,
+          stdio: ["pipe", "pipe", "pipe"],
+          detached: process.platform !== "win32",
+          windowsHide: true,
+        });
+      } else {
+        const reason = `[Claw-Empire] RUN FAILED (runtime_kind): unsupported runtime kind '${runtimeKind}'`;
+        safeWrite(`${reason}\n`);
+        appendTaskLog(taskId, "error", reason);
+        shouldWritePrompt = false;
+        child = spawn(process.execPath, ["-e", "process.exit(1)"], {
+          cwd: projectPath,
+          env: cleanEnv,
+          shell: false,
+          stdio: ["pipe", "pipe", "pipe"],
+          detached: process.platform !== "win32",
+          windowsHide: true,
+        });
+      }
+    }
 
     let finished = false;
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -327,8 +703,12 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
     });
 
     // Deliver prompt via stdin (cross-platform safe)
-    child.stdin?.write(prompt);
-    child.stdin?.end();
+    if (shouldWritePrompt) {
+      child.stdin?.write(prompt);
+      child.stdin?.end();
+    } else {
+      child.stdin?.end();
+    }
 
     // Pipe agent output to log file AND broadcast via WebSocket
     stdoutListener = (chunk: Buffer) => {

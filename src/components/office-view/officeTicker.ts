@@ -29,6 +29,7 @@ interface AgentAnimItem {
   particles: Container;
   agentId?: string;
   cliProvider?: string;
+  cliUsageKey?: string;
   deskG?: Graphics;
   bedG?: Graphics;
   blanketG?: Graphics;
@@ -205,7 +206,7 @@ export function runOfficeTickerStep(ctx: OfficeTickerContext): void {
     }
   }
 
-  for (const { sprite, status, baseX, baseY, particles, agentId, cliProvider, deskG, bedG, blanketG } of ctx
+  for (const { sprite, status, baseX, baseY, particles, agentId, cliProvider, cliUsageKey, deskG, bedG, blanketG } of ctx
     .animItemsRef.current) {
     if (agentId) {
       const meetingNow = Date.now();
@@ -248,7 +249,8 @@ export function runOfficeTickerStep(ctx: OfficeTickerContext): void {
     }
 
     if (cliProvider) {
-      const usage = ctx.cliUsageRef.current?.[cliProvider];
+      const usageByKey = ctx.cliUsageRef.current ?? null;
+      const usage = (cliUsageKey ? usageByKey?.[cliUsageKey] : null) ?? usageByKey?.[cliProvider];
       const maxUtil = usage?.windows?.reduce((max, window) => Math.max(max, window.utilization), 0) ?? 0;
       const isOfflineAgent = status === "offline";
 

@@ -121,17 +121,19 @@ export function createEditorState(channelsConfig: MessengerChannelsConfig): Chat
 export function defaultWorkflowPackLabel(t: ChannelSettingsTabProps["t"], key: WorkflowPackKey): string {
   switch (key) {
     case "development":
-      return t({ ko: "개발", en: "Development", ja: "開発", zh: "开发" });
+      return t({ ko: "개발", en: "Development", ja: "Development", zh: "Development" });
+    case "donggri":
+      return t({ ko: "동그리 통합팩", en: "Donggri Unified", ja: "Donggri Unified", zh: "Donggri Unified" });
     case "novel":
-      return t({ ko: "소설", en: "Novel", ja: "小説", zh: "小说" });
+      return t({ ko: "소설", en: "Novel", ja: "Novel", zh: "Novel" });
     case "report":
-      return t({ ko: "보고서", en: "Report", ja: "レポート", zh: "报告" });
+      return t({ ko: "보고서", en: "Report", ja: "Report", zh: "Report" });
     case "video_preprod":
-      return t({ ko: "영상기획", en: "Video Preprod", ja: "映像企画", zh: "视频策划" });
+      return t({ ko: "영상기획", en: "Video Preprod", ja: "Video Preprod", zh: "Video Preprod" });
     case "web_research_report":
-      return t({ ko: "웹서치+리포트", en: "Web Research", ja: "Web調査", zh: "网页调研" });
+      return t({ ko: "웹리서치", en: "Web Research", ja: "Web Research", zh: "Web Research" });
     case "roleplay":
-      return t({ ko: "롤플레이", en: "Roleplay", ja: "ロールプレイ", zh: "角色扮演" });
+      return t({ ko: "롤플레이", en: "Roleplay", ja: "Roleplay", zh: "Roleplay" });
     default:
       return key;
   }

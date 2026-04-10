@@ -10,8 +10,15 @@ interface ApiAssignModalProps {
 }
 
 export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModalProps) {
-  const { apiAssignTarget, apiAssigning, apiAssignAgents, apiAssignDepts, setApiAssignTarget, handleApiAssignToAgent } =
-    apiState;
+  const {
+    apiAssignTarget,
+    apiAssigning,
+    apiAssignAgents,
+    apiAssignDepts,
+    setApiAssignTarget,
+    handleApiAssignToAgent,
+    handleApiAssignToDepartment,
+  } = apiState;
 
   if (!apiAssignTarget) return null;
 
@@ -61,6 +68,16 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
           agents: apiAssignAgents.filter(
             (agent) => agent.department_id === dept.id && normalizeWorkflowPackKey(agent.workflow_pack_key) === packKey,
           ),
+          allAssigned: apiAssignAgents
+            .filter(
+              (agent) => agent.department_id === dept.id && normalizeWorkflowPackKey(agent.workflow_pack_key) === packKey,
+            )
+            .every(
+              (agent) =>
+                agent.cli_provider === "api" &&
+                agent.api_provider_id === apiAssignTarget.providerId &&
+                agent.api_model === apiAssignTarget.model,
+            ),
         }))
         .filter((group) => group.agents.length > 0);
       const unassigned = apiAssignAgents.filter(
@@ -118,10 +135,10 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
         <div className="px-4 py-3 border-b border-slate-700">
           <h4 className="text-sm font-semibold text-white">
             {t({
-              ko: "에이전트에 모델 배정",
-              en: "Assign Model to Agent",
-              ja: "エージェントにモデル割当",
-              zh: "分配模型给代理",
+              ko: "모델 할당",
+              en: "Assign Model",
+              ja: "モデル割り当て",
+              zh: "分配模型",
             })}
           </h4>
           <p className="text-[11px] text-slate-400 mt-0.5 font-mono truncate">{apiAssignTarget.model}</p>
@@ -146,14 +163,29 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
                       {t(getOfficePackMeta(packKey).label)}
                     </span>
                   </div>
-                  {departments.map(({ dept, agents }) => (
+                  {departments.map(({ dept, agents, allAssigned }) => (
                     <div key={`${packKey}:${dept.id}`}>
-                      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-slate-700/40">
-                        <span className="text-sm">{dept.icon}</span>
-                        <span className="text-[11px] font-semibold text-slate-300 tracking-wide">
-                          {localName(dept.name, dept.name_ko)}
-                        </span>
-                        <span className="text-[10px] text-slate-600">({agents.length})</span>
+                      <div className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-slate-700/40">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-sm">{dept.icon}</span>
+                          <span className="text-[11px] font-semibold text-slate-300 tracking-wide">
+                            {localName(dept.name, dept.name_ko)}
+                          </span>
+                          <span className="text-[10px] text-slate-600">({agents.length})</span>
+                        </div>
+                        <button
+                          disabled={apiAssigning || allAssigned}
+                          onClick={() => void handleApiAssignToDepartment(dept.id, packKey)}
+                          className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
+                            allAssigned
+                              ? "bg-green-500/10 text-green-400 cursor-default"
+                              : "bg-blue-600/20 text-blue-300 hover:bg-blue-600/30"
+                          } disabled:opacity-60`}
+                        >
+                          {allAssigned
+                            ? t({ ko: "적용됨", en: "Applied", ja: "適用済み", zh: "已应用" })
+                            : t({ ko: "부서 전체 적용", en: "Apply to team", ja: "部門全体に適用", zh: "应用到整个部门" })}
+                        </button>
                       </div>
                       {agents.map(renderAgentRow)}
                     </div>

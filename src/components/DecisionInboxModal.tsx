@@ -57,12 +57,14 @@ export default function DecisionInboxModal({
   const [followupTarget, setFollowupTarget] = useState<{ itemId: string; optionNumber: number } | null>(null);
   const [followupDraft, setFollowupDraft] = useState("");
   const [selectedFeedbackDraftByItem, setSelectedFeedbackDraftByItem] = useState<Record<string, string>>({});
+  const [selectedFeedbackNumbersByItem, setSelectedFeedbackNumbersByItem] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
     if (!open) {
       setFollowupTarget(null);
       setFollowupDraft("");
       setSelectedFeedbackDraftByItem({});
+      setSelectedFeedbackNumbersByItem({});
       return;
     }
     if (!followupTarget) return;
@@ -76,6 +78,18 @@ export default function DecisionInboxModal({
     const keep = new Set(items.map((item) => item.id));
     setSelectedFeedbackDraftByItem((prev) => {
       const next: Record<string, string> = {};
+      let changed = false;
+      for (const [itemId, value] of Object.entries(prev)) {
+        if (!keep.has(itemId)) {
+          changed = true;
+          continue;
+        }
+        next[itemId] = value;
+      }
+      return changed ? next : prev;
+    });
+    setSelectedFeedbackNumbersByItem((prev) => {
+      const next: Record<string, number[]> = {};
       let changed = false;
       for (const [itemId, value] of Object.entries(prev)) {
         if (!keep.has(itemId)) {
@@ -123,23 +137,37 @@ export default function DecisionInboxModal({
     setSelectedFeedbackDraftByItem((prev) => ({ ...prev, [itemId]: value }));
   }
 
+  function toggleSelectedFeedbackNumber(itemId: string, number: number) {
+    setSelectedFeedbackNumbersByItem((prev) => {
+      const current = prev[itemId] ?? [];
+      const exists = current.includes(number);
+      const nextNumbers = exists ? current.filter((entry) => entry !== number) : [...current, number].sort((a, b) => a - b);
+      return { ...prev, [itemId]: nextNumbers };
+    });
+  }
+
   function submitApplySelected(item: DecisionInboxItem) {
     const option = findOption(item, "apply_selected_feedback") ?? findOption(item, "apply_review_pick");
     if (!option) return;
+    const selectedFeedbackNumbers = selectedFeedbackNumbersByItem[item.id] ?? [];
     const note = (selectedFeedbackDraftByItem[item.id] ?? "").trim();
-    if (!note) {
+    if (selectedFeedbackNumbers.length <= 0 && !note) {
       window.alert(
         t({
-          ko: "선택 반영은 메모를 입력해야 합니다.",
-          en: "Apply Selected requires a note.",
-          ja: "選択反映にはメモが必要です。",
-          zh: "选择采纳需要填写备注。",
+          ko: "선택 반영은 항목 선택 또는 메모 입력이 필요합니다.",
+          en: "Apply Selected requires selected feedback or a note.",
+          ja: "Apply Selected には選択項目またはメモが必要です。",
+          zh: "Apply Selected 需要选择项或备注。",
         }),
       );
       return;
     }
-    onReplyOption(item, option.number, { note });
+    onReplyOption(item, option.number, {
+      ...(selectedFeedbackNumbers.length > 0 ? { selected_feedback_numbers: selectedFeedbackNumbers } : {}),
+      ...(note ? { note } : {}),
+    });
     setSelectedFeedbackDraftByItem((prev) => ({ ...prev, [item.id]: "" }));
+    setSelectedFeedbackNumbersByItem((prev) => ({ ...prev, [item.id]: [] }));
   }
 
   const getKindLabel = (kind: DecisionInboxItem["kind"]) => {
@@ -201,6 +229,8 @@ export default function DecisionInboxModal({
                 const applySelectedOption = findOption(item, "apply_selected_feedback") ?? findOption(item, "apply_review_pick");
                 const proceedOption = findOption(item, "proceed_final_verdict") ?? findOption(item, "skip_to_next_round");
                 const selectedDraft = selectedFeedbackDraftByItem[item.id] ?? "";
+                const selectedFeedbackNumbers = selectedFeedbackNumbersByItem[item.id] ?? [];
+                const optionNotes = Array.isArray(item.optionNotes) ? item.optionNotes : [];
                 const isItemBusy = Boolean(busyKey?.startsWith(`${item.id}:`));
 
                 return (
@@ -288,15 +318,48 @@ export default function DecisionInboxModal({
                               <p className="text-[11px] text-slate-300">
                                 {`${applySelectedOption.number}. ${applySelectedOption.label}`}
                               </p>
+                              {optionNotes.length > 0 ? (
+                                <div className="space-y-1 rounded-md border border-slate-700/70 bg-slate-950/60 p-2">
+                                  <p className="text-[11px] text-slate-400">
+                                    {t({
+                                      ko: "반영할 검토 항목",
+                                      en: "Feedback to apply",
+                                      ja: "反映するレビュー項目",
+                                      zh: "要采纳的评审项",
+                                    })}
+                                  </p>
+                                  <div className="space-y-1">
+                                    {optionNotes.map((note, noteIndex) => {
+                                      const number = noteIndex + 1;
+                                      const checked = selectedFeedbackNumbers.includes(number);
+                                      return (
+                                        <label
+                                          key={`${item.id}:note:${number}`}
+                                          className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-700/60 bg-slate-900/50 px-2 py-1 text-[11px] text-slate-200"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() => toggleSelectedFeedbackNumber(item.id, number)}
+                                            className="mt-0.5 h-3.5 w-3.5 rounded border-slate-500 bg-slate-950 text-indigo-400"
+                                          />
+                                          <span className="shrink-0 text-indigo-300">{number}.</span>
+                                          <span className="min-w-0 flex-1 break-words">{note}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
                               <textarea
                                 value={selectedDraft}
                                 onChange={(event) => setSelectedFeedbackDraft(item.id, event.target.value)}
                                 rows={2}
                                 placeholder={t({
-                                  ko: "선택 반영할 메모를 입력하세요.",
-                                  en: "Add note for selected feedback.",
-                                  ja: "選択反映メモを入力してください。",
-                                  zh: "填写选择采纳备注。",
+                                  ko: "추가 메모(선택)",
+                                  en: "Additional note (optional)",
+                                  ja: "追加メモ（任意）",
+                                  zh: "补充备注（可选）",
                                 })}
                                 className="w-full resize-y rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none"
                               />

@@ -1,12 +1,14 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { SQLInputValue } from "node:sqlite";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { MeetingMinuteEntryRow, MeetingMinutesRow } from "../../shared/types.ts";
-import { isWorkflowPackKey } from "../../../workflow/packs/definitions.ts";
+import { DEFAULT_WORKFLOW_PACK_KEY, isWorkflowPackKey, type WorkflowPackKey } from "../../../workflow/packs/definitions.ts";
+import { classifyWorkflowPackText } from "../../../workflow/packs/text-routing.ts";
 import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack-resolver.ts";
+import { normalizeSubtaskTitleForDisplay } from "../../../workflow/subtasks/title-normalizer.ts";
 
 export type TaskCrudRouteDeps = Pick<
   RuntimeContext,
@@ -67,6 +69,34 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
 
     const absolute = path.isAbsolute(candidate) ? candidate : path.resolve(process.cwd(), candidate);
     return path.normalize(absolute);
+  }
+
+  function parseHydratedPackList(raw: unknown): Set<string> {
+    if (typeof raw !== "string" || !raw.trim()) return new Set<string>();
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return new Set<string>();
+      return new Set(parsed.map((entry) => normalizeTextField(entry)).filter((entry): entry is string => !!entry));
+    } catch {
+      return new Set<string>();
+    }
+  }
+
+  function markOfficePackHydrated(packKey: WorkflowPackKey): void {
+    if (packKey === DEFAULT_WORKFLOW_PACK_KEY) return;
+    try {
+      const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get("officePackHydratedPacks") as
+        | { value?: unknown }
+        | undefined;
+      const hydrated = parseHydratedPackList(row?.value);
+      if (hydrated.has(packKey)) return;
+      hydrated.add(packKey);
+      db.prepare(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      ).run("officePackHydratedPacks", JSON.stringify([...hydrated].sort()));
+    } catch {
+      // best-effort metadata update only
+    }
   }
 
   app.get("/api/tasks", (req, res) => {
@@ -224,6 +254,20 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       }
     }
 
+    const explicitPackKey = normalizeTextField((body as any).workflow_pack_key);
+    const descriptionText = normalizeTextField((body as any).description) ?? "";
+    const routeText = `${title}\n${descriptionText}`.trim();
+    const routedPackDecision = !explicitPackKey ? classifyWorkflowPackText(routeText) : null;
+    const autoRoutedPackKey: WorkflowPackKey | null =
+      routedPackDecision && routedPackDecision.packKey === "donggri" && routedPackDecision.confidence >= 0.72
+        ? "donggri"
+        : null;
+    const resolvedWorkflowPackKey = resolveWorkflowPackKeyForTask({
+      db: db as any,
+      explicitPackKey: explicitPackKey ?? autoRoutedPackKey,
+      projectId: resolvedProjectId,
+    });
+
     db.prepare(
       `
     INSERT INTO tasks (
@@ -243,11 +287,7 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       (body as any).status ?? "inbox",
       (body as any).priority ?? 0,
       (body as any).task_type ?? "general",
-      resolveWorkflowPackKeyForTask({
-        db: db as any,
-        explicitPackKey: (body as any).workflow_pack_key,
-        projectId: resolvedProjectId,
-      }),
+      resolvedWorkflowPackKey,
       typeof (body as any).workflow_meta_json === "string"
         ? (body as any).workflow_meta_json
         : (body as any).workflow_meta_json
@@ -259,6 +299,9 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       t,
       t,
     );
+    if (autoRoutedPackKey && resolvedWorkflowPackKey === autoRoutedPackKey) {
+      markOfficePackHydrated(autoRoutedPackKey);
+    }
     recordTaskCreationAudit({
       taskId: id,
       taskTitle: title,
@@ -369,7 +412,17 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     if (!task) return res.status(404).json({ error: "not_found" });
 
     const logs = db.prepare("SELECT * FROM task_logs WHERE task_id = ? ORDER BY created_at DESC LIMIT 200").all(id);
-    const subtasks = db.prepare("SELECT * FROM subtasks WHERE task_id = ? ORDER BY created_at").all(id);
+    const subtasks = db
+      .prepare("SELECT * FROM subtasks WHERE task_id = ? ORDER BY created_at")
+      .all(id)
+      .map((row) => {
+        if (!row || typeof row !== "object") return row;
+        const normalizedRow = row as Record<string, unknown>;
+        return {
+          ...normalizedRow,
+          title: normalizeSubtaskTitleForDisplay(normalizedRow.title),
+        };
+      });
 
     res.json({ task, logs, subtasks });
   });
@@ -570,7 +623,7 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       try {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       } catch {
-        // 로그 파일 정리는 베스트 에포트
+        // log cleanup best-effort
       }
     }
 
@@ -578,3 +631,4 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     res.json({ ok: true });
   });
 }
+

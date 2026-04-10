@@ -126,6 +126,31 @@ export default function AgentManager({
     );
   }, [filteredAgents]);
 
+  const deriveWorkflowDefaults = useCallback((agent?: Agent | null) => {
+    const isJules =
+      String(agent?.cli_provider ?? "").toLowerCase() === "jules" || /jules/i.test(String(agent?.name ?? ""));
+    return {
+      workflow_role: (isJules ? "primary_author" : "reviewer") as FormData["workflow_role"],
+      review_lenses_text: isJules ? "" : "general",
+      two_pass_required: true,
+      max_review_rounds: isJules ? 2 : null,
+    };
+  }, []);
+
+  const parseReviewLenses = useCallback((raw: string): string[] => {
+    const seen = new Set<string>();
+    return raw
+      .split(/[\n,]/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .filter((entry) => {
+        const key = entry.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }, []);
+
   const openCreate = useCallback(() => {
     setModalAgent(null);
     setForm({ ...BLANK, department_id: deptTab !== "all" ? deptTab : departments[0]?.id || "" });
@@ -136,6 +161,8 @@ export default function AgentManager({
     (agent: Agent) => {
       setModalAgent(agent);
       const computed = agent.sprite_number ?? buildSpriteMap(agents).get(agent.id) ?? null;
+      const workflowDefaults = deriveWorkflowDefaults(agent);
+      const workflowProfile = agent.workflow_profile ?? null;
       setForm({
         name: agent.name,
         name_ko: agent.name_ko,
@@ -145,13 +172,17 @@ export default function AgentManager({
         role: agent.role,
         cli_provider: agent.cli_provider,
         cli_account_pool_id: agent.cli_account_pool_id ?? "",
+        workflow_role: workflowProfile?.role ?? workflowDefaults.workflow_role,
+        review_lenses_text: (workflowProfile?.review_lenses ?? []).join(", ") || workflowDefaults.review_lenses_text,
+        two_pass_required: workflowProfile?.two_pass_required ?? workflowDefaults.two_pass_required,
+        max_review_rounds: workflowProfile?.max_review_rounds ?? workflowDefaults.max_review_rounds,
         avatar_emoji: agent.avatar_emoji,
         sprite_number: computed,
         personality: agent.personality || "",
       });
       setShowModal(true);
     },
-    [agents],
+    [agents, deriveWorkflowDefaults],
   );
 
   const closeModal = useCallback(() => {
@@ -181,6 +212,13 @@ export default function AgentManager({
         role: form.role,
         cli_provider: form.cli_provider,
         cli_account_pool_id: normalizedCliAccountPoolId,
+        workflow_profile: {
+          role: form.workflow_role,
+          review_lenses: parseReviewLenses(form.review_lenses_text),
+          two_pass_required: form.two_pass_required,
+          max_review_rounds:
+            form.workflow_role === "primary_author" ? Math.max(1, Math.min(form.max_review_rounds ?? 2, 2)) : null,
+        },
         avatar_emoji: form.avatar_emoji || "🤖",
         sprite_number: form.sprite_number,
         personality: form.personality.trim() || null,
@@ -297,6 +335,7 @@ export default function AgentManager({
     isIsolatedPack,
     modalAgent,
     onAgentsChange,
+    parseReviewLenses,
     persistIsolatedProfile,
     useDbBackedPack,
   ]);

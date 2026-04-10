@@ -63,6 +63,7 @@ export type DecisionInboxRouteItem = {
   blocker_count?: number;
   blocker_delta?: number | null;
   jules_applied?: boolean | null;
+  option_notes?: string[];
   options: DecisionInboxRouteOption[];
 };
 
@@ -89,7 +90,12 @@ export async function getDecisionInbox(): Promise<DecisionInboxRouteItem[]> {
 export async function replyDecisionInbox(
   id: string,
   optionNumber: number,
-  payload?: { note?: string; target_task_id?: string; selected_option_numbers?: number[] },
+  payload?: {
+    note?: string;
+    target_task_id?: string;
+    selected_feedback_numbers?: number[];
+    selected_option_numbers?: number[];
+  },
 ): Promise<DecisionInboxReplyResult> {
   return request<DecisionInboxReplyResult>(`/api/decision-inbox/${encodeURIComponent(id)}/reply`, {
     method: "POST",
@@ -98,6 +104,9 @@ export async function replyDecisionInbox(
       option_number: optionNumber,
       ...(payload?.note ? { note: payload.note } : {}),
       ...(payload?.target_task_id ? { target_task_id: payload.target_task_id } : {}),
+      ...(payload && Object.prototype.hasOwnProperty.call(payload, "selected_feedback_numbers")
+        ? { selected_feedback_numbers: payload.selected_feedback_numbers }
+        : {}),
       ...(payload && Object.prototype.hasOwnProperty.call(payload, "selected_option_numbers")
         ? { selected_option_numbers: payload.selected_option_numbers }
         : {}),

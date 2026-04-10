@@ -36,6 +36,7 @@ function baseWorkflowDecisionItem(item: DecisionInboxRouteItem): Omit<DecisionIn
     blockerCount: item.blocker_count,
     blockerDelta: item.blocker_delta ?? null,
     julesApplied: item.jules_applied ?? null,
+    optionNotes: Array.isArray(item.option_notes) ? item.option_notes.map((entry) => String(entry ?? "").trim()).filter(Boolean) : [],
   };
 }
 

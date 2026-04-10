@@ -38,6 +38,7 @@ export interface DecisionInboxRouteItem {
   blocker_count?: number;
   blocker_delta?: number | null;
   jules_applied?: boolean | null;
+  option_notes?: string[];
   options: DecisionOption[];
 }
 

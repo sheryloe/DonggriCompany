@@ -114,7 +114,6 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
                 SELECT a.*
                 FROM agents a
                 WHERE a.status != 'offline'
-                  AND (a.status IN ('idle','break') OR a.id = ?)
                   ${scopeClause}
                 ORDER BY
                   CASE WHEN LOWER(COALESCE(a.cli_provider, '')) = 'jules' THEN 0 ELSE 1 END,
@@ -122,7 +121,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
                   a.created_at ASC
               `,
             )
-            .all(execAgent.id, ...(scopedIds ?? [])) as Array<Record<string, unknown>>;
+            .all(...(scopedIds ?? [])) as Array<Record<string, unknown>>;
           const preferred = candidates.find((candidate) => {
             const profile = resolveAgentWorkflowProfile({
               workflowProfileRaw: candidate.workflow_profile ?? null,
@@ -132,23 +131,64 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
             });
             return isPrimaryAuthorProfile(profile);
           });
-          if (preferred && preferred.id && String(preferred.id) !== String(execAgent.id)) {
-            execAgent = preferred;
-            effectiveDeptId = (preferred.department_id as string | null) ?? effectiveDeptId ?? null;
-            if (effectiveDeptId) {
-              const deptRow = db.prepare("SELECT name FROM departments WHERE id = ? LIMIT 1").get(effectiveDeptId) as
-                | { name?: string | null }
-                | undefined;
-              effectiveDeptName = String(deptRow?.name ?? effectiveDeptName ?? "Unassigned");
+          if (preferred && preferred.id) {
+            const preferredId = String(preferred.id);
+            const preferredBusy =
+              String(preferred.status ?? "").toLowerCase() === "working" &&
+              String(preferred.current_task_id ?? "").trim() &&
+              String(preferred.current_task_id ?? "").trim() !== taskId;
+            if (preferredBusy) {
+              const taskLang = resolveLang(taskMeta.title ?? "");
+              db.prepare("UPDATE tasks SET assigned_agent_id = ?, updated_at = ? WHERE id = ?").run(
+                preferredId,
+                nowMs(),
+                taskId,
+              );
+              appendTaskLog(
+                taskId,
+                "system",
+                `Primary-author gate: ${String(preferred.name ?? preferredId)} is busy on ${String(preferred.current_task_id ?? "")}; execution deferred`,
+              );
+              notifyCeo(
+                pickL(
+                  l(
+                    [
+                      `[PRIMARY AUTHOR] '${taskMeta.title}' 작업은 Jules(primary_author) 우선 정책에 따라 대기합니다. Jules가 다른 작업(${String(preferred.current_task_id ?? "")})을 수행 중입니다.`,
+                    ],
+                    [
+                      `[PRIMARY AUTHOR] '${taskMeta.title}' is waiting due to primary-author policy. Jules is busy on another task (${String(preferred.current_task_id ?? "")}).`,
+                    ],
+                    [
+                      `[PRIMARY AUTHOR] '${taskMeta.title}' は primary_author ポリシーにより待機中です。Jules が別タスク (${String(preferred.current_task_id ?? "")}) を実行中です。`,
+                    ],
+                    [
+                      `[PRIMARY AUTHOR] '${taskMeta.title}' 因 primary_author 策略进入等待。Jules 正在处理其他任务 (${String(preferred.current_task_id ?? "")})。`,
+                    ],
+                  ),
+                  taskLang,
+                ),
+                taskId,
+              );
+              return;
             }
-            appendTaskLog(
-              taskId,
-              "system",
-              `Primary-author override: ${requestedAgent.name ?? requestedAgent.id} -> ${String(preferred.name ?? preferred.id)}`,
-            );
+            if (preferredId !== String(execAgent.id)) {
+              execAgent = preferred;
+              effectiveDeptId = (preferred.department_id as string | null) ?? effectiveDeptId ?? null;
+              if (effectiveDeptId) {
+                const deptRow = db.prepare("SELECT name FROM departments WHERE id = ? LIMIT 1").get(effectiveDeptId) as
+                  | { name?: string | null }
+                  | undefined;
+                effectiveDeptName = String(deptRow?.name ?? effectiveDeptName ?? "Unassigned");
+              }
+              appendTaskLog(
+                taskId,
+                "system",
+                `Primary-author override: ${requestedAgent.name ?? requestedAgent.id} -> ${String(preferred.name ?? preferred.id)}`,
+              );
+            }
             db.prepare(
               "UPDATE tasks SET assigned_agent_id = ?, department_id = COALESCE(department_id, ?), updated_at = ? WHERE id = ?",
-            ).run(String(preferred.id), effectiveDeptId, nowMs(), taskId);
+            ).run(preferredId, effectiveDeptId, nowMs(), taskId);
           }
         }
       }
@@ -158,6 +198,18 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         "system",
         `Primary-author override skipped (${String(err?.message ?? err)})`,
       );
+    }
+    if (
+      String(execAgent.status ?? "").toLowerCase() === "working" &&
+      String(execAgent.current_task_id ?? "").trim() &&
+      String(execAgent.current_task_id ?? "").trim() !== taskId
+    ) {
+      appendTaskLog(
+        taskId,
+        "system",
+        `Execution deferred: agent ${execAgent.name ?? execAgent.id} is busy on ${execAgent.current_task_id}`,
+      );
+      return;
     }
     const execName = execAgent.name_ko || execAgent.name;
     const t = nowMs();

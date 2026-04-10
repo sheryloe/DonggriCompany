@@ -172,8 +172,32 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
       let meetingId: string | null = null;
       const leaders = getTaskReviewLeaders(taskId, departmentId);
       if (leaders.length === 0) {
+        const noReviewerLang = resolveLang(taskTitle);
+        const ts = Date.now();
+        db.prepare("UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ? AND status = 'review'").run(ts, taskId);
+        appendTaskLog(taskId, "system", "Review consensus aborted: no eligible reviewers found");
+        notifyCeo(
+          pickL(
+            l(
+              [
+                `[CEO OFFICE] '${taskTitle}' 리뷰를 진행할 reviewer를 확보하지 못해 승인 없이 보류(pending)로 전환했습니다. reviewer 구성 확인이 필요합니다.`,
+              ],
+              [
+                `[CEO OFFICE] '${taskTitle}' was moved to pending because no eligible reviewers were available. Reviewer assignment must be fixed before review.`,
+              ],
+              [
+                `[CEO OFFICE] '${taskTitle}' は有効な reviewer がいないため、承認せず pending に戻しました。reviewer 構成の確認が必要です。`,
+              ],
+              [
+                `[CEO OFFICE] '${taskTitle}' 因无可用 reviewer，任务已在未批准情况下回到 pending。请先修复 reviewer 配置。`,
+              ],
+            ),
+            noReviewerLang,
+          ),
+          taskId,
+        );
+        reviewRoundState.delete(taskId);
         reviewInFlight.delete(taskId);
-        onApproved();
         return;
       }
       try {
@@ -446,7 +470,7 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
         await sleepMs(randomDelay(720, 1300));
         if (abortIfInactive()) return;
 
-        for (const leader of otherLeaders) {
+        for (const leader of leaders) {
           if (abortIfInactive()) return;
           const reviewerProfile = resolveAgentWorkflowProfile({
             workflowProfileRaw: (leader as any).workflow_profile ?? null,
@@ -541,7 +565,13 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
             }
           }
           const feedbackText = summarizeStructuredFeedbackForMeeting(feedback);
-          speak(leader, "chat", "agent", planningLeader.id, feedbackText);
+          speak(
+            leader,
+            "chat",
+            leader.id === planningLeader.id ? "all" : "agent",
+            leader.id === planningLeader.id ? null : planningLeader.id,
+            feedbackText,
+          );
           if (feedback.finalVerdict !== "approved" || feedback.blockingItems.length > 0) {
             needsRevision = true;
             if (!reviseOwner) reviseOwner = leader;
@@ -550,7 +580,7 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
           if (abortIfInactive()) return;
         }
 
-        if (otherLeaders.length === 0) {
+        if (otherLeaders.length === 0 && !structuredReviewByAgent.has(planningLeader.id)) {
           if (abortIfInactive()) return;
           const soloPrompt = buildMeetingPrompt(planningLeader, {
             meetingType: "review",

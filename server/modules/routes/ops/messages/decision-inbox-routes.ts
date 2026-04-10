@@ -365,11 +365,21 @@ export function registerDecisionInboxRoutes(ctx: RuntimeContext): DecisionInboxR
 
   const runReviewRoundTimeoutDefault = () => {
     const now = nowMs();
-    const items = getDecisionInboxItems()
+    const timedOutItems = getDecisionInboxItems()
       .filter((item) => item.kind === "review_round_pick")
-      .filter((item) => now - item.created_at >= REVIEW_ROUND_DEFAULT_APPLY_TIMEOUT_MS)
-      .sort((a, b) => a.created_at - b.created_at);
-    for (const item of items) {
+      .map((item) => {
+        const meetingId = String(item.meeting_id ?? "").trim();
+        if (!meetingId) return null;
+        const state = getReviewRoundDecisionState(meetingId);
+        if (!state || state.status !== "ready") return null;
+        const readyAt = Number(state.updated_at ?? state.created_at ?? 0);
+        if (!Number.isFinite(readyAt) || readyAt <= 0) return null;
+        if (now - readyAt < REVIEW_ROUND_DEFAULT_APPLY_TIMEOUT_MS) return null;
+        return { item, readyAt };
+      })
+      .filter((entry): entry is { item: DecisionInboxRouteItem; readyAt: number } => Boolean(entry))
+      .sort((a, b) => a.readyAt - b.readyAt);
+    for (const { item } of timedOutItems) {
       const applyAllOption =
         item.options.find((option) => option.action === "apply_all_feedback") ??
         item.options.find((option) => option.action === "apply_review_pick");

@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 import type { Lang } from "../../../types/lang.ts";
 import { resolveConstrainedAgentScopeForTask } from "../../routes/core/tasks/execution-run-auto-assign.ts";
+import { normalizeSubtaskTitleForStorage } from "../subtasks/title-normalizer.ts";
 
 type SubtaskSeedingDeps = {
   db: any;
@@ -44,19 +45,20 @@ export function createSubtaskSeedingTools(deps: SubtaskSeedingDeps) {
     const parentAgent = db.prepare("SELECT assigned_agent_id FROM tasks WHERE id = ?").get(taskId) as
       | { assigned_agent_id: string | null }
       | undefined;
+    const normalizedTitle = normalizeSubtaskTitleForStorage(title);
 
     db.prepare(
       `
     INSERT INTO subtasks (id, task_id, title, status, assigned_agent_id, cli_tool_use_id, created_at)
     VALUES (?, ?, ?, 'in_progress', ?, ?, ?)
   `,
-    ).run(subId, taskId, title, parentAgent?.assigned_agent_id ?? null, toolUseId, nowMs());
+    ).run(subId, taskId, normalizedTitle, parentAgent?.assigned_agent_id ?? null, toolUseId, nowMs());
 
     // Detect if this subtask belongs to a foreign department
     const parentTaskDept = db.prepare("SELECT department_id, workflow_pack_key FROM tasks WHERE id = ?").get(taskId) as
       | { department_id: string | null; workflow_pack_key: string | null }
       | undefined;
-    const targetDeptId = analyzeSubtaskDepartment(title, parentTaskDept?.department_id ?? null);
+    const targetDeptId = analyzeSubtaskDepartment(normalizedTitle, parentTaskDept?.department_id ?? null);
 
     if (targetDeptId) {
       const targetDeptName = getDeptName(targetDeptId, parentTaskDept?.workflow_pack_key ?? null);

@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+﻿import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { registerTaskCrudRoutes } from "./crud.ts";
 
@@ -77,6 +77,10 @@ function createTaskCrudHarness(): { db: DatabaseSync; routes: Map<string, RouteH
       status TEXT NOT NULL,
       delegated_task_id TEXT
     );
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
   `);
 
   const routes = new Map<string, RouteHandler>();
@@ -132,8 +136,8 @@ function createTaskCrudHarness(): { db: DatabaseSync; routes: Map<string, RouteH
   return { db, routes };
 }
 
-describe("task CRUD workflow pack filter", () => {
-  it("GET /api/tasks는 workflow_pack_key 필터를 적용한다", () => {
+describe("task CRUD workflow pack behavior", () => {
+  it("applies workflow_pack_key filter on GET /api/tasks", () => {
     const { db, routes } = createTaskCrudHarness();
     try {
       db.prepare(
@@ -217,7 +221,7 @@ describe("task CRUD workflow pack filter", () => {
     }
   });
 
-  it("GET /api/tasks는 invalid workflow_pack_key에 400을 반환한다", () => {
+  it("returns 400 for invalid workflow_pack_key filter", () => {
     const { db, routes } = createTaskCrudHarness();
     try {
       const handler = routes.get("GET /api/tasks");
@@ -233,7 +237,7 @@ describe("task CRUD workflow pack filter", () => {
     }
   });
 
-  it("POST /api/tasks는 workflow_pack_key 미지정 시 프로젝트 default_pack_key를 상속한다", () => {
+  it("inherits project default_pack_key when workflow_pack_key is omitted", () => {
     const { db, routes } = createTaskCrudHarness();
     try {
       db.prepare(
@@ -262,6 +266,63 @@ describe("task CRUD workflow pack filter", () => {
       expect(payload.task.workflow_pack_key).toBe("novel");
       expect(payload.task.project_id).toBe("project-novel");
       expect(payload.task.project_path).toBe("/tmp/novel-project");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("auto-routes to donggri for instagram card news task and records hydrated pack", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      const handler = routes.get("POST /api/tasks") as RouteHandler | undefined;
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            title: "인스타그램 카드뉴스 로컬 제작",
+            description: "동그리 스타일 카드뉴스 5장 만들어줘",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { task: { workflow_pack_key: string } };
+      expect(payload.task.workflow_pack_key).toBe("donggri");
+
+      const hydratedRow = db.prepare("SELECT value FROM settings WHERE key = ?").get("officePackHydratedPacks") as
+        | { value?: string }
+        | undefined;
+      expect(hydratedRow?.value).toBeTypeOf("string");
+      const hydrated = JSON.parse(String(hydratedRow?.value ?? "[]")) as string[];
+      expect(hydrated).toContain("donggri");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("keeps explicit workflow_pack_key priority over auto-routing", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      const handler = routes.get("POST /api/tasks") as RouteHandler | undefined;
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            title: "인스타그램 카드뉴스 로컬 제작",
+            workflow_pack_key: "report",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { task: { workflow_pack_key: string } };
+      expect(payload.task.workflow_pack_key).toBe("report");
     } finally {
       db.close();
     }

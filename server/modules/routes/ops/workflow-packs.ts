@@ -7,6 +7,7 @@ import {
   isWorkflowPackKey,
   type WorkflowPackKey,
 } from "../../workflow/packs/definitions.ts";
+import { classifyWorkflowPackText } from "../../workflow/packs/text-routing.ts";
 
 type WorkflowPackRow = {
   key: string;
@@ -20,14 +21,6 @@ type WorkflowPackRow = {
   cost_profile_json: string;
   created_at: number;
   updated_at: number;
-};
-
-type WorkflowRouteResult = {
-  packKey: WorkflowPackKey;
-  confidence: number;
-  reason: string;
-  candidates: Array<{ packKey: WorkflowPackKey; confidence: number; reason: string }>;
-  requiresConfirmation: boolean;
 };
 
 function normalizeJsonStorageInput(value: unknown): { ok: true; json: string } | { ok: false; error: string } {
@@ -51,57 +44,6 @@ function parseStoredJson(raw: string): unknown {
   } catch {
     return raw;
   }
-}
-
-function classifyWorkflowPack(text: string): WorkflowRouteResult {
-  const normalized = String(text || "").trim();
-  const lower = normalized.toLowerCase();
-  if (!lower) {
-    return {
-      packKey: DEFAULT_WORKFLOW_PACK_KEY,
-      confidence: 0.35,
-      reason: "empty_text",
-      candidates: [{ packKey: DEFAULT_WORKFLOW_PACK_KEY, confidence: 0.35, reason: "empty_text" }],
-      requiresConfirmation: true,
-    };
-  }
-
-  const scoreByPack = new Map<WorkflowPackKey, number>();
-  const addScore = (key: WorkflowPackKey, delta: number) => {
-    scoreByPack.set(key, (scoreByPack.get(key) ?? 0) + delta);
-  };
-
-  const matcher = (re: RegExp): boolean => re.test(normalized) || re.test(lower);
-
-  if (matcher(/(donggri|dongri|unified\s*pack|hybrid\s*pack|combined\s*workflow|fusion\s*workflow)/i))
-    addScore("donggri", 0.9);
-
-  if (matcher(/(웹\s*서치|web\s*search|research|리서치|자료\s*조사|market\s*research|fact\s*check)/i))
-    addScore("web_research_report", 0.78);
-  if (matcher(/(보고서|리포트|brief|summary\s*report|status\s*report|executive\s*summary)/i)) addScore("report", 0.74);
-  if (matcher(/(소설|novel|fiction|chapter|스토리|세계관|시놉시스)/i)) addScore("novel", 0.76);
-  if (matcher(/(영상|video|콘티|storyboard|shot\s*list|샷리스트|script\s*for\s*video|릴스|쇼츠)/i))
-    addScore("video_preprod", 0.77);
-  if (matcher(/(역할\s*놀이|roleplay|rp\b|캐릭터\s*대화|in\s*character)/i)) addScore("roleplay", 0.79);
-  if (matcher(/(코드|개발|버그|테스트|fix|refactor|build|api|feature|deploy)/i)) addScore("development", 0.72);
-
-  if (scoreByPack.size <= 0) {
-    addScore("development", 0.5);
-  }
-
-  const sorted = Array.from(scoreByPack.entries())
-    .map(([packKey, confidence]) => ({ packKey, confidence: Math.min(confidence, 0.98), reason: "keyword_match" }))
-    .sort((a, b) => b.confidence - a.confidence);
-
-  const top = sorted[0]!;
-  const requiresConfirmation = top.confidence < 0.72;
-  return {
-    packKey: top.packKey,
-    confidence: top.confidence,
-    reason: top.reason,
-    candidates: sorted.slice(0, 3),
-    requiresConfirmation,
-  };
 }
 
 export function registerWorkflowPackRoutes(
@@ -285,7 +227,7 @@ export function registerWorkflowPackRoutes(
       }
     }
 
-    const inferred = classifyWorkflowPack(text);
+    const inferred = classifyWorkflowPackText(text);
     const inferredEnabled = isEnabled(inferred.packKey)
       ? inferred
       : {

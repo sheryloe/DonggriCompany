@@ -9,6 +9,7 @@ export type DecisionApplyResult = {
 export type YoloDecisionReplyPayload = {
   option_number: number;
   selected_option_numbers?: number[];
+  selected_feedback_numbers?: number[];
 };
 
 const RETRYABLE_DECISION_ERRORS = new Set<string>([
@@ -116,6 +117,7 @@ export function buildYoloDecisionReplyPayload(item: DecisionInboxRouteItem): Yol
       return {
         option_number: selected[0],
         selected_option_numbers: selected,
+        selected_feedback_numbers: selected,
       };
     }
 

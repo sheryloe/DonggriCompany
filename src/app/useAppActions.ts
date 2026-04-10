@@ -343,7 +343,7 @@ export function useAppActions({
     async (
       item: DecisionInboxItem,
       optionNumber: number,
-      payloadInput?: { note?: string; selected_option_numbers?: number[] },
+      payloadInput?: { note?: string; selected_feedback_numbers?: number[]; selected_option_numbers?: number[] },
     ) => {
       const option = item.options.find((entry) => entry.number === optionNumber);
       if (!option) return;
@@ -369,7 +369,14 @@ export function useAppActions({
           setDecisionInboxItems((prev) => prev.filter((entry) => entry.id !== item.id));
         } else {
           const selectedAction = option.action ?? "";
-          let payload: { note?: string; target_task_id?: string; selected_option_numbers?: number[] } | undefined;
+          let payload:
+            | {
+                note?: string;
+                target_task_id?: string;
+                selected_feedback_numbers?: number[];
+                selected_option_numbers?: number[];
+              }
+            | undefined;
           if (selectedAction === "add_followup_request") {
             const note = payloadInput?.note?.trim() ?? "";
             if (!note) {
@@ -385,11 +392,16 @@ export function useAppActions({
             }
             payload = { note, ...(item.taskId ? { target_task_id: item.taskId } : {}) };
           } else if (item.kind === "review_round_pick") {
-            const selectedOptionNumbers = payloadInput?.selected_option_numbers;
+            const selectedFeedbackNumbers = payloadInput?.selected_feedback_numbers ?? payloadInput?.selected_option_numbers;
             const note = payloadInput?.note?.trim() ?? "";
             payload = {
               ...(note ? { note } : {}),
-              ...(Array.isArray(selectedOptionNumbers) ? { selected_option_numbers: selectedOptionNumbers } : {}),
+              ...(Array.isArray(selectedFeedbackNumbers)
+                ? {
+                    selected_feedback_numbers: selectedFeedbackNumbers,
+                    selected_option_numbers: selectedFeedbackNumbers,
+                  }
+                : {}),
             };
           }
           const replyResult = await api.replyDecisionInbox(item.id, optionNumber, payload);

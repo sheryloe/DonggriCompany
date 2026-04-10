@@ -1,4 +1,4 @@
-import path from "node:path";
+﻿import path from "node:path";
 import { notifyTaskStatus } from "../../../../gateway/client.ts";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { AgentRow } from "../../shared/types.ts";
@@ -342,7 +342,7 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
     const continuationInstruction = continuationCtx
       ? pickL(
           l(
-            ["?곗냽 ?ㅽ뻾: ?숈씪 ?뚯쑀 而⑦뀓?ㅽ듃瑜??좎??섍퀬, 遺덊븘?뷀븳 ?뚯씪 ?ы깘???놁씠 誘명빐寃???ぉ留?諛섏쁺?섏꽭??"],
+            ["이전 실행 컨텍스트를 유지하고, 관련 없는 파일 재탐색 없이 미해결 항목만 이어서 처리하세요."],
             [
               "Continuation run: keep the same ownership context, avoid re-reading unrelated files, and apply only unresolved deltas.",
             ],
@@ -353,7 +353,7 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
         )
       : pickL(
           l(
-            ["諛섎났?곸씤 李⑹닔 硫섑듃 ?놁씠 諛붾줈 ?ㅽ뻾?섏꽭??"],
+            ["불필요한 착수 멘트 없이 바로 작업을 진행하세요."],
             ["Execute directly without repeated kickoff narration."],
             ["Execute directly without repeated kickoff narration."],
             ["Execute directly without repeated kickoff narration."],
@@ -370,14 +370,14 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
       ? `\n\n${pickL(
           l(
             [
-              `[?묒뾽 怨꾪쉷 異쒕젰 洹쒖튃]
-?묒뾽???쒖옉?섍린 ?꾩뿉 ?꾨옒 JSON ?뺤떇?쇰줈 怨꾪쉷??異쒕젰?섏꽭??
+              `[작업 계획 출력 규칙]
+작업 시작 전에 아래 JSON 형식으로 계획을 출력하세요.
 \`\`\`json
-{"subtasks": [{"title": "?쒕툕?쒖뒪???쒕ぉ1"}, {"title": "?쒕툕?쒖뒪???쒕ぉ2"}]}
+{"subtasks": [{"title": "서브태스크 제목1"}, {"title": "서브태스크 제목2"}]}
 \`\`\`
-媛??쒕툕?쒖뒪?щ? ?꾨즺???뚮쭏???꾨옒 ?뺤떇?쇰줈 蹂닿퀬?섏꽭??
+각 서브태스크를 완료할 때마다 아래 형식으로 보고하세요.
 \`\`\`json
-{"subtask_done": "?꾨즺???쒕툕?쒖뒪???쒕ぉ"}
+{"subtask_done": "완료된 서브태스크 제목"}
 \`\`\``,
             ],
             [
@@ -392,25 +392,25 @@ Whenever you complete a subtask, report it in this format:
 \`\`\``,
             ],
             [
-              `[鵝쒏?鼇덄뵽??눣?쎼꺂?쇈꺂]
-鵝쒏??뗥쭓?띲겓?곫А??JSON 壤℡폀?㎬쮫?삠굮?뷴뒟?쀣겍?뤵걽?뺛걚:
+              `[タスク計画出力ルール]
+作業開始前に、次のJSON形式で計画を出力してください。
 \`\`\`json
-{"subtasks": [{"title": "?듐깣?욍궧??"}, {"title": "?듐깣?욍궧??"}]}
+{"subtasks": [{"title": "サブタスクタイトル1"}, {"title": "サブタスクタイトル2"}]}
 \`\`\`
-?꾠궢?뽧궭?밤궚?믣츑雅녴걲?뗣걼?녈겓?곫А??숱凉뤵겎?긷몜?쀣겍?뤵걽?뺛걚:
+各サブタスクを完了するたびに、次の形式で報告してください。
 \`\`\`json
-{"subtask_done": "done subtask title"}
+{"subtask_done": "完了したサブタスクタイトル"}
 \`\`\``,
             ],
             [
-              `[餓삣뒦溫▼닋渦볟눣鰲꾢닕]
-凉冶뗥램鵝쒎뎺竊뚩??됦툔瓦?JSON ?쇔폀渦볟눣溫▼닋:
+              `[任务计划输出规则]
+开始工作前，请按以下 JSON 格式输出计划：
 \`\`\`json
-{"subtasks": [{"title": "耶먧뻣??"}, {"title": "耶먧뻣??"}]}
+{"subtasks": [{"title": "子任务标题1"}, {"title": "子任务标题2"}]}
 \`\`\`
-驪뤷츑?먧?訝ゅ춴餓삣뒦竊뚩??됦툔瓦경졏凉뤸콋??
+每完成一个子任务，都请按以下格式汇报：
 \`\`\`json
-{"subtask_done": "done subtask title"}
+{"subtask_done": "已完成的子任务标题"}
 \`\`\``,
             ],
           ),
@@ -433,7 +433,7 @@ Whenever you complete a subtask, report it in this format:
     const runInstruction = pickL(
       l(
         [
-          "???묒뾽??異⑸텇???꾩닔?섏꽭?? ?????留λ씫怨??꾨줈?앺듃 援ъ“瑜?李멸퀬?대룄 醫뗭?留? ?꾨줈?앺듃 援ъ“ ?먯깋???쒓컙???곗? 留덉꽭?? ?꾩슂??援ъ“???대? ?쒓났?섏뿀?듬땲??",
+          "위 작업을 충분히 완수하세요. 연속 실행 요약과 대화 맥락, 프로젝트 구조를 활용하되 미해결 항목과 무관한 재탐색은 하지 마세요.",
         ],
         [
           "Please complete the task above thoroughly. Use the continuation brief, conversation context, and project structure above if relevant. Do NOT spend time exploring the project structure again unless required by unresolved checklist items.",
@@ -526,9 +526,9 @@ Whenever you complete a subtask, report it in this format:
       const assigneeName = getAgentDisplayName(agent as unknown as AgentRow, taskLang);
       const worktreeNote = pickL(
         l(
-          [` (寃⑸━ 釉뚮옖移? climpire/${id.slice(0, 8)})`],
+          [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
           [` (isolated branch: climpire/${id.slice(0, 8)})`],
-          [` (?녽썴?뽧꺀?녈긽: climpire/${id.slice(0, 8)})`],
+          [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
           [` (isolated branch: climpire/${id.slice(0, 8)})`],
         ),
         taskLang,
@@ -536,10 +536,10 @@ Whenever you complete a subtask, report it in this format:
       notifyCeo(
         pickL(
           l(
-            [`${assigneeName}媛 '${task.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
+            [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
             [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-            [`${assigneeName}??'${task.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],
-            [`${assigneeName} 藥꿨?冶뗥쨪??'${task.title}'??{worktreeNote}`],
+            [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
+            [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
           ),
           taskLang,
         ),
@@ -583,9 +583,9 @@ Whenever you complete a subtask, report it in this format:
       const assigneeName = getAgentDisplayName(agent as unknown as AgentRow, taskLang);
       const worktreeNote = pickL(
         l(
-          [` (寃⑸━ 釉뚮옖移? climpire/${id.slice(0, 8)})`],
+          [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
           [` (isolated branch: climpire/${id.slice(0, 8)})`],
-          [` (?녽썴?뽧꺀?녈긽: climpire/${id.slice(0, 8)})`],
+          [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
           [` (isolated branch: climpire/${id.slice(0, 8)})`],
         ),
         taskLang,
@@ -593,10 +593,10 @@ Whenever you complete a subtask, report it in this format:
       notifyCeo(
         pickL(
           l(
-            [`${assigneeName}媛 '${task.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
+            [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
             [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-            [`${assigneeName}??'${task.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],
-            [`${assigneeName} 藥꿨?冶뗥쨪??'${task.title}'??{worktreeNote}`],
+            [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
+            [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
           ),
           taskLang,
         ),
@@ -642,9 +642,9 @@ Whenever you complete a subtask, report it in this format:
     const assigneeName = getAgentDisplayName(agent as unknown as AgentRow, taskLang);
     const worktreeNote = pickL(
       l(
-        [` (寃⑸━ 釉뚮옖移? climpire/${id.slice(0, 8)})`],
+        [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
         [` (isolated branch: climpire/${id.slice(0, 8)})`],
-        [` (?녽썴?뽧꺀?녈긽: climpire/${id.slice(0, 8)})`],
+        [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
         [` (isolated branch: climpire/${id.slice(0, 8)})`],
       ),
       taskLang,
@@ -652,10 +652,10 @@ Whenever you complete a subtask, report it in this format:
     notifyCeo(
       pickL(
         l(
-          [`${assigneeName}媛 '${task.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
+          [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
           [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-          [`${assigneeName}??'${task.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],
-          [`${assigneeName} 藥꿨?冶뗥쨪??'${task.title}'??{worktreeNote}`],
+          [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
+          [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
         ),
         taskLang,
       ),
@@ -670,3 +670,4 @@ Whenever you complete a subtask, report it in this format:
     res.json({ ok: true, pid: child.pid ?? null, logPath, cwd: agentCwd, worktree: !!worktreePath });
   });
 }
+

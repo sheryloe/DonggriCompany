@@ -259,11 +259,10 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
       const taskTitle = normalizeNote(row.task_title) || row.task_id;
       const projectName = normalizeNote(row.project_name) || null;
       const fallbackNotesRaw = getReviewDecisionNotes(row.task_id, row.meeting_round, 6);
-      const fallbackNotes =
-        fallbackNotesRaw.length > 0 ? fallbackNotesRaw : [getReviewDecisionFallbackLabel(lang)];
+      const fallbackNotes = fallbackNotesRaw.length > 0 ? fallbackNotesRaw : [getReviewDecisionFallbackLabel(lang)];
       const optionNotes = collectRoundOptionNotes(row.task_id, row.meeting_id, row.meeting_round, fallbackNotes);
       const reviewerVerdicts = getReviewerVerdicts(row.task_id, row.meeting_id, row.meeting_round);
-      const blockerCount = getBlockerCount(reviewerVerdicts);
+      const blockerCount = reviewerVerdicts.length > 0 ? getBlockerCount(reviewerVerdicts) : optionNotes.length;
       const previousBlockerCount = getPreviousRoundBlockerCount(row.task_id, row.meeting_round);
       const blockerDelta = previousBlockerCount === null ? null : blockerCount - previousBlockerCount;
 
@@ -287,9 +286,9 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
 
       const summary = t(
         lang,
-        `리뷰 라운드 ${row.meeting_round}에서 blocker ${blockerCount}건이 감지되었습니다.\n작업: '${taskTitle}'\n${projectName ? `프로젝트: '${projectName}'\n` : ""}Jules 수정 반영 방식을 선택하세요: 전체 반영 / 선택 반영 / 최종판정 진행.`,
+        `리뷰 라운드 ${row.meeting_round}에서 blocker ${blockerCount}건이 감지되었습니다.\n작업: '${taskTitle}'\n${projectName ? `프로젝트: '${projectName}'\n` : ""}Jules 반영 방식을 선택하세요. 전체 반영 / 선택 반영 / 최종판정으로 진행.`,
         `Review round ${row.meeting_round} detected ${blockerCount} blocker(s).\nTask: '${taskTitle}'\n${projectName ? `Project: '${projectName}'\n` : ""}Choose how Jules should handle feedback: apply all, apply selected, or proceed to final verdict.`,
-        `レビューラウンド${row.meeting_round}で blocker が ${blockerCount} 件検出されました。\nタスク: '${taskTitle}'\n${projectName ? `プロジェクト: '${projectName}'\n` : ""}Jules 反映方針を選択してください: 全体反映 / 選択反映 / 最終判定進行。`,
+        `レビューラウンド ${row.meeting_round} で blocker ${blockerCount} 件を検出しました。\nタスク: '${taskTitle}'\n${projectName ? `プロジェクト: '${projectName}'\n` : ""}Jules の反映方法を選択してください。すべて反映 / 選択反映 / 最終判定へ進行。`,
         `评审轮次 ${row.meeting_round} 检测到 ${blockerCount} 个 blocker。\n任务: '${taskTitle}'\n${projectName ? `项目: '${projectName}'\n` : ""}请选择 Jules 的处理方式：全部采纳 / 选择采纳 / 进入最终判定。`,
       );
 
@@ -333,25 +332,21 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
             lang,
             "기획팀 요약 지연 - 기본 옵션으로 진행",
             "Planning summary delayed - baseline options enabled",
-            "企画要約遅延 - 基本オプションで進行",
-            "规划摘要延迟 - 按基础选项继续",
+            "企画要約が遅延中 - 基本オプションで進行",
+            "规划摘要延迟 - 按默认选项继续",
           )
-        : t(
-            lang,
-            "기획팀 요약 완료",
-            "Planning summary ready",
-            "企画要約完了",
-            "规划摘要已完成",
-          );
+        : t(lang, "기획팀 요약 완료", "Planning summary ready", "企画要約完了", "规划摘要已完成");
       const plannerSummary = useCollectingFallback
         ? ""
         : formatPlannerSummaryForDisplay(String(decisionState?.planner_summary ?? "").trim());
       const combinedSummary = plannerSummary ? `${plannerHeader}\n${plannerSummary}\n\n${summary}` : `${plannerHeader}\n\n${summary}`;
+      const decisionReadyAt =
+        decisionState?.status === "ready" ? decisionState.updated_at ?? decisionState.created_at ?? null : null;
 
       out.push({
         id: `review-round-pick:${row.task_id}:${row.meeting_id}`,
         kind: "review_round_pick",
-        created_at: row.meeting_completed_at ?? row.meeting_started_at ?? now,
+        created_at: decisionReadyAt ?? row.meeting_completed_at ?? row.meeting_started_at ?? now,
         summary: combinedSummary,
         agent_id: planningLeadMeta.agent_id,
         agent_name: planningLeadMeta.agent_name,
@@ -368,6 +363,7 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
         blocker_count: blockerCount,
         blocker_delta: blockerDelta,
         jules_applied: null,
+        option_notes: optionNotes,
         options,
       });
     }

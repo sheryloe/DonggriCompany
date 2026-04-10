@@ -70,11 +70,17 @@ export async function processReviewConsensusOutcome(ctx: OutcomeContext): Promis
           requiresJulesAction?: boolean;
         }
       | undefined;
-    const hasStructuredBlocker = structured
+    const latestDecision = meetingReviewDecisionByAgent.get(leader.id);
+    let hasStructuredBlocker = structured
       ? String(structured.finalVerdict ?? "").toLowerCase() !== "approved" ||
         (Array.isArray(structured.blockingItems) && structured.blockingItems.length > 0) ||
         structured.requiresJulesAction === true
       : false;
+    if (latestDecision === "approved") {
+      hasStructuredBlocker = false;
+    } else if (latestDecision === "hold") {
+      hasStructuredBlocker = true;
+    }
     if (!structured && meetingReviewDecisionByAgent.get(leader.id) !== "hold") continue;
     if (structured && !hasStructuredBlocker) continue;
     const latestDecisionLine =

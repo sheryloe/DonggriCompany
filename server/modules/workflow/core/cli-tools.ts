@@ -1,5 +1,6 @@
-import os from "node:os";
+﻿import os from "node:os";
 import path from "node:path";
+import { TextDecoder } from "node:util";
 
 export type CliOutputStream = "stdout" | "stderr";
 
@@ -28,8 +29,35 @@ export function createCliTools(deps: CreateCliToolsDeps) {
         ];
 
   const ANSI_ESCAPE_REGEX = /\u001b(?:\[[0-?]*[ -/]*[@-~]|][^\u0007]*(?:\u0007|\u001b\\)|[@-Z\\-_])/g;
-  const CLI_SPINNER_LINE_REGEX = /^[\s.·•◦○●◌◍◐◓◑◒◉◎|/\\\-⠁-⣿]+$/u;
+  const CLI_SPINNER_LINE_REGEX = /^[\s.|/\\\-+=*~]{2,}$/u;
   const cliOutputDedupCache = new Map<string, { normalized: string; ts: number }>();
+
+  const euckrDecoder: TextDecoder | null = (() => {
+    if (process.platform !== "win32") return null;
+    try {
+      return new TextDecoder("euc-kr");
+    } catch {
+      return null;
+    }
+  })();
+
+  function scoreDecodedChunk(text: string): number {
+    const hangul = (text.match(/[\uAC00-\uD7A3]/g) ?? []).length;
+    const replacement = (text.match(/\uFFFD/g) ?? []).length;
+    const questionMarks = (text.match(/\?/g) ?? []).length;
+    return hangul * 2 - replacement * 3 - questionMarks;
+  }
+
+  function decodeBufferChunk(raw: Buffer): string {
+    const utf8 = raw.toString("utf8");
+    if (!euckrDecoder) return utf8;
+
+    const utf8Score = scoreDecodedChunk(utf8);
+    if (utf8Score >= 0 && !utf8.includes("\uFFFD")) return utf8;
+
+    const euckr = euckrDecoder.decode(raw);
+    return scoreDecodedChunk(euckr) > utf8Score ? euckr : utf8;
+  }
 
   function withCliPathFallback(pathValue: string | undefined): string {
     const parts = (pathValue ?? "")
@@ -57,7 +85,7 @@ export function createCliTools(deps: CreateCliToolsDeps) {
         const args = ["codex"];
         if (!noTools) args.push("--enable", "multi_agent");
         if (model) args.push("-m", model);
-        if (reasoningLevel) args.push("-c", `model_reasoning_effort="${reasoningLevel}"`);
+        if (reasoningLevel) args.push("-c", `model_reasoning_effort=\"${reasoningLevel}\"`);
         if (!noTools) args.push("--yolo");
         args.push("exec", "--json");
         if (noTools) args.push("--sandbox", "read-only");
@@ -75,7 +103,6 @@ export function createCliTools(deps: CreateCliToolsDeps) {
           "200",
         ];
         if (model) args.push("--model", model);
-        // Keep no-tools as a single argv token so empty value is preserved across shells.
         if (noTools) args.push("--tools=");
         return args;
       }
@@ -132,7 +159,7 @@ export function createCliTools(deps: CreateCliToolsDeps) {
 
   function normalizeStreamChunk(raw: Buffer | string, opts: { dropCliNoise?: boolean } = {}): string {
     const { dropCliNoise = false } = opts;
-    const input = typeof raw === "string" ? raw : raw.toString("utf8");
+    const input = typeof raw === "string" ? raw : decodeBufferChunk(raw);
     const normalized = input.replace(ANSI_ESCAPE_REGEX, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
     if (!dropCliNoise) return normalized;

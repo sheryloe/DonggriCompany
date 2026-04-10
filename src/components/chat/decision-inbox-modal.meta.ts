@@ -14,7 +14,7 @@ export interface DecisionInboxModalProps {
   onReplyOption: (
     item: DecisionInboxItem,
     optionNumber: number,
-    payload?: { note?: string; selected_option_numbers?: number[] },
+    payload?: { note?: string; selected_feedback_numbers?: number[]; selected_option_numbers?: number[] },
   ) => void;
   onOpenChat: (agentId: string) => void;
 }

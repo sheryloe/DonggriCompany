@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto";
+﻿import { randomUUID } from "node:crypto";
 import type { SQLInputValue } from "node:sqlite";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { AgentRow } from "../../shared/types.ts";
+import { normalizeSubtaskTitleForDisplay, normalizeSubtaskTitleForStorage } from "../../../workflow/subtasks/title-normalizer.ts";
 
 export type TaskSubtaskRouteDeps = Pick<
   RuntimeContext,
@@ -39,24 +40,33 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
     l,
   } = deps;
 
+  const normalizeSubtaskRow = <T extends Record<string, unknown>>(row: T): T => {
+    return {
+      ...row,
+      title: normalizeSubtaskTitleForDisplay(row.title),
+    };
+  };
+
   app.get("/api/subtasks", (req, res) => {
     const active = firstQueryValue(req.query.active);
-    let subtasks;
-    if (active === "1") {
-      subtasks = db
-        .prepare(
-          `
+    const subtasks =
+      active === "1"
+        ? db
+            .prepare(
+              `
       SELECT s.* FROM subtasks s
       JOIN tasks t ON s.task_id = t.id
       WHERE t.status IN ('planned', 'collaborating', 'in_progress', 'review')
       ORDER BY s.created_at
     `,
-        )
-        .all();
-    } else {
-      subtasks = db.prepare("SELECT * FROM subtasks ORDER BY created_at").all();
-    }
-    res.json({ subtasks });
+            )
+            .all()
+        : db.prepare("SELECT * FROM subtasks ORDER BY created_at").all();
+
+    const normalized = Array.isArray(subtasks)
+      ? (subtasks as Record<string, unknown>[]).map((row) => normalizeSubtaskRow(row))
+      : subtasks;
+    res.json({ subtasks: normalized });
   });
 
   app.post("/api/tasks/:id/subtasks", (req, res) => {
@@ -69,6 +79,8 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
       return res.status(400).json({ error: "title_required" });
     }
 
+    const normalizedTitle = normalizeSubtaskTitleForStorage((body as any).title);
+
     const id = randomUUID();
     db.prepare(
       `
@@ -78,7 +90,7 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
     ).run(
       id,
       taskId,
-      (body as any).title,
+      normalizedTitle,
       (body as any).description ?? null,
       (body as any).assigned_agent_id ?? null,
       nowMs(),
@@ -87,7 +99,7 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
     const parentTaskDept = db.prepare("SELECT department_id FROM tasks WHERE id = ?").get(taskId) as
       | { department_id: string | null }
       | undefined;
-    const targetDeptId = analyzeSubtaskDepartment((body as any).title, parentTaskDept?.department_id ?? null);
+    const targetDeptId = analyzeSubtaskDepartment(normalizedTitle, parentTaskDept?.department_id ?? null);
     if (targetDeptId) {
       const targetDeptName = getDeptName(targetDeptId);
       db.prepare(
@@ -95,9 +107,12 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
       ).run(targetDeptId, `${targetDeptName} 협업 대기`, id);
     }
 
-    const subtask = db.prepare("SELECT * FROM subtasks WHERE id = ?").get(id);
-    broadcast("subtask_update", subtask);
-    res.json(subtask);
+    const subtask = db.prepare("SELECT * FROM subtasks WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!subtask) return res.status(500).json({ error: "subtask_create_failed" });
+
+    const normalizedSubtask = normalizeSubtaskRow(subtask);
+    broadcast("subtask_update", normalizedSubtask);
+    res.json(normalizedSubtask);
   });
 
   app.patch("/api/subtasks/:id", (req, res) => {
@@ -121,7 +136,11 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
     for (const field of allowedFields) {
       if (field in (body as any)) {
         updates.push(`${field} = ?`);
-        params.push((body as any)[field]);
+        if (field === "title") {
+          params.push(normalizeSubtaskTitleForStorage((body as any)[field]));
+        } else {
+          params.push((body as any)[field]);
+        }
       }
     }
 
@@ -135,9 +154,12 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
     params.push(id);
     db.prepare(`UPDATE subtasks SET ${updates.join(", ")} WHERE id = ?`).run(...(params as SQLInputValue[]));
 
-    const subtask = db.prepare("SELECT * FROM subtasks WHERE id = ?").get(id);
-    broadcast("subtask_update", subtask);
-    res.json(subtask);
+    const subtask = db.prepare("SELECT * FROM subtasks WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!subtask) return res.status(500).json({ error: "subtask_reload_failed" });
+
+    const normalizedSubtask = normalizeSubtaskRow(subtask);
+    broadcast("subtask_update", normalizedSubtask);
+    res.json(normalizedSubtask);
   });
 
   app.post("/api/tasks/:id/assign", (req, res) => {
@@ -213,9 +235,9 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
         leader,
         pickL(
           l(
-            [`${leaderName}이(가) ${agentName}에게 '${task.title}' 업무를 할당했습니다.`],
+            [`${leaderName}가 ${agentName}에게 '${task.title}' 업무를 할당했습니다.`],
             [`${leaderName} assigned '${task.title}' to ${agentName}.`],
-            [`${leaderName}が '${task.title}' を${agentName}に割り当てました。`],
+            [`${leaderName} は ${agentName} に '${task.title}' を割り当てました。`],
             [`${leaderName} 已将 '${task.title}' 分配给 ${agentName}。`],
           ),
           lang,

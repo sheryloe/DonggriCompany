@@ -27,6 +27,7 @@ export interface DecisionInboxItem {
   blockerCount?: number;
   blockerDelta?: number | null;
   julesApplied?: boolean | null;
+  optionNotes?: string[];
 }
 
 const DECISION_REPLY_RE = /\[의사결정\s*회신\]|\[Decision Reply\]|\[意思決定返信\]|\[决策回复\]/i;

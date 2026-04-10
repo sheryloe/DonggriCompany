@@ -186,11 +186,13 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
       : selectedActionRaw === "skip_to_next_round"
         ? "proceed_final_verdict"
         : selectedActionRaw;
-  const payloadNumbers: unknown[] = Array.isArray(req.body?.selected_option_numbers)
-    ? (req.body.selected_option_numbers as unknown[])
-    : [];
+  const payloadFeedbackNumbers: unknown[] = Array.isArray(req.body?.selected_feedback_numbers)
+    ? (req.body.selected_feedback_numbers as unknown[])
+    : Array.isArray(req.body?.selected_option_numbers)
+      ? (req.body.selected_option_numbers as unknown[])
+      : [];
   const selectedNumbersSet = new Set<number>();
-  for (const value of payloadNumbers) {
+  for (const value of payloadFeedbackNumbers) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) continue;
     const normalized = Math.trunc(numeric);
@@ -339,6 +341,7 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
     kind: "review_round_pick",
     action: selectedAction,
     task_id: taskId,
+    selected_feedback_numbers: selectedNumbers,
     selected_option_numbers: selectedNumbers,
     review_round: reviewRound,
     revision_subtask_count: subtaskCount,

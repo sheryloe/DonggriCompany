@@ -45,7 +45,7 @@ interface AppOverlaysProps {
   onReplyDecisionOption: (
     item: DecisionInboxItem,
     optionNumber: number,
-    payloadInput?: { note?: string; selected_option_numbers?: number[] },
+    payloadInput?: { note?: string; selected_feedback_numbers?: number[]; selected_option_numbers?: number[] },
   ) => Promise<void>;
   onOpenDecisionChat: (agentId: string) => void;
   selectedAgent: Agent | null;

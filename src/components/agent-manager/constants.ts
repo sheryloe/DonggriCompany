@@ -1,7 +1,8 @@
-import type { AgentRole, CliProvider } from "../../types";
+﻿import type { AgentRole, CliProvider } from "../../types";
 import type { DeptForm, FormData } from "./types";
 
 export const ROLES: AgentRole[] = ["team_leader", "senior", "junior", "intern"];
+
 export const CLI_PROVIDERS: CliProvider[] = [
   "claude",
   "codex",
@@ -15,7 +16,7 @@ export const CLI_PROVIDERS: CliProvider[] = [
 ];
 
 export const ROLE_LABEL: Record<string, { ko: string; en: string }> = {
-  team_leader: { ko: "팀장", en: "Leader" },
+  team_leader: { ko: "리더", en: "Leader" },
   senior: { ko: "시니어", en: "Senior" },
   junior: { ko: "주니어", en: "Junior" },
   intern: { ko: "인턴", en: "Intern" },
@@ -39,24 +40,24 @@ export const ICON_SPRITE_POOL = Array.from({ length: 44 }, (_, i) => i + 1);
 
 export const EMOJI_GROUPS: { label: string; labelEn: string; emojis: string[] }[] = [
   {
-    label: "부서/업무",
+    label: "업무",
     labelEn: "Work",
-    emojis: ["📊", "💻", "🎨", "🔍", "🛡️", "⚙️", "📁", "🏢", "📋", "📈", "💼", "🗂️", "📌", "🎯", "🔧", "🧪"],
+    emojis: ["💼", "🧠", "🧪", "📊", "📈", "🛠️", "🔧", "🧭", "🗂️", "🧾", "🧱", "⚙️", "🖥️", "📌", "📎", "📝"],
   },
   {
-    label: "사람/표정",
+    label: "사람",
     labelEn: "People",
-    emojis: ["🤖", "👤", "👥", "😊", "😎", "🤓", "🧑‍💻", "👨‍🔬", "👩‍🎨", "🧑‍🏫", "🦸", "🦊", "🐱", "🐶", "🐻", "🐼"],
+    emojis: ["😀", "🙂", "😎", "🧑", "👩", "👨", "👩‍💻", "👨‍💻", "🧑‍💼", "👩‍🔧", "👨‍🔧", "🧑‍🎨", "👑", "🫡", "🤝", "🗣️"],
   },
   {
-    label: "사물/기호",
+    label: "오브젝트",
     labelEn: "Objects",
-    emojis: ["💡", "🚀", "⚡", "🔥", "💎", "🏆", "🎵", "🎮", "📱", "💾", "🖥️", "📡", "🔑", "🛠️", "📦", "🧩"],
+    emojis: ["📦", "🎯", "🏷️", "🔒", "🔑", "🧷", "📍", "💡", "📚", "🧾", "🗄️", "🧰", "🛰️", "🔋", "🕹️", "⏱️"],
   },
   {
-    label: "자연/색상",
+    label: "자연",
     labelEn: "Nature",
-    emojis: ["🌟", "⭐", "🌈", "🌊", "🌸", "🍀", "🌙", "☀️", "❄️", "🔵", "🟢", "🟡", "🔴", "🟣", "🟠", "⚪"],
+    emojis: ["🌿", "🌱", "🍀", "🌸", "🌞", "🌙", "⭐", "🌊", "⛰️", "🔥", "☁️", "🌧️", "🌈", "🌲", "🍃", "🌻"],
   },
 ];
 
@@ -69,7 +70,11 @@ export const BLANK: FormData = {
   role: "junior",
   cli_provider: "claude",
   cli_account_pool_id: "",
-  avatar_emoji: "🤖",
+  workflow_role: "reviewer",
+  review_lenses_text: "general",
+  two_pass_required: true,
+  max_review_rounds: null,
+  avatar_emoji: "😀",
   sprite_number: null,
   personality: "",
 };
@@ -92,7 +97,7 @@ export const DEPT_BLANK: DeptForm = {
   name_ko: "",
   name_ja: "",
   name_zh: "",
-  icon: "📁",
+  icon: "🧩",
   color: "#3b82f6",
   description: "",
   prompt: "",

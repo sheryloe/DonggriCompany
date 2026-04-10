@@ -20,6 +20,10 @@ export interface FormData {
   role: import("../../types").AgentRole;
   cli_provider: import("../../types").CliProvider;
   cli_account_pool_id: string;
+  workflow_role: import("../../types").AgentWorkflowRole;
+  review_lenses_text: string;
+  two_pass_required: boolean;
+  max_review_rounds: number | null;
   avatar_emoji: string;
   sprite_number: number | null;
   personality: string;

@@ -469,6 +469,7 @@ export function createDecisionInboxMessengerBridge(deps: DecisionBridgeDeps) {
     };
     if (pendingDecision.kind === "review_round_pick" && validOptionNumbers.length > 1) {
       replyBody.selected_option_numbers = validOptionNumbers;
+      replyBody.selected_feedback_numbers = validOptionNumbers;
     }
     if (note) replyBody.note = note;
 

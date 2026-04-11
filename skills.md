@@ -1,15 +1,26 @@
 ﻿# skills.md
 
-이 문서는 DonggriCompany에서 사용하는 **캐릭터(아바타) 실행 스킬 체계**의 최신 운영 기준입니다.
+이 문서는 DonggriCompany의 캐릭터(아바타) 실행 규칙을 한국어 기준으로 정리한 운영 문서입니다.
 
-## 1) 운영 원칙
-- 기본 회사팩은 `development`로 고정합니다.
-- 명시 팩(`workflow_pack_key`)이 있으면 항상 명시값을 우선합니다.
-- 명시 팩이 없으면 텍스트 기반 라우팅을 수행하고, `donggri` 신호가 강하면 `donggri`로 자동 라우팅합니다.
-- 자동 라우팅으로 선택된 팩은 `officePackHydratedPacks`에 기록해 재선택 비용을 줄입니다.
+## 1. 목적
+- 대표 요청을 UI 내부에서 바로 PRN으로 만들고 지시까지 전환
+- Jules 중심 2x 리뷰 파이프라인 일관 적용
+- 캐릭터별 2배 모드/심사숙고 모드 설정 표준화
+- 한글 깨짐 없는 업무 카드/서브태스크 표시 보장
 
-## 2) 캐릭터 2x/심사숙고 모드
-모든 아바타는 `workflow_profile`로 제어합니다.
+## 2. 캐릭터 모드 정의
+
+### 2배 모드 (2x)
+- 의미: 같은 과업을 `초기판단(pass1)` + `반증검사(pass2)`로 2회 검토
+- 강제 필드: `pass1`, `pass2`, `final_verdict`, `confidence`, `blocking_items`
+- 누락 시 처리: 파서 실패 → 재시도
+
+### 심사숙고 모드
+- 의미: 결론 전에 반례/리스크를 별도 점검
+- 구현 기준: `two_pass_required=true`
+- 적용 대상: Jules + reviewer 기본 전원
+
+## 3. workflow_profile 표준
 
 ```json
 {
@@ -20,61 +31,78 @@
 }
 ```
 
-### 기본값
+기본값:
 - Jules: `primary_author`, `two_pass_required=true`, `max_review_rounds=2`
-- 그 외 아바타: `reviewer`, `two_pass_required=true`
-- 레거시 에이전트(`workflow_profile` 없음): 런타임 기본값 주입
+- 기타: `reviewer`, `two_pass_required=true`
+- 레거시 에이전트: `workflow_profile` 없으면 런타임 기본값 주입
 
-## 3) Jules 중심 2x 리뷰 파이프라인
-1. Jules 초안 생성
-2. 리뷰어 최대 3명 병렬 리뷰(`review_lenses` 기준)
-3. 합의(Consensus)에서 `pass2(counter-check)` 우선 반영
-4. `blocker=0`이면 즉시 승인
-5. `blocker>0`이면 Jules 재작업(2x) + 라운드2 재검토
-6. 라운드2 종료 후 blocker 잔존 시 `reject + escalation`
+## 4. Jules 중심 리뷰 파이프라인
+1. Jules 초안 작성
+2. reviewer 최대 3명 fan-out
+3. 합의기(consensus)에서 `pass2`를 blocker 계산 우선값으로 사용
+4. 라운드1 결과:
+   - blocker=0 → 승인
+   - blocker>0 → Jules 재작업(필수)
+5. 라운드2 결과:
+   - blocker=0 → 승인
+   - blocker>0 → reject + escalation (추가 라운드 없음)
 
-리뷰 계약 필드(필수):
-- `pass1`
-- `pass2`
-- `final_verdict`
-- `confidence`
-- `blocking_items`
+## 5. 대표 PRN 작성 기능 규칙
+- 입력 방식: `PRN 작성` 버튼 또는 `/prn <요구사항>`
+- 생성 API: `POST /api/directives/prn-draft`
+- PRN 섹션(표준형 v1):
+  - 배경
+  - 목표
+  - 비목표
+  - 핵심요구사항
+  - 수용기준
+  - 리스크
+  - 오픈질문
+  - 지시문 초안
+- 모달 액션 고정:
+  - 지시 전송
+  - 초안 재생성
+  - 취소
+- 지시 전송: 기존 directive API 재사용 + `source: "prn_ui"`
 
-누락 시 파서 실패 처리 후 재시도합니다.
+## 6. 팩 정책 (회사팩 + 동그리팩)
+- 전역 기본팩: `development`
+- 명시팩(`workflow_pack_key`)이 있으면 명시값 우선
+- 명시팩이 없을 때만 텍스트 라우팅으로 `donggri` 자동 선택
+- 자동 선택 팩은 `officePackHydratedPacks`에 반영
 
-## 4) 스킬/렌즈 권장 매핑
-- `security`: 보안 경계, 권한, 입력 검증
-- `performance`: 병목, 쿼리/렌더 비용, 캐시
-- `ux`: 사용자 흐름, 문구 명확성, 상태 피드백
-- `reliability`: 실패 복구, 타임아웃, 재시도
-- `maintainability`: 결합도, 타입 안정성, 테스트 공백
+## 7. 스킬 렌즈 한글화 매핑
+- `security`: 보안/권한/입력검증
+- `performance`: 성능/병목/리소스 비용
+- `ux`: 사용자 흐름/문구/피드백
+- `reliability`: 실패복구/재시도/타임아웃
+- `maintainability`: 코드 구조/결합도/테스트 공백
 
-## 5) 한글 깨짐 방지 규칙
-- CLI 스트림 정규화에서 Windows 인코딩(euc-kr) fallback 디코딩을 사용합니다.
-- 서브태스크 제목은 저장/조회 모두 정규화합니다.
-- 모지바케 패턴(`?쒕툕...`)은 `서브태스크 제목N`으로 복구합니다.
-- 응답 직전(display)에서도 마지막 방어선 정규화를 수행합니다.
+## 8. 한글 깨짐 방지 운영 규칙
+- 서브태스크 제목 정규화는 아래 경로에 공통 적용
+  - 저장
+  - 조회
+  - 브로드캐스트
+  - 렌더
+- 모지바케 패턴(`?쒕툕...`) 감지 시 안전 라벨 치환
+- Decision Inbox/캐릭터 카드에서 마지막 렌더 방어 정규화 1회 추가
 
-## 6) 요청사항 대응 체크리스트
-- [x] 캐릭터별 2x/심사숙고 모드 입력 UI
-- [x] Jules primary author 고정 파이프라인
-- [x] 리뷰 라운드 상한(2라운드)
-- [x] 동그리+회사팩(development) 동시 정책
-- [x] 한글 깨짐 복구(서브태스크/스트림)
-- [x] 자동 테스트 추가 및 통과
+## 9. 검증 절차 (PowerShell)
 
-## 7) PowerShell 운영 명령
 ```powershell
-# API 테스트
+# 빌드
+corepack pnpm run build
+
+# 테스트
+corepack pnpm run test:web
 corepack pnpm run test:api
 
-# WEB 테스트
-corepack pnpm run test:web
+# 통합 스모크
+$env:QA_API_AUTH_TOKEN="__CHANGE_ME__"
+node .\scripts\qa\prn-review-pipeline-smoke.mjs
 
-# 컨테이너 재시작
+# 도커 재기동 및 상태 확인
 docker compose restart donggricompany
-
-# 상태/로그 점검
 docker compose ps
 docker compose logs --tail 200 donggricompany
 ```

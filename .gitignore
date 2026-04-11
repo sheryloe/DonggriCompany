@@ -60,6 +60,7 @@ coverage/
 # Local AI assistant artifacts
 .agents/
 .claude/
+.cli-homes/
 skills-lock.json
 
 # OS metadata

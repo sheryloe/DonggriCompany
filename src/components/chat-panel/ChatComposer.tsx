@@ -10,6 +10,7 @@ interface ChatComposerProps {
   input: string;
   selectedAgent: Agent | null;
   isDirectiveMode: boolean;
+  isPrnCommandMode: boolean;
   isAnnouncementMode: boolean;
   tr: Tr;
   getAgentName: (agent: Agent | null | undefined) => string;
@@ -17,6 +18,7 @@ interface ChatComposerProps {
   onModeChange: (mode: ChatMode) => void;
   onInputChange: (value: string) => void;
   onSend: () => void;
+  onCreatePrn: () => void;
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
@@ -25,6 +27,7 @@ export default function ChatComposer({
   input,
   selectedAgent,
   isDirectiveMode,
+  isPrnCommandMode,
   isAnnouncementMode,
   tr,
   getAgentName,
@@ -32,6 +35,7 @@ export default function ChatComposer({
   onModeChange,
   onInputChange,
   onSend,
+  onCreatePrn,
   onKeyDown,
 }: ChatComposerProps) {
   return (
@@ -46,8 +50,7 @@ export default function ChatComposer({
               : "bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
           }`}
         >
-          <span>📋</span>
-          <span>{tr("업무 지시", "Task", "タスク指示", "任务指示")}</span>
+          <span>{tr("업무 지시", "Task", "タスク", "任务")}</span>
         </button>
 
         <button
@@ -56,8 +59,7 @@ export default function ChatComposer({
             mode === "announcement" ? "bg-yellow-500 text-gray-900" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
           }`}
         >
-          <span>📢</span>
-          <span>{tr("전사 공지", "Announcement", "全体告知", "全员公告")}</span>
+          <span>{tr("공지", "Announcement", "告知", "公告")}</span>
         </button>
 
         <button
@@ -69,73 +71,61 @@ export default function ChatComposer({
               : "bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
           }`}
         >
-          <span>📊</span>
-          <span>{tr("보고 요청", "Report", "レポート依頼", "报告请求")}</span>
+          <span>{tr("보고 요청", "Report", "レポート", "报告")}</span>
+        </button>
+
+        <button
+          onClick={onCreatePrn}
+          disabled={!input.trim()}
+          className="flex flex-1 items-center justify-center rounded-lg bg-indigo-700 px-2 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <span>{tr("PRN 작성", "Create PRN", "PRN作成", "生成PRN")}</span>
         </button>
       </div>
 
-      <ChatModeHint mode={mode} isDirectiveMode={isDirectiveMode} tr={tr} />
+      <ChatModeHint mode={mode} isDirectiveMode={isDirectiveMode} isPrnCommandMode={isPrnCommandMode} tr={tr} />
 
       <div className="flex-shrink-0 px-4 pb-4 pt-2">
         <div
           className={`flex items-end gap-2 rounded-2xl border bg-gray-800 transition-colors ${
             isDirectiveMode
               ? "border-red-500/50 focus-within:border-red-400"
-              : isAnnouncementMode
-                ? "border-yellow-500/50 focus-within:border-yellow-400"
-                : mode === "task"
-                  ? "border-blue-500/50 focus-within:border-blue-400"
-                  : mode === "report"
-                    ? "border-emerald-500/50 focus-within:border-emerald-400"
-                    : "border-gray-600 focus-within:border-blue-500"
+              : isPrnCommandMode
+                ? "border-indigo-500/50 focus-within:border-indigo-400"
+                : isAnnouncementMode
+                  ? "border-yellow-500/50 focus-within:border-yellow-400"
+                  : mode === "task"
+                    ? "border-blue-500/50 focus-within:border-blue-400"
+                    : mode === "report"
+                      ? "border-emerald-500/50 focus-within:border-emerald-400"
+                      : "border-gray-600 focus-within:border-blue-500"
           }`}
         >
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => onInputChange(e.target.value)}
+            onChange={(event) => onInputChange(event.target.value)}
             onKeyDown={onKeyDown}
             placeholder={
               isAnnouncementMode
-                ? tr(
-                    "전사 공지 내용을 입력하세요...",
-                    "Write an announcement...",
-                    "全体告知内容を入力してください...",
-                    "请输入公告内容...",
-                  )
+                ? tr("공지 내용을 입력하세요...", "Write an announcement...", "告知内容を入力...", "输入公告内容...")
                 : mode === "task"
-                  ? tr(
-                      "업무 지시 내용을 입력하세요...",
-                      "Write a task instruction...",
-                      "タスク指示内容を入力してください...",
-                      "请输入任务指示内容...",
-                    )
+                  ? tr("업무 지시 내용을 입력하세요...", "Write a task instruction...", "タスク指示を入力...", "输入任务指令...")
                   : mode === "report"
-                    ? tr(
-                        "보고 요청 내용을 입력하세요...",
-                        "Write a report request...",
-                        "レポート依頼内容を入力してください...",
-                        "请输入报告请求内容...",
-                      )
+                    ? tr("보고 요청 내용을 입력하세요...", "Write a report request...", "レポート依頼を入力...", "输入报告请求...")
                     : selectedAgent
                       ? tr(
                           `${getAgentName(selectedAgent)}에게 메시지 보내기...`,
                           `Send a message to ${getAgentName(selectedAgent)}...`,
-                          `${getAgentName(selectedAgent)}にメッセージを送る...`,
-                          `向 ${getAgentName(selectedAgent)} 发送消息...`,
+                          `${getAgentName(selectedAgent)} へメッセージ送信...`,
+                          `发送消息给 ${getAgentName(selectedAgent)}...`,
                         )
-                      : tr(
-                          "메시지를 입력하세요...",
-                          "Type a message...",
-                          "メッセージを入力してください...",
-                          "请输入消息...",
-                        )
-            }
+                      : tr("메시지를 입력하세요...", "Type a message...", "メッセージを入力...", "输入消息...")}
             rows={1}
             className="min-h-[44px] max-h-32 flex-1 resize-none overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed text-gray-100 placeholder-gray-500 focus:outline-none"
             style={{ scrollbarWidth: "none" }}
-            onInput={(e) => {
-              const el = e.currentTarget;
+            onInput={(event) => {
+              const el = event.currentTarget;
               el.style.height = "auto";
               el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
             }}
@@ -147,13 +137,15 @@ export default function ChatComposer({
               input.trim()
                 ? isDirectiveMode
                   ? "bg-red-600 text-white hover:bg-red-500"
-                  : isAnnouncementMode
-                    ? "bg-yellow-500 text-gray-900 hover:bg-yellow-400"
-                    : mode === "task"
-                      ? "bg-blue-600 text-white hover:bg-blue-500"
-                      : mode === "report"
-                        ? "bg-emerald-600 text-white hover:bg-emerald-500"
-                        : "bg-blue-600 text-white hover:bg-blue-500"
+                  : isPrnCommandMode
+                    ? "bg-indigo-600 text-white hover:bg-indigo-500"
+                    : isAnnouncementMode
+                      ? "bg-yellow-500 text-gray-900 hover:bg-yellow-400"
+                      : mode === "task"
+                        ? "bg-blue-600 text-white hover:bg-blue-500"
+                        : mode === "report"
+                          ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                          : "bg-blue-600 text-white hover:bg-blue-500"
                 : "cursor-not-allowed bg-gray-700 text-gray-600"
             }`}
             aria-label={tr("전송", "Send", "送信", "发送")}
@@ -165,13 +157,14 @@ export default function ChatComposer({
         </div>
         <p className="mt-1.5 px-1 text-xs text-gray-600">
           {tr(
-            "Enter로 전송, Shift+Enter로 줄바꿈",
-            "Press Enter to send, Shift+Enter for a new line",
-            "Enterで送信、Shift+Enterで改行",
-            "按 Enter 发送，Shift+Enter 换行",
+            "Enter 전송, Shift+Enter 줄바꿈, /prn 요구사항 생성",
+            "Enter to send, Shift+Enter newline, /prn to draft requirements",
+            "Enter送信, Shift+Enter改行, /prn で要件草案",
+            "Enter发送，Shift+Enter换行，/prn 生成需求草案",
           )}
         </p>
       </div>
     </>
   );
 }
+

@@ -15,6 +15,7 @@ export type ProjectMetaPayload = {
   project_id?: string;
   project_path?: string;
   project_context?: string;
+  source?: string;
 };
 
 export type CliSubAgentEvent =

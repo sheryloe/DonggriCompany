@@ -10,6 +10,7 @@ import { ROOM_THEMES_STORAGE_KEY } from "./constants";
 import { mapWorkflowDecisionItemsRaw } from "./decision-inbox";
 import { normalizeOfficeWorkflowPack } from "./office-workflow-pack";
 import type { RoomThemeMap } from "./types";
+import { normalizeSubtaskTitleForUi } from "./subtask-title-normalizer";
 import {
   isRoomThemeMap,
   isUserLanguagePinned,
@@ -110,7 +111,12 @@ export function useAppBootstrapData({
           console.error("Auto language sync failed:", error);
         });
       }
-      setSubtasks(subs);
+      setSubtasks(
+        subs.map((subtask) => ({
+          ...subtask,
+          title: normalizeSubtaskTitleForUi(subtask.title),
+        })),
+      );
       setMeetingPresence(presence);
       setDecisionInboxItems(mapWorkflowDecisionItemsRaw(decisionItems ?? []));
     } catch (error) {

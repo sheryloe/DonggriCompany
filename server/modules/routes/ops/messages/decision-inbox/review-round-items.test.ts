@@ -165,4 +165,44 @@ describe("review round decision items", () => {
       db.close();
     }
   });
+
+  it("리뷰어 3명 verdict를 카드에 반영하고 blocker 수를 계산한다", () => {
+    const db = createDb();
+    try {
+      db.prepare("INSERT INTO projects (id, name) VALUES ('proj-1', 'Project 1')").run();
+      db.prepare(
+        `INSERT INTO tasks (id, title, status, source_task_id, project_id, project_path)
+         VALUES ('task-1', 'Task 1', 'review', NULL, 'proj-1', '/tmp/project')`,
+      ).run();
+      db.prepare(
+        `INSERT INTO meeting_minutes (id, task_id, meeting_type, round, status, started_at, completed_at, created_at)
+         VALUES ('meeting-1', 'task-1', 'review', 1, 'revision_requested', 1000, 2000, 1000)`,
+      ).run();
+      db.prepare(
+        `INSERT INTO review_round_feedback_items
+         (task_id, meeting_id, round, pass2, final_verdict, blocking_items_json, requires_jules_action, lens, confidence, agent_id)
+         VALUES
+         ('task-1', 'meeting-1', 1, 'counter A', 'approved', '[]', 0, 'quality', 0.91, 'reviewer-1'),
+         ('task-1', 'meeting-1', 1, 'counter B', 'hold', '["B blocker"]', 1, 'security', 0.72, 'reviewer-2'),
+         ('task-1', 'meeting-1', 1, 'counter C', 'rejected', '["C blocker"]', 1, 'ux', 0.68, 'reviewer-3')`,
+      ).run();
+
+      const states = new Map<string, ReviewRoundDecisionState | null>();
+      const tools = buildDeps(db, states);
+      const items = tools.buildReviewRoundDecisionItems();
+      const item = items[0];
+
+      expect(items).toHaveLength(1);
+      expect(item?.reviewer_verdicts).toHaveLength(3);
+      expect(item?.reviewer_verdicts?.map((verdict) => verdict.final_verdict)).toEqual([
+        "approved",
+        "hold",
+        "rejected",
+      ]);
+      expect(item?.blocker_count).toBe(2);
+      expect(item?.option_notes).toContain("B blocker");
+    } finally {
+      db.close();
+    }
+  });
 });

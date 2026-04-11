@@ -82,6 +82,31 @@ export type DecisionInboxReplyResult = {
   }>;
 };
 
+export type PrnDraftSections = {
+  background: string;
+  goal: string;
+  non_goal: string;
+  requirements: string;
+  acceptance_criteria: string;
+  risks: string;
+  open_questions: string;
+};
+
+export type PrnDraftResponse = {
+  sections: PrnDraftSections;
+  directive_text: string;
+  confidence: number;
+  generation_meta: {
+    fallback_used: boolean;
+    parser_error: string | null;
+    planner_agent_id: string | null;
+    planner_agent_name: string | null;
+    source: "planning_lead" | "fallback";
+    pass1: string;
+    pass2: string;
+  };
+};
+
 export async function getDecisionInbox(): Promise<DecisionInboxRouteItem[]> {
   const j = await request<{ items: DecisionInboxRouteItem[] }>("/api/decision-inbox");
   return j.items ?? [];
@@ -158,6 +183,7 @@ export async function sendDirectiveWithProject(input: {
   project_id?: string;
   project_path?: string;
   project_context?: string;
+  source?: string;
 }): Promise<string> {
   const idempotencyKey = makeIdempotencyKey("ceo-directive");
   const j = await postWithIdempotency<{ id?: string; message?: { id?: string } }>(
@@ -166,6 +192,18 @@ export async function sendDirectiveWithProject(input: {
     idempotencyKey,
   );
   return extractMessageId(j);
+}
+
+export async function createPrnDraft(input: {
+  prompt: string;
+  project_id?: string;
+  project_path?: string;
+  project_context?: string;
+  language?: string;
+}): Promise<PrnDraftResponse> {
+  const idempotencyKey = makeIdempotencyKey("ceo-prn");
+  const j = await postWithIdempotency<{ draft: PrnDraftResponse }>("/api/directives/prn-draft", input, idempotencyKey);
+  return j.draft;
 }
 
 export async function clearMessages(agentId?: string): Promise<void> {

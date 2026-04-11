@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { INBOX_WEBHOOK_SECRET } from "../../../../config/runtime.ts";
 import { sendMessengerMessage, sendMessengerSessionMessage } from "../../../../gateway/client.ts";
 import {
@@ -12,6 +13,7 @@ import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { AgentRow, DelegationOptions, StoredMessage } from "../../shared/types.ts";
 import type { DecisionReplyBridgeInput, DecisionReplyBridgeResult } from "./decision-inbox-routes.ts";
 import { resolveDirectiveLeaderCandidateScope } from "./directive-leader-scope.ts";
+import { buildFallbackPrnDraft, buildPrnDraftPrompt, normalizePrnLanguage, parsePrnDraftResponse } from "./prn-draft.ts";
 
 type DirectiveAndInboxRouteCtx = Pick<RuntimeContext, "app" | "db" | "broadcast">;
 
@@ -30,6 +32,8 @@ type DirectiveAndInboxRouteDeps = {
   findTeamLeader: RuntimeContext["findTeamLeader"];
   handleTaskDelegation: RuntimeContext["handleTaskDelegation"];
   scheduleAgentReply: RuntimeContext["scheduleAgentReply"];
+  runAgentOneShot: RuntimeContext["runAgentOneShot"];
+  getPreferredLanguage: RuntimeContext["getPreferredLanguage"];
   resetDirectChatState: RuntimeContext["resetDirectChatState"];
   detectMentions: RuntimeContext["detectMentions"];
   tryHandleInboxDecisionReply?: (input: DecisionReplyBridgeInput) => Promise<DecisionReplyBridgeResult>;
@@ -124,12 +128,15 @@ export function registerDirectiveAndInboxRoutes(
     findTeamLeader,
     handleTaskDelegation,
     scheduleAgentReply,
+    runAgentOneShot,
+    getPreferredLanguage,
     resetDirectChatState,
     detectMentions,
     tryHandleInboxDecisionReply,
   } = deps;
 
   const manualProjectModeCache = new Map<string, boolean>();
+  const prnDraftIdempotencyCache = new Map<string, { payloadHash: string; response: unknown; createdAt: number }>();
 
   const isManualProject = (projectId: string | null): boolean => {
     const normalizedProjectId = normalizeTextField(projectId);
@@ -184,6 +191,171 @@ export function registerDirectiveAndInboxRoutes(
     if (projectId) return null;
     return findTeamLeader(departmentId);
   };
+
+  const prunePrnDraftIdempotencyCache = (now = Date.now()) => {
+    const ttlMs = 30 * 60 * 1000;
+    if (prnDraftIdempotencyCache.size <= 512) return;
+    for (const [key, value] of prnDraftIdempotencyCache.entries()) {
+      if (now - value.createdAt > ttlMs) {
+        prnDraftIdempotencyCache.delete(key);
+      }
+    }
+  };
+
+  const hashPrnPayload = (payload: Record<string, unknown>): string =>
+    createHash("sha256")
+      .update(JSON.stringify(payload))
+      .digest("hex");
+
+  app.post("/api/directives/prn-draft", async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const idempotencyKey = resolveMessageIdempotencyKey(req, body, "api.directives.prn-draft");
+    const prompt = normalizeTextField(body.prompt ?? body.content);
+    const projectId = normalizeTextField(body.project_id);
+    const projectPath = normalizeTextField(body.project_path);
+    const projectContext = normalizeTextField(body.project_context);
+    const preferredLanguage = normalizePrnLanguage(body.language, normalizePrnLanguage(getPreferredLanguage(), "ko"));
+    const payloadForHash = {
+      prompt,
+      project_id: projectId,
+      project_path: projectPath,
+      project_context: projectContext,
+      language: preferredLanguage,
+    };
+
+    if (!prompt) {
+      if (
+        !recordMessageIngressAuditOr503(res, {
+          endpoint: "/api/directives/prn-draft",
+          req,
+          body,
+          idempotencyKey,
+          outcome: "validation_error",
+          statusCode: 400,
+          detail: "prompt_required",
+        })
+      )
+        return;
+      return res.status(400).json({ error: "prompt_required" });
+    }
+
+    if (enforceDirectiveProjectBinding && !projectId) {
+      if (
+        !recordMessageIngressAuditOr503(res, {
+          endpoint: "/api/directives/prn-draft",
+          req,
+          body,
+          idempotencyKey,
+          outcome: "validation_error",
+          statusCode: 428,
+          detail: "agent_upgrade_required:install_first",
+        })
+      )
+        return;
+      return res.status(428).json(buildAgentUpgradeRequiredPayload());
+    }
+
+    prunePrnDraftIdempotencyCache();
+    if (idempotencyKey) {
+      const incomingHash = hashPrnPayload(payloadForHash);
+      const previous = prnDraftIdempotencyCache.get(idempotencyKey);
+      if (previous) {
+        if (previous.payloadHash !== incomingHash) {
+          if (
+            !recordMessageIngressAuditOr503(res, {
+              endpoint: "/api/directives/prn-draft",
+              req,
+              body,
+              idempotencyKey,
+              outcome: "idempotency_conflict",
+              statusCode: 409,
+              detail: "payload_mismatch",
+            })
+          )
+            return;
+          return res.status(409).json({ error: "idempotency_conflict", idempotency_key: idempotencyKey });
+        }
+        if (
+          !recordMessageIngressAuditOr503(res, {
+            endpoint: "/api/directives/prn-draft",
+            req,
+            body,
+            idempotencyKey,
+            outcome: "duplicate",
+            statusCode: 200,
+            detail: "idempotent_replay",
+          })
+        )
+          return;
+        return res.json({ ok: true, duplicate: true, draft: previous.response });
+      }
+    }
+
+    const planningScope = resolveDirectiveLeaderCandidateScope(db as any, projectId ?? null, "planning");
+    const planningLeader = findDirectiveLeader("planning", projectId ?? null, planningScope);
+    const fallback = buildFallbackPrnDraft({
+      prompt,
+      projectContext,
+      language: preferredLanguage,
+      plannerAgent: planningLeader ?? null,
+      parserError: "planning_leader_unavailable",
+    });
+    let draftResponse: ReturnType<typeof buildFallbackPrnDraft> = fallback;
+
+    if (planningLeader) {
+      try {
+        const promptText = buildPrnDraftPrompt({
+          prompt,
+          projectContext,
+          language: preferredLanguage,
+        });
+        const run = await runAgentOneShot(planningLeader, promptText, {
+          projectPath: projectPath || process.cwd(),
+          timeoutMs: 75_000,
+          rawOutput: true,
+          noTools: true,
+        });
+        draftResponse = parsePrnDraftResponse({
+          rawText: String(run.text ?? ""),
+          prompt,
+          projectContext,
+          language: preferredLanguage,
+          plannerAgent: planningLeader,
+        });
+      } catch (err) {
+        draftResponse = buildFallbackPrnDraft({
+          prompt,
+          projectContext,
+          language: preferredLanguage,
+          plannerAgent: planningLeader,
+          parserError: `run_failed:${String(err)}`,
+        });
+      }
+    }
+
+    if (idempotencyKey) {
+      prnDraftIdempotencyCache.set(idempotencyKey, {
+        payloadHash: hashPrnPayload(payloadForHash),
+        response: draftResponse,
+        createdAt: Date.now(),
+      });
+    }
+
+    if (
+      !recordMessageIngressAuditOr503(res, {
+        endpoint: "/api/directives/prn-draft",
+        req,
+        body,
+        idempotencyKey,
+        outcome: "accepted",
+        statusCode: 200,
+        detail: `created:fallback=${String(draftResponse.generation_meta.fallback_used)}`,
+      })
+    )
+      return;
+
+    return res.json({ ok: true, draft: draftResponse });
+  });
 
   app.post("/api/directives", async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>;

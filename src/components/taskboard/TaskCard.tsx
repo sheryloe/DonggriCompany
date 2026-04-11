@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Agent, Department, SubTask, Task, TaskStatus } from "../../types";
 import { useI18n } from "../../i18n";
+import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import AgentAvatar from "../AgentAvatar";
 import AgentSelect from "../AgentSelect";
 import DiffModal from "./DiffModal";
@@ -228,7 +229,7 @@ export default function TaskCard({
                     <span
                       className={`flex-1 truncate ${subtask.status === "done" ? "line-through text-slate-500" : "text-slate-300"}`}
                     >
-                      {subtask.title}
+                      {normalizeSubtaskTitleForUi(subtask.title)}
                     </span>
                     {targetDepartment && (
                       <span

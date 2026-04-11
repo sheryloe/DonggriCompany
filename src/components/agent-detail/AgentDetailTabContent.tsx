@@ -1,5 +1,6 @@
 import { localeName, type UiLanguage } from "../../i18n";
 import type { Agent, Department, SubAgent, SubTask, Task } from "../../types";
+import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import { getSubAgentSpriteNum, SUBTASK_STATUS_ICON, taskStatusLabel, taskTypeLabel, type TFunction } from "./constants";
 
 interface AgentDetailTabContentProps {
@@ -159,7 +160,7 @@ export default function AgentDetailTabContent({
                           <span
                             className={`flex-1 truncate ${subtask.status === "done" ? "line-through text-slate-500" : "text-slate-300"}`}
                           >
-                            {subtask.title}
+                            {normalizeSubtaskTitleForUi(subtask.title)}
                           </span>
                           {targetDepartment && (
                             <span

@@ -226,6 +226,31 @@ export interface Message {
   created_at: number;
 }
 
+export interface PrnDraftSections {
+  background: string;
+  goal: string;
+  non_goal: string;
+  requirements: string;
+  acceptance_criteria: string;
+  risks: string;
+  open_questions: string;
+}
+
+export interface PrnDraftResponse {
+  sections: PrnDraftSections;
+  directive_text: string;
+  confidence: number;
+  generation_meta: {
+    fallback_used: boolean;
+    parser_error: string | null;
+    planner_agent_id: string | null;
+    planner_agent_name: string | null;
+    source: "planning_lead" | "fallback";
+    pass1: string;
+    pass2: string;
+  };
+}
+
 // CLI Status
 export interface CliToolStatus {
   installed: boolean;

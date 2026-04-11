@@ -4,6 +4,7 @@ import type { TaskReportDetail, TaskReportDocument, TaskReportTeamSection } from
 import { archiveTaskReport, getTaskReportDetail } from "../api";
 import type { UiLanguage } from "../i18n";
 import { pickLang } from "../i18n";
+import { normalizeSubtaskTitleForUi } from "../app/subtask-title-normalizer";
 import AgentAvatar from "./AgentAvatar";
 import { resolveReportAgent } from "./task-report-agent";
 
@@ -316,7 +317,7 @@ export default function TaskReportPopup({ report, agents, departments, uiLanguag
                   key={st.id}
                   className="flex items-center justify-between gap-2 rounded bg-slate-800/70 px-2 py-1.5 text-[11px]"
                 >
-                  <span className="min-w-0 flex-1 truncate text-slate-300">{st.title}</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-300">{normalizeSubtaskTitleForUi(st.title)}</span>
                   <span className={`rounded px-1.5 py-0.5 ${statusClass(st.status)}`}>{st.status}</span>
                 </div>
               ))}

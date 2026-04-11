@@ -27,6 +27,7 @@ import {
 import { parseCliSubAgentEvents, shouldParseCliChunkForSubAgents } from "./sub-agent-events";
 import type { View } from "./types";
 import { appendCapped, areAgentsEquivalent } from "./utils";
+import { normalizeSubtaskTitleForUi } from "./subtask-title-normalizer";
 
 type SocketOn = (event: WSEventType, handler: (payload: unknown) => void) => () => void;
 
@@ -243,14 +244,18 @@ export function useRealtimeSync({
       }),
       on("subtask_update", (payload: unknown) => {
         const st = payload as SubTask;
+        const normalizedSubtask: SubTask = {
+          ...st,
+          title: normalizeSubtaskTitleForUi(st?.title),
+        };
         setSubtasks((prev) => {
-          const idx = prev.findIndex((s) => s.id === st.id);
+          const idx = prev.findIndex((s) => s.id === normalizedSubtask.id);
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = st;
+            next[idx] = normalizedSubtask;
             return next;
           }
-          return appendCapped(prev, st, MAX_LIVE_SUBTASKS);
+          return appendCapped(prev, normalizedSubtask, MAX_LIVE_SUBTASKS);
         });
         scheduleLiveSync(160);
       }),

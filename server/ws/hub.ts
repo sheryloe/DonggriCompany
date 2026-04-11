@@ -1,4 +1,5 @@
 import { WebSocket } from "ws";
+import { normalizeSubtaskTitleForDisplay } from "../modules/workflow/subtasks/title-normalizer.ts";
 
 export function createWsHub(nowMs: () => number): {
   wsClients: Set<WebSocket>;
@@ -27,28 +28,38 @@ export function createWsHub(nowMs: () => number): {
   const MAX_BATCH_QUEUE = 60;
   const batches = new Map<string, { queue: unknown[]; timer: ReturnType<typeof setTimeout> }>();
 
+  function normalizePayloadForBroadcast(type: string, payload: unknown): unknown {
+    if (type !== "subtask_update" || !payload || typeof payload !== "object") return payload;
+    const row = payload as Record<string, unknown>;
+    return {
+      ...row,
+      title: normalizeSubtaskTitleForDisplay(row.title),
+    };
+  }
+
   function broadcast(type: string, payload: unknown): void {
+    const normalizedPayload = normalizePayloadForBroadcast(type, payload);
     const interval = BATCH_INTERVAL[type];
     if (!interval) {
-      sendRaw(type, payload);
+      sendRaw(type, normalizedPayload);
       return;
     }
 
     const existing = batches.get(type);
     if (existing) {
       if (existing.queue.length < MAX_BATCH_QUEUE) {
-        existing.queue.push(payload);
+        existing.queue.push(normalizedPayload);
       }
       // Over cap: shed oldest to prevent unbounded growth
       else {
         existing.queue.shift();
-        existing.queue.push(payload);
+        existing.queue.push(normalizedPayload);
       }
       return;
     }
 
     // First event: send immediately, then open a batch window
-    sendRaw(type, payload);
+    sendRaw(type, normalizedPayload);
     const entry: { queue: unknown[]; timer: ReturnType<typeof setTimeout> } = {
       queue: [],
       timer: setTimeout(() => {

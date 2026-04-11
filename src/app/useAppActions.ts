@@ -99,12 +99,13 @@ export function useAppActions({
 
   const handleSendDirective = useCallback(async (content: string, projectMeta?: ProjectMetaPayload) => {
     try {
-      if (projectMeta?.project_id || projectMeta?.project_path || projectMeta?.project_context) {
+      if (projectMeta?.project_id || projectMeta?.project_path || projectMeta?.project_context || projectMeta?.source) {
         await api.sendDirectiveWithProject({
           content,
           project_id: projectMeta.project_id,
           project_path: projectMeta.project_path,
           project_context: projectMeta.project_context,
+          source: projectMeta.source,
         });
       } else {
         await api.sendDirective(content);

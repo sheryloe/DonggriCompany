@@ -89,6 +89,30 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
   }
 
   function getReviewerVerdicts(taskId: string, meetingId: string, reviewRound: number): ReviewRoundReviewerVerdict[] {
+    const mapRowsToVerdicts = (
+      rows: Array<{
+        agent_id: string | null;
+        agent_name: string | null;
+        agent_name_ko: string | null;
+        lens: string | null;
+        final_verdict: string;
+        confidence: number | null;
+        requires_jules_action: number | null;
+      }>,
+    ): ReviewRoundReviewerVerdict[] =>
+      rows.map((row) => ({
+        agent_id: row.agent_id ?? null,
+        agent_name: row.agent_name ?? null,
+        agent_name_ko: row.agent_name_ko ?? row.agent_name ?? null,
+        lens: row.lens ?? null,
+        final_verdict:
+          row.final_verdict === "approved" || row.final_verdict === "hold" || row.final_verdict === "rejected"
+            ? row.final_verdict
+            : "hold",
+        confidence: Number.isFinite(Number(row.confidence ?? NaN)) ? Number(row.confidence) : 0.5,
+        requires_jules_action: Number(row.requires_jules_action ?? 0) === 1,
+      }));
+
     try {
       const rows = db
         .prepare(
@@ -118,20 +142,40 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
         confidence: number | null;
         requires_jules_action: number | null;
       }>;
-      return rows.map((row) => ({
-        agent_id: row.agent_id ?? null,
-        agent_name: row.agent_name ?? null,
-        agent_name_ko: row.agent_name_ko ?? row.agent_name ?? null,
-        lens: row.lens ?? null,
-        final_verdict:
-          row.final_verdict === "approved" || row.final_verdict === "hold" || row.final_verdict === "rejected"
-            ? row.final_verdict
-            : "hold",
-        confidence: Number.isFinite(Number(row.confidence ?? NaN)) ? Number(row.confidence) : 0.5,
-        requires_jules_action: Number(row.requires_jules_action ?? 0) === 1,
-      }));
+      return mapRowsToVerdicts(rows);
     } catch {
-      return [];
+      try {
+        const fallbackRows = db
+          .prepare(
+            `
+        SELECT
+          agent_id AS agent_id,
+          NULL AS agent_name,
+          NULL AS agent_name_ko,
+          lens AS lens,
+          final_verdict AS final_verdict,
+          confidence AS confidence,
+          requires_jules_action AS requires_jules_action
+        FROM review_round_feedback_items
+        WHERE task_id = ?
+          AND meeting_id = ?
+          AND round = ?
+        ORDER BY id ASC
+      `,
+          )
+          .all(taskId, meetingId, reviewRound) as Array<{
+          agent_id: string | null;
+          agent_name: string | null;
+          agent_name_ko: string | null;
+          lens: string | null;
+          final_verdict: string;
+          confidence: number | null;
+          requires_jules_action: number | null;
+        }>;
+        return mapRowsToVerdicts(fallbackRows);
+      } catch {
+        return [];
+      }
     }
   }
 

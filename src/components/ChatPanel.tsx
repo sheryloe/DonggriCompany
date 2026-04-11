@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import type { Agent, Message, Project } from "../types";
+import type { Agent, Message, Project, PrnDraftResponse } from "../types";
 import { buildSpriteMap } from "./AgentAvatar";
 import { useI18n } from "../i18n";
-import { createProject, getProjects } from "../api";
+import { createProject, createPrnDraft, getProjects } from "../api";
 import { parseDecisionRequest } from "./chat/decision-request";
 import type { DecisionOption } from "./chat/decision-request";
 import ChatComposer from "./chat-panel/ChatComposer";
 import ChatMessageList from "./chat-panel/ChatMessageList";
 import ChatPanelHeader from "./chat-panel/ChatPanelHeader";
+import PrnDraftModal from "./chat-panel/PrnDraftModal";
 import { useDecisionReplyHandlers } from "./chat-panel/useDecisionReply";
 import {
   ROLE_LABELS,
@@ -34,6 +35,7 @@ interface ChatPanelProps {
       project_id?: string;
       project_path?: string;
       project_context?: string;
+      source?: string;
     },
   ) => void | Promise<void>;
   onSendAnnouncement: (content: string) => void;
@@ -43,10 +45,18 @@ interface ChatPanelProps {
       project_id?: string;
       project_path?: string;
       project_context?: string;
+      source?: string;
     },
-  ) => void;
+  ) => void | Promise<void>;
   onClearMessages?: (agentId?: string) => void;
   onClose: () => void;
+}
+
+function extractPrnPrompt(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  if (!trimmed.toLowerCase().startsWith("/prn")) return trimmed;
+  return trimmed.slice(4).trim();
 }
 
 export function ChatPanel({
@@ -92,7 +102,6 @@ export function ChatPanel({
     : selectedAgent?.department_id;
   const selectedTaskId = selectedAgent?.current_task_id;
 
-  // Close on Escape key
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -101,24 +110,20 @@ export function ChatPanel({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  // 스트리밍 중인 메시지가 현재 에이전트 것인지 판별
-  const isStreamingForAgent = streamingMessage && selectedAgent && streamingMessage.agent_id === selectedAgent.id;
-
-  // Auto-scroll to bottom on new messages or streaming delta
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingMessage?.content]);
 
-  // Switch mode when agent selection changes
   useEffect(() => {
     if (!selectedAgent) {
       setMode("announcement");
     } else if (mode === "announcement") {
       setMode("task");
     }
-  }, [selectedAgent]);
+  }, [selectedAgent, mode]);
 
   const isDirectiveMode = input.trimStart().startsWith("$");
+  const isPrnCommandMode = input.trimStart().toLowerCase().startsWith("/prn");
   const [pendingSend, setPendingSend] = useState<PendingSendAction | null>(null);
   const [projectFlowOpen, setProjectFlowOpen] = useState(false);
   const [projectFlowStep, setProjectFlowStep] = useState<"choose" | "existing" | "new" | "confirm">("choose");
@@ -132,7 +137,14 @@ export function ChatPanel({
   const [newProjectGoal, setNewProjectGoal] = useState("");
   const [projectSaving, setProjectSaving] = useState(false);
   const [decisionReplyKey, setDecisionReplyKey] = useState<string | null>(null);
+  const [prnModalOpen, setPrnModalOpen] = useState(false);
+  const [prnDraftLoading, setPrnDraftLoading] = useState(false);
+  const [prnDraftError, setPrnDraftError] = useState<string | null>(null);
+  const [prnDraft, setPrnDraft] = useState<PrnDraftResponse | null>(null);
+  const [prnPrompt, setPrnPrompt] = useState("");
+  const [prnProjectMeta, setPrnProjectMeta] = useState<ProjectMetaPayload | null>(null);
   const isDirectivePending = pendingSend?.kind === "directive";
+  const isPrnPending = pendingSend?.kind === "prn";
 
   const closeProjectFlow = () => {
     setProjectFlowOpen(false);
@@ -146,6 +158,15 @@ export function ChatPanel({
     setNewProjectGoal("");
     setProjectItems([]);
   };
+
+  const closePrnModal = useCallback(() => {
+    setPrnModalOpen(false);
+    setPrnDraftLoading(false);
+    setPrnDraftError(null);
+    setPrnDraft(null);
+    setPrnPrompt("");
+    setPrnProjectMeta(null);
+  }, []);
 
   const loadRecentProjects = useCallback(async () => {
     setProjectLoading(true);
@@ -220,7 +241,7 @@ export function ChatPanel({
     setExistingProjectError("");
     setSelectedProject(picked);
     setProjectFlowStep("confirm");
-  }, [existingProjectInput, resolveExistingProjectSelection]);
+  }, [existingProjectInput, resolveExistingProjectSelection, tr]);
 
   const handleChooseExistingProject = useCallback(() => {
     setProjectFlowStep("existing");
@@ -244,10 +265,49 @@ export function ChatPanel({
     [existingProjectError],
   );
 
+  const requestPrnDraft = useCallback(
+    async (prompt: string, projectMeta: ProjectMetaPayload) => {
+      setPrnDraftLoading(true);
+      setPrnDraftError(null);
+      try {
+        const draft = await createPrnDraft({
+          prompt,
+          project_id: projectMeta.project_id,
+          project_path: projectMeta.project_path,
+          project_context: projectMeta.project_context,
+          language: locale,
+        });
+        setPrnDraft(draft);
+      } catch (err) {
+        console.error("Failed to create PRN draft:", err);
+        setPrnDraftError(
+          tr(
+            "PRN 초안 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
+            "Failed to create PRN draft. Please try again.",
+            "PRN草案の生成に失敗しました。しばらくしてから再試行してください。",
+            "生成 PRN 草案失败，请稍后重试。",
+          ),
+        );
+      } finally {
+        setPrnDraftLoading(false);
+      }
+    },
+    [locale, tr],
+  );
+
   const dispatchPending = useCallback(
     (action: PendingSendAction, projectMeta?: ProjectMetaPayload) => {
       if (action.kind === "directive") {
         onSendDirective(action.content, projectMeta);
+        return;
+      }
+      if (action.kind === "prn") {
+        const normalizedProjectMeta = projectMeta ?? {};
+        setPrnPrompt(action.content);
+        setPrnProjectMeta(normalizedProjectMeta);
+        setPrnDraft(null);
+        setPrnModalOpen(true);
+        void requestPrnDraft(action.content, normalizedProjectMeta);
         return;
       }
       if (action.kind === "announcement") {
@@ -268,7 +328,7 @@ export function ChatPanel({
       }
       onSendMessage(action.content, "all", undefined, undefined, projectMeta);
     },
-    [onSendAnnouncement, onSendDirective, onSendMessage],
+    [onSendAnnouncement, onSendDirective, onSendMessage, requestPrnDraft],
   );
 
   const handleConfirmProject = () => {
@@ -311,7 +371,7 @@ export function ChatPanel({
     setExistingProjectInput("");
     setExistingProjectError("");
     setProjectItems([]);
-    setNewProjectGoal(action.kind === "directive" ? action.content : "");
+    setNewProjectGoal(action.kind === "directive" || action.kind === "prn" ? action.content : "");
   };
 
   const handleSend = () => {
@@ -323,6 +383,10 @@ export function ChatPanel({
       const directiveContent = trimmed.slice(1).trim();
       if (!directiveContent) return;
       action = { kind: "directive", content: directiveContent };
+    } else if (trimmed.toLowerCase().startsWith("/prn")) {
+      const prompt = extractPrnPrompt(trimmed);
+      if (!prompt) return;
+      action = { kind: "prn", content: prompt };
     } else if (mode === "announcement") {
       action = { kind: "announcement", content: trimmed };
     } else if (mode === "task" && selectedAgent) {
@@ -339,7 +403,8 @@ export function ChatPanel({
       action = { kind: "broadcast", content: trimmed };
     }
 
-    const requiresProject = action.kind === "directive" || action.kind === "task" || action.kind === "report";
+    const requiresProject =
+      action.kind === "directive" || action.kind === "prn" || action.kind === "task" || action.kind === "report";
 
     if (requiresProject) {
       openProjectBranch(action);
@@ -371,7 +436,6 @@ export function ChatPanel({
 
   const isAnnouncementMode = mode === "announcement";
 
-  // Filter messages relevant to current view (memoized to avoid re-filtering on every render)
   const selectedAgentId = selectedAgent?.id;
   const visibleMessages = useMemo(
     () =>
@@ -401,6 +465,28 @@ export function ChatPanel({
     }
     return mapped;
   }, [selectedAgentId, visibleMessages]);
+
+  const handleCreatePrn = useCallback(() => {
+    const prompt = extractPrnPrompt(input);
+    if (!prompt) return;
+    openProjectBranch({ kind: "prn", content: prompt });
+  }, [input]);
+
+  const handleRegeneratePrn = useCallback(() => {
+    if (!prnPrompt || !prnProjectMeta) return;
+    void requestPrnDraft(prnPrompt, prnProjectMeta);
+  }, [prnPrompt, prnProjectMeta, requestPrnDraft]);
+
+  const handleSendPrnDirective = useCallback(() => {
+    if (!prnDraft || !prnProjectMeta) return;
+    onSendDirective(prnDraft.directive_text, {
+      ...prnProjectMeta,
+      source: "prn_ui",
+    });
+    setInput("");
+    textareaRef.current?.focus();
+    closePrnModal();
+  }, [closePrnModal, onSendDirective, prnDraft, prnProjectMeta]);
 
   const { handleDecisionOptionReply, handleDecisionManualDraft } = useDecisionReplyHandlers({
     tr,
@@ -448,6 +534,7 @@ export function ChatPanel({
         open={projectFlowOpen}
         step={projectFlowStep}
         isDirectivePending={isDirectivePending}
+        isPrnPending={isPrnPending}
         pendingContent={pendingSend?.content ?? ""}
         projectLoading={projectLoading}
         projectItems={projectItems}
@@ -476,11 +563,23 @@ export function ChatPanel({
         onConfirm={handleConfirmProject}
       />
 
+      <PrnDraftModal
+        open={prnModalOpen}
+        loading={prnDraftLoading}
+        draft={prnDraft}
+        error={prnDraftError}
+        tr={tr}
+        onRegenerate={handleRegeneratePrn}
+        onSendDirective={handleSendPrnDirective}
+        onClose={closePrnModal}
+      />
+
       <ChatComposer
         mode={mode}
         input={input}
         selectedAgent={selectedAgent}
         isDirectiveMode={isDirectiveMode}
+        isPrnCommandMode={isPrnCommandMode}
         isAnnouncementMode={isAnnouncementMode}
         tr={tr}
         getAgentName={getAgentName}
@@ -488,6 +587,7 @@ export function ChatPanel({
         onModeChange={setMode}
         onInputChange={setInput}
         onSend={handleSend}
+        onCreatePrn={handleCreatePrn}
         onKeyDown={handleKeyDown}
       />
     </div>

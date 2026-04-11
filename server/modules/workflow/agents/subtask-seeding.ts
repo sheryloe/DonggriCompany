@@ -322,6 +322,7 @@ export function createSubtaskSeedingTools(deps: SubtaskSeedingDeps) {
 
     for (const st of items) {
       const sid = randomUUID();
+      const normalizedSeedTitle = normalizeSubtaskTitleForStorage(st.title);
       db.prepare(
         `
       INSERT INTO subtasks (id, task_id, title, description, status, assigned_agent_id, blocked_reason, target_department_id, created_at)
@@ -330,7 +331,7 @@ export function createSubtaskSeedingTools(deps: SubtaskSeedingDeps) {
       ).run(
         sid,
         taskId,
-        st.title,
+        normalizedSeedTitle,
         st.description,
         st.status,
         st.assignedAgentId,
@@ -500,13 +501,14 @@ export function createSubtaskSeedingTools(deps: SubtaskSeedingDeps) {
 
     let created = 0;
     for (const st of items) {
-      const exists = hasOpenSubtask.get(taskId, st.title) as { 1: number } | undefined;
+      const normalizedSeedTitle = normalizeSubtaskTitleForStorage(st.title);
+      const exists = hasOpenSubtask.get(taskId, normalizedSeedTitle) as { 1: number } | undefined;
       if (exists) continue;
       const sid = randomUUID();
       insertSubtask.run(
         sid,
         taskId,
-        st.title,
+        normalizedSeedTitle,
         st.description,
         st.status,
         st.assignedAgentId,

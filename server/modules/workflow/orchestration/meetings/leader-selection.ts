@@ -1,8 +1,5 @@
 import { resolveConstrainedAgentScopeForTask } from "../../../routes/core/tasks/execution-run-auto-assign.ts";
-import {
-  isPrimaryAuthorProfile,
-  resolveAgentWorkflowProfile,
-} from "../../agents/workflow-profile.ts";
+import { isPrimaryAuthorProfile, resolveAgentWorkflowProfile } from "../../agents/workflow-profile.ts";
 
 interface AgentRow {
   id: string;
@@ -133,8 +130,12 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
         const profile = profileById.get(agent.id);
         return (
           isPrimaryAuthorProfile(profile) ||
-          String(agent.cli_provider ?? "").trim().toLowerCase() === "jules" ||
-          String(agent.name ?? "").trim().toLowerCase() === "jules"
+          String(agent.cli_provider ?? "")
+            .trim()
+            .toLowerCase() === "jules" ||
+          String(agent.name ?? "")
+            .trim()
+            .toLowerCase() === "jules"
         );
       }) ?? null;
 
@@ -144,8 +145,12 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
         const profile = profileById.get(agent.id);
         return (
           isPrimaryAuthorProfile(profile) &&
-          (String(agent.cli_provider ?? "").trim().toLowerCase() === "jules" ||
-            String(agent.name ?? "").trim().toLowerCase() === "jules")
+          (String(agent.cli_provider ?? "")
+            .trim()
+            .toLowerCase() === "jules" ||
+            String(agent.name ?? "")
+              .trim()
+              .toLowerCase() === "jules")
         );
       }) ??
       null;

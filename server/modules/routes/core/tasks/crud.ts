@@ -5,7 +5,11 @@ import { randomUUID } from "node:crypto";
 import type { SQLInputValue } from "node:sqlite";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { MeetingMinuteEntryRow, MeetingMinutesRow } from "../../shared/types.ts";
-import { DEFAULT_WORKFLOW_PACK_KEY, isWorkflowPackKey, type WorkflowPackKey } from "../../../workflow/packs/definitions.ts";
+import {
+  DEFAULT_WORKFLOW_PACK_KEY,
+  isWorkflowPackKey,
+  type WorkflowPackKey,
+} from "../../../workflow/packs/definitions.ts";
 import { classifyWorkflowPackText } from "../../../workflow/packs/text-routing.ts";
 import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack-resolver.ts";
 import { normalizeSubtaskTitleForDisplay } from "../../../workflow/subtasks/title-normalizer.ts";
@@ -631,4 +635,3 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     res.json({ ok: true });
   });
 }
-

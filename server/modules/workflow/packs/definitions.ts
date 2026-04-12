@@ -65,15 +65,7 @@ export const DEFAULT_WORKFLOW_PACK_SEEDS: WorkflowPackSeed[] = [
     name: "Donggri Unified Pack",
     inputSchema: {
       required: ["goal", "instruction"],
-      optional: [
-        "project",
-        "target_audience",
-        "format",
-        "deadline",
-        "source_policy",
-        "story_tone",
-        "character_roster",
-      ],
+      optional: ["project", "target_audience", "format", "deadline", "source_policy", "story_tone", "character_roster"],
     },
     promptPreset: {
       mode: "donggri_unified",

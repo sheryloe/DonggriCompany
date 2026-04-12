@@ -19,7 +19,9 @@ function scoreKeywords(text: string, keywords: readonly string[]): number {
 }
 
 export function classifyWorkflowPackText(text: string): WorkflowPackRouteDecision {
-  const normalized = String(text ?? "").trim().toLowerCase();
+  const normalized = String(text ?? "")
+    .trim()
+    .toLowerCase();
   if (!normalized) {
     return {
       packKey: DEFAULT_WORKFLOW_PACK_KEY,

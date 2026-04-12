@@ -108,4 +108,3 @@ describe("prn-draft helpers", () => {
     expect(fallback.directive_text).toContain("본 PRN 기준");
   });
 });
-

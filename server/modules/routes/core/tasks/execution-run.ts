@@ -349,8 +349,12 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
             [
               "Continuation run: keep the same ownership context, avoid re-reading unrelated files, and apply only unresolved deltas.",
             ],
-            ["Continuation run: keep the same ownership context, avoid re-reading unrelated files, and apply only unresolved deltas."],
-            ["Continuation run: keep the same ownership context, avoid re-reading unrelated files, and apply only unresolved deltas."],
+            [
+              "Continuation run: keep the same ownership context, avoid re-reading unrelated files, and apply only unresolved deltas.",
+            ],
+            [
+              "Continuation run: keep the same ownership context, avoid re-reading unrelated files, and apply only unresolved deltas.",
+            ],
           ),
           taskLang,
         )
@@ -538,11 +542,11 @@ Whenever you complete a subtask, report it in this format:
               [` (isolated branch: climpire/${id.slice(0, 8)})`],
             )
           : l(
-          [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
-          [` (isolated branch: climpire/${id.slice(0, 8)})`],
-          [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
-          [` (isolated branch: climpire/${id.slice(0, 8)})`],
-        ),
+              [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+              [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+            ),
         taskLang,
       );
       notifyCeo(
@@ -555,11 +559,11 @@ Whenever you complete a subtask, report it in this format:
                 [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
               )
             : l(
-            [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
-            [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-            [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
-            [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
-          ),
+                [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
+                [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+                [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
+                [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
+              ),
           taskLang,
         ),
         id,
@@ -609,11 +613,11 @@ Whenever you complete a subtask, report it in this format:
               [` (isolated branch: climpire/${id.slice(0, 8)})`],
             )
           : l(
-          [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
-          [` (isolated branch: climpire/${id.slice(0, 8)})`],
-          [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
-          [` (isolated branch: climpire/${id.slice(0, 8)})`],
-        ),
+              [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+              [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+            ),
         taskLang,
       );
       notifyCeo(
@@ -626,11 +630,11 @@ Whenever you complete a subtask, report it in this format:
                 [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
               )
             : l(
-            [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
-            [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-            [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
-            [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
-          ),
+                [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
+                [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+                [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
+                [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
+              ),
           taskLang,
         ),
         id,
@@ -682,11 +686,11 @@ Whenever you complete a subtask, report it in this format:
             [` (isolated branch: climpire/${id.slice(0, 8)})`],
           )
         : l(
-        [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
-        [` (isolated branch: climpire/${id.slice(0, 8)})`],
-        [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
-        [` (isolated branch: climpire/${id.slice(0, 8)})`],
-      ),
+            [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
+            [` (isolated branch: climpire/${id.slice(0, 8)})`],
+            [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
+            [` (isolated branch: climpire/${id.slice(0, 8)})`],
+          ),
       taskLang,
     );
     notifyCeo(
@@ -699,11 +703,11 @@ Whenever you complete a subtask, report it in this format:
               [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
             )
           : l(
-          [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
-          [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-          [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
-          [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
-        ),
+              [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
+              [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+              [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
+              [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
+            ),
         taskLang,
       ),
       id,
@@ -717,4 +721,3 @@ Whenever you complete a subtask, report it in this format:
     res.json({ ok: true, pid: child.pid ?? null, logPath, cwd: agentCwd, worktree: !!worktreePath });
   });
 }
-

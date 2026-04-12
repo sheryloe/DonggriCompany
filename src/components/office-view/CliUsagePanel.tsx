@@ -285,11 +285,7 @@ export default function CliUsagePanel({
             const usage = card.usage;
             const sessionUsage = card.sessionUsage;
             const errorCode = usage?.error ?? sessionUsage?.error ?? null;
-            const statusDotClass = card.inUse
-              ? "bg-emerald-400"
-              : card.signedIn
-                ? "bg-cyan-400"
-                : "bg-slate-500";
+            const statusDotClass = card.inUse ? "bg-emerald-400" : card.signedIn ? "bg-cyan-400" : "bg-slate-500";
             return (
               <div
                 key={card.key}
@@ -297,7 +293,9 @@ export default function CliUsagePanel({
               >
                 <div className="mb-1.5 flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-start gap-2">
-                    <span className="mt-0.5 flex h-[16px] w-[16px] items-center justify-center text-sm">{card.icon}</span>
+                    <span className="mt-0.5 flex h-[16px] w-[16px] items-center justify-center text-sm">
+                      {card.icon}
+                    </span>
                     <div className="min-w-0">
                       <div className={`truncate text-xs font-semibold ${card.color}`}>{card.title}</div>
                       {card.subtitle && <div className="truncate text-[9px] text-slate-400">{card.subtitle}</div>}
@@ -316,7 +314,9 @@ export default function CliUsagePanel({
                   <p className="text-[10px] text-slate-500 italic">{t(LOCALE_TEXT.cliUnavailable)}</p>
                 )}
 
-                {!usage && !sessionUsage && <p className="text-[10px] text-slate-500 italic">{t(LOCALE_TEXT.cliLoading)}</p>}
+                {!usage && !sessionUsage && (
+                  <p className="text-[10px] text-slate-500 italic">{t(LOCALE_TEXT.cliLoading)}</p>
+                )}
 
                 {usage && !usage.error && card.windows.length > 0 && (
                   <div className="space-y-1.5">
@@ -380,7 +380,9 @@ export default function CliUsagePanel({
                       <span className="text-rose-300">{sessionUsage.sessions.failed}</span>
                     </div>
                     {sessionUsage.lastActive && (
-                      <div className="truncate text-[8px] text-slate-500">Last active: {formatReset(sessionUsage.lastActive, language)}</div>
+                      <div className="truncate text-[8px] text-slate-500">
+                        Last active: {formatReset(sessionUsage.lastActive, language)}
+                      </div>
                     )}
                   </div>
                 )}

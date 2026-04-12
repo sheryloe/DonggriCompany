@@ -527,7 +527,7 @@ export function registerWorktreeAndUsageRoutes(ctx: RuntimeContext): {
       const expiryDateMs =
         provider === "gemini"
           ? parseExpiryMs(raw.expiry_date)
-          : parseExpiryMs(raw.expiry) ?? parseExpiryMs(raw.expiry_date);
+          : (parseExpiryMs(raw.expiry) ?? parseExpiryMs(raw.expiry_date));
       return {
         provider,
         sourcePath,
@@ -865,7 +865,11 @@ export function registerWorktreeAndUsageRoutes(ctx: RuntimeContext): {
     return { counts, lastActive };
   }
 
-  function readJulesSessionUsageFromProfile(profileHome: string): { counts: CliSessionUsageCounts; lastActive: string | null; error: string | null } {
+  function readJulesSessionUsageFromProfile(profileHome: string): {
+    counts: CliSessionUsageCounts;
+    lastActive: string | null;
+    error: string | null;
+  } {
     const envPatch: NodeJS.ProcessEnv = { ...process.env, HOME: profileHome };
     if (process.platform === "win32") {
       envPatch.USERPROFILE = profileHome;
@@ -883,8 +887,16 @@ export function registerWorktreeAndUsageRoutes(ctx: RuntimeContext): {
       const withOutput = error as Error & { stdout?: Buffer | string; stderr?: Buffer | string };
       const details = [
         error instanceof Error ? error.message : String(error),
-        withOutput.stdout ? (Buffer.isBuffer(withOutput.stdout) ? withOutput.stdout.toString("utf8") : String(withOutput.stdout)) : "",
-        withOutput.stderr ? (Buffer.isBuffer(withOutput.stderr) ? withOutput.stderr.toString("utf8") : String(withOutput.stderr)) : "",
+        withOutput.stdout
+          ? Buffer.isBuffer(withOutput.stdout)
+            ? withOutput.stdout.toString("utf8")
+            : String(withOutput.stdout)
+          : "",
+        withOutput.stderr
+          ? Buffer.isBuffer(withOutput.stderr)
+            ? withOutput.stderr.toString("utf8")
+            : String(withOutput.stderr)
+          : "",
       ]
         .filter(Boolean)
         .join(" ")
@@ -910,7 +922,9 @@ export function registerWorktreeAndUsageRoutes(ctx: RuntimeContext): {
           usage = tokens ? await fetchCodexUsageByTokens(tokens) : { windows: [], error: "unauthenticated" };
         } else if (pool.provider === "gemini") {
           const accessToken = await resolveFreshGoogleAccessTokenFromProfile(pool.profile_home, "gemini");
-          usage = accessToken ? await fetchGeminiQuotaUsageByToken(accessToken) : { windows: [], error: "unauthenticated" };
+          usage = accessToken
+            ? await fetchGeminiQuotaUsageByToken(accessToken)
+            : { windows: [], error: "unauthenticated" };
         }
         const baseLabel = String(pool.label || pool.account_pool_id).trim() || pool.account_pool_id;
         return {

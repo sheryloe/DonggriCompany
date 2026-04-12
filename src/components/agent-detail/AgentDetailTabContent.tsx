@@ -60,15 +60,24 @@ export default function AgentDetailTabContent({
       <div className="space-y-3">
         <div className="bg-slate-700/30 rounded-lg p-3">
           <div className="text-xs text-slate-500 mb-1">
-            {t({ ko: "역할/성장 프로필", en: "Role / Growth Profile", ja: "Role / Growth Profile", zh: "Role / Growth Profile" })}
+            {t({
+              ko: "역할/성장 프로필",
+              en: "Role / Growth Profile",
+              ja: "Role / Growth Profile",
+              zh: "Role / Growth Profile",
+            })}
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md bg-slate-800/60 px-2.5 py-2 text-slate-300">
-              <div className="text-slate-500">{t({ ko: "적용 티어", en: "Applied Tier", ja: "Applied Tier", zh: "Applied Tier" })}</div>
+              <div className="text-slate-500">
+                {t({ ko: "적용 티어", en: "Applied Tier", ja: "Applied Tier", zh: "Applied Tier" })}
+              </div>
               <div className="mt-1 font-semibold text-white">Tier {profile.growth_tier}</div>
             </div>
             <div className="rounded-md bg-slate-800/60 px-2.5 py-2 text-slate-300">
-              <div className="text-slate-500">{t({ ko: "추천 티어", en: "Recommended Tier", ja: "Recommended Tier", zh: "Recommended Tier" })}</div>
+              <div className="text-slate-500">
+                {t({ ko: "추천 티어", en: "Recommended Tier", ja: "Recommended Tier", zh: "Recommended Tier" })}
+              </div>
               <div className="mt-1 font-semibold text-white">Tier {recommendedTier}</div>
             </div>
           </div>
@@ -79,7 +88,12 @@ export default function AgentDetailTabContent({
 
         <div className="bg-slate-700/30 rounded-lg p-3">
           <div className="text-xs text-slate-500 mb-1">
-            {t({ ko: "최종 수동 보정", en: "Final Manual Override", ja: "Final Manual Override", zh: "Final Manual Override" })}
+            {t({
+              ko: "최종 수동 보정",
+              en: "Final Manual Override",
+              ja: "Final Manual Override",
+              zh: "Final Manual Override",
+            })}
           </div>
           <div className="text-sm text-slate-300">
             {overrideText || t({ ko: "설정 없음", en: "Not set", ja: "未設定", zh: "未设置" })}

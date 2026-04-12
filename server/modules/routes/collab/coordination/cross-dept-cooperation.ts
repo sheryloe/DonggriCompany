@@ -319,13 +319,13 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
                 ],
               )
             : l(
-            [`협업 요청 전송 중: ${crossDeptName} (${index + 1}/${deptIds.length}, 대기 ${remaining}개 팀)`],
-            [
-              `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
-            ],
-            [`連携依頼を送信中: ${crossDeptName} (${index + 1}/${deptIds.length}, 残り ${remaining} チーム)`],
-            [`协作请求发送中: ${crossDeptName} (${index + 1}/${deptIds.length}, 剩余 ${remaining} 个团队)`],
-          ),
+                [`협업 요청 전송 중: ${crossDeptName} (${index + 1}/${deptIds.length}, 대기 ${remaining}개 팀)`],
+                [
+                  `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
+                ],
+                [`連携依頼を送信中: ${crossDeptName} (${index + 1}/${deptIds.length}, 残り ${remaining} チーム)`],
+                [`协作请求发送中: ${crossDeptName} (${index + 1}/${deptIds.length}, 剩余 ${remaining} 个团队)`],
+              ),
           lang,
         ),
         taskId,
@@ -343,21 +343,27 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
               `Hi ${crossCoordinatorName}! We're working on "${taskTitle}" per CEO's directive and need ${crossDeptName}'s support. Could you help?`,
               `${crossCoordinatorName}, we need ${crossDeptName}'s input on "${taskTitle}". Let's sync when you have a moment.`,
             ],
-            [`CEO instructed ${crossCoordinatorName} to delegate "${taskTitle}" to ${crossDeptName} for collaboration.`],
-            [`CEO instructed ${crossCoordinatorName} to delegate "${taskTitle}" to ${crossDeptName} for collaboration.`],
+            [
+              `CEO instructed ${crossCoordinatorName} to delegate "${taskTitle}" to ${crossDeptName} for collaboration.`,
+            ],
+            [
+              `CEO instructed ${crossCoordinatorName} to delegate "${taskTitle}" to ${crossDeptName} for collaboration.`,
+            ],
           )
         : l(
-        [
-          `${crossCoordinatorName}님, 대표님 지시로 "${taskTitle}" 작업에 ${crossDeptName}의 협업이 필요합니다. 지원 부탁드립니다.`,
-          `${crossCoordinatorName}님, "${taskTitle}" 작업과 관련해 ${crossDeptName} 검토가 필요합니다. 가능할 때 바로 연결 부탁드립니다.`,
-        ],
-        [
-          `Hi ${crossCoordinatorName}! We're working on "${taskTitle}" per CEO's directive and need ${crossDeptName}'s support. Could you help?`,
-          `${crossCoordinatorName}, we need ${crossDeptName}'s input on "${taskTitle}". Let's sync when you have a moment.`,
-        ],
-        [`${crossCoordinatorName}さん、CEO 指示の "${taskTitle}" 対応に ${crossDeptName} の協力が必要です。支援をお願いします。`],
-        [`${crossCoordinatorName}，根据 CEO 指示，处理“${taskTitle}”需要 ${crossDeptName} 协作支持，请帮忙。`],
-      ),
+            [
+              `${crossCoordinatorName}님, 대표님 지시로 "${taskTitle}" 작업에 ${crossDeptName}의 협업이 필요합니다. 지원 부탁드립니다.`,
+              `${crossCoordinatorName}님, "${taskTitle}" 작업과 관련해 ${crossDeptName} 검토가 필요합니다. 가능할 때 바로 연결 부탁드립니다.`,
+            ],
+            [
+              `Hi ${crossCoordinatorName}! We're working on "${taskTitle}" per CEO's directive and need ${crossDeptName}'s support. Could you help?`,
+              `${crossCoordinatorName}, we need ${crossDeptName}'s input on "${taskTitle}". Let's sync when you have a moment.`,
+            ],
+            [
+              `${crossCoordinatorName}さん、CEO 指示の "${taskTitle}" 対応に ${crossDeptName} の協力が必要です。支援をお願いします。`,
+            ],
+            [`${crossCoordinatorName}，根据 CEO 指示，处理“${taskTitle}”需要 ${crossDeptName} 协作支持，请帮忙。`],
+          ),
       lang,
     );
     sendAgentMessage(
@@ -413,17 +419,17 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
                     [`Sure, ${leaderName}! I'll assign ${execName} to support right away.`],
                   )
                 : l(
-                [
-                  `${leaderName}님, 확인했습니다. ${execName}에게 바로 배정하겠습니다.`,
-                  `${execName}에게 ${crossDeptName} 협업을 바로 배정하고 진행 상황을 공유드리겠습니다.`,
-                ],
-                [
-                  `Sure, ${leaderName}! I'll assign ${execName} to support right away.`,
-                  `Got it! ${execName} will handle the ${crossDeptName} side. I'll keep you posted.`,
-                ],
-                [`${leaderName}さん、承知しました。${execName} をすぐに割り当てます。`],
-                [`${leaderName}，收到。我会立即把任务分配给 ${execName}。`],
-              ),
+                    [
+                      `${leaderName}님, 확인했습니다. ${execName}에게 바로 배정하겠습니다.`,
+                      `${execName}에게 ${crossDeptName} 협업을 바로 배정하고 진행 상황을 공유드리겠습니다.`,
+                    ],
+                    [
+                      `Sure, ${leaderName}! I'll assign ${execName} to support right away.`,
+                      `Got it! ${execName} will handle the ${crossDeptName} side. I'll keep you posted.`,
+                    ],
+                    [`${leaderName}さん、承知しました。${execName} をすぐに割り当てます。`],
+                    [`${leaderName}，收到。我会立即把任务分配给 ${execName}。`],
+                  ),
               lang,
             )
           : pickL(
@@ -435,11 +441,11 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
                     [`Sure, ${leaderName}! I'll handle it personally.`],
                   )
                 : l(
-                [`${leaderName}님, 확인했습니다. 제가 직접 진행하겠습니다.`],
-                [`Sure, ${leaderName}! I'll handle it personally.`],
-                [`承知しました、${leaderName}さん。私が直接進めます。`],
-                [`收到，${leaderName}。我会直接处理。`],
-              ),
+                    [`${leaderName}님, 확인했습니다. 제가 직접 진행하겠습니다.`],
+                    [`Sure, ${leaderName}! I'll handle it personally.`],
+                    [`承知しました、${leaderName}さん。私が直接進めます。`],
+                    [`收到，${leaderName}。我会直接处理。`],
+                  ),
               lang,
             );
       sendAgentMessage(crossCoordinator, crossAckMsg, "chat", "agent", null, taskId);

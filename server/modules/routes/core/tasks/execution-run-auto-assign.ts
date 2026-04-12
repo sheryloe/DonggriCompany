@@ -51,7 +51,17 @@ const PACK_DEPARTMENT_PRIORITIES: Record<WorkflowPackKey, string[]> = {
 };
 
 const VALID_AGENT_ROLES = new Set(["team_leader", "senior", "junior", "intern"]);
-const VALID_CLI_PROVIDERS = new Set(["claude", "codex", "gemini", "jules", "opencode", "kimi", "copilot", "antigravity", "api"]);
+const VALID_CLI_PROVIDERS = new Set([
+  "claude",
+  "codex",
+  "gemini",
+  "jules",
+  "opencode",
+  "kimi",
+  "copilot",
+  "antigravity",
+  "api",
+]);
 
 type OfficePackProfileAgent = {
   id: string;
@@ -445,4 +455,3 @@ export function selectAutoAssignableAgentForTask(
 
   return { packKey, agent: fallbackCandidate };
 }
-

@@ -348,7 +348,9 @@ describe("agent CRUD seed filter", () => {
       );
 
       expect(res.statusCode).toBe(201);
-      const payload = res.payload as { agent?: { id?: string; agent_profile?: { growth_tier?: number; specialties?: string[] } } };
+      const payload = res.payload as {
+        agent?: { id?: string; agent_profile?: { growth_tier?: number; specialties?: string[] } };
+      };
       expect(payload.agent?.id).toBeTruthy();
       expect(payload.agent?.agent_profile?.growth_tier).toBe(5);
       expect(payload.agent?.agent_profile?.specialties).toEqual(["backend", "review"]);
@@ -357,7 +359,7 @@ describe("agent CRUD seed filter", () => {
       const row = db.prepare("SELECT agent_profile_json FROM agents WHERE id = ?").get(agentId) as
         | { agent_profile_json?: string | null }
         | undefined;
-      expect(row?.agent_profile_json).toContain("\"growth_tier\":5");
+      expect(row?.agent_profile_json).toContain('"growth_tier":5');
     } finally {
       db.close();
     }
@@ -595,9 +597,9 @@ describe("agent CRUD seed filter", () => {
       );
 
       expect(res.statusCode).toBe(200);
-      const row = db
-        .prepare("SELECT cli_model, run_mode FROM agents WHERE id = ?")
-        .get("agent-1") as { cli_model: string | null; run_mode: string } | undefined;
+      const row = db.prepare("SELECT cli_model, run_mode FROM agents WHERE id = ?").get("agent-1") as
+        | { cli_model: string | null; run_mode: string }
+        | undefined;
       expect(row).toEqual({
         cli_model: null,
         run_mode: "standard",

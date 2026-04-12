@@ -59,15 +59,21 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
   });
 
   app.get("/api/office/oauth/sessions", (_req, res) => {
-    res.status(410).json({ error: "oauth_rolled_back", message: "OAuth office routes are deprecated for CLI multi-account mode" });
+    res
+      .status(410)
+      .json({ error: "oauth_rolled_back", message: "OAuth office routes are deprecated for CLI multi-account mode" });
   });
 
   app.post("/api/office/oauth/connect", (_req, res) => {
-    res.status(410).json({ error: "oauth_rolled_back", message: "OAuth office routes are deprecated for CLI multi-account mode" });
+    res
+      .status(410)
+      .json({ error: "oauth_rolled_back", message: "OAuth office routes are deprecated for CLI multi-account mode" });
   });
 
   app.post("/api/office/oauth/disconnect", (_req, res) => {
-    res.status(410).json({ error: "oauth_rolled_back", message: "OAuth office routes are deprecated for CLI multi-account mode" });
+    res
+      .status(410)
+      .json({ error: "oauth_rolled_back", message: "OAuth office routes are deprecated for CLI multi-account mode" });
   });
 
   app.get("/api/office/cli-accounts", (_req, res) => {

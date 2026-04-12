@@ -183,12 +183,12 @@ function buildVariantParams(targetSpriteNum) {
   const seed = (Math.imul(targetSpriteNum, 2654435761) >>> 0) + 0x9e3779b9;
   const hueShift = (seed % 360) - 180; // [-180..179]
   const satScale = 0.86 + (((seed >>> 8) % 40) / 100) * 1.0; // ~[0.86..1.25]
-  const valScale = 0.90 + (((seed >>> 16) % 30) / 100) * 1.0; // ~[0.90..1.19]
+  const valScale = 0.9 + (((seed >>> 16) % 30) / 100) * 1.0; // ~[0.90..1.19]
 
   // A second style lane (pastel)
   const styleLane = Math.floor((targetSpriteNum - TARGET_START) / (BASE_END - BASE_START + 1)) % 2; // 0 or 1
   const finalHueShift = styleLane === 0 ? hueShift : hueShift + 120;
-  const finalSatScale = styleLane === 0 ? satScale * 1.05 : satScale * 0.70;
+  const finalSatScale = styleLane === 0 ? satScale * 1.05 : satScale * 0.7;
   const finalValScale = styleLane === 0 ? valScale : valScale * 1.08;
 
   return {
@@ -213,7 +213,7 @@ function recolorBufferRGBA(input, width, height, params, skinSignature) {
 
     if (isOutlineLike(hsv) || isEyeWhiteLike(hsv) || isNearSkin(r, g, b, hsv, skinSignature)) continue;
 
-    const shiftedH = ((hsv.h + params.hueShift) % 360 + 360) % 360;
+    const shiftedH = (((hsv.h + params.hueShift) % 360) + 360) % 360;
     const shiftedS = clamp01(hsv.s * params.satScale);
     const shiftedV = clamp01(hsv.v * params.valScale);
 

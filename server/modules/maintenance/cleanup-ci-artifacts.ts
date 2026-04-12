@@ -26,13 +26,7 @@ export type CleanupResult = CleanupPreview & {
 };
 
 function uniqueIds(values: Array<string | null | undefined>): string[] {
-  return Array.from(
-    new Set(
-      values
-        .map((value) => String(value ?? "").trim())
-        .filter((value) => value.length > 0),
-    ),
-  );
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter((value) => value.length > 0)));
 }
 
 function hasTable(db: DatabaseSync, tableName: string): boolean {
@@ -122,27 +116,15 @@ function collectRelatedIds(db: DatabaseSync, seed: CleanupSeed): CleanupIds {
       const inDepartments = buildInClause(departmentIds);
       agentIds = unionIds(
         agentIds,
-        selectIds(
-          db,
-          `SELECT id FROM agents WHERE department_id IN (${inDepartments})`,
-          departmentIds,
-        ),
+        selectIds(db, `SELECT id FROM agents WHERE department_id IN (${inDepartments})`, departmentIds),
       );
       taskIds = unionIds(
         taskIds,
-        selectIds(
-          db,
-          `SELECT id FROM tasks WHERE department_id IN (${inDepartments})`,
-          departmentIds,
-        ),
+        selectIds(db, `SELECT id FROM tasks WHERE department_id IN (${inDepartments})`, departmentIds),
       );
       subtaskIds = unionIds(
         subtaskIds,
-        selectIds(
-          db,
-          `SELECT id FROM subtasks WHERE target_department_id IN (${inDepartments})`,
-          departmentIds,
-        ),
+        selectIds(db, `SELECT id FROM subtasks WHERE target_department_id IN (${inDepartments})`, departmentIds),
       );
     }
 
@@ -150,11 +132,7 @@ function collectRelatedIds(db: DatabaseSync, seed: CleanupSeed): CleanupIds {
       const inProjects = buildInClause(projectIds);
       taskIds = unionIds(
         taskIds,
-        selectIds(
-          db,
-          `SELECT id FROM tasks WHERE project_id IN (${inProjects})`,
-          projectIds,
-        ),
+        selectIds(db, `SELECT id FROM tasks WHERE project_id IN (${inProjects})`, projectIds),
       );
     }
 
@@ -162,19 +140,11 @@ function collectRelatedIds(db: DatabaseSync, seed: CleanupSeed): CleanupIds {
       const inAgents = buildInClause(agentIds);
       taskIds = unionIds(
         taskIds,
-        selectIds(
-          db,
-          `SELECT id FROM tasks WHERE assigned_agent_id IN (${inAgents})`,
-          agentIds,
-        ),
+        selectIds(db, `SELECT id FROM tasks WHERE assigned_agent_id IN (${inAgents})`, agentIds),
       );
       subtaskIds = unionIds(
         subtaskIds,
-        selectIds(
-          db,
-          `SELECT id FROM subtasks WHERE assigned_agent_id IN (${inAgents})`,
-          agentIds,
-        ),
+        selectIds(db, `SELECT id FROM subtasks WHERE assigned_agent_id IN (${inAgents})`, agentIds),
       );
     }
 
@@ -204,14 +174,7 @@ function collectRelatedIds(db: DatabaseSync, seed: CleanupSeed): CleanupIds {
           taskIds,
         ),
       );
-      taskIds = unionIds(
-        taskIds,
-        selectIds(
-          db,
-          `SELECT id FROM tasks WHERE source_task_id IN (${inTasks})`,
-          taskIds,
-        ),
-      );
+      taskIds = unionIds(taskIds, selectIds(db, `SELECT id FROM tasks WHERE source_task_id IN (${inTasks})`, taskIds));
       subtaskIds = unionIds(
         subtaskIds,
         selectIds(
@@ -250,11 +213,7 @@ function collectRelatedIds(db: DatabaseSync, seed: CleanupSeed): CleanupIds {
 
   const meetingIds =
     taskIds.length > 0
-      ? selectIds(
-          db,
-          `SELECT id FROM meeting_minutes WHERE task_id IN (${buildInClause(taskIds)})`,
-          taskIds,
-        )
+      ? selectIds(db, `SELECT id FROM meeting_minutes WHERE task_id IN (${buildInClause(taskIds)})`, taskIds)
       : [];
 
   return {
@@ -292,29 +251,35 @@ function buildPreview(db: DatabaseSync, ids: CleanupIds): CleanupPreview {
     tableCounts.project_agents = countWhere(
       db,
       "project_agents",
-      buildOrClause([
-        `project_id IN (${buildInClause(ids.projectIds)})`,
-        ids.agentIds.length > 0 ? `agent_id IN (${buildInClause(ids.agentIds)})` : "",
-      ].filter(Boolean)),
+      buildOrClause(
+        [
+          `project_id IN (${buildInClause(ids.projectIds)})`,
+          ids.agentIds.length > 0 ? `agent_id IN (${buildInClause(ids.agentIds)})` : "",
+        ].filter(Boolean),
+      ),
       [...ids.projectIds, ...ids.agentIds],
     );
     tableCounts.project_review_decision_events = countWhere(
       db,
       "project_review_decision_events",
-      buildOrClause([
-        `project_id IN (${buildInClause(ids.projectIds)})`,
-        ids.taskIds.length > 0 ? `task_id IN (${buildInClause(ids.taskIds)})` : "",
-        ids.meetingIds.length > 0 ? `meeting_id IN (${buildInClause(ids.meetingIds)})` : "",
-      ].filter(Boolean)),
+      buildOrClause(
+        [
+          `project_id IN (${buildInClause(ids.projectIds)})`,
+          ids.taskIds.length > 0 ? `task_id IN (${buildInClause(ids.taskIds)})` : "",
+          ids.meetingIds.length > 0 ? `meeting_id IN (${buildInClause(ids.meetingIds)})` : "",
+        ].filter(Boolean),
+      ),
       [...ids.projectIds, ...ids.taskIds, ...ids.meetingIds],
     );
     tableCounts.project_review_decision_states = countWhere(
       db,
       "project_review_decision_states",
-      buildOrClause([
-        `project_id IN (${buildInClause(ids.projectIds)})`,
-        ids.agentIds.length > 0 ? `planner_agent_id IN (${buildInClause(ids.agentIds)})` : "",
-      ].filter(Boolean)),
+      buildOrClause(
+        [
+          `project_id IN (${buildInClause(ids.projectIds)})`,
+          ids.agentIds.length > 0 ? `planner_agent_id IN (${buildInClause(ids.agentIds)})` : "",
+        ].filter(Boolean),
+      ),
       [...ids.projectIds, ...ids.agentIds],
     );
   }
@@ -325,18 +290,8 @@ function buildPreview(db: DatabaseSync, ids: CleanupIds): CleanupPreview {
 
   if (ids.taskIds.length > 0) {
     tableCounts.tasks = countWhere(db, "tasks", `id IN (${buildInClause(ids.taskIds)})`, ids.taskIds);
-    tableCounts.task_logs = countWhere(
-      db,
-      "task_logs",
-      `task_id IN (${buildInClause(ids.taskIds)})`,
-      ids.taskIds,
-    );
-    tableCounts.messages = countWhere(
-      db,
-      "messages",
-      `task_id IN (${buildInClause(ids.taskIds)})`,
-      ids.taskIds,
-    );
+    tableCounts.task_logs = countWhere(db, "task_logs", `task_id IN (${buildInClause(ids.taskIds)})`, ids.taskIds);
+    tableCounts.messages = countWhere(db, "messages", `task_id IN (${buildInClause(ids.taskIds)})`, ids.taskIds);
     tableCounts.meeting_minutes = countWhere(
       db,
       "meeting_minutes",
@@ -358,21 +313,25 @@ function buildPreview(db: DatabaseSync, ids: CleanupIds): CleanupPreview {
     tableCounts.task_report_archives = countWhere(
       db,
       "task_report_archives",
-      buildOrClause([
-        `root_task_id IN (${buildInClause(ids.taskIds)})`,
-        ids.agentIds.length > 0 ? `generated_by_agent_id IN (${buildInClause(ids.agentIds)})` : "",
-      ].filter(Boolean)),
+      buildOrClause(
+        [
+          `root_task_id IN (${buildInClause(ids.taskIds)})`,
+          ids.agentIds.length > 0 ? `generated_by_agent_id IN (${buildInClause(ids.agentIds)})` : "",
+        ].filter(Boolean),
+      ),
       [...ids.taskIds, ...ids.agentIds],
     );
     tableCounts.task_creation_audits = countWhere(
       db,
       "task_creation_audits",
-      buildOrClause([
-        `task_id IN (${buildInClause(ids.taskIds)})`,
-        `source_task_id IN (${buildInClause(ids.taskIds)})`,
-        ids.departmentIds.length > 0 ? `department_id IN (${buildInClause(ids.departmentIds)})` : "",
-        ids.agentIds.length > 0 ? `assigned_agent_id IN (${buildInClause(ids.agentIds)})` : "",
-      ].filter(Boolean)),
+      buildOrClause(
+        [
+          `task_id IN (${buildInClause(ids.taskIds)})`,
+          `source_task_id IN (${buildInClause(ids.taskIds)})`,
+          ids.departmentIds.length > 0 ? `department_id IN (${buildInClause(ids.departmentIds)})` : "",
+          ids.agentIds.length > 0 ? `assigned_agent_id IN (${buildInClause(ids.agentIds)})` : "",
+        ].filter(Boolean),
+      ),
       [...ids.taskIds, ...ids.taskIds, ...ids.departmentIds, ...ids.agentIds],
     );
   }
@@ -404,29 +363,35 @@ function buildPreview(db: DatabaseSync, ids: CleanupIds): CleanupPreview {
     tableCounts.meeting_minute_entries = countWhere(
       db,
       "meeting_minute_entries",
-      buildOrClause([
-        `meeting_id IN (${buildInClause(ids.meetingIds)})`,
-        ids.agentIds.length > 0 ? `speaker_agent_id IN (${buildInClause(ids.agentIds)})` : "",
-      ].filter(Boolean)),
+      buildOrClause(
+        [
+          `meeting_id IN (${buildInClause(ids.meetingIds)})`,
+          ids.agentIds.length > 0 ? `speaker_agent_id IN (${buildInClause(ids.agentIds)})` : "",
+        ].filter(Boolean),
+      ),
       [...ids.meetingIds, ...ids.agentIds],
     );
     tableCounts.review_round_decision_states = countWhere(
       db,
       "review_round_decision_states",
-      buildOrClause([
-        `meeting_id IN (${buildInClause(ids.meetingIds)})`,
-        ids.agentIds.length > 0 ? `planner_agent_id IN (${buildInClause(ids.agentIds)})` : "",
-      ].filter(Boolean)),
+      buildOrClause(
+        [
+          `meeting_id IN (${buildInClause(ids.meetingIds)})`,
+          ids.agentIds.length > 0 ? `planner_agent_id IN (${buildInClause(ids.agentIds)})` : "",
+        ].filter(Boolean),
+      ),
       [...ids.meetingIds, ...ids.agentIds],
     );
     tableCounts.review_round_feedback_items = countWhere(
       db,
       "review_round_feedback_items",
-      buildOrClause([
-        `meeting_id IN (${buildInClause(ids.meetingIds)})`,
-        ids.taskIds.length > 0 ? `task_id IN (${buildInClause(ids.taskIds)})` : "",
-        ids.agentIds.length > 0 ? `agent_id IN (${buildInClause(ids.agentIds)})` : "",
-      ].filter(Boolean)),
+      buildOrClause(
+        [
+          `meeting_id IN (${buildInClause(ids.meetingIds)})`,
+          ids.taskIds.length > 0 ? `task_id IN (${buildInClause(ids.taskIds)})` : "",
+          ids.agentIds.length > 0 ? `agent_id IN (${buildInClause(ids.agentIds)})` : "",
+        ].filter(Boolean),
+      ),
       [...ids.meetingIds, ...ids.taskIds, ...ids.agentIds],
     );
   }
@@ -442,7 +407,13 @@ function deleteWhere(db: DatabaseSync, tableName: string, whereClause: string, p
   db.prepare(`DELETE FROM ${tableName} WHERE ${whereClause}`).run(...(params as SQLInputValue[]));
 }
 
-function updateWhere(db: DatabaseSync, tableName: string, setClause: string, whereClause: string, params: unknown[]): void {
+function updateWhere(
+  db: DatabaseSync,
+  tableName: string,
+  setClause: string,
+  whereClause: string,
+  params: unknown[],
+): void {
   if (!hasTable(db, tableName)) return;
   db.prepare(`UPDATE ${tableName} SET ${setClause} WHERE ${whereClause}`).run(...(params as SQLInputValue[]));
 }

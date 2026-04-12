@@ -4,13 +4,7 @@ import SettingsTabNav from "./SettingsTabNav";
 
 describe("SettingsTabNav", () => {
   it("renders oauth tab together with CLI-focused tabs", () => {
-    render(
-      <SettingsTabNav
-        tab="general"
-        setTab={vi.fn()}
-        t={(messages) => messages.ko}
-      />,
-    );
+    render(<SettingsTabNav tab="general" setTab={vi.fn()} t={(messages) => messages.ko} />);
 
     expect(screen.getByRole("button", { name: "일반 설정" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "CLI 계정" })).toBeInTheDocument();

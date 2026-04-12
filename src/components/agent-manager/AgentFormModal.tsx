@@ -257,7 +257,11 @@ export default function AgentFormModal({
                 <label className="block text-xs mb-1.5 font-medium" style={{ color: "var(--th-text-secondary)" }}>
                   Emoji
                 </label>
-                <EmojiPicker tr={tr} value={form.avatar_emoji} onChange={(emoji) => setForm({ ...form, avatar_emoji: emoji })} />
+                <EmojiPicker
+                  tr={tr}
+                  value={form.avatar_emoji}
+                  onChange={(emoji) => setForm({ ...form, avatar_emoji: emoji })}
+                />
               </div>
               <div>
                 <label className="block text-xs mb-1.5 font-medium" style={{ color: "var(--th-text-secondary)" }}>
@@ -294,7 +298,9 @@ export default function AgentFormModal({
                       type="button"
                       onClick={() => applyRolePreset(role)}
                       className={`py-2 rounded-lg text-xs font-medium border transition-all ${active ? ROLE_BADGE[role] : ""}`}
-                      style={!active ? { borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" } : undefined}
+                      style={
+                        !active ? { borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" } : undefined
+                      }
                     >
                       {isKo ? ROLE_LABEL[role].ko : ROLE_LABEL[role].en}
                     </button>
@@ -316,7 +322,13 @@ export default function AgentFormModal({
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, workflow_role: "primary_author", max_review_rounds: form.max_review_rounds ?? 2 })}
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      workflow_role: "primary_author",
+                      max_review_rounds: form.max_review_rounds ?? 2,
+                    })
+                  }
                   className={`py-1.5 rounded-lg text-xs border transition-all ${
                     form.workflow_role === "primary_author"
                       ? "bg-blue-500/15 text-blue-400 border-blue-500/30"
@@ -430,21 +442,27 @@ export default function AgentFormModal({
                       type="button"
                       onClick={() => {
                         const nextPools = cliAccountPools.filter((pool) => pool.provider === provider);
-                        const nextPoolId =
-                          CLI_POOL_PROVIDERS.includes(provider) ? form.cli_account_pool_id || nextPools[0]?.accountPoolId || "" : "";
+                        const nextPoolId = CLI_POOL_PROVIDERS.includes(provider)
+                          ? form.cli_account_pool_id || nextPools[0]?.accountPoolId || ""
+                          : "";
                         setForm({
                           ...form,
                           cli_provider: provider,
                           cli_model: provider === "codex" ? form.cli_model : "",
                           cli_reasoning_level: provider === "codex" ? form.cli_reasoning_level : "",
-                          run_mode: provider === "codex" ? normalizeCodexRunMode(provider, form.cli_model, form.run_mode) : "standard",
+                          run_mode:
+                            provider === "codex"
+                              ? normalizeCodexRunMode(provider, form.cli_model, form.run_mode)
+                              : "standard",
                           cli_account_pool_id: nextPoolId,
                         });
                       }}
                       className={`px-2.5 py-1.5 rounded-lg text-[11px] font-mono border transition-all ${
                         active ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : ""
                       }`}
-                      style={!active ? { borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" } : undefined}
+                      style={
+                        !active ? { borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" } : undefined
+                      }
                     >
                       {provider}
                     </button>
@@ -467,7 +485,9 @@ export default function AgentFormModal({
                 >
                   {selectedProviderPools.length <= 0 ? (
                     <option value="">
-                      {cliAccountPoolsLoading ? tr("로딩 중...", "Loading account pools...") : tr("연결된 계정 없음", "No connected account pool")}
+                      {cliAccountPoolsLoading
+                        ? tr("로딩 중...", "Loading account pools...")
+                        : tr("연결된 계정 없음", "No connected account pool")}
                     </option>
                   ) : (
                     selectedProviderPools.map((pool) => (
@@ -503,7 +523,9 @@ export default function AgentFormModal({
                     setForm({
                       ...form,
                       cli_model: nextModel,
-                      cli_reasoning_level: nextModel ? resolveCodexReasoningLevel(nextSelectedModel, form.cli_reasoning_level) : "",
+                      cli_reasoning_level: nextModel
+                        ? resolveCodexReasoningLevel(nextSelectedModel, form.cli_reasoning_level)
+                        : "",
                       run_mode: nextModel ? normalizeCodexRunMode("codex", nextModel, form.run_mode) : "standard",
                     });
                   }}
@@ -573,7 +595,6 @@ export default function AgentFormModal({
                 )}
               </div>
             )}
-
           </div>
         </div>
 
@@ -616,7 +637,11 @@ export default function AgentFormModal({
             </label>
           )}
 
-          {processing && <div className="text-sm" style={{ color: "var(--th-text-muted)" }}>{tr("처리 중...", "Processing...")}</div>}
+          {processing && (
+            <div className="text-sm" style={{ color: "var(--th-text-muted)" }}>
+              {tr("처리 중...", "Processing...")}
+            </div>
+          )}
 
           {previews && !processing && (
             <div className="space-y-3">
@@ -630,7 +655,12 @@ export default function AgentFormModal({
                       className="rounded-lg p-2 flex items-center justify-center h-24"
                       style={{ background: "var(--th-input-bg)", border: "1px solid var(--th-input-border)" }}
                     >
-                      <img src={previews[dir]} alt={dir} className="max-h-20 object-contain" style={{ imageRendering: "pixelated" }} />
+                      <img
+                        src={previews[dir]}
+                        alt={dir}
+                        className="max-h-20 object-contain"
+                        style={{ imageRendering: "pixelated" }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -666,7 +696,11 @@ export default function AgentFormModal({
                   disabled={registering || !spriteNum || registered}
                   className="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white disabled:opacity-50"
                 >
-                  {registering ? tr("등록 중...", "Registering...") : registered ? tr("등록 완료", "Registered") : tr("스프라이트 등록", "Register Sprite")}
+                  {registering
+                    ? tr("등록 중...", "Registering...")
+                    : registered
+                      ? tr("등록 완료", "Registered")
+                      : tr("스프라이트 등록", "Register Sprite")}
                 </button>
                 <button
                   type="button"
@@ -691,7 +725,11 @@ export default function AgentFormModal({
             disabled={saving || !canSave}
             className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white disabled:opacity-40"
           >
-            {saving ? tr("저장 중...", "Saving...") : isEdit ? tr("변경 저장", "Save Changes") : tr("에이전트 생성", "Create Agent")}
+            {saving
+              ? tr("저장 중...", "Saving...")
+              : isEdit
+                ? tr("변경 저장", "Save Changes")
+                : tr("에이전트 생성", "Create Agent")}
           </button>
           <button
             type="button"

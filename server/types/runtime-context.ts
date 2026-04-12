@@ -51,12 +51,7 @@ export type MessageIngressAuditOutcome =
   | "validation_error";
 
 export type MessageIngressAuditInput = {
-  endpoint:
-    | "/api/messages"
-    | "/api/announcements"
-    | "/api/directives"
-    | "/api/directives/prn-draft"
-    | "/api/inbox";
+  endpoint: "/api/messages" | "/api/announcements" | "/api/directives" | "/api/directives/prn-draft" | "/api/inbox";
   req: {
     get(name: string): string | undefined;
     ip?: string;

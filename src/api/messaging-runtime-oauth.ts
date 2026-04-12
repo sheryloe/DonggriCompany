@@ -593,9 +593,12 @@ export async function updateCliAccountPool(
 }
 
 export async function deleteCliAccountPool(provider: OfficeExecutionProvider, accountPoolId: string): Promise<void> {
-  await request<{ ok: boolean }>(`/api/office/cli-accounts/${encodeURIComponent(provider)}/${encodeURIComponent(accountPoolId)}`, {
-    method: "DELETE",
-  });
+  await request<{ ok: boolean }>(
+    `/api/office/cli-accounts/${encodeURIComponent(provider)}/${encodeURIComponent(accountPoolId)}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export async function verifyCliAccountPool(

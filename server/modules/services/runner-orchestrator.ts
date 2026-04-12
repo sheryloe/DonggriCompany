@@ -145,7 +145,11 @@ export class OfficeRunnerOrchestrator {
     return rows.map((row) => this.toQueueView(row));
   }
 
-  requestRunner(provider: string, accountPoolId: string, requestPayload: ActivateRunnerRequestPayload): RunnerRequestResult {
+  requestRunner(
+    provider: string,
+    accountPoolId: string,
+    requestPayload: ActivateRunnerRequestPayload,
+  ): RunnerRequestResult {
     const normalizedProvider = provider.trim().toLowerCase();
     if (!isExecutionProvider(normalizedProvider)) {
       throw new Error(`unsupported_runner_provider:${provider}`);
@@ -298,7 +302,9 @@ export class OfficeRunnerOrchestrator {
       if (!candidate) break;
 
       const now = this.nowMs();
-      this.db.prepare("UPDATE office_runner_queue SET status = 'running', started_at = ? WHERE id = ?").run(now, candidate.id);
+      this.db
+        .prepare("UPDATE office_runner_queue SET status = 'running', started_at = ? WHERE id = ?")
+        .run(now, candidate.id);
 
       let queueStatus: RunnerQueueStatus = "done";
       let queueError: string | null = null;
@@ -318,9 +324,7 @@ export class OfficeRunnerOrchestrator {
 
       const endedAt = this.nowMs();
       this.db
-        .prepare(
-          "UPDATE office_runner_queue SET status = ?, ended_at = ?, error_message = ? WHERE id = ?",
-        )
+        .prepare("UPDATE office_runner_queue SET status = ?, ended_at = ?, error_message = ? WHERE id = ?")
         .run(queueStatus, endedAt, queueError, candidate.id);
       this.broadcast("runner.queue.updated", { queue: this.listQueue(), changedId: candidate.id });
       this.broadcast("runner.updated", { runners: this.listRunners(), runnerKey: candidate.runner_key });
@@ -415,9 +419,7 @@ export class OfficeRunnerOrchestrator {
 
   private markRunnerError(id: string, message: string): void {
     const now = this.nowMs();
-    this.db
-      .prepare("UPDATE office_runner_instances SET status = 'error', updated_at = ? WHERE id = ?")
-      .run(now, id);
+    this.db.prepare("UPDATE office_runner_instances SET status = 'error', updated_at = ? WHERE id = ?").run(now, id);
     this.broadcast("runner.updated", { runners: this.listRunners(), error: message.slice(0, 500) });
   }
 

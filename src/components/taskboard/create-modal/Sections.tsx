@@ -1,12 +1,7 @@
 import type { KeyboardEvent, RefObject } from "react";
 import type { Agent, Department, Project } from "../../../types";
 import AgentSelect from "../../AgentSelect";
-import {
-  priorityIcon,
-  priorityLabel,
-  type MissingPathPrompt,
-  type TFunction,
-} from "../constants";
+import { priorityIcon, priorityLabel, type MissingPathPrompt, type TFunction } from "../constants";
 
 interface PrioritySectionProps {
   priority: number;
@@ -227,7 +222,12 @@ export function ProjectSection({
             </button>
             {projectsLoading ? (
               <div className="px-3 py-2 text-sm text-slate-400">
-                {t({ ko: "프로젝트를 불러오는 중...", en: "Loading projects...", ja: "Loading projects...", zh: "Loading projects..." })}
+                {t({
+                  ko: "프로젝트를 불러오는 중...",
+                  en: "Loading projects...",
+                  ja: "Loading projects...",
+                  zh: "Loading projects...",
+                })}
               </div>
             ) : filteredProjects.length === 0 ? (
               <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-slate-300">
@@ -362,7 +362,12 @@ export function ProjectSection({
 
                 <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
                   <p className="text-[11px] text-slate-400">
-                    {t({ ko: "기본 프로젝트 루트", en: "Default project root", ja: "Default project root", zh: "Default project root" })}
+                    {t({
+                      ko: "기본 프로젝트 루트",
+                      en: "Default project root",
+                      ja: "Default project root",
+                      zh: "Default project root",
+                    })}
                   </p>
                   <p className="mt-1 break-all text-xs text-slate-200">
                     {defaultProjectRootLoading
@@ -381,7 +386,12 @@ export function ProjectSection({
 
           <label className="block text-xs text-slate-400">
             {githubAutoPathLocked
-              ? t({ ko: "새 프로젝트 경로 (자동)", en: "New project path (Auto)", ja: "New project path (Auto)", zh: "New project path (Auto)" })
+              ? t({
+                  ko: "새 프로젝트 경로 (자동)",
+                  en: "New project path (Auto)",
+                  ja: "New project path (Auto)",
+                  zh: "New project path (Auto)",
+                })
               : t({ ko: "새 프로젝트 경로", en: "New project path", ja: "New project path", zh: "New project path" })}
           </label>
           <input
@@ -436,7 +446,12 @@ export function ProjectSection({
                 onClick={onOpenManualPathBrowser}
                 className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {t({ ko: "앱 내 폴더 탐색", en: "In-App Folder Browser", ja: "In-App Folder Browser", zh: "In-App Folder Browser" })}
+                {t({
+                  ko: "앱 내 폴더 탐색",
+                  en: "In-App Folder Browser",
+                  ja: "In-App Folder Browser",
+                  zh: "In-App Folder Browser",
+                })}
               </button>
               <button
                 type="button"
@@ -445,7 +460,12 @@ export function ProjectSection({
                 className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {pathSuggestionsOpen
-                  ? t({ ko: "자동 경로 찾기 닫기", en: "Close Auto Finder", ja: "Close Auto Finder", zh: "Close Auto Finder" })
+                  ? t({
+                      ko: "자동 경로 찾기 닫기",
+                      en: "Close Auto Finder",
+                      ja: "Close Auto Finder",
+                      zh: "Close Auto Finder",
+                    })
                   : t({ ko: "자동 경로 찾기", en: "Auto Path Finder", ja: "Auto Path Finder", zh: "Auto Path Finder" })}
               </button>
               <button
@@ -455,7 +475,12 @@ export function ProjectSection({
                 className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {nativePathPicking
-                  ? t({ ko: "수동 선택기 여는 중...", en: "Opening Manual Picker...", ja: "Opening Manual Picker...", zh: "Opening Manual Picker..." })
+                  ? t({
+                      ko: "수동 선택기 여는 중...",
+                      en: "Opening Manual Picker...",
+                      ja: "Opening Manual Picker...",
+                      zh: "Opening Manual Picker...",
+                    })
                   : nativePickerUnsupported
                     ? t({
                         ko: "수동 경로 선택기 (사용 불가)",
@@ -463,7 +488,12 @@ export function ProjectSection({
                         ja: "Manual Path Finder (Unavailable)",
                         zh: "Manual Path Finder (Unavailable)",
                       })
-                    : t({ ko: "수동 경로 선택기", en: "Manual Path Finder", ja: "Manual Path Finder", zh: "Manual Path Finder" })}
+                    : t({
+                        ko: "수동 경로 선택기",
+                        en: "Manual Path Finder",
+                        ja: "Manual Path Finder",
+                        zh: "Manual Path Finder",
+                      })}
               </button>
             </div>
           )}
@@ -472,11 +502,21 @@ export function ProjectSection({
             <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-800/70">
               {pathSuggestionsLoading ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({ ko: "경로 후보를 불러오는 중...", en: "Loading path suggestions...", ja: "Loading path suggestions...", zh: "Loading path suggestions..." })}
+                  {t({
+                    ko: "경로 후보를 불러오는 중...",
+                    en: "Loading path suggestions...",
+                    ja: "Loading path suggestions...",
+                    zh: "Loading path suggestions...",
+                  })}
                 </p>
               ) : pathSuggestions.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({ ko: "추천 경로가 없습니다. 직접 입력해 주세요.", en: "No suggested path. Enter one manually.", ja: "No suggested path. Enter one manually.", zh: "No suggested path. Enter one manually." })}
+                  {t({
+                    ko: "추천 경로가 없습니다. 직접 입력해 주세요.",
+                    en: "No suggested path. Enter one manually.",
+                    ja: "No suggested path. Enter one manually.",
+                    zh: "No suggested path. Enter one manually.",
+                  })}
                 </p>
               ) : (
                 pathSuggestions.map((candidate) => (

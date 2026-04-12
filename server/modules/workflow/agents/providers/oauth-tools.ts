@@ -287,7 +287,8 @@ export function createOAuthTools(deps: CreateOAuthToolsDeps) {
     const customClientId = readSettingString("google_oauth_client_id");
     const customClientSecret = readSettingString("google_oauth_client_secret");
     const clientId = customClientId || BUILTIN_GOOGLE_CLIENT_ID || readEnvString("OAUTH_GOOGLE_CLIENT_ID");
-    const clientSecret = customClientSecret || BUILTIN_GOOGLE_CLIENT_SECRET || readEnvString("OAUTH_GOOGLE_CLIENT_SECRET");
+    const clientSecret =
+      customClientSecret || BUILTIN_GOOGLE_CLIENT_SECRET || readEnvString("OAUTH_GOOGLE_CLIENT_SECRET");
     if (!clientId) {
       throw new Error("missing_OAUTH_GOOGLE_CLIENT_ID");
     }

@@ -15,10 +15,7 @@ export type ProjectQueryChangeResolution = {
   resetNewProjectPath: boolean;
 };
 
-export function resolveProjectQueryChange(
-  value: string,
-  createNewProjectMode: boolean,
-): ProjectQueryChangeResolution {
+export function resolveProjectQueryChange(value: string, createNewProjectMode: boolean): ProjectQueryChangeResolution {
   return {
     projectQuery: value,
     projectId: "",
@@ -68,7 +65,10 @@ export function resolveNativePickerFailure(params: {
     zh: "无法打开系统文件夹选择器。",
   });
 
-  if (isApiRequestError(error) && (error.code === "native_picker_unavailable" || error.code === "native_picker_failed")) {
+  if (
+    isApiRequestError(error) &&
+    (error.code === "native_picker_unavailable" || error.code === "native_picker_failed")
+  ) {
     return {
       mode: "manual_fallback",
       nativePickerUnsupported: true,

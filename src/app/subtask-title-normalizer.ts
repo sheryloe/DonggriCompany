@@ -8,12 +8,7 @@ const SUBTASK_TOKEN_REGEX = /(sub[\s_-]*task|서브태스크|\?쒕툕|쒕툕)/i;
 
 function sanitizeRawText(input: unknown): string {
   const raw = String(input ?? "");
-  return raw
-    .replace(ANSI_ESCAPE_REGEX, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/\s+/g, " ")
-    .trim();
+  return raw.replace(ANSI_ESCAPE_REGEX, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\s+/g, " ").trim();
 }
 
 function extractTrailingNumber(value: string): string | null {

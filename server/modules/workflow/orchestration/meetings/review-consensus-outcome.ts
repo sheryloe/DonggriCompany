@@ -158,9 +158,7 @@ export async function processReviewConsensusOutcome(ctx: OutcomeContext): Promis
             [
               `[CEO OFFICE] '${taskTitle}' は最終レビューラウンド${round}終了時点で blocker が残っているため、承認拒否とエスカレーションで終了します。`,
             ],
-            [
-              `[CEO OFFICE] '${taskTitle}' 在最终评审轮次 ${round} 结束时仍存在 blocker，按拒绝并升级处理后结束。`,
-            ],
+            [`[CEO OFFICE] '${taskTitle}' 在最终评审轮次 ${round} 结束时仍存在 blocker，按拒绝并升级处理后结束。`],
           ),
           lang,
         ),

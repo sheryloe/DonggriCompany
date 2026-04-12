@@ -388,8 +388,18 @@ export default function SettingsPanel({
               setDeviceStatus(result.status);
               setDeviceError(
                 result.status === "expired"
-                  ? t({ ko: "코드가 만료되었습니다.", en: "Code expired.", ja: "コードが期限切れです。", zh: "验证码已过期。" })
-                  : t({ ko: "인증이 거부되었습니다.", en: "Authentication denied.", ja: "認証が拒否されました。", zh: "认证被拒绝。" }),
+                  ? t({
+                      ko: "코드가 만료되었습니다.",
+                      en: "Code expired.",
+                      ja: "コードが期限切れです。",
+                      zh: "验证码已过期。",
+                    })
+                  : t({
+                      ko: "인증이 거부되었습니다.",
+                      en: "Authentication denied.",
+                      ja: "認証が拒否されました。",
+                      zh: "认证被拒绝。",
+                    }),
               );
               return;
             }
@@ -400,7 +410,9 @@ export default function SettingsPanel({
               stopped = true;
               devicePollTimerRef.current = null;
               setDeviceStatus("error");
-              setDeviceError(result.error || t({ ko: "알 수 없는 오류", en: "Unknown error", ja: "不明なエラー", zh: "未知错误" }));
+              setDeviceError(
+                result.error || t({ ko: "알 수 없는 오류", en: "Unknown error", ja: "不明なエラー", zh: "未知错误" }),
+              );
               return;
             }
           } catch {
@@ -511,7 +523,16 @@ export default function SettingsPanel({
 
   const handleDeleteAccount = useCallback(
     async (provider: OAuthConnectProvider, accountId: string) => {
-      if (!window.confirm(t({ ko: "이 OAuth 계정을 삭제하시겠습니까?", en: "Delete this OAuth account?", ja: "この OAuth アカウントを削除しますか？", zh: "要删除此 OAuth 账号吗？" }))) {
+      if (
+        !window.confirm(
+          t({
+            ko: "이 OAuth 계정을 삭제하시겠습니까?",
+            en: "Delete this OAuth account?",
+            ja: "この OAuth アカウントを削除しますか？",
+            zh: "要删除此 OAuth 账号吗？",
+          }),
+        )
+      ) {
         return;
       }
       setSavingAccountId(accountId);
@@ -602,24 +623,27 @@ export default function SettingsPanel({
     [loadCliAccountLayer],
   );
 
-  const handleCopyLoginCommand = useCallback(async (provider: OfficeExecutionProvider, accountPoolId: string) => {
-    const busyKey = `${provider}:${accountPoolId}:login`;
-    setCliAuthBusyKey(busyKey);
-    try {
-      const result = await api.getCliAccountLoginCommand(provider, accountPoolId);
-      await copyToClipboard(result.command);
-      window.alert(
-        t({
-          ko: "인증 명령을 클립보드에 복사했습니다.",
-          en: "Copied login command to clipboard.",
-          ja: "ログインコマンドをクリップボードにコピーしました。",
-          zh: "已将登录命令复制到剪贴板。",
-        }),
-      );
-    } finally {
-      setCliAuthBusyKey(null);
-    }
-  }, [t]);
+  const handleCopyLoginCommand = useCallback(
+    async (provider: OfficeExecutionProvider, accountPoolId: string) => {
+      const busyKey = `${provider}:${accountPoolId}:login`;
+      setCliAuthBusyKey(busyKey);
+      try {
+        const result = await api.getCliAccountLoginCommand(provider, accountPoolId);
+        await copyToClipboard(result.command);
+        window.alert(
+          t({
+            ko: "인증 명령을 클립보드에 복사했습니다.",
+            en: "Copied login command to clipboard.",
+            ja: "ログインコマンドをクリップボードにコピーしました。",
+            zh: "已将登录命令复制到剪贴板。",
+          }),
+        );
+      } finally {
+        setCliAuthBusyKey(null);
+      }
+    },
+    [t],
+  );
 
   const handleActivateRunner = useCallback(
     async (provider: OfficeExecutionProvider, accountPoolId: string) => {

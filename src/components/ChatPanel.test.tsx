@@ -238,7 +238,7 @@ function renderChatPanel(options: {
       <ChatPanel
         selectedAgent={selectedAgent}
         messages={options.messages ?? []}
-        agents={options.agents ?? [selectedAgent].filter(Boolean) as Agent[]}
+        agents={options.agents ?? ([selectedAgent].filter(Boolean) as Agent[])}
         onSendMessage={onSendMessage}
         onSendAnnouncement={onSendAnnouncement}
         onSendDirective={onSendDirective}

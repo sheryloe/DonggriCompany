@@ -194,11 +194,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         }
       }
     } catch (err: any) {
-      appendTaskLog(
-        taskId,
-        "system",
-        `Primary-author override skipped (${String(err?.message ?? err)})`,
-      );
+      appendTaskLog(taskId, "system", `Primary-author override skipped (${String(err?.message ?? err)})`);
     }
     if (
       String(execAgent.status ?? "").toLowerCase() === "working" &&
@@ -302,19 +298,19 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
                 ],
               )
             : l(
-            [
-              `[WORKTREE REQUIRED] '${taskData.title}' ?ㅽ뻾??李⑤떒?덉뒿?덈떎. 寃⑸━ worktree ?앹꽦???ㅽ뙣???꾨줈?앺듃 猷⑦듃 ?ㅼ뿼??諛⑹??섍린 ?꾪빐 以묐떒?섏뿀?듬땲??`,
-            ],
-            [
-              `[WORKTREE REQUIRED] Blocked execution for '${taskData.title}'. Isolated worktree creation failed, so run was aborted to protect the project root.`,
-            ],
-            [
-              `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
-            ],
-            [
-              `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
-            ],
-          ),
+                [
+                  `[WORKTREE REQUIRED] '${taskData.title}' ?ㅽ뻾??李⑤떒?덉뒿?덈떎. 寃⑸━ worktree ?앹꽦???ㅽ뙣???꾨줈?앺듃 猷⑦듃 ?ㅼ뿼??諛⑹??섍린 ?꾪빐 以묐떒?섏뿀?듬땲??`,
+                ],
+                [
+                  `[WORKTREE REQUIRED] Blocked execution for '${taskData.title}'. Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                ],
+                [
+                  `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                ],
+                [
+                  `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                ],
+              ),
           taskLang,
         ),
         taskId,
@@ -347,21 +343,33 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       ? pickL(
           taskLang === "ko"
             ? l(
-                ["이어달리기 실행: 인수인계를 유지하고, 인사말이나 착수 멘트는 생략한 뒤, 남은 리뷰 항목부터 바로 처리하세요."],
+                [
+                  "이어달리기 실행: 인수인계를 유지하고, 인사말이나 착수 멘트는 생략한 뒤, 남은 리뷰 항목부터 바로 처리하세요.",
+                ],
                 [
                   "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
                 ],
-                ["Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately."],
-                ["Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately."],
+                [
+                  "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
+                ],
+                [
+                  "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
+                ],
               )
             : l(
-            ["?곗냽 ?ㅽ뻾: ?뚯쑀 而⑦뀓?ㅽ듃瑜??좎??섍퀬 ?몄궗/李⑹닔 硫섑듃 ?놁씠 誘명빐寃?寃????ぉ??利됱떆 諛섏쁺?섏꽭??"],
-            [
-              "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
-            ],
-            ["Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately."],
-            ["Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately."],
-          ),
+                [
+                  "?곗냽 ?ㅽ뻾: ?뚯쑀 而⑦뀓?ㅽ듃瑜??좎??섍퀬 ?몄궗/李⑹닔 硫섑듃 ?놁씠 誘명빐寃?寃????ぉ??利됱떆 諛섏쁺?섏꽭??",
+                ],
+                [
+                  "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
+                ],
+                [
+                  "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
+                ],
+                [
+                  "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
+                ],
+              ),
           taskLang,
         )
       : pickL(
@@ -373,11 +381,11 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
                 ["Execute directly without long preamble and keep messages concise."],
               )
             : l(
-            ["湲??쒕줎 ?놁씠 諛붾줈 ?ㅽ뻾?섍퀬, 硫붿떆吏??媛꾧껐?섍쾶 ?좎??섏꽭??"],
-            ["Execute directly without long preamble and keep messages concise."],
-            ["Execute directly without long preamble and keep messages concise."],
-            ["Execute directly without long preamble and keep messages concise."],
-          ),
+                ["湲??쒕줎 ?놁씠 諛붾줈 ?ㅽ뻾?섍퀬, 硫붿떆吏??媛꾧껐?섍쾶 ?좎??섏꽭??"],
+                ["Execute directly without long preamble and keep messages concise."],
+                ["Execute directly without long preamble and keep messages concise."],
+                ["Execute directly without long preamble and keep messages concise."],
+              ),
           taskLang,
         );
     const runInstruction = pickL(
@@ -387,17 +395,25 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
             [
               "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
             ],
-            ["Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant."],
-            ["Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant."],
+            [
+              "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
+            ],
+            [
+              "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
+            ],
           )
         : l(
-        ["???묒뾽??異⑸텇???꾩닔?섏꽭?? ?꾩슂 ???곗냽 ?ㅽ뻾 ?붿빟怨????留λ씫??李멸퀬?섏꽭??"],
-        [
-          "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
-        ],
-        ["Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant."],
-        ["Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant."],
-      ),
+            ["???묒뾽??異⑸텇???꾩닔?섏꽭?? ?꾩슂 ???곗냽 ?ㅽ뻾 ?붿빟怨????留λ씫??李멸퀬?섏꽭??"],
+            [
+              "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
+            ],
+            [
+              "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
+            ],
+            [
+              "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
+            ],
+          ),
       taskLang,
     );
     const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(provider);
@@ -501,11 +517,11 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
           )
         : l(
-        [` (寃⑸━ 釉뚮옖移? climpire/${taskId.slice(0, 8)})`],
-        [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
-        [` (?녽썴?뽧꺀?녈긽: climpire/${taskId.slice(0, 8)})`],
-        [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
-      ),
+            [` (寃⑸━ 釉뚮옖移? climpire/${taskId.slice(0, 8)})`],
+            [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
+            [` (?녽썴?뽧꺀?녈긽: climpire/${taskId.slice(0, 8)})`],
+            [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
+          ),
       taskLang,
     );
     notifyCeo(
@@ -518,11 +534,11 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
               [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
             )
           : l(
-          [`${execName}媛 '${taskData.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
-          [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
-          [`${execName}??'${taskData.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],
-          [`${execName} 藥꿨?冶뗥쨪??'${taskData.title}'??{worktreeNote}`],
-        ),
+              [`${execName}媛 '${taskData.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
+              [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
+              [`${execName}??'${taskData.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],
+              [`${execName} 藥꿨?冶뗥쨪??'${taskData.title}'??{worktreeNote}`],
+            ),
         taskLang,
       ),
       taskId,

@@ -412,7 +412,8 @@ export function createOAuthRouteHelpers(ctx: RuntimeContext) {
     const customClientId = readSettingString("google_oauth_client_id");
     const customClientSecret = readSettingString("google_oauth_client_secret");
     const clientId = customClientId || BUILTIN_GOOGLE_CLIENT_ID || readEnvString("OAUTH_GOOGLE_CLIENT_ID");
-    const clientSecret = customClientSecret || BUILTIN_GOOGLE_CLIENT_SECRET || readEnvString("OAUTH_GOOGLE_CLIENT_SECRET");
+    const clientSecret =
+      customClientSecret || BUILTIN_GOOGLE_CLIENT_SECRET || readEnvString("OAUTH_GOOGLE_CLIENT_SECRET");
     if (!clientId) throw new Error("missing_OAUTH_GOOGLE_CLIENT_ID");
     const verifier = decryptSecret(stateRow.verifier_enc);
     const tokenBody = new URLSearchParams({
@@ -445,7 +446,11 @@ export function createOAuthRouteHelpers(ctx: RuntimeContext) {
       tokenData = {};
     }
     if (!tokenData.access_token) {
-      const details = [tokenData.error || "unknown_error", tokenData.error_description || "", `status=${tokenResp.status}`]
+      const details = [
+        tokenData.error || "unknown_error",
+        tokenData.error_description || "",
+        `status=${tokenResp.status}`,
+      ]
         .filter(Boolean)
         .join(" | ");
       throw new Error(`google_token_exchange_failed: ${details}`);

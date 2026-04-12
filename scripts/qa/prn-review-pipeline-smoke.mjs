@@ -171,9 +171,18 @@ async function run() {
     assertOrThrow(prnDraft.ok && prnDraft.json?.ok === true, `prn-draft failed (${prnDraft.status})`);
 
     const draft = prnDraft.json?.draft ?? {};
-    assertOrThrow(typeof draft.directive_text === "string" && draft.directive_text.trim().length > 0, "directive_text missing");
-    assertOrThrow(typeof draft.generation_meta?.pass1 === "string" && draft.generation_meta.pass1.trim(), "pass1 missing");
-    assertOrThrow(typeof draft.generation_meta?.pass2 === "string" && draft.generation_meta.pass2.trim(), "pass2 missing");
+    assertOrThrow(
+      typeof draft.directive_text === "string" && draft.directive_text.trim().length > 0,
+      "directive_text missing",
+    );
+    assertOrThrow(
+      typeof draft.generation_meta?.pass1 === "string" && draft.generation_meta.pass1.trim(),
+      "pass1 missing",
+    );
+    assertOrThrow(
+      typeof draft.generation_meta?.pass2 === "string" && draft.generation_meta.pass2.trim(),
+      "pass2 missing",
+    );
 
     summary.checks.prn_draft = "ok";
     summary.artifacts.prn_confidence = Number(draft.confidence ?? 0);

@@ -73,7 +73,9 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
       LIMIT ?
     `,
       )
-      .all(taskId, reviewRound, reviewRound, Math.max(boundedLimit * 3, boundedLimit)) as Array<{ raw_note: string | null }>;
+      .all(taskId, reviewRound, reviewRound, Math.max(boundedLimit * 3, boundedLimit)) as Array<{
+      raw_note: string | null;
+    }>;
     const out: string[] = [];
     const seen = new Set<string>();
     for (const row of rows) {
@@ -180,9 +182,8 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
   }
 
   function getBlockerCount(verdicts: ReviewRoundReviewerVerdict[]): number {
-    return verdicts.filter(
-      (verdict) => verdict.final_verdict !== "approved" || verdict.requires_jules_action === true,
-    ).length;
+    return verdicts.filter((verdict) => verdict.final_verdict !== "approved" || verdict.requires_jules_action === true)
+      .length;
   }
 
   function getPreviousRoundBlockerCount(taskId: string, reviewRound: number): number | null {
@@ -213,7 +214,12 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
     return blockers;
   }
 
-  function collectRoundOptionNotes(taskId: string, meetingId: string, reviewRound: number, fallback: string[]): string[] {
+  function collectRoundOptionNotes(
+    taskId: string,
+    meetingId: string,
+    reviewRound: number,
+    fallback: string[],
+  ): string[] {
     let rows: Array<{ pass2: string | null; blocking_items_json: string | null }> = [];
     try {
       rows = db
@@ -383,9 +389,11 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
       const plannerSummary = useCollectingFallback
         ? ""
         : formatPlannerSummaryForDisplay(String(decisionState?.planner_summary ?? "").trim());
-      const combinedSummary = plannerSummary ? `${plannerHeader}\n${plannerSummary}\n\n${summary}` : `${plannerHeader}\n\n${summary}`;
+      const combinedSummary = plannerSummary
+        ? `${plannerHeader}\n${plannerSummary}\n\n${summary}`
+        : `${plannerHeader}\n\n${summary}`;
       const decisionReadyAt =
-        decisionState?.status === "ready" ? decisionState.updated_at ?? decisionState.created_at ?? null : null;
+        decisionState?.status === "ready" ? (decisionState.updated_at ?? decisionState.created_at ?? null) : null;
 
       out.push({
         id: `review-round-pick:${row.task_id}:${row.meeting_id}`,

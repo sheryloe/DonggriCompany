@@ -70,7 +70,8 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
           ),
           allAssigned: apiAssignAgents
             .filter(
-              (agent) => agent.department_id === dept.id && normalizeWorkflowPackKey(agent.workflow_pack_key) === packKey,
+              (agent) =>
+                agent.department_id === dept.id && normalizeWorkflowPackKey(agent.workflow_pack_key) === packKey,
             )
             .every(
               (agent) =>
@@ -184,7 +185,12 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
                         >
                           {allAssigned
                             ? t({ ko: "적용됨", en: "Applied", ja: "適用済み", zh: "已应用" })
-                            : t({ ko: "부서 전체 적용", en: "Apply to team", ja: "部門全体に適用", zh: "应用到整个部门" })}
+                            : t({
+                                ko: "부서 전체 적용",
+                                en: "Apply to team",
+                                ja: "部門全体に適用",
+                                zh: "应用到整个部门",
+                              })}
                         </button>
                       </div>
                       {agents.map(renderAgentRow)}

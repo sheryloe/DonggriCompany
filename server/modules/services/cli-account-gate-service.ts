@@ -143,7 +143,9 @@ export class CliAccountGateService {
   deletePool(provider: string, accountPoolId: string): void {
     const normalizedProvider = normalizeProvider(provider);
     const normalizedPool = normalizePool(accountPoolId);
-    this.db.prepare("DELETE FROM cli_account_pools WHERE provider = ? AND account_pool_id = ?").run(normalizedProvider, normalizedPool);
+    this.db
+      .prepare("DELETE FROM cli_account_pools WHERE provider = ? AND account_pool_id = ?")
+      .run(normalizedProvider, normalizedPool);
   }
 
   verifyPool(provider: string, accountPoolId: string): CliAccountVerifyResponse {
@@ -169,7 +171,13 @@ export class CliAccountGateService {
 
     const binaryInstalled = isBinaryInstalled(normalizedProvider);
     if (!binaryInstalled) {
-      this.updatePoolStatus(row.provider, row.account_pool_id, "install_required", now, `${normalizedProvider}_not_installed`);
+      this.updatePoolStatus(
+        row.provider,
+        row.account_pool_id,
+        "install_required",
+        now,
+        `${normalizedProvider}_not_installed`,
+      );
       return {
         pool: this.toView(this.mustGetPoolRow(row.provider, row.account_pool_id)),
         binaryInstalled: false,
@@ -251,18 +259,34 @@ export class CliAccountGateService {
     }
     const existing = this.getPoolRow(normalizedProvider, normalizedPool);
     if (!existing) {
-      throw new CliAccountGateError("cli_not_connected", 412, `CLI account pool is not registered for ${normalizedProvider}:${normalizedPool}`);
+      throw new CliAccountGateError(
+        "cli_not_connected",
+        412,
+        `CLI account pool is not registered for ${normalizedProvider}:${normalizedPool}`,
+      );
     }
     const verified = this.verifyPool(normalizedProvider, normalizedPool);
     const status = verified.pool.status;
     if (status === "connected") return verified.pool;
     if (status === "install_required") {
-      throw new CliAccountGateError("cli_install_required", 412, `CLI binary is not installed for ${normalizedProvider}`);
+      throw new CliAccountGateError(
+        "cli_install_required",
+        412,
+        `CLI binary is not installed for ${normalizedProvider}`,
+      );
     }
     if (status === "profile_error") {
-      throw new CliAccountGateError("cli_profile_error", 412, `Profile error for ${normalizedProvider}:${normalizedPool}`);
+      throw new CliAccountGateError(
+        "cli_profile_error",
+        412,
+        `Profile error for ${normalizedProvider}:${normalizedPool}`,
+      );
     }
-    throw new CliAccountGateError("cli_auth_required", 412, `CLI authentication is required for ${normalizedProvider}:${normalizedPool}`);
+    throw new CliAccountGateError(
+      "cli_auth_required",
+      412,
+      `CLI authentication is required for ${normalizedProvider}:${normalizedPool}`,
+    );
   }
 
   private updatePoolStatus(
@@ -295,7 +319,11 @@ export class CliAccountGateService {
   private mustGetPoolRow(provider: string, accountPoolId: string): CliAccountPoolRow {
     const row = this.getPoolRow(provider, accountPoolId);
     if (!row) {
-      throw new CliAccountGateError("cli_not_connected", 404, `CLI account pool not found: ${provider}:${accountPoolId}`);
+      throw new CliAccountGateError(
+        "cli_not_connected",
+        404,
+        `CLI account pool not found: ${provider}:${accountPoolId}`,
+      );
     }
     return row;
   }

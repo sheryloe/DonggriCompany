@@ -164,11 +164,7 @@ export class OAuthGateService {
     }
   }
 
-  private markRefreshFailed(
-    session: OAuthSessionRow,
-    message: string,
-    nextStatus: "expired" | "error",
-  ): void {
+  private markRefreshFailed(session: OAuthSessionRow, message: string, nextStatus: "expired" | "error"): void {
     const now = this.nowMs();
     this.db
       .prepare(

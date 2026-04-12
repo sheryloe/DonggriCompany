@@ -212,7 +212,9 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
     const defaultOption = String(item.options[0]?.number ?? options[0]?.match(/^(\d+)/)?.[1] ?? 1);
     const isMultiPick =
       item.kind === "review_round_pick" &&
-      item.options.some((option) => option.action === "apply_review_pick" || option.action === "apply_selected_feedback");
+      item.options.some(
+        (option) => option.action === "apply_review_pick" || option.action === "apply_selected_feedback",
+      );
     const replyGuide =
       options.length > 0
         ? pickDecisionL10n(

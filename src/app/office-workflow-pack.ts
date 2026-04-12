@@ -361,7 +361,12 @@ const PACK_PRESETS: Record<WorkflowPackKey, PackPreset> = {
   video_preprod: {
     key: "video_preprod",
     slug: "VID",
-    label: { ko: "영상 프리프로덕션", en: "Video Pre-production", ja: "Video Pre-production", zh: "Video Pre-production" },
+    label: {
+      ko: "영상 프리프로덕션",
+      en: "Video Pre-production",
+      ja: "Video Pre-production",
+      zh: "Video Pre-production",
+    },
     summary: {
       ko: "콘티/샷리스트 중심",
       en: "Storyboard and shot-list focused setup",
@@ -421,7 +426,10 @@ function pickText(locale: UiLanguageLike, text: Localized): string {
   }
 }
 
-function localizedNumberedName(prefix: Localized, order: number): {
+function localizedNumberedName(
+  prefix: Localized,
+  order: number,
+): {
   name: string;
   name_ko: string;
   name_ja: string;
@@ -575,7 +583,11 @@ export function buildOfficePackPresentation(params: {
       name_ko: deptPreset.name.ko,
       name_ja: deptPreset.name.ja,
       name_zh: deptPreset.name.zh,
-      description: buildPackDepartmentDescription({ locale, packSummary: preset.summary, departmentName: localizedName }),
+      description: buildPackDepartmentDescription({
+        locale,
+        packSummary: preset.summary,
+        departmentName: localizedName,
+      }),
       prompt: buildPackDepartmentPrompt({ locale, packSummary: preset.summary, departmentName: localizedName }),
     };
   });
@@ -633,7 +645,10 @@ export function buildOfficePackStarterAgents(params: {
   );
   const workerCycle = nonLeaderCycle.length > 0 ? nonLeaderCycle : baseDeptOrder;
   const rolePool: AgentRole[] = ["senior", "junior", "intern"];
-  const baseDesiredCount = Math.max(baseDeptOrder.length + 2, params.targetCount ?? Math.min(10, baseDeptOrder.length * 2));
+  const baseDesiredCount = Math.max(
+    baseDeptOrder.length + 2,
+    params.targetCount ?? Math.min(10, baseDeptOrder.length * 2),
+  );
   const desiredCount = packKey === "donggri" ? Math.max(baseDesiredCount, 12) : baseDesiredCount;
 
   const perDeptCounter = new Map<string, number>();

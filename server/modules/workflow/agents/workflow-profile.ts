@@ -107,7 +107,9 @@ function isJulesAgent(agentName: unknown, cliProvider: unknown): boolean {
 
 export function resolveAgentWorkflowProfile(input: ResolveAgentWorkflowProfileInput): AgentWorkflowProfile {
   const rawObject = parseJsonObject(input.workflowProfileRaw);
-  const defaultRole: AgentWorkflowRole = isJulesAgent(input.agentName, input.cliProvider) ? "primary_author" : "reviewer";
+  const defaultRole: AgentWorkflowRole = isJulesAgent(input.agentName, input.cliProvider)
+    ? "primary_author"
+    : "reviewer";
   const role = normalizeRole(rawObject?.role) ?? defaultRole;
   const twoPassRequired = normalizeBoolean(rawObject?.two_pass_required, true);
   const maxReviewRounds = normalizeMaxReviewRounds(rawObject?.max_review_rounds, role === "primary_author" ? 2 : null);
@@ -131,10 +133,7 @@ export function parseWorkflowProfilePayload(value: unknown): AgentWorkflowProfil
     role,
     review_lenses: normalizeReviewLenses(objectValue.review_lenses, ""),
     two_pass_required: normalizeBoolean(objectValue.two_pass_required, true),
-    max_review_rounds:
-      role === "primary_author"
-        ? 2
-        : normalizeMaxReviewRounds(objectValue.max_review_rounds, null),
+    max_review_rounds: role === "primary_author" ? 2 : normalizeMaxReviewRounds(objectValue.max_review_rounds, null),
   };
 }
 

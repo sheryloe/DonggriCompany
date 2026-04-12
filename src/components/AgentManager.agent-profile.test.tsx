@@ -25,13 +25,9 @@ vi.mock("./agent-manager/EmojiPicker", () => ({
 }));
 
 vi.mock("./agent-manager/AgentsTab", () => ({
-  default: ({
-    agents,
-    onEditAgent,
-  }: {
-    agents: Agent[];
-    onEditAgent: (agent: Agent) => void;
-  }) => <button onClick={() => onEditAgent(agents[0])}>Edit Legacy Agent</button>,
+  default: ({ agents, onEditAgent }: { agents: Agent[]; onEditAgent: (agent: Agent) => void }) => (
+    <button onClick={() => onEditAgent(agents[0])}>Edit Legacy Agent</button>
+  ),
 }));
 
 vi.mock("./agent-manager/DepartmentsTab", () => ({

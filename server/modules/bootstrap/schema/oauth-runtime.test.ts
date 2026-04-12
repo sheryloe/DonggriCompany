@@ -206,7 +206,9 @@ describe("initializeOAuthRuntime", () => {
       }
     ).sql;
     const row = db
-      .prepare("SELECT workflow_pack_key, cli_provider, workflow_profile, run_mode, created_at FROM agents WHERE id = ?")
+      .prepare(
+        "SELECT workflow_pack_key, cli_provider, workflow_profile, run_mode, created_at FROM agents WHERE id = ?",
+      )
       .get("legacy-agent") as {
       workflow_pack_key: string;
       cli_provider: string;

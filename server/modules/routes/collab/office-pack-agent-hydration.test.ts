@@ -135,11 +135,11 @@ describe("hydrateOfficePackAgentFromSettings", () => {
     expect(hydrated?.cli_model).toBe("claude-opus-4-6");
     expect((hydrated as unknown as { sprite_number?: number }).sprite_number).toBe(8);
     expect((hydrated as unknown as { acts_as_planning_leader?: number }).acts_as_planning_leader).toBe(1);
-    const hydratedRow = db
-      .prepare("SELECT agent_profile_json FROM agents WHERE id = 'video_preprod-seed-1'")
-      .get() as { agent_profile_json?: string | null } | undefined;
-    expect(hydratedRow?.agent_profile_json).toContain("\"growth_tier\":5");
-    expect(hydratedRow?.agent_profile_json).toContain("\"storyboarding\"");
+    const hydratedRow = db.prepare("SELECT agent_profile_json FROM agents WHERE id = 'video_preprod-seed-1'").get() as
+      | { agent_profile_json?: string | null }
+      | undefined;
+    expect(hydratedRow?.agent_profile_json).toContain('"growth_tier":5');
+    expect(hydratedRow?.agent_profile_json).toContain('"storyboarding"');
 
     const dept = db.prepare("SELECT id, name_ko FROM departments WHERE id = 'planning'").get() as
       | { id: string; name_ko: string }
@@ -225,7 +225,7 @@ describe("hydrateOfficePackAgentFromSettings", () => {
       name: "Luna",
       department_id: "design",
       acts_as_planning_leader: 1,
-      agent_profile_json: expect.stringContaining("\"growth_tier\":4"),
+      agent_profile_json: expect.stringContaining('"growth_tier":4'),
     });
   });
 

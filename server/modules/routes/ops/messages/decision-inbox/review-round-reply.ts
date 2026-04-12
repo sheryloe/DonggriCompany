@@ -309,16 +309,16 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
       event_type: "representative_pick",
       summary: pickL(
         l(
-          [`리뷰 라운드 ${reviewRound} 의사결정: Jules 반영(${selectedAction === "apply_all_feedback" ? "전체" : "선택"})`],
+          [
+            `리뷰 라운드 ${reviewRound} 의사결정: Jules 반영(${selectedAction === "apply_all_feedback" ? "전체" : "선택"})`,
+          ],
           [
             `Review round ${reviewRound} decision: Jules applies ${selectedAction === "apply_all_feedback" ? "all" : "selected"} feedback`,
           ],
           [
             `レビューラウンド${reviewRound} 意思決定: Jules が${selectedAction === "apply_all_feedback" ? "全体" : "選択"}反映`,
           ],
-          [
-            `评审轮次 ${reviewRound} 决策：Jules ${selectedAction === "apply_all_feedback" ? "全部" : "选择"}采纳`,
-          ],
+          [`评审轮次 ${reviewRound} 决策：Jules ${selectedAction === "apply_all_feedback" ? "全部" : "选择"}采纳`],
         ),
         lang,
       ),

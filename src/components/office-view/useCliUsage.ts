@@ -57,12 +57,12 @@ export function useCliUsage(tasks: Task[]): UseCliUsageResult {
     if (doneCountRef.current > 0 && doneCount > doneCountRef.current) {
       refreshCliUsage()
         .then((response) => {
-        if (!response.ok) return;
-        setCliUsage(response.usage);
-        setCliPoolUsage(response.poolUsage ?? []);
-        setCliSessionUsage(response.sessionUsage ?? []);
-      })
-      .catch(() => {});
+          if (!response.ok) return;
+          setCliUsage(response.usage);
+          setCliPoolUsage(response.poolUsage ?? []);
+          setCliSessionUsage(response.sessionUsage ?? []);
+        })
+        .catch(() => {});
     }
     doneCountRef.current = doneCount;
   }, [tasks]);

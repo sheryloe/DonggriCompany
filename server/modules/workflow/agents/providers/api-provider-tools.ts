@@ -121,7 +121,12 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
   }
 
   function sanitizeFileSegment(value: string): string {
-    return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "artifact";
+    return (
+      value
+        .replace(/[^a-zA-Z0-9._-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") || "artifact"
+    );
   }
 
   function extensionForMimeType(mimeType: string): string {
@@ -142,7 +147,9 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
     return path.join(preferredBase, taskSlug);
   }
 
-  function parseGoogleCandidateParts(payload: unknown): Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> {
+  function parseGoogleCandidateParts(
+    payload: unknown,
+  ): Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> {
     const root = payload as {
       candidates?: Array<{ content?: { parts?: Array<Record<string, unknown>> } }>;
       response?: { candidates?: Array<{ content?: { parts?: Array<Record<string, unknown>> } }> };

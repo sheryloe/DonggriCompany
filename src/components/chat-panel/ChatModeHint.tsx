@@ -69,4 +69,3 @@ export default function ChatModeHint({ mode, isDirectiveMode, isPrnCommandMode, 
     </div>
   );
 }
-

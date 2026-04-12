@@ -64,33 +64,36 @@ export function useProjectPickerState({
   useEffect(() => {
     let cancelled = false;
     const trimmedQuery = projectQuery.trim();
-    const timeoutId = window.setTimeout(() => {
-      setProjectsLoading(true);
-      getProjects({
-        page: 1,
-        page_size: 30,
-        ...(trimmedQuery ? { search: trimmedQuery } : {}),
-      })
-        .then((res) => {
-          if (cancelled) return;
-          setProjects((prev) =>
-            mergeProjectsById([
-              ...res.projects,
-              ...(selectedProjectSnapshot ? [selectedProjectSnapshot] : []),
-              ...(!trimmedQuery ? prev.filter((project) => project.id === selectedProjectSnapshot?.id) : []),
-            ]),
-          );
+    const timeoutId = window.setTimeout(
+      () => {
+        setProjectsLoading(true);
+        getProjects({
+          page: 1,
+          page_size: 30,
+          ...(trimmedQuery ? { search: trimmedQuery } : {}),
         })
-        .catch((err) => {
-          console.error("Failed to load projects for task creation:", err);
-          if (cancelled) return;
-          setProjects(selectedProjectSnapshot ? [selectedProjectSnapshot] : []);
-        })
-        .finally(() => {
-          if (cancelled) return;
-          setProjectsLoading(false);
-        });
-    }, trimmedQuery ? 180 : 0);
+          .then((res) => {
+            if (cancelled) return;
+            setProjects((prev) =>
+              mergeProjectsById([
+                ...res.projects,
+                ...(selectedProjectSnapshot ? [selectedProjectSnapshot] : []),
+                ...(!trimmedQuery ? prev.filter((project) => project.id === selectedProjectSnapshot?.id) : []),
+              ]),
+            );
+          })
+          .catch((err) => {
+            console.error("Failed to load projects for task creation:", err);
+            if (cancelled) return;
+            setProjects(selectedProjectSnapshot ? [selectedProjectSnapshot] : []);
+          })
+          .finally(() => {
+            if (cancelled) return;
+            setProjectsLoading(false);
+          });
+      },
+      trimmedQuery ? 180 : 0,
+    );
 
     return () => {
       cancelled = true;
@@ -125,7 +128,7 @@ export function useProjectPickerState({
     () =>
       projectId
         ? (projects.find((project) => project.id === projectId) ??
-            (selectedProjectSnapshot?.id === projectId ? selectedProjectSnapshot : null))
+          (selectedProjectSnapshot?.id === projectId ? selectedProjectSnapshot : null))
         : null,
     [projectId, projects, selectedProjectSnapshot],
   );

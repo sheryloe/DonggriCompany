@@ -20,10 +20,7 @@ import {
   resolveAgentProfileFromRow,
   serializeAgentProfile,
 } from "../../../workflow/agents/agent-profile.ts";
-import {
-  parseAgentRunModePayload,
-  resolveAgentRunMode,
-} from "../../../workflow/agents/run-mode.ts";
+import { parseAgentRunModePayload, resolveAgentRunMode } from "../../../workflow/agents/run-mode.ts";
 
 export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   const {
@@ -803,7 +800,9 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       return res.status(400).json({ error: "run_mode_not_supported" });
     }
     const nextCliModel =
-      "cli_model" in body ? (body.cli_model as string | null) : ((existing.cli_model as string | null | undefined) ?? null);
+      "cli_model" in body
+        ? (body.cli_model as string | null)
+        : ((existing.cli_model as string | null | undefined) ?? null);
     const resolvedRunMode = resolveAgentRunMode({
       runMode: parsedRunMode ?? existing.run_mode ?? "standard",
       cliProvider: nextProvider,
@@ -814,11 +813,15 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     }
     if (
       hasAgentRunModeColumn &&
-      (providerChanged || "cli_model" in body || "run_mode" in body || resolvedRunMode !== resolveAgentRunMode({
-        runMode: existing.run_mode,
-        cliProvider: existing.cli_provider,
-        cliModel: existing.cli_model,
-      }))
+      (providerChanged ||
+        "cli_model" in body ||
+        "run_mode" in body ||
+        resolvedRunMode !==
+          resolveAgentRunMode({
+            runMode: existing.run_mode,
+            cliProvider: existing.cli_provider,
+            cliModel: existing.cli_model,
+          }))
     ) {
       body.run_mode = resolvedRunMode;
     }

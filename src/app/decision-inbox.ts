@@ -18,7 +18,8 @@ function baseWorkflowDecisionItem(item: DecisionInboxRouteItem): Omit<DecisionIn
       (item.kind === "project_review_ready"
         ? item.project_name || item.project_id || "기획팀장"
         : item.task_title || item.task_id || "작업"),
-    agentAvatar: item.agent_avatar ?? (item.kind === "project_review_ready" || item.kind === "review_round_pick" ? "PL" : null),
+    agentAvatar:
+      item.agent_avatar ?? (item.kind === "project_review_ready" || item.kind === "review_round_pick" ? "PL" : null),
     requestContent: item.summary,
     createdAt: item.created_at,
     taskId: item.task_id,
@@ -36,7 +37,9 @@ function baseWorkflowDecisionItem(item: DecisionInboxRouteItem): Omit<DecisionIn
     blockerCount: item.blocker_count,
     blockerDelta: item.blocker_delta ?? null,
     julesApplied: item.jules_applied ?? null,
-    optionNotes: Array.isArray(item.option_notes) ? item.option_notes.map((entry) => String(entry ?? "").trim()).filter(Boolean) : [],
+    optionNotes: Array.isArray(item.option_notes)
+      ? item.option_notes.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+      : [],
   };
 }
 

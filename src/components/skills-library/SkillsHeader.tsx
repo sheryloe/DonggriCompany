@@ -111,7 +111,9 @@ export default function SkillsHeader({
           className="bg-slate-900/60 border border-slate-600/50 rounded-lg px-3 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500/50"
         >
           <option value="rank">{t({ ko: "순위순", en: "By Rank", ja: "順位順", zh: "按排名" })}</option>
-          <option value="installs">{t({ ko: "설치순", en: "By Installs", ja: "インストール順", zh: "按安装量" })}</option>
+          <option value="installs">
+            {t({ ko: "설치순", en: "By Installs", ja: "インストール順", zh: "按安装量" })}
+          </option>
           <option value="name">{t({ ko: "이름순", en: "By Name", ja: "名前順", zh: "按名称" })}</option>
         </select>
       </div>

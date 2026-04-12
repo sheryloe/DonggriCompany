@@ -88,7 +88,11 @@ export default function AgentProfileBuilder({
     value: AgentLevelValue,
     onChange: (next: number) => void,
   ) => (
-    <div key={key} className="space-y-1.5 rounded-lg border px-3 py-2" style={{ borderColor: "var(--th-input-border)" }}>
+    <div
+      key={key}
+      className="space-y-1.5 rounded-lg border px-3 py-2"
+      style={{ borderColor: "var(--th-input-border)" }}
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
           {label}
@@ -117,10 +121,16 @@ export default function AgentProfileBuilder({
             {tr("성장/프롬프트 빌더", "Growth / Prompt Builder")}
           </div>
           <div className="text-xs" style={{ color: "var(--th-text-muted)" }}>
-            {tr("설정값은 실제 실행 프롬프트에 바로 반영됩니다.", "These values are injected directly into runtime prompts.")}
+            {tr(
+              "설정값은 실제 실행 프롬프트에 바로 반영됩니다.",
+              "These values are injected directly into runtime prompts.",
+            )}
           </div>
         </div>
-        <div className="rounded-lg border px-3 py-2 text-right text-xs" style={{ borderColor: "var(--th-input-border)" }}>
+        <div
+          className="rounded-lg border px-3 py-2 text-right text-xs"
+          style={{ borderColor: "var(--th-input-border)" }}
+        >
           <div style={{ color: "var(--th-text-muted)" }}>{tr("XP 기준 추천 티어", "Recommended Tier by XP")}</div>
           <div className="font-semibold" style={{ color: "var(--th-text-heading)" }}>
             Tier {recommendedGrowthTier} · {currentXp} XP
@@ -156,7 +166,9 @@ export default function AgentProfileBuilder({
           className="w-full accent-blue-500"
         />
         <div className="mt-1 flex items-center justify-between text-[11px]" style={{ color: "var(--th-text-muted)" }}>
-          <span>{tr("추천", "Recommended")}: Tier {recommendedGrowthTier}</span>
+          <span>
+            {tr("추천", "Recommended")}: Tier {recommendedGrowthTier}
+          </span>
           <span>{getLevelWord(form.agent_profile.growth_tier, locale)}</span>
         </div>
       </div>
@@ -167,11 +179,8 @@ export default function AgentProfileBuilder({
             {tr("6축 능력치", "Capability Matrix")}
           </div>
           {CAPABILITY_KEYS.map((key) =>
-            renderSlider(
-              key,
-              getCapabilityLabel(key, locale),
-              form.agent_profile.capabilities[key],
-              (next) => updateCapability(key, next),
+            renderSlider(key, getCapabilityLabel(key, locale), form.agent_profile.capabilities[key], (next) =>
+              updateCapability(key, next),
             ),
           )}
         </div>
@@ -181,11 +190,8 @@ export default function AgentProfileBuilder({
             {tr("프롬프트 스타일", "Prompt Style")}
           </div>
           {PROMPT_STYLE_KEYS.map((key) =>
-            renderSlider(
-              key,
-              getPromptStyleLabel(key, locale),
-              form.agent_profile.prompt_style[key],
-              (next) => updatePromptStyle(key, next),
+            renderSlider(key, getPromptStyleLabel(key, locale), form.agent_profile.prompt_style[key], (next) =>
+              updatePromptStyle(key, next),
             ),
           )}
         </div>
@@ -220,7 +226,10 @@ export default function AgentProfileBuilder({
                 borderColor: "var(--th-input-border)",
                 color: "var(--th-text-primary)",
               }}
-              placeholder={tr("예: backend, orchestration, prompt design", "e.g. backend, orchestration, prompt design")}
+              placeholder={tr(
+                "예: backend, orchestration, prompt design",
+                "e.g. backend, orchestration, prompt design",
+              )}
             />
           </div>
 

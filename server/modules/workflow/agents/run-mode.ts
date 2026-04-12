@@ -4,10 +4,7 @@ function normalizeText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-export function isCodexPlanModeEligible(input: {
-  cliProvider: unknown;
-  cliModel: unknown;
-}): boolean {
+export function isCodexPlanModeEligible(input: { cliProvider: unknown; cliModel: unknown }): boolean {
   return normalizeText(input.cliProvider).toLowerCase() === "codex" && normalizeText(input.cliModel).length > 0;
 }
 

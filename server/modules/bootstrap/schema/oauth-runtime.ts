@@ -69,7 +69,9 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
     /* already exists */
   }
   try {
-    db.exec("ALTER TABLE agents ADD COLUMN run_mode TEXT NOT NULL DEFAULT 'standard' CHECK(run_mode IN ('standard','plan'))");
+    db.exec(
+      "ALTER TABLE agents ADD COLUMN run_mode TEXT NOT NULL DEFAULT 'standard' CHECK(run_mode IN ('standard','plan'))",
+    );
   } catch {
     /* already exists */
   }

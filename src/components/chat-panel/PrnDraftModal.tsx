@@ -46,7 +46,9 @@ export default function PrnDraftModal({
       <div className="w-full max-w-3xl rounded-2xl border border-indigo-500/30 bg-slate-900 shadow-2xl shadow-indigo-500/10">
         <div className="flex items-center justify-between border-b border-slate-700/70 px-5 py-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">{tr("PRN 요구사항 초안", "PRN Draft", "PRN要件草案", "PRN需求草案")}</h3>
+            <h3 className="text-sm font-semibold text-white">
+              {tr("PRN 요구사항 초안", "PRN Draft", "PRN要件草案", "PRN需求草案")}
+            </h3>
             <p className="mt-1 text-xs text-slate-400">
               {tr(
                 "대표 검토 후 지시 전송을 실행하세요.",
@@ -68,10 +70,17 @@ export default function PrnDraftModal({
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
           {loading ? (
             <div className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-8 text-center text-sm text-slate-300">
-              {tr("PRN 초안을 생성하는 중입니다...", "Generating PRN draft...", "PRN草案を生成中...", "正在生成 PRN 草案...")}
+              {tr(
+                "PRN 초안을 생성하는 중입니다...",
+                "Generating PRN draft...",
+                "PRN草案を生成中...",
+                "正在生成 PRN 草案...",
+              )}
             </div>
           ) : error ? (
-            <div className="rounded-lg border border-rose-700/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">{error}</div>
+            <div className="rounded-lg border border-rose-700/70 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
+              {error}
+            </div>
           ) : draft ? (
             <div className="space-y-3">
               {SECTION_ORDER.map((section) => (
@@ -86,18 +95,29 @@ export default function PrnDraftModal({
               ))}
 
               <div className="rounded-lg border border-slate-700/70 bg-slate-950/60 p-3">
-                <p className="text-xs font-semibold text-emerald-300">{tr("지시문 초안", "Directive Text", "指示文草案", "指令草案")}</p>
-                <pre className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-100">{draft.directive_text}</pre>
+                <p className="text-xs font-semibold text-emerald-300">
+                  {tr("지시문 초안", "Directive Text", "指示文草案", "指令草案")}
+                </p>
+                <pre className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-100">
+                  {draft.directive_text}
+                </pre>
                 <p className="mt-2 text-[11px] text-slate-400">
                   {tr("신뢰도", "Confidence", "信頼度", "置信度")}: {draft.confidence.toFixed(2)} /{" "}
                   {tr("폴백 사용", "Fallback used", "フォールバック使用", "是否回退")}:{" "}
-                  {draft.generation_meta.fallback_used ? tr("예", "Yes", "はい", "是") : tr("아니오", "No", "いいえ", "否")}
+                  {draft.generation_meta.fallback_used
+                    ? tr("예", "Yes", "はい", "是")
+                    : tr("아니오", "No", "いいえ", "否")}
                 </p>
               </div>
             </div>
           ) : (
             <div className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-8 text-center text-sm text-slate-400">
-              {tr("표시할 PRN 초안이 없습니다.", "No PRN draft available.", "表示できるPRN草案がありません。", "没有可显示的 PRN 草案。")}
+              {tr(
+                "표시할 PRN 초안이 없습니다.",
+                "No PRN draft available.",
+                "表示できるPRN草案がありません。",
+                "没有可显示的 PRN 草案。",
+              )}
             </div>
           )}
         </div>
@@ -124,4 +144,3 @@ export default function PrnDraftModal({
     </div>
   );
 }
-

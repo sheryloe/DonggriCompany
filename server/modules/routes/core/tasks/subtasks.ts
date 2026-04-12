@@ -2,7 +2,10 @@
 import type { SQLInputValue } from "node:sqlite";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { AgentRow } from "../../shared/types.ts";
-import { normalizeSubtaskTitleForDisplay, normalizeSubtaskTitleForStorage } from "../../../workflow/subtasks/title-normalizer.ts";
+import {
+  normalizeSubtaskTitleForDisplay,
+  normalizeSubtaskTitleForStorage,
+} from "../../../workflow/subtasks/title-normalizer.ts";
 
 export type TaskSubtaskRouteDeps = Pick<
   RuntimeContext,

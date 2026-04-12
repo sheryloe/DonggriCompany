@@ -104,7 +104,11 @@ export default function AgentCard({
             {agent.cli_provider}
           </span>
         </div>
-        <div className="max-w-[170px] truncate text-[10px]" style={{ color: "var(--th-text-muted)" }} title={capabilitySummary}>
+        <div
+          className="max-w-[170px] truncate text-[10px]"
+          style={{ color: "var(--th-text-muted)" }}
+          title={capabilitySummary}
+        >
           {capabilitySummary}
         </div>
         <div

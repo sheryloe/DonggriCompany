@@ -42,13 +42,7 @@ export interface AgentWorkflowProfile {
   max_review_rounds: number | null;
 }
 
-export type AgentCapabilityKey =
-  | "execution"
-  | "architecture"
-  | "review"
-  | "research"
-  | "communication"
-  | "leadership";
+export type AgentCapabilityKey = "execution" | "architecture" | "review" | "research" | "communication" | "leadership";
 export type AgentPromptStyleKey = "tone" | "autonomy" | "strictness" | "collaboration";
 export type AgentLevelValue = 1 | 2 | 3 | 4 | 5;
 

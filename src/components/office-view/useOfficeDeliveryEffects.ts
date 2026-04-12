@@ -68,7 +68,7 @@ export function useMeetingPresenceSync({
         continue;
       }
 
-    const spriteNum = spriteMapRef.current.get(row.agent_id) ?? (hashStr(row.agent_id) % 44) + 1;
+      const spriteNum = spriteMapRef.current.get(row.agent_id) ?? (hashStr(row.agent_id) % 44) + 1;
       const actor = new Container();
       const frames: Texture[] = [];
 

@@ -205,9 +205,9 @@ export default function AgentManager({
         department_id: agent.department_id || "",
         role: agent.role,
         cli_provider: agent.cli_provider,
-        cli_model: agent.cli_provider === "codex" ? agent.cli_model ?? "" : "",
-        cli_reasoning_level: agent.cli_provider === "codex" ? agent.cli_reasoning_level ?? "" : "",
-        run_mode: agent.cli_provider === "codex" ? agent.run_mode ?? "standard" : "standard",
+        cli_model: agent.cli_provider === "codex" ? (agent.cli_model ?? "") : "",
+        cli_reasoning_level: agent.cli_provider === "codex" ? (agent.cli_reasoning_level ?? "") : "",
+        run_mode: agent.cli_provider === "codex" ? (agent.run_mode ?? "standard") : "standard",
         cli_account_pool_id: agent.cli_account_pool_id ?? "",
         workflow_role: workflowProfile?.role ?? workflowDefaults.workflow_role,
         review_lenses_text: (workflowProfile?.review_lenses ?? []).join(", ") || workflowDefaults.review_lenses_text,
@@ -235,10 +235,9 @@ export default function AgentManager({
     try {
       const departmentId = form.department_id.trim();
       const providerPools = cliAccountPools.filter((pool) => pool.provider === form.cli_provider);
-      const normalizedCliAccountPoolId =
-        CLI_POOL_PROVIDERS.includes(form.cli_provider)
-          ? form.cli_account_pool_id.trim() || providerPools[0]?.accountPoolId || null
-          : null;
+      const normalizedCliAccountPoolId = CLI_POOL_PROVIDERS.includes(form.cli_provider)
+        ? form.cli_account_pool_id.trim() || providerPools[0]?.accountPoolId || null
+        : null;
       if (CLI_POOL_PROVIDERS.includes(form.cli_provider) && !normalizedCliAccountPoolId) {
         setSaving(false);
         return;
@@ -252,17 +251,18 @@ export default function AgentManager({
         form.personality,
       );
       const shouldWriteCodexConfig = form.cli_provider === "codex" || modalAgent?.cli_provider === "codex";
-      const codexExecutionConfig: Partial<Pick<Agent, "cli_model" | "cli_reasoning_level" | "run_mode">> = shouldWriteCodexConfig
-        ? {
-            cli_model: form.cli_provider === "codex" ? form.cli_model.trim() || null : null,
-            cli_reasoning_level:
-              form.cli_provider === "codex" && form.cli_model.trim()
-                ? form.cli_reasoning_level.trim() || null
-                : null,
-            run_mode:
-              form.cli_provider === "codex" && form.cli_model.trim() && form.run_mode === "plan" ? "plan" : "standard",
-          }
-        : {};
+      const codexExecutionConfig: Partial<Pick<Agent, "cli_model" | "cli_reasoning_level" | "run_mode">> =
+        shouldWriteCodexConfig
+          ? {
+              cli_model: form.cli_provider === "codex" ? form.cli_model.trim() || null : null,
+              cli_reasoning_level:
+                form.cli_provider === "codex" && form.cli_model.trim() ? form.cli_reasoning_level.trim() || null : null,
+              run_mode:
+                form.cli_provider === "codex" && form.cli_model.trim() && form.run_mode === "plan"
+                  ? "plan"
+                  : "standard",
+            }
+          : {};
       const basePayload = {
         name: form.name.trim(),
         name_ko: form.name_ko.trim(),

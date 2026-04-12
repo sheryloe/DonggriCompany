@@ -11,7 +11,7 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: "pnpm dev:e2e",
+    command: "corepack pnpm dev:e2e",
     url: "http://127.0.0.1:8810",
     // Opt-in only. Reusing an already-running 8810 server can accidentally hit the wrong DB.
     reuseExistingServer: process.env.PW_REUSE_EXISTING_SERVER === "1",

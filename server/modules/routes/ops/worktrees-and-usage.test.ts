@@ -415,8 +415,8 @@ describe("cli usage route", () => {
       tempDirs.push(mockBinDir);
       createMockCliBinary(mockBinDir, "jules", {
         stdoutLines: [
-          "{\"session_id\":\"j-1\",\"status\":\"running\",\"updated_at\":\"2026-04-10T00:00:00.000Z\"}",
-          "{\"session_id\":\"j-2\",\"status\":\"completed\",\"updated_at\":\"2026-04-09T23:00:00.000Z\"}",
+          '{"session_id":"j-1","status":"running","updated_at":"2026-04-10T00:00:00.000Z"}',
+          '{"session_id":"j-2","status":"completed","updated_at":"2026-04-09T23:00:00.000Z"}',
         ],
       });
       const previousPath = process.env.PATH ?? "";

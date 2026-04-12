@@ -206,8 +206,19 @@ export function runOfficeTickerStep(ctx: OfficeTickerContext): void {
     }
   }
 
-  for (const { sprite, status, baseX, baseY, particles, agentId, cliProvider, cliUsageKey, deskG, bedG, blanketG } of ctx
-    .animItemsRef.current) {
+  for (const {
+    sprite,
+    status,
+    baseX,
+    baseY,
+    particles,
+    agentId,
+    cliProvider,
+    cliUsageKey,
+    deskG,
+    bedG,
+    blanketG,
+  } of ctx.animItemsRef.current) {
     if (agentId) {
       const meetingNow = Date.now();
       const inMeetingPresence = (ctx.dataRef.current.meetingPresence ?? []).some((row) => {

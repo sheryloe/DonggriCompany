@@ -357,7 +357,9 @@ export interface GitHubCreateRepoResponse {
   };
 }
 
-function isValidGitHubCreateRepoResponse(response: GitHubCreateRepoResponse | null | undefined): response is GitHubCreateRepoResponse {
+function isValidGitHubCreateRepoResponse(
+  response: GitHubCreateRepoResponse | null | undefined,
+): response is GitHubCreateRepoResponse {
   return Boolean(response?.repo?.name && response.repo.full_name);
 }
 

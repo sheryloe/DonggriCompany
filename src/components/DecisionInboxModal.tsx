@@ -29,7 +29,10 @@ function verdictLabel(
   };
 }
 
-function findOption(item: DecisionInboxItem, action: string): { number: number; label: string; action?: string } | null {
+function findOption(
+  item: DecisionInboxItem,
+  action: string,
+): { number: number; label: string; action?: string } | null {
   return item.options.find((option) => option.action === action) ?? null;
 }
 
@@ -141,7 +144,9 @@ export default function DecisionInboxModal({
     setSelectedFeedbackNumbersByItem((prev) => {
       const current = prev[itemId] ?? [];
       const exists = current.includes(number);
-      const nextNumbers = exists ? current.filter((entry) => entry !== number) : [...current, number].sort((a, b) => a - b);
+      const nextNumbers = exists
+        ? current.filter((entry) => entry !== number)
+        : [...current, number].sort((a, b) => a - b);
       return { ...prev, [itemId]: nextNumbers };
     });
   }
@@ -193,8 +198,12 @@ export default function DecisionInboxModal({
       >
         <div className="flex items-center justify-between border-b border-slate-700/50 px-6 py-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-white">{t({ ko: "미결 의사결정", en: "Pending Decisions", ja: "未決定", zh: "待决事项" })}</h2>
-            <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs font-medium text-indigo-300">{items.length}</span>
+            <h2 className="text-lg font-bold text-white">
+              {t({ ko: "미결 의사결정", en: "Pending Decisions", ja: "未決定", zh: "待决事项" })}
+            </h2>
+            <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs font-medium text-indigo-300">
+              {items.length}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -215,19 +224,31 @@ export default function DecisionInboxModal({
         <div className="max-h-[70vh] overflow-y-auto p-4">
           {loading ? (
             <div className="py-12 text-center text-sm text-slate-500">
-              {t({ ko: "미결 목록 불러오는 중...", en: "Loading pending decisions...", ja: "読み込み中...", zh: "正在加载..." })}
+              {t({
+                ko: "미결 목록 불러오는 중...",
+                en: "Loading pending decisions...",
+                ja: "読み込み中...",
+                zh: "正在加载...",
+              })}
             </div>
           ) : items.length === 0 ? (
             <div className="py-12 text-center text-sm text-slate-500">
-              {t({ ko: "현재 미결 의사결정이 없습니다.", en: "No pending decisions right now.", ja: "未決定はありません。", zh: "当前没有待决事项。" })}
+              {t({
+                ko: "현재 미결 의사결정이 없습니다.",
+                en: "No pending decisions right now.",
+                ja: "未決定はありません。",
+                zh: "当前没有待决事项。",
+              })}
             </div>
           ) : (
             <div className="space-y-3">
               {items.map((item) => {
                 const agent = item.agentId ? agentById.get(item.agentId) : undefined;
                 const applyAllOption = findOption(item, "apply_all_feedback");
-                const applySelectedOption = findOption(item, "apply_selected_feedback") ?? findOption(item, "apply_review_pick");
-                const proceedOption = findOption(item, "proceed_final_verdict") ?? findOption(item, "skip_to_next_round");
+                const applySelectedOption =
+                  findOption(item, "apply_selected_feedback") ?? findOption(item, "apply_review_pick");
+                const proceedOption =
+                  findOption(item, "proceed_final_verdict") ?? findOption(item, "skip_to_next_round");
                 const selectedDraft = selectedFeedbackDraftByItem[item.id] ?? "";
                 const selectedFeedbackNumbers = selectedFeedbackNumbersByItem[item.id] ?? [];
                 const optionNotes = Array.isArray(item.optionNotes) ? item.optionNotes : [];
@@ -250,7 +271,9 @@ export default function DecisionInboxModal({
                           </span>
                         )}
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-white">{isKorean ? item.agentNameKo : item.agentName}</p>
+                          <p className="truncate text-sm font-semibold text-white">
+                            {isKorean ? item.agentNameKo : item.agentName}
+                          </p>
                           <p className="text-[11px] text-indigo-300/90">{getKindLabel(item.kind)}</p>
                           <p className="text-[11px] text-slate-400">{formatTime(item.createdAt, uiLanguage)}</p>
                         </div>
@@ -282,8 +305,15 @@ export default function DecisionInboxModal({
                             {item.reviewerVerdicts.map((verdict, index) => {
                               const badge = verdictLabel(verdict.finalVerdict, uiLanguage);
                               return (
-                                <div key={`${item.id}:reviewer:${index}`} className="flex flex-wrap items-center gap-2 text-[11px]">
-                                  <span className="text-slate-200">{isKorean ? verdict.agentNameKo || verdict.agentName : verdict.agentName || verdict.agentNameKo || "Reviewer"}</span>
+                                <div
+                                  key={`${item.id}:reviewer:${index}`}
+                                  className="flex flex-wrap items-center gap-2 text-[11px]"
+                                >
+                                  <span className="text-slate-200">
+                                    {isKorean
+                                      ? verdict.agentNameKo || verdict.agentName
+                                      : verdict.agentName || verdict.agentNameKo || "Reviewer"}
+                                  </span>
                                   <span className={`font-semibold ${badge.className}`}>{badge.text}</span>
                                   <span className="text-slate-400">{verdict.lens || "general"}</span>
                                   <span className="text-slate-500">c={verdict.confidence.toFixed(2)}</span>
@@ -369,7 +399,12 @@ export default function DecisionInboxModal({
                                 disabled={isItemBusy}
                                 className="decision-round-submit rounded-md px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                {t({ ko: "선택 반영 실행", en: "Run Apply Selected", ja: "選択反映実行", zh: "执行选择采纳" })}
+                                {t({
+                                  ko: "선택 반영 실행",
+                                  en: "Run Apply Selected",
+                                  ja: "選択反映実行",
+                                  zh: "执行选择采纳",
+                                })}
                               </button>
                             </div>
                           ) : null}
@@ -397,13 +432,20 @@ export default function DecisionInboxModal({
                               disabled={isBusy}
                               className="decision-inbox-option w-full rounded-md px-2.5 py-1.5 text-left text-xs transition disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              {isBusy ? t({ ko: "전송 중...", en: "Sending...", ja: "送信中...", zh: "发送中..." }) : `${option.number}. ${option.label}`}
+                              {isBusy
+                                ? t({ ko: "전송 중...", en: "Sending...", ja: "送信中...", zh: "发送中..." })
+                                : `${option.number}. ${option.label}`}
                             </button>
                           );
                         })
                       ) : (
                         <p className="rounded-md border border-slate-700/70 bg-slate-900/50 px-2.5 py-2 text-xs text-slate-400">
-                          {t({ ko: "선택지 준비 중...", en: "Options are being prepared...", ja: "オプション準備中...", zh: "选项准备中..." })}
+                          {t({
+                            ko: "선택지 준비 중...",
+                            en: "Options are being prepared...",
+                            ja: "オプション準備中...",
+                            zh: "选项准备中...",
+                          })}
                         </p>
                       )}
                     </div>

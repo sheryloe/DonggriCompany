@@ -101,9 +101,7 @@ function findExactProjectMatch(projects: Project[], candidate: string): Project 
     const projectPath = normalizeMatchValue(project.project_path);
     const pathBase = normalizeMatchValue(getPathBaseName(project.project_path));
     return (
-      projectName === normalizedCandidate ||
-      projectPath === normalizedCandidate ||
-      pathBase === normalizedCandidate
+      projectName === normalizedCandidate || projectPath === normalizedCandidate || pathBase === normalizedCandidate
     );
   });
   return matches.length === 1 ? matches[0] : null;
@@ -185,10 +183,7 @@ export function ChatPanel({
   const { t, locale } = useI18n();
   const isKorean = locale.startsWith("ko");
   const tr = useCallback((ko: string, en: string, ja = en, zh = en) => t({ ko, en, ja, zh }), [t]);
-  const taskboardT = useCallback(
-    (labels: { ko: string; en: string; ja?: string; zh?: string }) => t(labels),
-    [t],
-  );
+  const taskboardT = useCallback((labels: { ko: string; en: string; ja?: string; zh?: string }) => t(labels), [t]);
   const { unsupportedPathApiMessage, resolvePathHelperErrorMessage } = usePathHelperMessages(taskboardT);
   const projectPicker = useProjectPickerState({
     unsupportedPathApiMessage,
@@ -280,7 +275,10 @@ export function ChatPanel({
   const updateConversationContext = useCallback(
     (
       conversationId: string | null,
-      updater: ChatConversationContext | null | ((current: ChatConversationContext | null) => ChatConversationContext | null),
+      updater:
+        | ChatConversationContext
+        | null
+        | ((current: ChatConversationContext | null) => ChatConversationContext | null),
     ) => {
       if (!conversationId) return;
       setConversationContexts((prev) => {
@@ -543,7 +541,7 @@ export function ChatPanel({
           suggestedName: override.suggestedName,
           suggestedPath: override.suggestedPath,
           suggestedGoal:
-            action.kind === "directive" || action.kind === "prn" ? action.content : context?.project?.core_goal ?? "",
+            action.kind === "directive" || action.kind === "prn" ? action.content : (context?.project?.core_goal ?? ""),
           skipPlannedMeeting: context?.skipPlannedMeeting ?? false,
           feedback: override.feedback ?? null,
         });
@@ -554,8 +552,7 @@ export function ChatPanel({
         dispatchPending(
           action,
           buildProjectMeta(context.project, {
-            skipPlannedMeeting:
-              (action.kind === "directive" || action.kind === "prn") && context.skipPlannedMeeting,
+            skipPlannedMeeting: (action.kind === "directive" || action.kind === "prn") && context.skipPlannedMeeting,
           }),
         );
         setInput("");
@@ -570,7 +567,14 @@ export function ChatPanel({
         skipPlannedMeeting: context?.skipPlannedMeeting ?? false,
       });
     },
-    [conversationContexts, dispatchPending, openProjectFlow, resolveProjectOverride, selectedAgentId, updateConversationContext],
+    [
+      conversationContexts,
+      dispatchPending,
+      openProjectFlow,
+      resolveProjectOverride,
+      selectedAgentId,
+      updateConversationContext,
+    ],
   );
 
   const handleConfirmProject = useCallback(() => {
@@ -667,7 +671,10 @@ export function ChatPanel({
       setProjectFlowFeedback({
         tone: isApiRequestError(error) && error.code === "project_path_conflict" ? "info" : "error",
         message: isApiRequestError(error)
-          ? resolvePathHelperErrorMessage(error, { ko: "프로젝트 생성에 실패했습니다.", en: "Failed to create a project." })
+          ? resolvePathHelperErrorMessage(error, {
+              ko: "프로젝트 생성에 실패했습니다.",
+              en: "Failed to create a project.",
+            })
           : tr("프로젝트 생성에 실패했습니다.", "Failed to create a project."),
       });
     } finally {
@@ -707,7 +714,11 @@ export function ChatPanel({
     } else if (mode === "task" && selectedAgent) {
       action = { kind: "task", content: trimmed, receiverId: selectedAgent.id };
     } else if (mode === "report" && selectedAgent) {
-      action = { kind: "report", content: `[${tr("보고 요청", "Report Request")}] ${trimmed}`, receiverId: selectedAgent.id };
+      action = {
+        kind: "report",
+        content: `[${tr("보고 요청", "Report Request")}] ${trimmed}`,
+        receiverId: selectedAgent.id,
+      };
     } else if (selectedAgent) {
       action = { kind: "chat", content: trimmed, receiverId: selectedAgent.id };
     } else {
@@ -788,9 +799,7 @@ export function ChatPanel({
   }, [mode, selectedAgent]);
 
   const canCreateProject =
-    Boolean(projectQuery.trim()) &&
-    Boolean(newProjectPath.trim()) &&
-    Boolean(newProjectGoal.trim());
+    Boolean(projectQuery.trim()) && Boolean(newProjectPath.trim()) && Boolean(newProjectGoal.trim());
 
   const contextBarVisible = Boolean(currentProject || currentSkipMeeting);
 
@@ -910,7 +919,9 @@ export function ChatPanel({
                     : "border border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
                 }`}
               >
-                {currentSkipMeeting ? tr("회의 없이 실행", "Execute Without Meeting") : tr("회의 모드 변경", "Change Meeting Mode")}
+                {currentSkipMeeting
+                  ? tr("회의 없이 실행", "Execute Without Meeting")
+                  : tr("회의 모드 변경", "Change Meeting Mode")}
               </button>
             </div>
           </div>

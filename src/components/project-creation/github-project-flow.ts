@@ -137,7 +137,7 @@ export async function createProjectWithGitHubAutomation(
       core_goal: input.coreGoal,
       create_path_if_missing: input.createPathIfMissing,
       assignment_mode: input.assignmentMode,
-      agent_ids: input.assignmentMode === "manual" ? input.agentIds ?? [] : [],
+      agent_ids: input.assignmentMode === "manual" ? (input.agentIds ?? []) : [],
     });
     return {
       project,
@@ -156,10 +156,12 @@ export async function createProjectWithGitHubAutomation(
     });
   }
 
-  const remoteRepo = (await createGitHubRepo({
-    name: input.github.repoName,
-    private: input.github.private,
-  })).repo;
+  const remoteRepo = (
+    await createGitHubRepo({
+      name: input.github.repoName,
+      private: input.github.private,
+    })
+  ).repo;
 
   const repoOwner = splitRepoFullName(remoteRepo.full_name);
   if (!repoOwner) {
@@ -193,7 +195,7 @@ export async function createProjectWithGitHubAutomation(
       core_goal: input.coreGoal,
       create_path_if_missing: input.createPathIfMissing,
       assignment_mode: input.assignmentMode,
-      agent_ids: input.assignmentMode === "manual" ? input.agentIds ?? [] : [],
+      agent_ids: input.assignmentMode === "manual" ? (input.agentIds ?? []) : [],
       github_repo: remoteRepo.full_name,
     });
 

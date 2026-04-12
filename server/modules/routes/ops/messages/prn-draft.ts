@@ -59,20 +59,16 @@ const SECTION_ALIASES: Record<PrnSectionKey, string[]> = {
   goal: ["goal", "objective", "목표", "目标", "目標"],
   non_goal: ["non_goal", "non-goal", "out_of_scope", "비목표", "非目标", "非目標"],
   requirements: ["requirements", "core_requirements", "핵심요구사항", "要求事项", "要件"],
-  acceptance_criteria: [
-    "acceptance_criteria",
-    "acceptance",
-    "done_criteria",
-    "수용기준",
-    "验收标准",
-    "受け入れ基準",
-  ],
+  acceptance_criteria: ["acceptance_criteria", "acceptance", "done_criteria", "수용기준", "验收标准", "受け入れ基準"],
   risks: ["risks", "risk", "리스크", "风险", "リスク"],
   open_questions: ["open_questions", "questions", "pending_questions", "오픈질문", "开放问题", "未解決事項"],
 };
 
 function normalizeText(value: unknown): string {
-  return String(value ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  return String(value ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -112,8 +108,10 @@ function languageTemplate(
         background: `Request origin: ${prompt}`,
         goal: `Define implementation-ready requirements aligned with project context: ${projectContext}.`,
         non_goal: "Do not define rollout/migration plans outside immediate execution scope.",
-        requirements: "1) Functional requirements\n2) Non-functional constraints\n3) Interface/data contract expectations",
-        acceptance_criteria: "1) Testable acceptance points\n2) Edge/failure handling criteria\n3) Review-completion conditions",
+        requirements:
+          "1) Functional requirements\n2) Non-functional constraints\n3) Interface/data contract expectations",
+        acceptance_criteria:
+          "1) Testable acceptance points\n2) Edge/failure handling criteria\n3) Review-completion conditions",
         risks: "List major risks, blockers, and mitigation boundaries.",
         open_questions: "List unresolved questions that require CEO confirmation before execution.",
       },
@@ -178,7 +176,10 @@ export function buildFallbackPrnDraft(input: BuildFallbackPrnDraftInput): PrnDra
       planner_agent_id: input.plannerAgent?.id ?? null,
       planner_agent_name: input.plannerAgent?.name ?? null,
       source: "fallback",
-      pass1: input.language === "ko" ? "기본 템플릿으로 초기 요구사항을 구성했습니다." : "Composed baseline PRN with fallback template.",
+      pass1:
+        input.language === "ko"
+          ? "기본 템플릿으로 초기 요구사항을 구성했습니다."
+          : "Composed baseline PRN with fallback template.",
       pass2:
         input.language === "ko"
           ? "반증검사: 누락 가능성이 있어 대표 검토 후 보완이 필요합니다."
@@ -266,11 +267,7 @@ function parseJsonCandidates(raw: string): Record<string, unknown>[] {
   return out;
 }
 
-function resolveSectionValue(
-  rawSections: Record<string, unknown>,
-  key: PrnSectionKey,
-  fallbackValue: string,
-): string {
+function resolveSectionValue(rawSections: Record<string, unknown>, key: PrnSectionKey, fallbackValue: string): string {
   for (const alias of SECTION_ALIASES[key]) {
     const value = normalizeText(rawSections[alias]);
     if (value) return value;
@@ -286,13 +283,10 @@ function parseStructuredOutput(raw: string, fallback: PrnDraftResponse): ParsedP
     if (!pass1 || !pass2) continue;
 
     const rawSections = isObjectRecord(parsed.sections) ? parsed.sections : {};
-    const nextSections = PRN_SECTION_KEYS.reduce(
-      (acc, key) => {
-        acc[key] = resolveSectionValue(rawSections, key, fallback.sections[key]);
-        return acc;
-      },
-      {} as PrnSections,
-    );
+    const nextSections = PRN_SECTION_KEYS.reduce((acc, key) => {
+      acc[key] = resolveSectionValue(rawSections, key, fallback.sections[key]);
+      return acc;
+    }, {} as PrnSections);
 
     const directiveText = normalizeText(parsed.directive_text || parsed.directiveText) || fallback.directive_text;
 
@@ -340,4 +334,3 @@ export function parsePrnDraftResponse(input: {
     },
   };
 }
-

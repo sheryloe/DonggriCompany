@@ -144,11 +144,7 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
 }
 
 function normalizeSpecialties(value: unknown, fallback: string[] = []): string[] {
-  const rawValues = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(/[,\n]/g)
-      : fallback;
+  const rawValues = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[,\n]/g) : fallback;
   const out: string[] = [];
   const seen = new Set<string>();
   for (const item of rawValues) {
@@ -229,10 +225,7 @@ export function createPresetAgentProfile(role: AgentRoleTemplate): AgentProfile 
   return JSON.parse(JSON.stringify(PROFILE_PRESETS[role])) as AgentProfile;
 }
 
-export function normalizeAgentProfile(
-  value: unknown,
-  fallbackRole: AgentRoleTemplate = "junior",
-): AgentProfile {
+export function normalizeAgentProfile(value: unknown, fallbackRole: AgentRoleTemplate = "junior"): AgentProfile {
   const source = parseJsonObject(value) ?? {};
   const roleTemplate = normalizeRoleTemplate(source.role_template, fallbackRole);
   const preset = createPresetAgentProfile(roleTemplate);

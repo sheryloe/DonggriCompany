@@ -110,9 +110,9 @@ export function createTaskReportHelpers(deps: HelperDeps) {
                   ? "image/jpeg"
                   : ext === ".webp"
                     ? "image/webp"
-                : ext === ".ppt" || ext === ".pptx"
-                  ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                : "application/octet-stream",
+                    : ext === ".ppt" || ext === ".pptx"
+                      ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      : "application/octet-stream",
           size_bytes: stat.size,
           updated_at: stat.mtimeMs,
           truncated: false,

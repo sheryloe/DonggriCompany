@@ -56,8 +56,7 @@ export const GITHUB_DEVICE_CLIENT_ID = "01ab8ac9400c4e429b23";
 
 // Built-in Gemini CLI OAuth client pair.
 // Gemini CLI itself uses these values for cloud-platform OAuth exchange.
-export const GEMINI_PUBLIC_OAUTH_CLIENT_ID =
-  "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com";
+export const GEMINI_PUBLIC_OAUTH_CLIENT_ID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com";
 export const GEMINI_PUBLIC_OAUTH_CLIENT_SECRET = "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";
 
 export const BUILTIN_GITHUB_CLIENT_ID =

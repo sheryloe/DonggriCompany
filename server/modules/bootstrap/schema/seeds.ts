@@ -112,7 +112,8 @@ export function applyDefaultSeeds(db: DbLike): void {
     const hasOAuthAutoSwapSetting = db.prepare("SELECT 1 FROM settings WHERE key = 'oauthAutoSwap' LIMIT 1").get() as
       | { 1: number }
       | undefined;
-    if (!hasOAuthAutoSwapSetting) db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("oauthAutoSwap", "true");
+    if (!hasOAuthAutoSwapSetting)
+      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("oauthAutoSwap", "true");
 
     const hasAutoUpdateEnabledSetting = db
       .prepare("SELECT 1 FROM settings WHERE key = 'autoUpdateEnabled' LIMIT 1")
@@ -139,7 +140,10 @@ export function applyDefaultSeeds(db: DbLike): void {
       | { 1: number }
       | undefined;
     if (!hasRoomThemesSetting) {
-      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("roomThemes", JSON.stringify(defaultRoomThemes));
+      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+        "roomThemes",
+        JSON.stringify(defaultRoomThemes),
+      );
     }
   }
 

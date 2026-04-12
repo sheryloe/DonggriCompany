@@ -174,9 +174,11 @@ describe("cleanupCiArtifacts", () => {
       );
       db.prepare("INSERT INTO review_revision_history (id, task_id) VALUES (?, ?)").run("review-ci", "task-ci");
       db.prepare("INSERT INTO task_interrupt_injections (id, task_id) VALUES (?, ?)").run("interrupt-ci", "task-ci");
-      db.prepare(
-        "INSERT INTO task_report_archives (id, root_task_id, generated_by_agent_id) VALUES (?, ?, ?)",
-      ).run("archive-ci", "task-ci", "agent-ci");
+      db.prepare("INSERT INTO task_report_archives (id, root_task_id, generated_by_agent_id) VALUES (?, ?, ?)").run(
+        "archive-ci",
+        "task-ci",
+        "agent-ci",
+      );
       db.prepare(
         "INSERT INTO task_creation_audits (id, task_id, department_id, assigned_agent_id, source_task_id) VALUES (?, ?, ?, ?, ?)",
       ).run("audit-ci", "task-ci", "ci_run_dept_seed", "agent-ci", "task-ci");
@@ -192,9 +194,12 @@ describe("cleanupCiArtifacts", () => {
         "meeting-ci",
         "agent-ci",
       );
-      db.prepare(
-        "INSERT INTO review_round_feedback_items (id, meeting_id, task_id, agent_id) VALUES (?, ?, ?, ?)",
-      ).run("feedback-ci", "meeting-ci", "task-ci", "agent-ci");
+      db.prepare("INSERT INTO review_round_feedback_items (id, meeting_id, task_id, agent_id) VALUES (?, ?, ?, ?)").run(
+        "feedback-ci",
+        "meeting-ci",
+        "task-ci",
+        "agent-ci",
+      );
 
       const preview = previewCiArtifactCleanup(db);
       expect(preview.departmentIds).toEqual(["ci_run_dept_seed"]);

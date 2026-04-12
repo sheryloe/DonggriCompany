@@ -174,7 +174,10 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
       if (leaders.length === 0) {
         const noReviewerLang = resolveLang(taskTitle);
         const ts = Date.now();
-        db.prepare("UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ? AND status = 'review'").run(ts, taskId);
+        db.prepare("UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ? AND status = 'review'").run(
+          ts,
+          taskId,
+        );
         appendTaskLog(taskId, "system", "Review consensus aborted: no eligible reviewers found");
         notifyCeo(
           pickL(
@@ -316,9 +319,16 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
           : beginMeetingMinutes(taskId, "review", round, taskTitle);
         if (meetingId) {
           try {
-            db.prepare("DELETE FROM review_round_feedback_items WHERE meeting_id = ? AND round = ?").run(meetingId, round);
+            db.prepare("DELETE FROM review_round_feedback_items WHERE meeting_id = ? AND round = ?").run(
+              meetingId,
+              round,
+            );
           } catch (err: any) {
-            appendTaskLog(taskId, "system", `Review round ${round}: feedback table cleanup skipped (${String(err?.message ?? err)})`);
+            appendTaskLog(
+              taskId,
+              "system",
+              `Review round ${round}: feedback table cleanup skipped (${String(err?.message ?? err)})`,
+            );
           }
         }
         let minuteSeq = 1;

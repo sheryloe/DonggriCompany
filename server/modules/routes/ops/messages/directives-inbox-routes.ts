@@ -14,7 +14,12 @@ import { buildDirectChatConversationKey } from "../../collab/direct-chat-project
 import type { AgentRow, DelegationOptions, StoredMessage } from "../../shared/types.ts";
 import type { DecisionReplyBridgeInput, DecisionReplyBridgeResult } from "./decision-inbox-routes.ts";
 import { resolveDirectiveLeaderCandidateScope } from "./directive-leader-scope.ts";
-import { buildFallbackPrnDraft, buildPrnDraftPrompt, normalizePrnLanguage, parsePrnDraftResponse } from "./prn-draft.ts";
+import {
+  buildFallbackPrnDraft,
+  buildPrnDraftPrompt,
+  normalizePrnLanguage,
+  parsePrnDraftResponse,
+} from "./prn-draft.ts";
 
 type DirectiveAndInboxRouteCtx = Pick<RuntimeContext, "app" | "db" | "broadcast">;
 
@@ -302,9 +307,7 @@ export function registerDirectiveAndInboxRoutes(
   };
 
   const hashPrnPayload = (payload: Record<string, unknown>): string =>
-    createHash("sha256")
-      .update(JSON.stringify(payload))
-      .digest("hex");
+    createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 
   app.post("/api/directives/prn-draft", async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>;

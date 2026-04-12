@@ -401,7 +401,8 @@ export function useAppActions({
             }
             payload = { note, ...(item.taskId ? { target_task_id: item.taskId } : {}) };
           } else if (item.kind === "review_round_pick") {
-            const selectedFeedbackNumbers = payloadInput?.selected_feedback_numbers ?? payloadInput?.selected_option_numbers;
+            const selectedFeedbackNumbers =
+              payloadInput?.selected_feedback_numbers ?? payloadInput?.selected_option_numbers;
             const note = payloadInput?.note?.trim() ?? "";
             payload = {
               ...(note ? { note } : {}),

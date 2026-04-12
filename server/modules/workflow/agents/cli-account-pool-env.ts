@@ -77,7 +77,9 @@ function validateProfileHome(params: {
 }
 
 export function resolveCliAccountPoolEnv(input: ResolveCliAccountPoolEnvInput): CliAccountPoolEnvResolution {
-  const provider = String(input.provider ?? "").trim().toLowerCase();
+  const provider = String(input.provider ?? "")
+    .trim()
+    .toLowerCase();
   const poolId = String(input.cliAccountPoolId ?? "").trim();
   const platform = input.platform ?? process.platform;
   const requireExplicitSelection = input.policy?.requireExplicitSelection === true;

@@ -84,7 +84,9 @@ describe("direct-chat-project-context", () => {
       updatedAt: 100,
     });
 
-    expect(clearDirectChatProjectContext(db as never, "telegram:session:session-1:agent:agent-1", "agent-1")).toBe(true);
+    expect(clearDirectChatProjectContext(db as never, "telegram:session:session-1:agent:agent-1", "agent-1")).toBe(
+      true,
+    );
     expect(loadDirectChatProjectContext(db as never, "telegram:session:session-1:agent:agent-1", "agent-1")).toBeNull();
 
     expect(clearAllDirectChatProjectContextsForAgent(db as never, "agent-1")).toBe(1);
@@ -104,7 +106,9 @@ describe("direct-chat-project-context", () => {
     expect(loadDirectChatProjectContext(db as never, "telegram:session:session-1:agent:agent-1", "agent-1")).toBeNull();
 
     const remaining = db
-      .prepare("SELECT COUNT(*) AS count FROM conversation_project_contexts WHERE conversation_key = ? AND agent_id = ?")
+      .prepare(
+        "SELECT COUNT(*) AS count FROM conversation_project_contexts WHERE conversation_key = ? AND agent_id = ?",
+      )
       .get("telegram:session:session-1:agent:agent-1", "agent-1") as { count: number };
     expect(remaining.count).toBe(0);
   });

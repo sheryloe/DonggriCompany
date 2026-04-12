@@ -23,6 +23,26 @@ vi.mock("../api", () => ({
   unlearnSkill: vi.fn(),
 }));
 
+vi.mock("./skills-library/SkillsGrid", () => ({
+  default: () => <div data-testid="skills-grid" />,
+}));
+
+vi.mock("./skills-library/SkillsMemorySection", () => ({
+  default: () => null,
+}));
+
+vi.mock("./skills-library/LearningModal", () => ({
+  default: () => null,
+}));
+
+vi.mock("./skills-library/CustomSkillModal", () => ({
+  default: () => null,
+}));
+
+vi.mock("./skills-library/ClassroomOverlay", () => ({
+  default: () => null,
+}));
+
 const getSkillsMock = vi.mocked(getSkills);
 const getAvailableLearnedSkillsMock = vi.mocked(getAvailableLearnedSkills);
 const getCustomSkillsMock = vi.mocked(getCustomSkills);
@@ -150,19 +170,15 @@ describe("SkillsLibrary count aggregation", () => {
     vi.clearAllMocks();
   });
 
-  it(
-    "shows 600 when catalog is 600 and custom is 0",
-    async () => {
-      getSkillsMock.mockResolvedValueOnce(makeCatalogSkills(600));
-      getCustomSkillsMock.mockResolvedValueOnce([]);
+  it("shows 600 when catalog is 600 and custom is 0", async () => {
+    getSkillsMock.mockResolvedValueOnce(makeCatalogSkills(600));
+    getCustomSkillsMock.mockResolvedValueOnce([]);
 
-      render(<SkillsLibrary agents={[TEST_AGENT]} />);
+    render(<SkillsLibrary agents={[TEST_AGENT]} />);
 
-      await expectSummary(600, 600, 0);
-      expect(screen.getByRole("button", { name: /All.*600/ })).toBeInTheDocument();
-    },
-    20000,
-  );
+    await expectSummary(600, 600, 0);
+    expect(screen.getByRole("button", { name: /All.*600/ })).toBeInTheDocument();
+  }, 20000);
 
   it("aggregates total/all with custom skills while keeping other category counts catalog-only", async () => {
     getSkillsMock.mockResolvedValueOnce(makeMixedCategoryCatalog());

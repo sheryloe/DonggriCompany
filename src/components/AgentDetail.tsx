@@ -2,16 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CliAccountPoolView, OAuthStatus } from "../api";
 import * as api from "../api";
 import { localeName, useI18n } from "../i18n";
-import type {
-  Agent,
-  AgentRunMode,
-  CliModelInfo,
-  Department,
-  SubAgent,
-  SubTask,
-  Task,
-  WorkflowPackKey,
-} from "../types";
+import type { Agent, AgentRunMode, CliModelInfo, Department, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
 import {
   getCodexReasoningOptions,
   isCodexPlanModeEligible,
@@ -302,13 +293,7 @@ export default function AgentDetail({
     if (nextRunMode !== selectedRunMode) {
       setSelectedRunMode(nextRunMode);
     }
-  }, [
-    selectedCli,
-    selectedCliModel,
-    selectedCliModelInfo,
-    selectedCliReasoningLevel,
-    selectedRunMode,
-  ]);
+  }, [selectedCli, selectedCliModel, selectedCliModelInfo, selectedCliReasoningLevel, selectedRunMode]);
 
   useEffect(() => {
     if (!requiresCliPool) {
@@ -330,14 +315,19 @@ export default function AgentDetail({
         api_provider_id: requiresApiProvider ? selectedApiProviderId || null : null,
         api_model: requiresApiProvider ? selectedApiModel || null : null,
         cli_model:
-          selectedCli === "codex" ? selectedCliModel.trim() || null : supportsCliModelOverride ? selectedCliModel || null : null,
+          selectedCli === "codex"
+            ? selectedCliModel.trim() || null
+            : supportsCliModelOverride
+              ? selectedCliModel || null
+              : null,
         cli_reasoning_level:
           selectedCli === "codex" && selectedCliModel.trim()
             ? selectedCliReasoningLevel || resolveCodexReasoningLevel(selectedCliModelInfo, null) || null
             : null,
         run_mode: normalizeCodexRunMode(selectedCli, selectedCliModel, selectedRunMode),
-        cli_account_pool_id:
-          requiresCliPool ? selectedCliAccountPoolId || selectedCliAccountPools[0]?.accountPoolId || null : null,
+        cli_account_pool_id: requiresCliPool
+          ? selectedCliAccountPoolId || selectedCliAccountPools[0]?.accountPoolId || null
+          : null,
       });
       onAgentUpdated?.();
       setEditingCli(false);
@@ -635,9 +625,13 @@ export default function AgentDetail({
                                     selectedCliModelOptions.find((model) => model.slug === nextModel) ?? null;
                                   setSelectedCliModel(nextModel);
                                   setSelectedCliReasoningLevel(
-                                    nextModel ? resolveCodexReasoningLevel(nextModelInfo, selectedCliReasoningLevel) : "",
+                                    nextModel
+                                      ? resolveCodexReasoningLevel(nextModelInfo, selectedCliReasoningLevel)
+                                      : "",
                                   );
-                                  setSelectedRunMode(nextModel ? normalizeCodexRunMode("codex", nextModel, selectedRunMode) : "standard");
+                                  setSelectedRunMode(
+                                    nextModel ? normalizeCodexRunMode("codex", nextModel, selectedRunMode) : "standard",
+                                  );
                                 }}
                                 className="w-[180px] max-w-full bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                               >
@@ -730,16 +724,16 @@ export default function AgentDetail({
                   ) : (
                     <div className="flex flex-wrap items-center gap-1">
                       <span>🔧</span>
-                        <select
-                          value={selectedCli}
-                          onChange={(event) => {
-                            const nextCli = event.target.value as Agent["cli_provider"];
-                            setSelectedCli(nextCli);
-                            setSelectedCliModel("");
-                            setSelectedCliReasoningLevel("");
-                            setSelectedRunMode("standard");
-                            setSelectedCliAccountPoolId("");
-                          }}
+                      <select
+                        value={selectedCli}
+                        onChange={(event) => {
+                          const nextCli = event.target.value as Agent["cli_provider"];
+                          setSelectedCli(nextCli);
+                          setSelectedCliModel("");
+                          setSelectedCliReasoningLevel("");
+                          setSelectedRunMode("standard");
+                          setSelectedCliAccountPoolId("");
+                        }}
                         className="bg-slate-700 text-slate-200 text-xs rounded px-1.5 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                       >
                         {Object.entries(CLI_LABELS).map(([key, label]) => (
@@ -871,8 +865,7 @@ export default function AgentDetail({
                       zh: "点击更改 CLI",
                     })}
                   >
-                    🔧{" "}
-                    {cliSummaryText}
+                    🔧 {cliSummaryText}
                     <span className="text-[9px] text-slate-600 ml-0.5">✏️</span>
                   </button>
                 )}

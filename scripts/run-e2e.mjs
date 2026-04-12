@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process";
 
 const isWindows = process.platform === "win32";
-const pnpmBin = isWindows ? "pnpm.cmd" : "pnpm";
+const corepackBin = isWindows ? "corepack.cmd" : "corepack";
 const nodeBin = process.execPath;
 
 function run(command, args) {
@@ -11,6 +11,7 @@ function run(command, args) {
     const child = spawn(command, args, {
       stdio: "inherit",
       env: process.env,
+      shell: isWindows && command.toLowerCase().endsWith(".cmd"),
     });
 
     child.on("error", reject);
@@ -30,7 +31,15 @@ let exitCode = 0;
 
 try {
   await run(nodeBin, ["scripts/prepare-e2e-runtime.mjs"]);
-  await run(pnpmBin, ["exec", "playwright", "test", "--config", "playwright.config.ts", ...process.argv.slice(2)]);
+  await run(corepackBin, [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--config",
+    "playwright.config.ts",
+    ...process.argv.slice(2),
+  ]);
 } catch (error) {
   exitCode = 1;
   console.error(String(error));

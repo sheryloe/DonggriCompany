@@ -42,13 +42,7 @@ function buildForm(overrides: Partial<FormData> = {}): FormData {
   };
 }
 
-function ModalHarness({
-  initialForm = buildForm(),
-  currentXp = 0,
-}: {
-  initialForm?: FormData;
-  currentXp?: number;
-}) {
+function ModalHarness({ initialForm = buildForm(), currentXp = 0 }: { initialForm?: FormData; currentXp?: number }) {
   const [form, setForm] = useState<FormData>(initialForm);
 
   return (

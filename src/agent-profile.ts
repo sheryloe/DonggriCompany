@@ -169,7 +169,11 @@ const PROFILE_PRESETS: Record<AgentRole, AgentProfile> = {
 };
 
 function normalizeLocale(locale?: string): "ko" | "en" {
-  return String(locale || "").toLowerCase().startsWith("ko") ? "ko" : "en";
+  return String(locale || "")
+    .toLowerCase()
+    .startsWith("ko")
+    ? "ko"
+    : "en";
 }
 
 function normalizeLevel(value: unknown, fallback: AgentLevelValue): AgentLevelValue {
@@ -321,10 +325,12 @@ export function buildAgentPromptPreview(params: {
   const lang = normalizeLocale(locale);
   const overrideText = resolveAgentProfileOverrideText(normalized, legacyPersonality);
   const capabilitySummary = CAPABILITY_KEYS.map(
-    (key) => `${CAPABILITY_LABELS[lang][key]} ${LEVEL_WORDS[lang][normalized.capabilities[key]]}(${normalized.capabilities[key]})`,
+    (key) =>
+      `${CAPABILITY_LABELS[lang][key]} ${LEVEL_WORDS[lang][normalized.capabilities[key]]}(${normalized.capabilities[key]})`,
   ).join(", ");
   const styleSummary = PROMPT_STYLE_KEYS.map(
-    (key) => `${STYLE_LABELS[lang][key]} ${LEVEL_WORDS[lang][normalized.prompt_style[key]]}(${normalized.prompt_style[key]})`,
+    (key) =>
+      `${STYLE_LABELS[lang][key]} ${LEVEL_WORDS[lang][normalized.prompt_style[key]]}(${normalized.prompt_style[key]})`,
   ).join(", ");
   const reviewLenses = workflowProfile?.review_lenses?.join(", ") || "";
   const specialties = normalized.specialties.join(", ");

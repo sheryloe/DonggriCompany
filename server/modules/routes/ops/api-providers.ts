@@ -148,11 +148,7 @@ const OFFICIAL_API_PROVIDER_PRESETS = {
     docs_url: "https://ai.google.dev/gemini-api/docs/image-generation",
     api_key_hint: "Use a Google AI Studio API key for Gemini image generation.",
     api_key_placeholder: "AIza...",
-    fallback_models: [
-      "gemini-2.5-flash-image",
-      "gemini-3.1-flash-image-preview",
-      "gemini-3-pro-image-preview",
-    ],
+    fallback_models: ["gemini-2.5-flash-image", "gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"],
   },
 } as const satisfies Record<string, OfficialApiProviderPreset>;
 

@@ -110,9 +110,19 @@ export default function ChatComposer({
               isAnnouncementMode
                 ? tr("공지 내용을 입력하세요...", "Write an announcement...", "告知内容を入力...", "输入公告内容...")
                 : mode === "task"
-                  ? tr("업무 지시 내용을 입력하세요...", "Write a task instruction...", "タスク指示を入力...", "输入任务指令...")
+                  ? tr(
+                      "업무 지시 내용을 입력하세요...",
+                      "Write a task instruction...",
+                      "タスク指示を入力...",
+                      "输入任务指令...",
+                    )
                   : mode === "report"
-                    ? tr("보고 요청 내용을 입력하세요...", "Write a report request...", "レポート依頼を入力...", "输入报告请求...")
+                    ? tr(
+                        "보고 요청 내용을 입력하세요...",
+                        "Write a report request...",
+                        "レポート依頼を入力...",
+                        "输入报告请求...",
+                      )
                     : selectedAgent
                       ? tr(
                           `${getAgentName(selectedAgent)}에게 메시지 보내기...`,
@@ -120,7 +130,8 @@ export default function ChatComposer({
                           `${getAgentName(selectedAgent)} へメッセージ送信...`,
                           `发送消息给 ${getAgentName(selectedAgent)}...`,
                         )
-                      : tr("메시지를 입력하세요...", "Type a message...", "メッセージを入力...", "输入消息...")}
+                      : tr("메시지를 입력하세요...", "Type a message...", "メッセージを入力...", "输入消息...")
+            }
             rows={1}
             className="min-h-[44px] max-h-32 flex-1 resize-none overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed text-gray-100 placeholder-gray-500 focus:outline-none"
             style={{ scrollbarWidth: "none" }}
@@ -167,4 +178,3 @@ export default function ChatComposer({
     </>
   );
 }
-

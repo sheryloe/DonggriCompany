@@ -53,18 +53,16 @@ interface ProjectFlowDialogProps {
   onToggleSkipPlannedMeeting: () => void;
 }
 
-function renderProjectSummary(
-  project: Project,
-  tr: Tr,
-  pendingContent: string,
-): JSX.Element {
+function renderProjectSummary(project: Project, tr: Tr, pendingContent: string): JSX.Element {
   return (
     <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 p-3">
       <p className="text-sm font-semibold text-white">{project.name}</p>
       <p className="mt-1 break-all text-[11px] text-slate-400">{project.project_path}</p>
       <p className="mt-2 text-xs text-slate-200">{project.core_goal}</p>
       <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/70 p-2 text-[11px] text-slate-300">
-        <p className="font-semibold text-blue-200">{tr("현재 전송 예정", "Pending Send", "Pending Send", "Pending Send")}</p>
+        <p className="font-semibold text-blue-200">
+          {tr("현재 전송 예정", "Pending Send", "Pending Send", "Pending Send")}
+        </p>
         <p className="mt-1 whitespace-pre-wrap break-words">{pendingContent}</p>
       </div>
     </div>
@@ -205,7 +203,11 @@ export default function ProjectFlowDialog({
                       ? tr("검색 결과", "Search Results", "Search Results", "Search Results")
                       : tr("최근 프로젝트", "Recent Projects", "Recent Projects", "Recent Projects")}
                   </p>
-                  {projectsLoading && <span className="text-[11px] text-slate-500">{tr("불러오는 중", "Loading", "Loading", "Loading")}</span>}
+                  {projectsLoading && (
+                    <span className="text-[11px] text-slate-500">
+                      {tr("불러오는 중", "Loading", "Loading", "Loading")}
+                    </span>
+                  )}
                 </div>
                 <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
                   {filteredProjects.length === 0 ? (
@@ -242,7 +244,9 @@ export default function ProjectFlowDialog({
                               </span>
                             )}
                           </div>
-                          <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-slate-300">{project.core_goal}</p>
+                          <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-slate-300">
+                            {project.core_goal}
+                          </p>
                         </button>
                       );
                     })
@@ -264,7 +268,12 @@ export default function ProjectFlowDialog({
                         type="text"
                         value={newProjectPath}
                         onChange={(event) => onNewProjectPathChange(event.target.value)}
-                        placeholder={tr("절대 경로 입력", "Enter absolute path", "Enter absolute path", "Enter absolute path")}
+                        placeholder={tr(
+                          "절대 경로 입력",
+                          "Enter absolute path",
+                          "Enter absolute path",
+                          "Enter absolute path",
+                        )}
                         className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500"
                       />
                     </label>
@@ -300,13 +309,23 @@ export default function ProjectFlowDialog({
                       <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-2">
                         <p className="mb-2 text-[11px] text-slate-500">
                           {pathSuggestionsLoading
-                            ? tr("추천 경로를 불러오는 중입니다.", "Loading suggestions...", "Loading suggestions...", "Loading suggestions...")
+                            ? tr(
+                                "추천 경로를 불러오는 중입니다.",
+                                "Loading suggestions...",
+                                "Loading suggestions...",
+                                "Loading suggestions...",
+                              )
                             : tr("추천 경로", "Suggested paths", "Suggested paths", "Suggested paths")}
                         </p>
                         <div className="max-h-40 space-y-1 overflow-y-auto">
                           {pathSuggestions.length === 0 ? (
                             <p className="px-2 py-1 text-[11px] text-slate-500">
-                              {tr("표시할 추천 경로가 없습니다.", "No suggested paths.", "No suggested paths.", "No suggested paths.")}
+                              {tr(
+                                "표시할 추천 경로가 없습니다.",
+                                "No suggested paths.",
+                                "No suggested paths.",
+                                "No suggested paths.",
+                              )}
                             </p>
                           ) : (
                             pathSuggestions.map((candidate) => (
@@ -326,11 +345,23 @@ export default function ProjectFlowDialog({
 
                     {missingPathPrompt && (
                       <div className="rounded-lg border border-amber-500/40 bg-amber-950/20 p-3 text-[11px] text-amber-100">
-                        <p className="font-semibold">{tr("경로 확인 필요", "Path confirmation needed", "Path confirmation needed", "Path confirmation needed")}</p>
+                        <p className="font-semibold">
+                          {tr(
+                            "경로 확인 필요",
+                            "Path confirmation needed",
+                            "Path confirmation needed",
+                            "Path confirmation needed",
+                          )}
+                        </p>
                         <p className="mt-1 break-all">{missingPathPrompt.normalizedPath}</p>
                         {missingPathPrompt.nearestExistingParent && (
                           <p className="mt-1 break-all text-amber-200/80">
-                            {tr("가장 가까운 기존 폴더", "Nearest existing parent", "Nearest existing parent", "Nearest existing parent")}
+                            {tr(
+                              "가장 가까운 기존 폴더",
+                              "Nearest existing parent",
+                              "Nearest existing parent",
+                              "Nearest existing parent",
+                            )}
                             : {missingPathPrompt.nearestExistingParent}
                           </p>
                         )}
@@ -426,7 +457,12 @@ export default function ProjectFlowDialog({
                   </div>
                 ) : manualPathLoading ? (
                   <div className="px-3 py-6 text-center text-sm text-slate-400">
-                    {tr("폴더 목록을 불러오는 중입니다.", "Loading folders...", "Loading folders...", "Loading folders...")}
+                    {tr(
+                      "폴더 목록을 불러오는 중입니다.",
+                      "Loading folders...",
+                      "Loading folders...",
+                      "Loading folders...",
+                    )}
                   </div>
                 ) : (
                   <div className="max-h-52 space-y-1 overflow-y-auto">
@@ -450,7 +486,12 @@ export default function ProjectFlowDialog({
                 )}
                 {manualPathTruncated && (
                   <p className="mt-2 text-[11px] text-amber-300">
-                    {tr("항목이 많아 일부만 표시했습니다.", "Only part of the folder list is shown.", "Only part of the folder list is shown.", "Only part of the folder list is shown.")}
+                    {tr(
+                      "항목이 많아 일부만 표시했습니다.",
+                      "Only part of the folder list is shown.",
+                      "Only part of the folder list is shown.",
+                      "Only part of the folder list is shown.",
+                    )}
                   </p>
                 )}
               </div>
@@ -485,8 +526,18 @@ export default function ProjectFlowDialog({
                         </p>
                         <p className="mt-1 text-[11px] text-slate-500">
                           {skipPlannedMeeting
-                            ? tr("회의 없이 바로 실행합니다.", "Executes without planned meeting.", "Executes without planned meeting.", "Executes without planned meeting.")
-                            : tr("기본 정책대로 회의 여부를 판단합니다.", "Keeps the default meeting policy.", "Keeps the default meeting policy.", "Keeps the default meeting policy.")}
+                            ? tr(
+                                "회의 없이 바로 실행합니다.",
+                                "Executes without planned meeting.",
+                                "Executes without planned meeting.",
+                                "Executes without planned meeting.",
+                              )
+                            : tr(
+                                "기본 정책대로 회의 여부를 판단합니다.",
+                                "Keeps the default meeting policy.",
+                                "Keeps the default meeting policy.",
+                                "Keeps the default meeting policy.",
+                              )}
                         </p>
                       </div>
                       <button

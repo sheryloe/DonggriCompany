@@ -13,12 +13,7 @@ const COMPLETED_LABEL = "\uC644\uB8CC\uB41C";
 
 function sanitizeRawText(input: unknown): string {
   const raw = String(input ?? "");
-  return raw
-    .replace(ANSI_ESCAPE_REGEX, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/\s+/g, " ")
-    .trim();
+  return raw.replace(ANSI_ESCAPE_REGEX, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\s+/g, " ").trim();
 }
 
 function extractTrailingNumber(value: string): string | null {

@@ -4,9 +4,7 @@ import type { TFunction } from "./types";
 
 function normalizeSettingValue(value: unknown): string {
   if (value == null) return "";
-  const raw = String(value)
-    .replace(/^"|"$/g, "")
-    .trim();
+  const raw = String(value).replace(/^"|"$/g, "").trim();
   if (!raw) return "";
   const lowered = raw.toLowerCase();
   if (lowered === "null" || lowered === "undefined" || raw === "__CHANGE_ME__" || raw.startsWith("YOUR_")) {

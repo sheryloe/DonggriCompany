@@ -17,12 +17,7 @@ export type AuditRequestLike = {
 };
 
 export type MessageIngressAuditInput = {
-  endpoint:
-    | "/api/messages"
-    | "/api/announcements"
-    | "/api/directives"
-    | "/api/directives/prn-draft"
-    | "/api/inbox";
+  endpoint: "/api/messages" | "/api/announcements" | "/api/directives" | "/api/directives/prn-draft" | "/api/inbox";
   req: AuditRequestLike;
   body: Record<string, unknown>;
   idempotencyKey: string | null;

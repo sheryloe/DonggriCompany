@@ -147,6 +147,84 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     }
   });
 
+  app.post("/api/github/repos", async (req, res) => {
+    const token = getGitHubAccessToken();
+    if (!token) return res.status(401).json({ error: "github_not_connected" });
+
+    const body = (req.body ?? {}) as { name?: unknown; private?: unknown };
+    const repoName = typeof body.name === "string" ? body.name.trim() : "";
+    const isPrivate = typeof body.private === "boolean" ? body.private : true;
+    if (!repoName) return res.status(400).json({ error: "repo_name_required" });
+
+    try {
+      const resp = await fetch("https://api.github.com/user/repos", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        body: JSON.stringify({
+          name: repoName,
+          private: isPrivate,
+          auto_init: true,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      const responseText = await resp.text().catch(() => "");
+      let responseJson: any = null;
+      if (responseText) {
+        try {
+          responseJson = JSON.parse(responseText);
+        } catch {
+          responseJson = null;
+        }
+      }
+
+      if (!resp.ok) {
+        if (resp.status === 422) {
+          return res.status(422).json({
+            error: "repo_name_conflict",
+            detail: responseJson?.message ?? (responseText || "Repository name already exists"),
+          });
+        }
+        return res.status(resp.status).json({
+          error: "github_api_error",
+          status: resp.status,
+          detail: responseJson ?? responseText,
+        });
+      }
+
+      const repoNameFromResponse = typeof responseJson?.name === "string" ? responseJson.name : repoName;
+      const repoFullName = typeof responseJson?.full_name === "string" ? responseJson.full_name : null;
+      if (!repoFullName) {
+        return res.status(502).json({
+          error: "github_repo_create_failed",
+          message: "GitHub returned a success status without repository metadata.",
+          detail: responseText || null,
+        });
+      }
+
+      return res.json({
+        repo: {
+          name: repoNameFromResponse,
+          full_name: repoFullName,
+          private: Boolean(responseJson?.private),
+          default_branch: responseJson?.default_branch ?? null,
+          html_url: responseJson?.html_url ?? null,
+          clone_url: responseJson?.clone_url ?? null,
+        },
+      });
+    } catch (err) {
+      return res.status(502).json({
+        error: "github_repo_create_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
   app.get("/api/github/repos/:owner/:repo/branches", async (req, res) => {
     const pat = typeof req.headers["x-github-pat"] === "string" ? req.headers["x-github-pat"].trim() : null;
     const token = pat || getGitHubAccessToken();
@@ -218,6 +296,18 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
 
     if (fs.existsSync(targetPath) && fs.existsSync(path.join(targetPath, ".git"))) {
       return res.json({ clone_id: null, already_exists: true, target_path: targetPath });
+    }
+
+    const targetParent = path.dirname(targetPath);
+    if (targetParent && !fs.existsSync(targetParent)) {
+      try {
+        fs.mkdirSync(targetParent, { recursive: true });
+      } catch (err) {
+        return res.status(400).json({
+          error: "target_path_parent_unavailable",
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     const cloneId = randomUUID();

@@ -111,6 +111,7 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
     const projectId = normalizeTextField(body.project_id);
     const projectPath = normalizeTextField(body.project_path);
     const projectContext = normalizeTextField(body.project_context);
+    const skipPlannedMeeting = body.skipPlannedMeeting === true;
 
     let storedMessage: StoredMessage;
     let created: boolean;
@@ -201,12 +202,17 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
     // Schedule agent auto-reply when CEO messages an agent
     if (senderType === "ceo" && receiverType === "agent" && receiverId) {
       if (messageType === "report") {
-        const handled = handleReportRequest(receiverId, content);
+        const handled = handleReportRequest(receiverId, content, {
+          projectId,
+          projectPath,
+          projectContext,
+        });
         if (!handled) {
           scheduleAgentReply(receiverId, content, messageType, {
             projectId,
             projectPath,
             projectContext,
+            skipPlannedMeeting,
           });
         }
         return res.json({ ok: true, message: msg });
@@ -216,6 +222,7 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
         projectId,
         projectPath,
         projectContext,
+        skipPlannedMeeting,
       });
 
       // Check for @mentions to other departments/agents

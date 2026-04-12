@@ -28,7 +28,17 @@ describe("AgentDetail codex account pool", () => {
       providers: {},
     });
     vi.spyOn(api, "getCliModels").mockResolvedValue({
-      codex: [{ slug: "gpt-5.3-codex", displayName: "GPT-5.3 Codex" }],
+      codex: [
+        {
+          slug: "gpt-5.3-codex",
+          displayName: "GPT-5.3 Codex",
+          reasoningLevels: [
+            { effort: "medium", description: "Balanced" },
+            { effort: "xhigh", description: "Deep" },
+          ],
+          defaultReasoningLevel: "medium",
+        },
+      ],
     });
     vi.spyOn(api, "getCliAccountPools").mockResolvedValue([
       {
@@ -71,7 +81,8 @@ describe("AgentDetail codex account pool", () => {
       api_provider_id: null,
       api_model: null,
       cli_model: "gpt-5.3-codex",
-      cli_reasoning_level: "high",
+      cli_reasoning_level: "medium",
+      run_mode: "standard",
       cli_account_pool_id: null,
       avatar_emoji: "🤖",
       sprite_number: null,
@@ -109,6 +120,8 @@ describe("AgentDetail codex account pool", () => {
     const poolSelect = poolOption.closest("select");
     expect(poolSelect).toBeTruthy();
     await user.selectOptions(poolSelect as HTMLSelectElement, "codex-main");
+    await user.selectOptions(screen.getByLabelText("Codex reasoning level"), "xhigh");
+    await user.click(screen.getByLabelText("Codex plan mode"));
 
     const saveButton = screen.getByRole("button", { name: "Save" });
     await user.click(saveButton);
@@ -121,6 +134,9 @@ describe("AgentDetail codex account pool", () => {
       "agent-1",
       expect.objectContaining({
         cli_provider: "codex",
+        cli_model: "gpt-5.3-codex",
+        cli_reasoning_level: "xhigh",
+        run_mode: "plan",
         cli_account_pool_id: "codex-main",
       }),
     );

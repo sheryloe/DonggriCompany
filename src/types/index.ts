@@ -21,6 +21,7 @@ export interface Department {
 // Agent roles
 export type AgentRole = "team_leader" | "senior" | "junior" | "intern";
 export type AgentStatus = "idle" | "working" | "break" | "offline";
+export type AgentRunMode = "standard" | "plan";
 export type CliProvider =
   | "claude"
   | "codex"
@@ -41,6 +42,41 @@ export interface AgentWorkflowProfile {
   max_review_rounds: number | null;
 }
 
+export type AgentCapabilityKey =
+  | "execution"
+  | "architecture"
+  | "review"
+  | "research"
+  | "communication"
+  | "leadership";
+export type AgentPromptStyleKey = "tone" | "autonomy" | "strictness" | "collaboration";
+export type AgentLevelValue = 1 | 2 | 3 | 4 | 5;
+
+export interface AgentCapabilityMatrix {
+  execution: AgentLevelValue;
+  architecture: AgentLevelValue;
+  review: AgentLevelValue;
+  research: AgentLevelValue;
+  communication: AgentLevelValue;
+  leadership: AgentLevelValue;
+}
+
+export interface AgentPromptStyle {
+  tone: AgentLevelValue;
+  autonomy: AgentLevelValue;
+  strictness: AgentLevelValue;
+  collaboration: AgentLevelValue;
+}
+
+export interface AgentProfile {
+  role_template: AgentRole;
+  growth_tier: AgentLevelValue;
+  capabilities: AgentCapabilityMatrix;
+  prompt_style: AgentPromptStyle;
+  specialties: string[];
+  custom_prompt_override: string | null;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -58,8 +94,11 @@ export interface Agent {
   api_model?: string | null;
   cli_model?: string | null;
   cli_reasoning_level?: string | null;
+  run_mode?: AgentRunMode | null;
   cli_account_pool_id?: string | null;
   workflow_profile?: AgentWorkflowProfile | null;
+  agent_profile_json?: string | null;
+  agent_profile?: AgentProfile | null;
   avatar_emoji: string;
   sprite_number?: number | null;
   personality: string | null;

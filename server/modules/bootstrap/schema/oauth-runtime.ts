@@ -69,7 +69,17 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
     /* already exists */
   }
   try {
+    db.exec("ALTER TABLE agents ADD COLUMN run_mode TEXT NOT NULL DEFAULT 'standard' CHECK(run_mode IN ('standard','plan'))");
+  } catch {
+    /* already exists */
+  }
+  try {
     db.exec("ALTER TABLE agents ADD COLUMN cli_account_pool_id TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN agent_profile_json TEXT");
   } catch {
     /* already exists */
   }
@@ -137,6 +147,8 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
         ? "COALESCE(workflow_pack_key, 'development')"
         : "'development'";
       const cliAccountPoolExpr = hasColumn("agents", "cli_account_pool_id") ? "cli_account_pool_id" : "NULL";
+      const workflowProfileExpr = hasColumn("agents", "workflow_profile") ? "workflow_profile" : "NULL";
+      const runModeExpr = hasColumn("agents", "run_mode") ? "run_mode" : "'standard'";
       runInTransaction(() => {
         db.exec(`
         DROP TABLE IF EXISTS agents_new;
@@ -156,7 +168,10 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
           api_model TEXT,
           cli_model TEXT,
           cli_reasoning_level TEXT,
+          run_mode TEXT NOT NULL DEFAULT 'standard' CHECK(run_mode IN ('standard','plan')),
           cli_account_pool_id TEXT,
+          workflow_profile TEXT,
+          agent_profile_json TEXT,
           avatar_emoji TEXT NOT NULL DEFAULT '🤖',
           sprite_number INTEGER,
           personality TEXT,
@@ -169,7 +184,7 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
         INSERT INTO agents_new (
           id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key,
           role, acts_as_planning_leader, cli_provider, oauth_account_id,
-          api_provider_id, api_model, cli_model, cli_reasoning_level, cli_account_pool_id,
+          api_provider_id, api_model, cli_model, cli_reasoning_level, run_mode, cli_account_pool_id, workflow_profile, agent_profile_json,
           avatar_emoji, sprite_number, personality, status, current_task_id,
           stats_tasks_done, stats_xp, created_at
         )
@@ -189,7 +204,10 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
           api_model,
           cli_model,
           cli_reasoning_level,
+          ${runModeExpr},
           ${cliAccountPoolExpr},
+          ${workflowProfileExpr},
+          agent_profile_json,
           avatar_emoji,
           sprite_number,
           personality,

@@ -4,6 +4,7 @@ import * as api from "../api";
 import { localeName, useI18n } from "../i18n";
 import type {
   Agent,
+  AgentRunMode,
   CliModelInfo,
   Department,
   SubAgent,
@@ -11,6 +12,12 @@ import type {
   Task,
   WorkflowPackKey,
 } from "../types";
+import {
+  getCodexReasoningOptions,
+  isCodexPlanModeEligible,
+  normalizeCodexRunMode,
+  resolveCodexReasoningLevel,
+} from "../utils/codex-execution";
 import AgentAvatar from "./AgentAvatar";
 import AgentDetailTabContent from "./agent-detail/AgentDetailTabContent";
 import { CLI_LABELS, oauthAccountLabel, roleLabel, STATUS_CONFIG, statusLabel } from "./agent-detail/constants";
@@ -31,7 +38,7 @@ interface AgentDetailProps {
   onAgentUpdated?: () => void;
 }
 
-const CLI_MODEL_OVERRIDE_PROVIDERS: Agent["cli_provider"][] = ["claude", "gemini", "opencode", "kimi"];
+const CLI_MODEL_OVERRIDE_PROVIDERS: Agent["cli_provider"][] = ["claude", "codex", "gemini", "opencode", "kimi"];
 const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "gemini", "jules"];
 
 export default function AgentDetail({
@@ -57,6 +64,8 @@ export default function AgentDetail({
   const [selectedApiProviderId, setSelectedApiProviderId] = useState(agent.api_provider_id ?? "");
   const [selectedApiModel, setSelectedApiModel] = useState(agent.api_model ?? "");
   const [selectedCliModel, setSelectedCliModel] = useState(agent.cli_model ?? "");
+  const [selectedCliReasoningLevel, setSelectedCliReasoningLevel] = useState(agent.cli_reasoning_level ?? "");
+  const [selectedRunMode, setSelectedRunMode] = useState<AgentRunMode>(agent.run_mode === "plan" ? "plan" : "standard");
   const [selectedCliAccountPoolId, setSelectedCliAccountPoolId] = useState(agent.cli_account_pool_id ?? "");
   const [cliAccountPools, setCliAccountPools] = useState<CliAccountPoolView[]>([]);
   const [cliAccountPoolsLoading, setCliAccountPoolsLoading] = useState(false);
@@ -65,6 +74,7 @@ export default function AgentDetail({
   const [oauthLoading, setOauthLoading] = useState(false);
   const [cliModels, setCliModels] = useState<Record<string, CliModelInfo[]>>({});
   const [cliModelsLoading, setCliModelsLoading] = useState(false);
+  const [cliModelsLoaded, setCliModelsLoaded] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [savingPlanningLead, setSavingPlanningLead] = useState(false);
   const [actsAsPlanningLead, setActsAsPlanningLead] = useState(Number(agent.acts_as_planning_leader ?? 0) === 1);
@@ -93,6 +103,14 @@ export default function AgentDetail({
   const requiresCliPool = CLI_POOL_PROVIDERS.includes(selectedCli);
   const supportsCliModelOverride = CLI_MODEL_OVERRIDE_PROVIDERS.includes(selectedCli);
   const selectedCliModelOptions = useMemo(() => cliModels[selectedCli] ?? [], [cliModels, selectedCli]);
+  const selectedCliModelInfo = useMemo(
+    () => selectedCliModelOptions.find((model) => model.slug === selectedCliModel) ?? null,
+    [selectedCliModel, selectedCliModelOptions],
+  );
+  const selectedCliReasoningOptions = useMemo(
+    () => (selectedCli === "codex" ? getCodexReasoningOptions(selectedCliModelInfo) : []),
+    [selectedCli, selectedCliModelInfo],
+  );
   const selectedCliAccountPools = useMemo(
     () => cliAccountPools.filter((pool) => pool.provider === selectedCli),
     [cliAccountPools, selectedCli],
@@ -132,7 +150,7 @@ export default function AgentDetail({
     );
     return matched ? formatPoolLabel(matched) : poolId;
   }, [agent.cli_account_pool_id, agent.cli_provider, cliAccountPools, formatPoolLabel, t]);
-  const cliSummaryText = useMemo(() => {
+  const legacyCliSummaryText = useMemo(() => {
     if (agent.cli_provider === "api" && agent.api_model) {
       return `API: ${agent.api_model}`;
     }
@@ -146,6 +164,22 @@ export default function AgentDetail({
     }
     return providerLabel;
   }, [agent.api_model, agent.cli_model, agent.cli_provider, poolSummaryLabel]);
+  const cliSummaryText = useMemo(() => {
+    if (agent.cli_provider !== "codex") return legacyCliSummaryText;
+    const providerLabel = CLI_LABELS[agent.cli_provider] ?? agent.cli_provider;
+    const parts = [providerLabel];
+    if (agent.cli_model) parts.push(agent.cli_model);
+    if (agent.run_mode === "plan") parts.push("Plan");
+    if (agent.cli_account_pool_id) parts.push(poolSummaryLabel);
+    return parts.join(" · ");
+  }, [
+    agent.cli_account_pool_id,
+    agent.cli_model,
+    agent.cli_provider,
+    agent.run_mode,
+    legacyCliSummaryText,
+    poolSummaryLabel,
+  ]);
   const canSaveCli =
     (requiresApiProvider ? false : !requiresOAuthAccount || Boolean(selectedOAuthAccountId)) &&
     (!requiresCliPool || Boolean(selectedCliAccountPoolId));
@@ -159,6 +193,8 @@ export default function AgentDetail({
     setSelectedApiProviderId(agent.api_provider_id ?? "");
     setSelectedApiModel(agent.api_model ?? "");
     setSelectedCliModel(agent.cli_model ?? "");
+    setSelectedCliReasoningLevel(agent.cli_reasoning_level ?? "");
+    setSelectedRunMode(agent.run_mode === "plan" ? "plan" : "standard");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
     setActsAsPlanningLead(Number(agent.acts_as_planning_leader ?? 0) === 1);
   }, [
@@ -168,6 +204,8 @@ export default function AgentDetail({
     agent.api_provider_id,
     agent.api_model,
     agent.cli_model,
+    agent.cli_reasoning_level,
+    agent.run_mode,
     agent.cli_account_pool_id,
     agent.acts_as_planning_leader,
   ]);
@@ -183,7 +221,7 @@ export default function AgentDetail({
   }, [editingCli, requiresOAuthAccount]);
 
   useEffect(() => {
-    if (!editingCli || !supportsCliModelOverride || Object.keys(cliModels).length > 0) return;
+    if (!editingCli || !supportsCliModelOverride || cliModelsLoaded) return;
     let cancelled = false;
     setCliModelsLoading(true);
     api
@@ -194,12 +232,15 @@ export default function AgentDetail({
       })
       .catch((err) => console.error("Failed to load CLI models:", err))
       .finally(() => {
-        if (!cancelled) setCliModelsLoading(false);
+        if (!cancelled) {
+          setCliModelsLoading(false);
+          setCliModelsLoaded(true);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [editingCli, supportsCliModelOverride, cliModels]);
+  }, [editingCli, supportsCliModelOverride, cliModelsLoaded]);
 
   useEffect(() => {
     if (!editingCli && !CLI_POOL_PROVIDERS.includes(agent.cli_provider)) return;
@@ -239,6 +280,37 @@ export default function AgentDetail({
   }, [supportsCliModelOverride, selectedCliModel]);
 
   useEffect(() => {
+    if (selectedCli === "codex") return;
+    if (selectedCliReasoningLevel) setSelectedCliReasoningLevel("");
+    if (selectedRunMode !== "standard") setSelectedRunMode("standard");
+  }, [selectedCli, selectedCliReasoningLevel, selectedRunMode]);
+
+  useEffect(() => {
+    if (selectedCli !== "codex") return;
+    const trimmedModel = selectedCliModel.trim();
+    if (!trimmedModel) {
+      if (selectedCliReasoningLevel) setSelectedCliReasoningLevel("");
+      if (selectedRunMode !== "standard") setSelectedRunMode("standard");
+      return;
+    }
+
+    const nextReasoningLevel = resolveCodexReasoningLevel(selectedCliModelInfo, selectedCliReasoningLevel);
+    if (nextReasoningLevel !== selectedCliReasoningLevel) {
+      setSelectedCliReasoningLevel(nextReasoningLevel);
+    }
+    const nextRunMode = normalizeCodexRunMode(selectedCli, trimmedModel, selectedRunMode);
+    if (nextRunMode !== selectedRunMode) {
+      setSelectedRunMode(nextRunMode);
+    }
+  }, [
+    selectedCli,
+    selectedCliModel,
+    selectedCliModelInfo,
+    selectedCliReasoningLevel,
+    selectedRunMode,
+  ]);
+
+  useEffect(() => {
     if (!requiresCliPool) {
       if (selectedCliAccountPoolId) setSelectedCliAccountPoolId("");
       return;
@@ -257,8 +329,13 @@ export default function AgentDetail({
         oauth_account_id: requiresOAuthAccount ? selectedOAuthAccountId || null : null,
         api_provider_id: requiresApiProvider ? selectedApiProviderId || null : null,
         api_model: requiresApiProvider ? selectedApiModel || null : null,
-        cli_model: selectedCli === "codex" ? null : supportsCliModelOverride ? selectedCliModel || null : null,
-        cli_reasoning_level: null,
+        cli_model:
+          selectedCli === "codex" ? selectedCliModel.trim() || null : supportsCliModelOverride ? selectedCliModel || null : null,
+        cli_reasoning_level:
+          selectedCli === "codex" && selectedCliModel.trim()
+            ? selectedCliReasoningLevel || resolveCodexReasoningLevel(selectedCliModelInfo, null) || null
+            : null,
+        run_mode: normalizeCodexRunMode(selectedCli, selectedCliModel, selectedRunMode),
         cli_account_pool_id:
           requiresCliPool ? selectedCliAccountPoolId || selectedCliAccountPools[0]?.accountPoolId || null : null,
       });
@@ -279,9 +356,12 @@ export default function AgentDetail({
     selectedApiModel,
     supportsCliModelOverride,
     selectedCliModel,
+    selectedCliReasoningLevel,
+    selectedCliModelInfo,
     requiresCliPool,
     selectedCliAccountPoolId,
     selectedCliAccountPools,
+    selectedRunMode,
     onAgentUpdated,
   ]);
 
@@ -292,6 +372,8 @@ export default function AgentDetail({
     setSelectedApiProviderId(agent.api_provider_id ?? "");
     setSelectedApiModel(agent.api_model ?? "");
     setSelectedCliModel(agent.cli_model ?? "");
+    setSelectedCliReasoningLevel(agent.cli_reasoning_level ?? "");
+    setSelectedRunMode(agent.run_mode === "plan" ? "plan" : "standard");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
   }, [
     agent.cli_provider,
@@ -299,6 +381,8 @@ export default function AgentDetail({
     agent.api_provider_id,
     agent.api_model,
     agent.cli_model,
+    agent.cli_reasoning_level,
+    agent.run_mode,
     agent.cli_account_pool_id,
   ]);
 
@@ -479,8 +563,11 @@ export default function AgentDetail({
                         <select
                           value={selectedCli}
                           onChange={(event) => {
-                            setSelectedCli(event.target.value as Agent["cli_provider"]);
+                            const nextCli = event.target.value as Agent["cli_provider"];
+                            setSelectedCli(nextCli);
                             setSelectedCliModel("");
+                            setSelectedCliReasoningLevel("");
+                            setSelectedRunMode("standard");
                             setSelectedCliAccountPoolId("");
                           }}
                           className="w-[94px] shrink-0 bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
@@ -526,6 +613,102 @@ export default function AgentDetail({
                           </select>
                         )}
                       </div>
+                      {selectedCli === "codex" && (
+                        <div className="flex flex-wrap items-center gap-1 pb-0.5">
+                          {cliModelsLoading ? (
+                            <span className="text-[10px] text-slate-400">
+                              {t({
+                                ko: "모델 로딩 중...",
+                                en: "Loading models...",
+                                ja: "Loading models...",
+                                zh: "Loading models...",
+                              })}
+                            </span>
+                          ) : selectedCliModelOptions.length > 0 ? (
+                            <>
+                              <select
+                                aria-label="Codex model"
+                                value={selectedCliModel}
+                                onChange={(event) => {
+                                  const nextModel = event.target.value;
+                                  const nextModelInfo =
+                                    selectedCliModelOptions.find((model) => model.slug === nextModel) ?? null;
+                                  setSelectedCliModel(nextModel);
+                                  setSelectedCliReasoningLevel(
+                                    nextModel ? resolveCodexReasoningLevel(nextModelInfo, selectedCliReasoningLevel) : "",
+                                  );
+                                  setSelectedRunMode(nextModel ? normalizeCodexRunMode("codex", nextModel, selectedRunMode) : "standard");
+                                }}
+                                className="w-[180px] max-w-full bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
+                              >
+                                <option value="">
+                                  {t({
+                                    ko: "Codex 모델 선택",
+                                    en: "Select Codex model",
+                                    ja: "Select Codex model",
+                                    zh: "Select Codex model",
+                                  })}
+                                </option>
+                                {selectedCliModelOptions.map((model) => (
+                                  <option key={model.slug} value={model.slug}>
+                                    {model.displayName || model.slug}
+                                  </option>
+                                ))}
+                              </select>
+                              {selectedCliModel.trim() ? (
+                                <>
+                                  <select
+                                    aria-label="Codex reasoning level"
+                                    value={selectedCliReasoningLevel}
+                                    onChange={(event) => setSelectedCliReasoningLevel(event.target.value)}
+                                    className="w-[150px] max-w-full bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
+                                  >
+                                    {selectedCliReasoningOptions.map((option) => (
+                                      <option key={option.effort} value={option.effort}>
+                                        {option.effort}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <label className="inline-flex items-center gap-1 text-[10px] text-slate-300">
+                                    <input
+                                      type="checkbox"
+                                      aria-label="Codex plan mode"
+                                      checked={selectedRunMode === "plan"}
+                                      onChange={(event) =>
+                                        setSelectedRunMode(
+                                          event.target.checked && isCodexPlanModeEligible(selectedCli, selectedCliModel)
+                                            ? "plan"
+                                            : "standard",
+                                        )
+                                      }
+                                      className="h-3 w-3 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/50"
+                                    />
+                                    <span>Codex Plan</span>
+                                  </label>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-slate-400">
+                                  {t({
+                                    ko: "모델을 지정하면 추론/플랜 옵션이 열립니다.",
+                                    en: "Reasoning and plan options appear after selecting a model.",
+                                    ja: "Reasoning and plan options appear after selecting a model.",
+                                    zh: "Reasoning and plan options appear after selecting a model.",
+                                  })}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">
+                              {t({
+                                ko: "사용 가능한 Codex 모델이 없습니다.",
+                                en: "No Codex models available",
+                                ja: "No Codex models available",
+                                zh: "No Codex models available",
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="flex flex-wrap items-center gap-1">
                         <button
                           disabled={savingCli || !canSaveCli}
@@ -547,13 +730,16 @@ export default function AgentDetail({
                   ) : (
                     <div className="flex flex-wrap items-center gap-1">
                       <span>🔧</span>
-                      <select
-                        value={selectedCli}
-                        onChange={(event) => {
-                          setSelectedCli(event.target.value as Agent["cli_provider"]);
-                          setSelectedCliModel("");
-                          setSelectedCliAccountPoolId("");
-                        }}
+                        <select
+                          value={selectedCli}
+                          onChange={(event) => {
+                            const nextCli = event.target.value as Agent["cli_provider"];
+                            setSelectedCli(nextCli);
+                            setSelectedCliModel("");
+                            setSelectedCliReasoningLevel("");
+                            setSelectedRunMode("standard");
+                            setSelectedCliAccountPoolId("");
+                          }}
                         className="bg-slate-700 text-slate-200 text-xs rounded px-1.5 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                       >
                         {Object.entries(CLI_LABELS).map(([key, label]) => (

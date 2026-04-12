@@ -19,8 +19,20 @@ interface ProjectEditorPanelProps {
   detail: ProjectDetailResponse | null;
   name: string;
   setName: Dispatch<SetStateAction<string>>;
+  githubAutoCreateAvailable: boolean;
+  githubAutoCreateEnabled: boolean;
+  setGitHubAutoCreateEnabled: (enabled: boolean) => void;
+  githubRepoName: string;
+  setGitHubRepoName: (value: string) => void;
+  githubRepoPrivate: boolean;
+  setGitHubRepoPrivate: (value: boolean) => void;
+  defaultProjectRoot: string;
+  defaultProjectRootLoading: boolean;
   projectPath: string;
   setProjectPath: Dispatch<SetStateAction<string>>;
+  projectPathCustomized: boolean;
+  setProjectPathCustomized: (value: boolean) => void;
+  onResetAutoProjectPath: () => void;
   coreGoal: string;
   setCoreGoal: Dispatch<SetStateAction<string>>;
   saving: boolean;
@@ -70,8 +82,20 @@ export default function ProjectEditorPanel({
   detail,
   name,
   setName,
+  githubAutoCreateAvailable,
+  githubAutoCreateEnabled,
+  setGitHubAutoCreateEnabled,
+  githubRepoName,
+  setGitHubRepoName,
+  githubRepoPrivate,
+  setGitHubRepoPrivate,
+  defaultProjectRoot,
+  defaultProjectRootLoading,
   projectPath,
   setProjectPath,
+  projectPathCustomized,
+  setProjectPathCustomized,
+  onResetAutoProjectPath,
   coreGoal,
   setCoreGoal,
   saving,
@@ -111,10 +135,13 @@ export default function ProjectEditorPanel({
   onStartEditSelected,
   onDelete,
 }: ProjectEditorPanelProps) {
+  const githubAutoPathLocked = githubAutoCreateAvailable && githubAutoCreateEnabled && !projectPathCustomized;
+  const showPathTools = pathToolsVisible && (!githubAutoCreateAvailable || !githubAutoCreateEnabled || projectPathCustomized);
+
   return (
     <div className="min-w-0 space-y-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4">
       <label className="block text-xs text-slate-400">
-        {t({ ko: "프로젝트 이름", en: "Project Name", ja: "プロジェクト名", zh: "项目名称" })}
+        {t({ ko: "프로젝트 이름", en: "Project Name", ja: "Project Name", zh: "Project Name" })}
         <input
           type="text"
           value={name}
@@ -126,21 +153,184 @@ export default function ProjectEditorPanel({
           className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
         />
       </label>
+
+      {githubAutoCreateAvailable && (
+        <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/70 p-3">
+          <label className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-200">
+                {t({
+                  ko: "GitHub 레포 자동 생성",
+                  en: "Auto-create GitHub repository",
+                  ja: "Auto-create GitHub repository",
+                  zh: "Auto-create GitHub repository",
+                })}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400">
+                {t({
+                  ko: "프로젝트 생성 시 원격 레포를 만들고 로컬로 바로 클론합니다.",
+                  en: "Create a remote repository and clone it locally during project creation.",
+                  ja: "Create a remote repository and clone it locally during project creation.",
+                  zh: "Create a remote repository and clone it locally during project creation.",
+                })}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={githubAutoCreateEnabled}
+              onClick={() => {
+                setGitHubAutoCreateEnabled(!githubAutoCreateEnabled);
+                setFormFeedback(null);
+              }}
+              className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
+                githubAutoCreateEnabled ? "border-emerald-400 bg-emerald-500/90" : "border-slate-600 bg-slate-700"
+              }`}
+            >
+              <span
+                className={`mx-0.5 inline-block h-4 w-4 rounded-full bg-white transition ${
+                  githubAutoCreateEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </label>
+
+          {githubAutoCreateEnabled && (
+            <div className="space-y-3">
+              <label className="block text-xs text-slate-400">
+                {t({ ko: "레포지토리 이름", en: "Repository Name", ja: "Repository Name", zh: "Repository Name" })}
+                <input
+                  type="text"
+                  value={githubRepoName}
+                  onChange={(e) => {
+                    setGitHubRepoName(e.target.value);
+                    setFormFeedback(null);
+                  }}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                />
+              </label>
+
+              <div className="space-y-2">
+                <p className="text-xs text-slate-400">
+                  {t({ ko: "공개 범위", en: "Visibility", ja: "Visibility", zh: "Visibility" })}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGitHubRepoPrivate(true);
+                      setFormFeedback(null);
+                    }}
+                    className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                      githubRepoPrivate
+                        ? "border-blue-500 bg-blue-500/15 text-blue-100"
+                        : "border-slate-700 bg-slate-900 text-slate-300"
+                    }`}
+                  >
+                    {t({ ko: "비공개", en: "Private", ja: "Private", zh: "Private" })}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGitHubRepoPrivate(false);
+                      setFormFeedback(null);
+                    }}
+                    className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                      !githubRepoPrivate
+                        ? "border-blue-500 bg-blue-500/15 text-blue-100"
+                        : "border-slate-700 bg-slate-900 text-slate-300"
+                    }`}
+                  >
+                    {t({ ko: "공개", en: "Public", ja: "Public", zh: "Public" })}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
+                <p className="text-[11px] text-slate-400">
+                  {t({ ko: "기본 프로젝트 루트", en: "Default project root", ja: "Default project root", zh: "Default project root" })}
+                </p>
+                <p className="mt-1 break-all text-xs text-slate-200">
+                  {defaultProjectRootLoading
+                    ? t({
+                        ko: "기본 루트를 확인하는 중...",
+                        en: "Resolving default root...",
+                        ja: "Resolving default root...",
+                        zh: "Resolving default root...",
+                      })
+                    : defaultProjectRoot || "~/Projects"}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <label className="block text-xs text-slate-400">
-        {t({ ko: "프로젝트 경로", en: "Project Path", ja: "プロジェクトパス", zh: "项目路径" })}
+        {githubAutoPathLocked
+          ? t({ ko: "프로젝트 경로 (자동)", en: "Project Path (Auto)", ja: "Project Path (Auto)", zh: "Project Path (Auto)" })
+          : t({ ko: "프로젝트 경로", en: "Project Path", ja: "Project Path", zh: "Project Path" })}
         <input
           type="text"
           value={projectPath}
           onChange={(e) => {
+            if (githubAutoCreateAvailable && githubAutoCreateEnabled) {
+              setProjectPathCustomized(true);
+            }
             setProjectPath(e.target.value);
             setMissingPathPrompt(null);
             setFormFeedback(null);
           }}
+          readOnly={githubAutoPathLocked}
           disabled={!isCreating && !editingProjectId}
-          className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+          className={`mt-1 w-full rounded-lg border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-blue-500 ${
+            githubAutoPathLocked ? "bg-slate-950/80 text-slate-300" : "bg-slate-900"
+          }`}
         />
       </label>
-      {pathToolsVisible && (
+
+      {githubAutoCreateAvailable && githubAutoCreateEnabled && (
+        <div className="flex justify-end gap-2">
+          {projectPathCustomized ? (
+            <button
+              type="button"
+              onClick={() => {
+                setProjectPathCustomized(false);
+                onResetAutoProjectPath();
+                setMissingPathPrompt(null);
+                setFormFeedback(null);
+              }}
+              className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800"
+            >
+              {t({ ko: "자동 경로로 되돌리기", en: "Use Auto Path", ja: "Use Auto Path", zh: "Use Auto Path" })}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setProjectPathCustomized(true);
+                setFormFeedback(null);
+              }}
+              className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800"
+            >
+              {t({ ko: "경로 직접 수정", en: "Customize Path", ja: "Customize Path", zh: "Customize Path" })}
+            </button>
+          )}
+        </div>
+      )}
+
+      {githubAutoPathLocked && (
+        <p className="text-[11px] text-slate-400">
+          {t({
+            ko: "첫 번째 허용 루트와 레포지토리 이름으로 자동 채워집니다. 고급 사용자는 경로를 직접 수정할 수 있습니다.",
+            en: "This path is generated from the first allowed root and the repository name. Advanced users can unlock it to customize.",
+            ja: "This path is generated from the first allowed root and the repository name. Advanced users can unlock it to customize.",
+            zh: "This path is generated from the first allowed root and the repository name. Advanced users can unlock it to customize.",
+          })}
+        </p>
+      )}
+
+      {showPathTools && (
         <div className="space-y-2">
           <div className="flex justify-end gap-2">
             <button
@@ -156,8 +346,8 @@ export default function ProjectEditorPanel({
               {t({
                 ko: "앱 내 폴더 탐색",
                 en: "In-App Folder Browser",
-                ja: "アプリ内フォルダ閲覧",
-                zh: "应用内文件夹浏览",
+                ja: "In-App Folder Browser",
+                zh: "In-App Folder Browser",
               })}
             </button>
             <button
@@ -170,8 +360,8 @@ export default function ProjectEditorPanel({
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {pathSuggestionsOpen
-                ? t({ ko: "자동 경로찾기 닫기", en: "Close Auto Finder", ja: "自動候補を閉じる", zh: "关闭自动查找" })
-                : t({ ko: "자동 경로찾기", en: "Auto Path Finder", ja: "自動パス検索", zh: "自动路径查找" })}
+                ? t({ ko: "자동 경로 찾기 닫기", en: "Close Auto Finder", ja: "Close Auto Finder", zh: "Close Auto Finder" })
+                : t({ ko: "자동 경로 찾기", en: "Auto Path Finder", ja: "Auto Path Finder", zh: "Auto Path Finder" })}
             </button>
             <button
               type="button"
@@ -182,6 +372,7 @@ export default function ProjectEditorPanel({
                 try {
                   const picked = await pickProjectPathNative();
                   if (picked.cancelled || !picked.path) return;
+                  setProjectPathCustomized(true);
                   setProjectPath(picked.path);
                   setMissingPathPrompt(null);
                   setPathSuggestionsOpen(false);
@@ -193,10 +384,10 @@ export default function ProjectEditorPanel({
                     setFormFeedback({ tone: "info", message: unsupportedPathApiMessage });
                   } else {
                     const message = resolvePathHelperErrorMessage(err, {
-                      ko: "운영체제 폴더 선택기를 열지 못했습니다.",
+                      ko: "OS 폴더 선택기를 열지 못했습니다.",
                       en: "Failed to open OS folder picker.",
-                      ja: "OSフォルダ選択を開けませんでした。",
-                      zh: "无法打开系统文件夹选择器。",
+                      ja: "Failed to open OS folder picker.",
+                      zh: "Failed to open OS folder picker.",
                     });
                     if (
                       isApiRequestError(err) &&
@@ -217,41 +408,27 @@ export default function ProjectEditorPanel({
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {nativePathPicking
-                ? t({
-                    ko: "수동 경로찾기 여는 중...",
-                    en: "Opening Manual Picker...",
-                    ja: "手動パス選択を開いています...",
-                    zh: "正在打开手动路径选择...",
-                  })
+                ? t({ ko: "수동 선택기 여는 중...", en: "Opening Manual Picker...", ja: "Opening Manual Picker...", zh: "Opening Manual Picker..." })
                 : nativePickerUnsupported
                   ? t({
-                      ko: "수동 경로찾기(사용불가)",
+                      ko: "수동 경로 선택기 (사용 불가)",
                       en: "Manual Path Finder (Unavailable)",
-                      ja: "手動パス選択（利用不可）",
-                      zh: "手动路径选择（不可用）",
+                      ja: "Manual Path Finder (Unavailable)",
+                      zh: "Manual Path Finder (Unavailable)",
                     })
-                  : t({ ko: "수동 경로찾기", en: "Manual Path Finder", ja: "手動パス選択", zh: "手动路径选择" })}
+                  : t({ ko: "수동 경로 선택기", en: "Manual Path Finder", ja: "Manual Path Finder", zh: "Manual Path Finder" })}
             </button>
           </div>
+
           {pathSuggestionsOpen && (
             <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-800/70">
               {pathSuggestionsLoading ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({
-                    ko: "경로 후보를 불러오는 중...",
-                    en: "Loading path suggestions...",
-                    ja: "パス候補を読み込み中...",
-                    zh: "正在加载路径候选...",
-                  })}
+                  {t({ ko: "경로 후보를 불러오는 중...", en: "Loading path suggestions...", ja: "Loading path suggestions...", zh: "Loading path suggestions..." })}
                 </p>
               ) : pathSuggestions.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({
-                    ko: "추천 경로가 없습니다. 직접 입력해주세요.",
-                    en: "No suggested path. Enter one manually.",
-                    ja: "候補パスがありません。手入力してください。",
-                    zh: "没有推荐路径，请手动输入。",
-                  })}
+                  {t({ ko: "추천 경로가 없습니다. 직접 입력해 주세요.", en: "No suggested path. Enter one manually.", ja: "No suggested path. Enter one manually.", zh: "No suggested path. Enter one manually." })}
                 </p>
               ) : (
                 pathSuggestions.map((candidate) => (
@@ -259,6 +436,7 @@ export default function ProjectEditorPanel({
                     key={candidate}
                     type="button"
                     onClick={() => {
+                      setProjectPathCustomized(true);
                       setProjectPath(candidate);
                       setMissingPathPrompt(null);
                       setPathSuggestionsOpen(false);
@@ -272,18 +450,20 @@ export default function ProjectEditorPanel({
               )}
             </div>
           )}
+
           {missingPathPrompt && (
             <p className="text-xs text-amber-300">
               {t({
-                ko: "해당 경로가 아직 존재하지 않습니다. 저장 시 생성 여부를 확인합니다.",
+                ko: "이 경로는 아직 존재하지 않습니다. 저장 시 생성 여부를 확인합니다.",
                 en: "This path does not exist yet. Save will ask whether to create it.",
-                ja: "このパスはまだ存在しません。保存時に作成確認を行います。",
-                zh: "该路径尚不存在，保存时会先确认是否创建。",
+                ja: "This path does not exist yet. Save will ask whether to create it.",
+                zh: "This path does not exist yet. Save will ask whether to create it.",
               })}
             </p>
           )}
         </div>
       )}
+
       {formFeedback && (
         <div
           className={`rounded-lg border px-3 py-2 text-xs ${
@@ -295,8 +475,9 @@ export default function ProjectEditorPanel({
           {formFeedback.message}
         </div>
       )}
+
       <label className="block text-xs text-slate-400">
-        {t({ ko: "핵심 목표", en: "Core Goal", ja: "コア目標", zh: "核心目标" })}
+        {t({ ko: "핵심 목표", en: "Core Goal", ja: "Core Goal", zh: "Core Goal" })}
         <textarea
           rows={5}
           value={coreGoal}
@@ -333,15 +514,13 @@ export default function ProjectEditorPanel({
         {(isCreating || !!editingProjectId) && (
           <button
             type="button"
-            onClick={() => {
-              onSave();
-            }}
+            onClick={onSave}
             disabled={!canSave || saving}
             className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40"
           >
             {editingProjectId
-              ? t({ ko: "수정 저장", en: "Save", ja: "保存", zh: "保存" })
-              : t({ ko: "프로젝트 등록", en: "Create", ja: "作成", zh: "创建" })}
+              ? t({ ko: "저장", en: "Save", ja: "Save", zh: "Save" })
+              : t({ ko: "프로젝트 등록", en: "Create", ja: "Create", zh: "Create" })}
           </button>
         )}
         {(isCreating || !!editingProjectId) && (
@@ -350,7 +529,7 @@ export default function ProjectEditorPanel({
             onClick={onCancelEdit}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300"
           >
-            {t({ ko: "취소", en: "Cancel", ja: "キャンセル", zh: "取消" })}
+            {t({ ko: "취소", en: "Cancel", ja: "Cancel", zh: "Cancel" })}
           </button>
         )}
         <button
@@ -359,7 +538,7 @@ export default function ProjectEditorPanel({
           disabled={!selectedProject || isCreating || !!editingProjectId}
           className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-40"
         >
-          {t({ ko: "선택 프로젝트 편집", en: "Edit Selected", ja: "選択編集", zh: "编辑选中项" })}
+          {t({ ko: "선택 프로젝트 편집", en: "Edit Selected", ja: "Edit Selected", zh: "Edit Selected" })}
         </button>
         <button
           type="button"
@@ -367,7 +546,7 @@ export default function ProjectEditorPanel({
           disabled={!selectedProject}
           className="rounded-lg border border-red-700/70 px-3 py-1.5 text-xs text-red-300 disabled:opacity-40"
         >
-          {t({ ko: "삭제", en: "Delete", ja: "削除", zh: "删除" })}
+          {t({ ko: "삭제", en: "Delete", ja: "Delete", zh: "Delete" })}
         </button>
       </div>
     </div>

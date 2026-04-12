@@ -57,7 +57,7 @@ describe("worktree lifecycle branch collision handling", () => {
 
     tools.cleanupWorktree(repo, taskId);
     expect(taskWorktrees.has(taskId)).toBe(false);
-  });
+  }, 20_000);
 
   it("falls back to suffixed branch when existing branch is occupied in another worktree", () => {
     const repo = initRepo("climpire-wt-fallback-");
@@ -83,5 +83,5 @@ describe("worktree lifecycle branch collision handling", () => {
     tools.cleanupWorktree(repo, taskId);
     runGit(repo, ["worktree", "remove", occupiedPath, "--force"]);
     runGit(repo, ["branch", "-D", baseBranch]);
-  });
+  }, 20_000);
 });

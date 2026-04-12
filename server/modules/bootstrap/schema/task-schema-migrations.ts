@@ -133,6 +133,7 @@ export function applyTaskSchemaMigrations(db: DbLike): void {
   }
 
   ensureOfficePackScopedDepartmentSchema(db);
+  ensureConversationProjectContextSchema(db);
 
   migrateMessagesDirectiveType(db);
   migrateLegacyTasksStatusSchema(db);
@@ -185,6 +186,11 @@ function ensureOfficePackScopedDepartmentSchema(db: DbLike): void {
 
   try {
     db.exec("ALTER TABLE agents ADD COLUMN workflow_pack_key TEXT NOT NULL DEFAULT 'development'");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN agent_profile_json TEXT");
   } catch {
     /* already exists */
   }
@@ -306,6 +312,50 @@ function ensureOfficePackScopedDepartmentSchema(db: DbLike): void {
         }
       }
     }
+  }
+}
+
+function ensureConversationProjectContextSchema(db: DbLike): void {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS conversation_project_contexts (
+        conversation_key TEXT NOT NULL,
+        agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+        project_path TEXT,
+        project_context TEXT,
+        updated_at INTEGER DEFAULT (unixepoch()*1000),
+        PRIMARY KEY (conversation_key, agent_id)
+      )
+    `);
+  } catch {
+    /* already exists */
+  }
+
+  try {
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_conversation_project_contexts_agent_updated ON conversation_project_contexts(agent_id, updated_at DESC)",
+    );
+  } catch {
+    /* best effort */
+  }
+
+  try {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_conversation_project_contexts_project_delete_cleanup
+      BEFORE DELETE ON projects
+      FOR EACH ROW
+      BEGIN
+        UPDATE conversation_project_contexts
+        SET project_id = NULL,
+            project_path = NULL,
+            project_context = NULL,
+            updated_at = (unixepoch()*1000)
+        WHERE project_id = OLD.id;
+      END
+    `);
+  } catch {
+    /* best effort */
   }
 }
 

@@ -1,6 +1,11 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import { checkProjectPath, createProject, isApiRequestError, updateProject } from "../../api";
 import type { AssignmentMode } from "../../types";
+import {
+  createProjectWithGitHubAutomation,
+  isGitHubProjectCreateError,
+  type GitHubGateReason,
+} from "../project-creation/github-project-flow";
 import type { ManualAssignmentWarning, ProjectI18nTranslate } from "./types";
 import type { ProjectManagerPathTools } from "./useProjectManagerPathTools";
 
@@ -18,6 +23,13 @@ interface UseProjectSaveHandlerParams {
   name: string;
   coreGoal: string;
   selectedAgentIds: Set<string>;
+  githubAutoCreateEnabled: boolean;
+  githubRepoName: string;
+  githubRepoPrivate: boolean;
+  onRequireGitHubConnection: (
+    reason: GitHubGateReason,
+    options: { allowCreateMissingPath: boolean; bypassManualWarning: boolean },
+  ) => void;
   loadProjects: (targetPage: number, keyword: string) => Promise<void>;
   search: string;
   setSelectedProjectId: Dispatch<SetStateAction<string | null>>;
@@ -40,6 +52,10 @@ export function useProjectSaveHandler({
   name,
   coreGoal,
   selectedAgentIds,
+  githubAutoCreateEnabled,
+  githubRepoName,
+  githubRepoPrivate,
+  onRequireGitHubConnection,
   loadProjects,
   search,
   setSelectedProjectId,
@@ -123,15 +139,20 @@ export function useProjectSaveHandler({
           });
           setSelectedProjectId(updated.id);
         } else {
-          const created = await createProject({
+          const created = await createProjectWithGitHubAutomation({
             name: name.trim(),
-            project_path: savePath,
-            core_goal: coreGoal.trim(),
-            create_path_if_missing: createPathIfMissing,
-            assignment_mode: assignmentMode,
-            agent_ids: assignmentMode === "manual" ? Array.from(selectedAgentIds) : [],
+            coreGoal: coreGoal.trim(),
+            projectPath: savePath,
+            createPathIfMissing,
+            assignmentMode,
+            agentIds: assignmentMode === "manual" ? Array.from(selectedAgentIds) : [],
+            github: {
+              enabled: githubAutoCreateEnabled,
+              repoName: githubRepoName.trim(),
+              private: githubRepoPrivate,
+            },
           });
-          setSelectedProjectId(created.id);
+          setSelectedProjectId(created.project.id);
         }
         await loadProjects(1, search);
         setEditingProjectId(null);
@@ -140,6 +161,46 @@ export function useProjectSaveHandler({
         pathTools.resetPathHelperState();
       } catch (err) {
         console.error("Failed to save project:", err);
+        if (isGitHubProjectCreateError(err)) {
+          if (err.code === "github_connection_required" && err.gateReason) {
+            onRequireGitHubConnection(err.gateReason, { allowCreateMissingPath, bypassManualWarning });
+            return;
+          }
+          if (err.code === "github_repo_created_but_local_setup_failed") {
+            const detail =
+              err.causeDetail instanceof Error
+                ? err.causeDetail.message
+                : typeof err.causeDetail === "string"
+                  ? err.causeDetail
+                  : "";
+            pathTools.setFormFeedback({
+              tone: "error",
+              message: t({
+                ko: `GitHub 레포 '${err.remoteRepoFullName || githubRepoName.trim() || "repository"}'는 생성됐지만 로컬 설정에 실패했습니다. 원격 레포는 유지됩니다. 경로: ${err.localPath || savePath}${detail ? ` / 원인: ${detail}` : ""}`,
+                en: `GitHub repository '${err.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${err.localPath || savePath}${detail ? ` / Cause: ${detail}` : ""}`,
+                ja: `GitHub repository '${err.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${err.localPath || savePath}${detail ? ` / Cause: ${detail}` : ""}`,
+                zh: `GitHub repository '${err.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${err.localPath || savePath}${detail ? ` / Cause: ${detail}` : ""}`,
+              }),
+            });
+            return;
+          }
+        }
+        if (isApiRequestError(err) && err.code === "github_not_connected") {
+          onRequireGitHubConnection("not_connected", { allowCreateMissingPath, bypassManualWarning });
+          return;
+        }
+        if (isApiRequestError(err) && err.code === "repo_name_conflict") {
+          pathTools.setFormFeedback({
+            tone: "error",
+            message: t({
+              ko: "이미 존재하는 레포지토리명입니다. 다른 이름을 입력해 주세요.",
+              en: "This repository name already exists. Please choose another name.",
+              ja: "This repository name already exists. Please choose another name.",
+              zh: "This repository name already exists. Please choose another name.",
+            }),
+          });
+          return;
+        }
         if (isApiRequestError(err) && err.code === "project_path_conflict") {
           const details =
             (err.details as {
@@ -202,9 +263,13 @@ export function useProjectSaveHandler({
       canSave,
       coreGoal,
       editingProjectId,
+      githubAutoCreateEnabled,
+      githubRepoName,
+      githubRepoPrivate,
       getManualAssignmentWarning,
       loadProjects,
       name,
+      onRequireGitHubConnection,
       pathTools,
       projectPath,
       saving,

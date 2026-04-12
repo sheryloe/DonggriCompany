@@ -1,4 +1,5 @@
 import { timeAgo } from "../constants";
+import GitHubConnectionDialog from "../../project-creation/GitHubConnectionDialog";
 import type { CreateTaskModalOverlaysProps } from "./overlay-types";
 
 export default function CreateTaskModalOverlays({
@@ -19,6 +20,7 @@ export default function CreateTaskModalOverlays({
   manualPathEntries,
   manualPathTruncated,
   manualPathError,
+  githubConnectReason,
   draftModalOpen,
   drafts,
   onSelectRestoreDraft,
@@ -33,6 +35,8 @@ export default function CreateTaskModalOverlays({
   onManualPathRefresh,
   onOpenManualPathEntry,
   onSelectManualCurrentPath,
+  onCloseGitHubConnectionPrompt,
+  onGitHubConnected,
   onCloseDraftModal,
   onLoadDraft,
   onDeleteDraft,
@@ -380,9 +384,18 @@ export default function CreateTaskModalOverlays({
         </div>
       )}
 
+      {githubConnectReason && (
+        <GitHubConnectionDialog
+          reason={githubConnectReason}
+          onCancel={onCloseGitHubConnectionPrompt}
+          onConnected={onGitHubConnected}
+          zIndexClass="z-[61]"
+        />
+      )}
+
       {draftModalOpen && (
         <div
-          className="fixed inset-0 z-[61] flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-[62] flex items-center justify-center bg-black/70 p-4"
           onClick={onCloseDraftModal}
         >
           <div

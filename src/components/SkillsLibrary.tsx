@@ -36,7 +36,7 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
     );
   }
 
-  if (vm.error && vm.skills.length === 0) {
+  if (vm.error && vm.skills.length === 0 && vm.customSkillsCount === 0) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
@@ -65,7 +65,9 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
     <div className="space-y-4">
       <SkillsHeader
         t={t}
-        skillsCount={vm.skills.length}
+        totalSkillsCount={vm.totalSkillsCount}
+        catalogSkillsCount={vm.catalogSkillsCount}
+        customSkillsCount={vm.customSkillsCount}
         search={vm.search}
         onSearchChange={vm.setSearch}
         sortBy={vm.sortBy}
@@ -80,6 +82,7 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
         categoryCounts={vm.categoryCounts}
         filteredLength={vm.filtered.length}
         search={vm.search}
+        customSkillsCount={vm.customSkillsCount}
       />
 
       <SkillsMemorySection

@@ -50,8 +50,10 @@ CREATE TABLE IF NOT EXISTS agents (
   api_model TEXT,
   cli_model TEXT,
   cli_reasoning_level TEXT,
+  run_mode TEXT NOT NULL DEFAULT 'standard' CHECK(run_mode IN ('standard','plan')),
   cli_account_pool_id TEXT,
   workflow_profile TEXT,
+  agent_profile_json TEXT,
   avatar_emoji TEXT NOT NULL DEFAULT '🤖',
   sprite_number INTEGER,
   personality TEXT,
@@ -143,6 +145,16 @@ CREATE TABLE IF NOT EXISTS messages (
   task_id TEXT REFERENCES tasks(id),
   idempotency_key TEXT,
   created_at INTEGER DEFAULT (unixepoch()*1000)
+);
+
+CREATE TABLE IF NOT EXISTS conversation_project_contexts (
+  conversation_key TEXT NOT NULL,
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  project_path TEXT,
+  project_context TEXT,
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  PRIMARY KEY (conversation_key, agent_id)
 );
 
 CREATE TABLE IF NOT EXISTS task_logs (
@@ -372,6 +384,8 @@ CREATE INDEX IF NOT EXISTS idx_task_logs_task ON task_logs(task_id, created_at D
 CREATE INDEX IF NOT EXISTS idx_task_interrupt_injections_task
   ON task_interrupt_injections(task_id, session_id, consumed_at, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_type, receiver_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversation_project_contexts_agent_updated
+  ON conversation_project_contexts(agent_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_meeting_minutes_task ON meeting_minutes(task_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_meeting_minute_entries_meeting ON meeting_minute_entries(meeting_id, seq ASC);
 CREATE INDEX IF NOT EXISTS idx_review_revision_history_task ON review_revision_history(task_id, first_round DESC, id DESC);

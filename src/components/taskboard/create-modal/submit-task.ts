@@ -1,6 +1,11 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { Project, TaskType, WorkflowPackKey } from "../../../types";
 import { checkProjectPath, createProject, getProjects, isApiRequestError } from "../../../api";
+import type { Project, TaskType, WorkflowPackKey } from "../../../types";
+import {
+  createProjectWithGitHubAutomation,
+  isGitHubProjectCreateError,
+  type GitHubGateReason,
+} from "../../project-creation/github-project-flow";
 import type { FormFeedback, Locale, MissingPathPrompt, TFunction } from "../constants";
 
 type CreateTaskHandler = (input: {
@@ -17,7 +22,7 @@ type CreateTaskHandler = (input: {
 
 type ResolvePathHelperErrorMessage = (error: unknown, fallback: Record<Locale, string>) => string;
 
-type SubmitTaskOptions = {
+export type SubmitTaskOptions = {
   allowCreateMissingPath?: boolean;
   allowWithoutProject?: boolean;
 };
@@ -33,6 +38,9 @@ interface SubmitTaskContext {
   projectQuery: string;
   createNewProjectMode: boolean;
   newProjectPath: string;
+  githubAutoCreateEnabled: boolean;
+  githubRepoName: string;
+  githubRepoPrivate: boolean;
   selectedProject: Project | null;
   projects: Project[];
   submitBusy: boolean;
@@ -53,6 +61,29 @@ interface SubmitTaskContext {
   setNewProjectPath: (path: string) => void;
   setPathApiUnsupported: (unsupported: boolean) => void;
   setProjectDropdownOpen: (open: boolean) => void;
+  onRequireGitHubConnection: (reason: GitHubGateReason, options: SubmitTaskOptions) => void;
+}
+
+function resolveProjectFromQuery(projects: Project[], projectQuery: string): Project | null {
+  const query = projectQuery.trim().toLowerCase();
+  if (!query) return null;
+
+  const exact = projects.find(
+    (project) => project.name.toLowerCase() === query || project.project_path.toLowerCase() === query,
+  );
+  if (exact) return exact;
+
+  const prefixMatches = projects.filter(
+    (project) => project.name.toLowerCase().startsWith(query) || project.project_path.toLowerCase().startsWith(query),
+  );
+  if (prefixMatches.length === 1) return prefixMatches[0];
+
+  return null;
+}
+
+function getRecoveryDetail(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return typeof error === "string" ? error : "";
 }
 
 export async function submitTaskWithProjectHandling(
@@ -72,6 +103,9 @@ export async function submitTaskWithProjectHandling(
     projectQuery,
     createNewProjectMode,
     newProjectPath,
+    githubAutoCreateEnabled,
+    githubRepoName,
+    githubRepoPrivate,
     selectedProject,
     projects,
     submitBusy,
@@ -92,41 +126,27 @@ export async function submitTaskWithProjectHandling(
     setNewProjectPath,
     setPathApiUnsupported,
     setProjectDropdownOpen,
+    onRequireGitHubConnection,
   } = context;
 
-  if (!title.trim()) return;
-  if (submitBusy) return;
+  if (!title.trim() || submitBusy) return;
+
   setFormFeedback(null);
   setSubmitWithoutProjectPromptOpen(false);
 
   let resolvedProject = selectedProject;
-
   if (!resolvedProject && projectQuery.trim()) {
-    const query = projectQuery.trim().toLowerCase();
-    const exact = projects.find(
-      (project) => project.name.toLowerCase() === query || project.project_path.toLowerCase() === query,
-    );
-    if (exact) {
-      resolvedProject = exact;
-    } else {
-      const prefixMatches = projects.filter(
-        (project) =>
-          project.name.toLowerCase().startsWith(query) || project.project_path.toLowerCase().startsWith(query),
-      );
-      if (prefixMatches.length === 1) {
-        resolvedProject = prefixMatches[0];
-      }
-    }
+    resolvedProject = resolveProjectFromQuery(projects, projectQuery);
   }
 
   if (projectId && !resolvedProject) {
     setFormFeedback({
       tone: "error",
       message: t({
-        ko: "선택한 프로젝트를 찾을 수 없습니다. 다시 선택해주세요.",
+        ko: "선택한 프로젝트를 찾지 못했습니다. 다시 선택해 주세요.",
         en: "The selected project was not found. Please select again.",
-        ja: "選択したプロジェクトが見つかりません。再度選択してください。",
-        zh: "找不到所选项目，请重新选择。",
+        ja: "The selected project was not found. Please select again.",
+        zh: "The selected project was not found. Please select again.",
       }),
     });
     return;
@@ -136,10 +156,10 @@ export async function submitTaskWithProjectHandling(
     setFormFeedback({
       tone: "error",
       message: t({
-        ko: "입력한 프로젝트를 확정할 수 없습니다. 목록에서 선택하거나 비워두고 진행해주세요.",
+        ko: "입력한 프로젝트를 확정하지 못했습니다. 목록에서 선택하거나 비워서 계속해 주세요.",
         en: "Could not resolve the typed project. Pick from the list or clear it to continue.",
-        ja: "入力したプロジェクトを特定できません。リストから選択するか、空欄で続行してください。",
-        zh: "无法确定输入的项目。请从列表选择，或清空后继续。",
+        ja: "Could not resolve the typed project. Pick from the list or clear it to continue.",
+        zh: "Could not resolve the typed project. Pick from the list or clear it to continue.",
       }),
     });
     setProjectDropdownOpen(true);
@@ -153,10 +173,10 @@ export async function submitTaskWithProjectHandling(
       setFormFeedback({
         tone: "error",
         message: t({
-          ko: "신규 프로젝트명을 입력해주세요.",
+          ko: "새 프로젝트 이름을 입력해 주세요.",
           en: "Please enter a new project name.",
-          ja: "新規プロジェクト名を入力してください。",
-          zh: "请输入新项目名称。",
+          ja: "Please enter a new project name.",
+          zh: "Please enter a new project name.",
         }),
       });
       return;
@@ -165,10 +185,22 @@ export async function submitTaskWithProjectHandling(
       setFormFeedback({
         tone: "error",
         message: t({
-          ko: "신규 프로젝트 경로를 입력해주세요.",
+          ko: "새 프로젝트 경로를 입력해 주세요.",
           en: "Please enter a new project path.",
-          ja: "新規プロジェクトのパスを入力してください。",
-          zh: "请输入新项目路径。",
+          ja: "Please enter a new project path.",
+          zh: "Please enter a new project path.",
+        }),
+      });
+      return;
+    }
+    if (githubAutoCreateEnabled && !githubRepoName.trim()) {
+      setFormFeedback({
+        tone: "error",
+        message: t({
+          ko: "레포지토리 이름을 입력해 주세요.",
+          en: "Please enter a repository name.",
+          ja: "Please enter a repository name.",
+          zh: "Please enter a repository name.",
         }),
       });
       return;
@@ -177,16 +209,17 @@ export async function submitTaskWithProjectHandling(
       setFormFeedback({
         tone: "error",
         message: t({
-          ko: "신규 프로젝트 생성 시 설명은 필수이며, 프로젝트 핵심 목표로 저장됩니다.",
+          ko: "설명은 새 프로젝트 생성 시 필수이며 프로젝트 핵심 목표로 저장됩니다.",
           en: "Description is required for new project creation and will be saved as the project core goal.",
-          ja: "新規プロジェクト作成時は説明が必須で、プロジェクトのコア目標として保存されます。",
-          zh: "创建新项目时说明为必填，并会保存为项目核心目标。",
+          ja: "Description is required for new project creation and will be saved as the project core goal.",
+          zh: "Description is required for new project creation and will be saved as the project core goal.",
         }),
       });
       return;
     }
 
     setSubmitBusy(true);
+    let normalizedPathForRecovery = newProjectPath.trim();
     try {
       const rawNewProjectPath = newProjectPath.trim();
       let normalizedPath = rawNewProjectPath;
@@ -195,6 +228,7 @@ export async function submitTaskWithProjectHandling(
       try {
         const pathCheck = await checkProjectPath(rawNewProjectPath);
         normalizedPath = pathCheck.normalized_path || rawNewProjectPath;
+        normalizedPathForRecovery = normalizedPath;
         if (normalizedPath !== rawNewProjectPath) {
           setNewProjectPath(normalizedPath);
         }
@@ -203,10 +237,10 @@ export async function submitTaskWithProjectHandling(
           setFormFeedback({
             tone: "error",
             message: t({
-              ko: "입력한 경로가 폴더가 아닙니다. 디렉터리 경로를 입력해주세요.",
+              ko: "입력한 경로가 디렉터리가 아닙니다. 디렉터리 경로를 입력해 주세요.",
               en: "The path is not a directory. Please enter a directory path.",
-              ja: "入力したパスはフォルダではありません。ディレクトリパスを指定してください。",
-              zh: "该路径不是文件夹，请输入目录路径。",
+              ja: "The path is not a directory. Please enter a directory path.",
+              zh: "The path is not a directory. Please enter a directory path.",
             }),
           });
           return;
@@ -220,32 +254,50 @@ export async function submitTaskWithProjectHandling(
           });
           return;
         }
+
         createPathIfMissing = !pathCheck.exists && allowCreateMissingPath;
       } catch (pathCheckError) {
         if (isApiRequestError(pathCheckError) && pathCheckError.status === 404) {
           setPathApiUnsupported(true);
           setFormFeedback({ tone: "info", message: unsupportedPathApiMessage });
           createPathIfMissing = true;
+          normalizedPathForRecovery = rawNewProjectPath;
         } else {
           setFormFeedback({
             tone: "error",
             message: resolvePathHelperErrorMessage(pathCheckError, {
               ko: "프로젝트 경로 확인에 실패했습니다.",
               en: "Failed to verify project path.",
-              ja: "プロジェクトパスの確認に失敗しました。",
-              zh: "项目路径校验失败。",
+              ja: "Failed to verify project path.",
+              zh: "Failed to verify project path.",
             }),
           });
           return;
         }
       }
 
-      const createdProject = await createProject({
-        name: projectName,
-        project_path: normalizedPath,
-        core_goal: coreGoal,
-        create_path_if_missing: createPathIfMissing,
-      });
+      const createdProjectResult = githubAutoCreateEnabled
+        ? await createProjectWithGitHubAutomation({
+            name: projectName,
+            coreGoal,
+            projectPath: normalizedPath,
+            createPathIfMissing,
+            github: {
+              enabled: true,
+              repoName: githubRepoName.trim(),
+              private: githubRepoPrivate,
+            },
+          })
+        : {
+            project: await createProject({
+              name: projectName,
+              project_path: normalizedPath,
+              core_goal: coreGoal,
+              create_path_if_missing: createPathIfMissing,
+            }),
+          };
+
+      const createdProject = createdProjectResult.project;
       setMissingPathPrompt(null);
       resolvedProject = createdProject;
       setProjectId(createdProject.id);
@@ -257,6 +309,46 @@ export async function submitTaskWithProjectHandling(
       });
     } catch (error) {
       console.error("Failed to create project during task creation:", error);
+
+      if (isGitHubProjectCreateError(error)) {
+        if (error.code === "github_connection_required" && error.gateReason) {
+          onRequireGitHubConnection(error.gateReason, options);
+          return;
+        }
+        if (error.code === "github_repo_created_but_local_setup_failed") {
+          const recoveryPath = error.localPath || normalizedPathForRecovery;
+          const detail = getRecoveryDetail(error.causeDetail);
+          setFormFeedback({
+            tone: "error",
+            message: t({
+              ko: `GitHub 레포 '${error.remoteRepoFullName || githubRepoName.trim() || "repository"}'는 생성됐지만 로컬 설정에 실패했습니다. 원격 레포는 유지됩니다. 경로: ${recoveryPath}${detail ? ` / 원인: ${detail}` : ""}`,
+              en: `GitHub repository '${error.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${recoveryPath}${detail ? ` / Cause: ${detail}` : ""}`,
+              ja: `GitHub repository '${error.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${recoveryPath}${detail ? ` / Cause: ${detail}` : ""}`,
+              zh: `GitHub repository '${error.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${recoveryPath}${detail ? ` / Cause: ${detail}` : ""}`,
+            }),
+          });
+          return;
+        }
+      }
+
+      if (isApiRequestError(error) && error.code === "github_not_connected") {
+        onRequireGitHubConnection("not_connected", options);
+        return;
+      }
+
+      if (isApiRequestError(error) && error.code === "repo_name_conflict") {
+        setFormFeedback({
+          tone: "error",
+          message: t({
+            ko: "이미 존재하는 레포지토리명입니다. 다른 이름을 입력해 주세요.",
+            en: "This repository name already exists. Please choose another name.",
+            ja: "This repository name already exists. Please choose another name.",
+            zh: "This repository name already exists. Please choose another name.",
+          }),
+        });
+        return;
+      }
+
       if (isApiRequestError(error) && error.code === "project_path_conflict") {
         const details =
           (error.details as {
@@ -274,6 +366,7 @@ export async function submitTaskWithProjectHandling(
             (existingProjectId && project.id === existingProjectId) ||
             (existingProjectPath && project.project_path === existingProjectPath),
         );
+
         if (existingProject) {
           selectProject(existingProject);
         } else {
@@ -285,25 +378,27 @@ export async function submitTaskWithProjectHandling(
               console.error("Failed to refresh projects after path conflict:", loadError);
             });
         }
+
         setFormFeedback({
           tone: "info",
           message: t({
             ko: existingProjectName
-              ? `이미 '${existingProjectName}' 프로젝트에서 사용 중인 경로입니다. 기존 프로젝트를 선택해주세요.`
-              : "이미 등록된 프로젝트 경로입니다. 기존 프로젝트를 선택해주세요.",
+              ? `이 경로는 이미 '${existingProjectName}' 프로젝트가 사용 중입니다. 기존 프로젝트를 선택해 주세요.`
+              : "이 경로는 이미 다른 프로젝트가 사용 중입니다. 기존 프로젝트를 선택해 주세요.",
             en: existingProjectName
               ? `This path is already used by '${existingProjectName}'. Please use the existing project.`
               : "This path is already used by another project. Please use the existing project.",
             ja: existingProjectName
-              ? `このパスは既に '${existingProjectName}' で使用中です。既存プロジェクトを選択してください。`
-              : "このパスは既存プロジェクトで使用中です。既存プロジェクトを選択してください。",
+              ? `This path is already used by '${existingProjectName}'. Please use the existing project.`
+              : "This path is already used by another project. Please use the existing project.",
             zh: existingProjectName
-              ? `该路径已被‘${existingProjectName}’使用，请选择已有项目。`
-              : "该路径已被现有项目使用，请选择已有项目。",
+              ? `This path is already used by '${existingProjectName}'. Please use the existing project.`
+              : "This path is already used by another project. Please use the existing project.",
           }),
         });
         return;
       }
+
       if (isApiRequestError(error) && error.code === "project_path_not_found") {
         const details =
           (error.details as {
@@ -320,13 +415,14 @@ export async function submitTaskWithProjectHandling(
         });
         return;
       }
+
       setFormFeedback({
         tone: "error",
         message: resolvePathHelperErrorMessage(error, {
-          ko: "신규 프로젝트 생성에 실패했습니다. 프로젝트명/경로를 확인해주세요.",
+          ko: "새 프로젝트 생성에 실패했습니다. 이름과 경로를 확인해 주세요.",
           en: "Failed to create a new project. Please check name/path.",
-          ja: "新規プロジェクトの作成に失敗しました。名前/パスを確認してください。",
-          zh: "新项目创建失败，请检查名称/路径。",
+          ja: "Failed to create a new project. Please check name/path.",
+          zh: "Failed to create a new project. Please check name/path.",
         }),
       });
       return;
@@ -360,10 +456,10 @@ export async function submitTaskWithProjectHandling(
     setFormFeedback({
       tone: "error",
       message: t({
-        ko: "업무 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        ko: "업무 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
         en: "Failed to create task. Please try again shortly.",
-        ja: "タスク作成中にエラーが発生しました。しばらくしてから再試行してください。",
-        zh: "创建任务时发生错误，请稍后重试。",
+        ja: "Failed to create task. Please try again shortly.",
+        zh: "Failed to create task. Please try again shortly.",
       }),
     });
   } finally {

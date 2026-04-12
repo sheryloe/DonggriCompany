@@ -5,6 +5,8 @@ import {
   isWorkflowPackKey,
   type WorkflowPackKey,
 } from "../../workflow/packs/definitions.ts";
+import { normalizeAgentProfile, serializeAgentProfile } from "../../workflow/agents/agent-profile.ts";
+import { resolveAgentRunMode } from "../../workflow/agents/run-mode.ts";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
 
@@ -23,6 +25,12 @@ function normalizeText(value: unknown): string {
 function normalizeOptionalText(value: unknown): string | null {
   const text = normalizeText(value);
   return text.length > 0 ? text : null;
+}
+
+function normalizeAgentRole(value: unknown): "team_leader" | "senior" | "junior" | "intern" {
+  const role = normalizeText(value).toLowerCase();
+  if (role === "team_leader" || role === "senior" || role === "junior" || role === "intern") return role;
+  return "senior";
 }
 
 function normalizePositiveInt(value: unknown, fallback: number): number {
@@ -57,6 +65,24 @@ function hasAgentWorkflowPackColumn(db: DbLike): boolean {
   }
 }
 
+function hasAgentProfileJsonColumn(db: DbLike): boolean {
+  try {
+    const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
+    return cols.some((col) => normalizeText(col.name) === "agent_profile_json");
+  } catch {
+    return false;
+  }
+}
+
+function hasAgentRunModeColumn(db: DbLike): boolean {
+  try {
+    const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
+    return cols.some((col) => normalizeText(col.name) === "run_mode");
+  } catch {
+    return false;
+  }
+}
+
 type OfficePackProfileAgent = {
   id: string;
   name: string;
@@ -69,9 +95,11 @@ type OfficePackProfileAgent = {
   cli_provider: string;
   cli_model: string | null;
   cli_reasoning_level: string | null;
+  run_mode: "standard" | "plan";
   avatar_emoji: string;
   sprite_number: number | null;
   personality: string | null;
+  agent_profile_json: string | null;
   created_at: number;
 };
 
@@ -99,6 +127,7 @@ function normalizeOfficePackProfileAgent(raw: unknown, nowMs: number): OfficePac
   const name = normalizeText(obj.name) || id;
   const roleRaw = normalizeText(obj.role).toLowerCase();
   const cliProviderRaw = normalizeText(obj.cli_provider).toLowerCase();
+  const role = VALID_AGENT_ROLES.has(roleRaw) ? normalizeAgentRole(roleRaw) : "senior";
 
   return {
     id,
@@ -107,15 +136,21 @@ function normalizeOfficePackProfileAgent(raw: unknown, nowMs: number): OfficePac
     name_ja: normalizeText(obj.name_ja),
     name_zh: normalizeText(obj.name_zh),
     department_id: normalizeOptionalText(obj.department_id),
-    role: VALID_AGENT_ROLES.has(roleRaw) ? roleRaw : "senior",
+    role,
     acts_as_planning_leader:
       roleRaw === "team_leader" && normalizePositiveInt(obj.acts_as_planning_leader, 0) > 0 ? 1 : 0,
     cli_provider: VALID_CLI_PROVIDERS.has(cliProviderRaw) ? cliProviderRaw : "codex",
     cli_model: normalizeOptionalText(obj.cli_model),
     cli_reasoning_level: normalizeOptionalText(obj.cli_reasoning_level),
+    run_mode: resolveAgentRunMode({
+      runMode: obj.run_mode,
+      cliProvider: VALID_CLI_PROVIDERS.has(cliProviderRaw) ? cliProviderRaw : "codex",
+      cliModel: normalizeOptionalText(obj.cli_model),
+    }),
     avatar_emoji: normalizeText(obj.avatar_emoji) || "?쨼",
     sprite_number: normalizeNullablePositiveInt(obj.sprite_number),
     personality: normalizeOptionalText(obj.personality),
+    agent_profile_json: serializeAgentProfile(normalizeAgentProfile(obj.agent_profile ?? obj.agent_profile_json, role)),
     created_at: normalizePositiveInt(obj.created_at, nowMs),
   };
 }
@@ -332,6 +367,8 @@ export function hydrateOfficePackAgentFromSettings(db: DbLike, agentId: string, 
 
   const deptId = ensureDepartmentExists(db, found.packKey, found.agent.department_id, found.department, now);
   const includeWorkflowPackKey = hasAgentWorkflowPackColumn(db);
+  const includeAgentProfileJson = hasAgentProfileJsonColumn(db);
+  const includeRunMode = hasAgentRunModeColumn(db);
 
   try {
     if (includeWorkflowPackKey) {
@@ -341,9 +378,9 @@ export function hydrateOfficePackAgentFromSettings(db: DbLike, agentId: string, 
           id, name, name_ko, name_ja, name_zh, department_id, role,
           workflow_pack_key,
           acts_as_planning_leader,
-          cli_provider, avatar_emoji, sprite_number, personality, status, current_task_id,
+          cli_provider, avatar_emoji, sprite_number, personality${includeAgentProfileJson ? ", agent_profile_json" : ""}${includeRunMode ? ", run_mode" : ""}, status, current_task_id,
           stats_tasks_done, stats_xp, created_at, cli_model, cli_reasoning_level
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', NULL, 0, 0, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${includeAgentProfileJson ? ", ?" : ""}${includeRunMode ? ", ?" : ""}, 'idle', NULL, 0, 0, ?, ?, ?)
       `,
       ).run(
         found.agent.id,
@@ -359,6 +396,8 @@ export function hydrateOfficePackAgentFromSettings(db: DbLike, agentId: string, 
         found.agent.avatar_emoji,
         found.agent.sprite_number,
         found.agent.personality,
+        ...(includeAgentProfileJson ? [found.agent.agent_profile_json] : []),
+        ...(includeRunMode ? [found.agent.run_mode] : []),
         found.agent.created_at,
         found.agent.cli_model,
         found.agent.cli_reasoning_level,
@@ -369,9 +408,9 @@ export function hydrateOfficePackAgentFromSettings(db: DbLike, agentId: string, 
         INSERT OR IGNORE INTO agents (
           id, name, name_ko, name_ja, name_zh, department_id, role,
           acts_as_planning_leader,
-          cli_provider, avatar_emoji, sprite_number, personality, status, current_task_id,
+          cli_provider, avatar_emoji, sprite_number, personality${includeAgentProfileJson ? ", agent_profile_json" : ""}${includeRunMode ? ", run_mode" : ""}, status, current_task_id,
           stats_tasks_done, stats_xp, created_at, cli_model, cli_reasoning_level
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', NULL, 0, 0, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${includeAgentProfileJson ? ", ?" : ""}${includeRunMode ? ", ?" : ""}, 'idle', NULL, 0, 0, ?, ?, ?)
       `,
       ).run(
         found.agent.id,
@@ -386,6 +425,8 @@ export function hydrateOfficePackAgentFromSettings(db: DbLike, agentId: string, 
         found.agent.avatar_emoji,
         found.agent.sprite_number,
         found.agent.personality,
+        ...(includeAgentProfileJson ? [found.agent.agent_profile_json] : []),
+        ...(includeRunMode ? [found.agent.run_mode] : []),
         found.agent.created_at,
         found.agent.cli_model,
         found.agent.cli_reasoning_level,
@@ -408,6 +449,8 @@ function upsertOfficePackProfileAgent(
 ): number {
   const deptId = ensureDepartmentExists(db, packKey, agent.department_id, department, now);
   const includeWorkflowPackKey = hasAgentWorkflowPackColumn(db);
+  const includeAgentProfileJson = hasAgentProfileJsonColumn(db);
+  const includeRunMode = hasAgentRunModeColumn(db);
   try {
     const result = includeWorkflowPackKey
       ? (db
@@ -417,9 +460,9 @@ function upsertOfficePackProfileAgent(
           id, name, name_ko, name_ja, name_zh, department_id, role,
           workflow_pack_key,
           acts_as_planning_leader,
-          cli_provider, avatar_emoji, sprite_number, personality, status, current_task_id,
+          cli_provider, avatar_emoji, sprite_number, personality${includeAgentProfileJson ? ", agent_profile_json" : ""}${includeRunMode ? ", run_mode" : ""}, status, current_task_id,
           stats_tasks_done, stats_xp, created_at, cli_model, cli_reasoning_level
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', NULL, 0, 0, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${includeAgentProfileJson ? ", ?" : ""}${includeRunMode ? ", ?" : ""}, 'idle', NULL, 0, 0, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           name = excluded.name,
           name_ko = excluded.name_ko,
@@ -433,6 +476,8 @@ function upsertOfficePackProfileAgent(
           avatar_emoji = excluded.avatar_emoji,
           sprite_number = COALESCE(excluded.sprite_number, agents.sprite_number),
           personality = excluded.personality,
+          ${includeAgentProfileJson ? "agent_profile_json = excluded.agent_profile_json," : ""}
+          ${includeRunMode ? "run_mode = excluded.run_mode," : ""}
           cli_model = excluded.cli_model,
           cli_reasoning_level = excluded.cli_reasoning_level
       `,
@@ -451,6 +496,8 @@ function upsertOfficePackProfileAgent(
             agent.avatar_emoji,
             agent.sprite_number,
             agent.personality,
+            ...(includeAgentProfileJson ? [agent.agent_profile_json] : []),
+            ...(includeRunMode ? [agent.run_mode] : []),
             agent.created_at,
             agent.cli_model,
             agent.cli_reasoning_level,
@@ -461,9 +508,9 @@ function upsertOfficePackProfileAgent(
         INSERT INTO agents (
           id, name, name_ko, name_ja, name_zh, department_id, role,
           acts_as_planning_leader,
-          cli_provider, avatar_emoji, sprite_number, personality, status, current_task_id,
+          cli_provider, avatar_emoji, sprite_number, personality${includeAgentProfileJson ? ", agent_profile_json" : ""}${includeRunMode ? ", run_mode" : ""}, status, current_task_id,
           stats_tasks_done, stats_xp, created_at, cli_model, cli_reasoning_level
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', NULL, 0, 0, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${includeAgentProfileJson ? ", ?" : ""}${includeRunMode ? ", ?" : ""}, 'idle', NULL, 0, 0, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           name = excluded.name,
           name_ko = excluded.name_ko,
@@ -476,6 +523,8 @@ function upsertOfficePackProfileAgent(
           avatar_emoji = excluded.avatar_emoji,
           sprite_number = COALESCE(excluded.sprite_number, agents.sprite_number),
           personality = excluded.personality,
+          ${includeAgentProfileJson ? "agent_profile_json = excluded.agent_profile_json," : ""}
+          ${includeRunMode ? "run_mode = excluded.run_mode," : ""}
           cli_model = excluded.cli_model,
           cli_reasoning_level = excluded.cli_reasoning_level
       `,
@@ -493,6 +542,8 @@ function upsertOfficePackProfileAgent(
             agent.avatar_emoji,
             agent.sprite_number,
             agent.personality,
+            ...(includeAgentProfileJson ? [agent.agent_profile_json] : []),
+            ...(includeRunMode ? [agent.run_mode] : []),
             agent.created_at,
             agent.cli_model,
             agent.cli_reasoning_level,

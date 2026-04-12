@@ -1,4 +1,5 @@
-﻿import type { AgentRole, CliProvider } from "../../types";
+import { createPresetAgentProfile } from "../../agent-profile";
+import type { AgentRole, CliProvider } from "../../types";
 import type { DeptForm, FormData } from "./types";
 
 export const ROLES: AgentRole[] = ["team_leader", "senior", "junior", "intern"];
@@ -69,6 +70,9 @@ export const BLANK: FormData = {
   department_id: "",
   role: "junior",
   cli_provider: "claude",
+  cli_model: "",
+  cli_reasoning_level: "",
+  run_mode: "standard",
   cli_account_pool_id: "",
   workflow_role: "reviewer",
   review_lenses_text: "general",
@@ -77,6 +81,8 @@ export const BLANK: FormData = {
   avatar_emoji: "😀",
   sprite_number: null,
   personality: "",
+  specialties_text: "",
+  agent_profile: createPresetAgentProfile("junior"),
 };
 
 export const DEPT_COLORS = [

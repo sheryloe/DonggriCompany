@@ -4,6 +4,7 @@ import { getDepartmentPromptForPack } from "../packs/department-scope.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../core/video-skill-bootstrap.ts";
 import { buildWorkflowPackExecutionGuidance } from "../packs/execution-guidance.ts";
 import { resolveVideoArtifactSpecForTask } from "../packs/video-artifact.ts";
+import { buildAgentPromptProfileBlock } from "../agents/agent-profile.ts";
 import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
 import { resolveConstrainedAgentScopeForTask } from "../../routes/core/tasks/execution-run-auto-assign.ts";
 import { isPrimaryAuthorProfile, resolveAgentWorkflowProfile } from "../agents/workflow-profile.ts";
@@ -285,7 +286,22 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       notifyTaskStatus(taskId, taskData.title, "pending", taskLang);
       notifyCeo(
         pickL(
-          l(
+          taskLang === "ko"
+            ? l(
+                [
+                  `[WORKTREE REQUIRED] '${taskData.title}' 실행이 차단되었습니다. 격리 worktree 생성에 실패해 프로젝트 루트를 보호하기 위해 실행을 중단했습니다.`,
+                ],
+                [
+                  `[WORKTREE REQUIRED] Blocked execution for '${taskData.title}'. Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                ],
+                [
+                  `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                ],
+                [
+                  `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                ],
+              )
+            : l(
             [
               `[WORKTREE REQUIRED] '${taskData.title}' ?ㅽ뻾??李⑤떒?덉뒿?덈떎. 寃⑸━ worktree ?앹꽦???ㅽ뙣???꾨줈?앺듃 猷⑦듃 ?ㅼ뿼??諛⑹??섍린 ?꾪빐 以묐떒?섏뿀?듬땲??`,
             ],
@@ -329,7 +345,16 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     }
     const continuationInstruction = continuationCtx
       ? pickL(
-          l(
+          taskLang === "ko"
+            ? l(
+                ["이어달리기 실행: 인수인계를 유지하고, 인사말이나 착수 멘트는 생략한 뒤, 남은 리뷰 항목부터 바로 처리하세요."],
+                [
+                  "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
+                ],
+                ["Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately."],
+                ["Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately."],
+              )
+            : l(
             ["?곗냽 ?ㅽ뻾: ?뚯쑀 而⑦뀓?ㅽ듃瑜??좎??섍퀬 ?몄궗/李⑹닔 硫섑듃 ?놁씠 誘명빐寃?寃????ぉ??利됱떆 諛섏쁺?섏꽭??"],
             [
               "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
@@ -340,7 +365,14 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
           taskLang,
         )
       : pickL(
-          l(
+          taskLang === "ko"
+            ? l(
+                ["긴 서두 없이 바로 실행하고, 메시지는 간결하게 유지하세요."],
+                ["Execute directly without long preamble and keep messages concise."],
+                ["Execute directly without long preamble and keep messages concise."],
+                ["Execute directly without long preamble and keep messages concise."],
+              )
+            : l(
             ["湲??쒕줎 ?놁씠 諛붾줈 ?ㅽ뻾?섍퀬, 硫붿떆吏??媛꾧껐?섍쾶 ?좎??섏꽭??"],
             ["Execute directly without long preamble and keep messages concise."],
             ["Execute directly without long preamble and keep messages concise."],
@@ -349,7 +381,16 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
           taskLang,
         );
     const runInstruction = pickL(
-      l(
+      taskLang === "ko"
+        ? l(
+            ["위 작업을 빠짐없이 완료하세요. 필요하면 위의 이어달리기 브리프와 대화 문맥을 활용하세요."],
+            [
+              "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
+            ],
+            ["Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant."],
+            ["Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant."],
+          )
+        : l(
         ["???묒뾽??異⑸텇???꾩닔?섏꽭?? ?꾩슂 ???곗냽 ?ㅽ뻾 ?붿빟怨????留λ씫??李멸퀬?섏꽭??"],
         [
           "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
@@ -360,6 +401,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       taskLang,
     );
     const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(provider);
+    const agentProfileBlock = buildAgentPromptProfileBlock(execAgent);
     const spawnPrompt = buildTaskExecutionPrompt(
       [
         availableSkillsPromptBlock,
@@ -373,7 +415,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         conversationCtx,
         `\n---`,
         `Agent: ${execAgent.name} (${roleLabel}, ${effectiveDeptName})`,
-        execAgent.personality ? `Personality: ${execAgent.personality}` : "",
+        agentProfileBlock,
         deptConstraint,
         deptPromptBlock,
         `NOTE: You are working in an isolated Git worktree branch (climpire/${taskId.slice(0, 8)}). Commit your changes normally.`,
@@ -383,6 +425,8 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       ],
       {
         allowWarningFix: hasExplicitWarningFixRequest(taskData.title, taskData.description),
+        agent: execAgent,
+        lang: taskLang,
       },
     );
 
@@ -449,7 +493,14 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     }
 
     const worktreeNote = pickL(
-      l(
+      taskLang === "ko"
+        ? l(
+            [` (격리 브랜치: climpire/${taskId.slice(0, 8)})`],
+            [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
+            [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
+            [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
+          )
+        : l(
         [` (寃⑸━ 釉뚮옖移? climpire/${taskId.slice(0, 8)})`],
         [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
         [` (?녽썴?뽧꺀?녈긽: climpire/${taskId.slice(0, 8)})`],
@@ -459,7 +510,14 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     );
     notifyCeo(
       pickL(
-        l(
+        taskLang === "ko"
+          ? l(
+              [`${execName}이(가) '${taskData.title}' 작업을 시작했습니다.${worktreeNote}`],
+              [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
+              [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
+              [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
+            )
+          : l(
           [`${execName}媛 '${taskData.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
           [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
           [`${execName}??'${taskData.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],

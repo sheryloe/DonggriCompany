@@ -48,9 +48,11 @@ function createDb(): DatabaseSync {
       api_provider_id TEXT,
       api_model TEXT,
       sprite_number INTEGER,
+      agent_profile_json TEXT,
       name_ja TEXT NOT NULL DEFAULT '',
       name_zh TEXT NOT NULL DEFAULT '',
       cli_model TEXT,
+      run_mode TEXT NOT NULL DEFAULT 'standard',
       cli_reasoning_level TEXT,
       FOREIGN KEY (department_id) REFERENCES departments(id)
     );
@@ -98,6 +100,26 @@ describe("hydrateOfficePackAgentFromSettings", () => {
             avatar_emoji: "🎬",
             sprite_number: 8,
             personality: "planning lead",
+            agent_profile: {
+              role_template: "team_leader",
+              growth_tier: 5,
+              capabilities: {
+                execution: 5,
+                architecture: 4,
+                review: 4,
+                research: 4,
+                communication: 5,
+                leadership: 5,
+              },
+              prompt_style: {
+                tone: 4,
+                autonomy: 5,
+                strictness: 4,
+                collaboration: 5,
+              },
+              specialties: ["storyboarding", "approval"],
+              custom_prompt_override: "Escalate risks before final sign-off.",
+            },
             created_at: 1700000000001,
           },
         ],
@@ -113,6 +135,11 @@ describe("hydrateOfficePackAgentFromSettings", () => {
     expect(hydrated?.cli_model).toBe("claude-opus-4-6");
     expect((hydrated as unknown as { sprite_number?: number }).sprite_number).toBe(8);
     expect((hydrated as unknown as { acts_as_planning_leader?: number }).acts_as_planning_leader).toBe(1);
+    const hydratedRow = db
+      .prepare("SELECT agent_profile_json FROM agents WHERE id = 'video_preprod-seed-1'")
+      .get() as { agent_profile_json?: string | null } | undefined;
+    expect(hydratedRow?.agent_profile_json).toContain("\"growth_tier\":5");
+    expect(hydratedRow?.agent_profile_json).toContain("\"storyboarding\"");
 
     const dept = db.prepare("SELECT id, name_ko FROM departments WHERE id = 'planning'").get() as
       | { id: string; name_ko: string }
@@ -152,6 +179,26 @@ describe("hydrateOfficePackAgentFromSettings", () => {
             acts_as_planning_leader: 1,
             cli_provider: "claude",
             avatar_emoji: "✍️",
+            agent_profile_json: JSON.stringify({
+              role_template: "team_leader",
+              growth_tier: 4,
+              capabilities: {
+                execution: 4,
+                architecture: 4,
+                review: 4,
+                research: 3,
+                communication: 4,
+                leadership: 5,
+              },
+              prompt_style: {
+                tone: 4,
+                autonomy: 5,
+                strictness: 4,
+                collaboration: 5,
+              },
+              specialties: ["plot"],
+              custom_prompt_override: "Guard narrative consistency.",
+            }),
           },
         ],
       },
@@ -161,13 +208,24 @@ describe("hydrateOfficePackAgentFromSettings", () => {
     expect(result.agentsSynced).toBeGreaterThan(0);
 
     const row = db
-      .prepare("SELECT id, name, department_id, acts_as_planning_leader FROM agents WHERE id = 'novel-seed-1'")
-      .get() as { id: string; name: string; department_id: string | null; acts_as_planning_leader: number } | undefined;
+      .prepare(
+        "SELECT id, name, department_id, acts_as_planning_leader, agent_profile_json FROM agents WHERE id = 'novel-seed-1'",
+      )
+      .get() as
+      | {
+          id: string;
+          name: string;
+          department_id: string | null;
+          acts_as_planning_leader: number;
+          agent_profile_json: string | null;
+        }
+      | undefined;
     expect(row).toEqual({
       id: "novel-seed-1",
       name: "Luna",
       department_id: "design",
       acts_as_planning_leader: 1,
+      agent_profile_json: expect.stringContaining("\"growth_tier\":4"),
     });
   });
 
@@ -212,5 +270,49 @@ describe("hydrateOfficePackAgentFromSettings", () => {
 
     expect(novel?.id).toBe("novel-seed-1");
     expect(report).toBeUndefined();
+  });
+
+  it("preserves codex run_mode when syncing office-pack agents", () => {
+    db = createDb();
+    const profiles = {
+      development: {
+        departments: [{ id: "planning", name: "Planning", name_ko: "기획", icon: "📊", color: "#3b82f6" }],
+        agents: [
+          {
+            id: "codex-plan-seed",
+            name: "Planner",
+            name_ko: "플래너",
+            department_id: "planning",
+            role: "team_leader",
+            cli_provider: "codex",
+            cli_model: "gpt-5.4",
+            cli_reasoning_level: "high",
+            run_mode: "plan",
+            avatar_emoji: "🧠",
+          },
+        ],
+      },
+    };
+
+    const result = syncOfficePackAgentsFromProfiles(db, profiles, () => 1700000004000);
+    expect(result.agentsSynced).toBeGreaterThan(0);
+
+    const row = db
+      .prepare("SELECT cli_provider, cli_model, cli_reasoning_level, run_mode FROM agents WHERE id = ?")
+      .get("codex-plan-seed") as
+      | {
+          cli_provider: string;
+          cli_model: string | null;
+          cli_reasoning_level: string | null;
+          run_mode: string;
+        }
+      | undefined;
+
+    expect(row).toEqual({
+      cli_provider: "codex",
+      cli_model: "gpt-5.4",
+      cli_reasoning_level: "high",
+      run_mode: "plan",
+    });
   });
 });

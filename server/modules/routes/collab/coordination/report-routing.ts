@@ -6,6 +6,11 @@ import type { AgentRow } from "./types.ts";
 
 type ReportOutputFormat = "ppt" | "md";
 type ReportRoutingDeps = any;
+type ReportRequestOptions = {
+  projectId?: string | null;
+  projectPath?: string | null;
+  projectContext?: string | null;
+};
 type ReportPptToolAvailability = {
   available: boolean;
   missingPaths: string[];
@@ -223,7 +228,7 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
     };
   }
 
-  function handleReportRequest(targetAgentId: string, ceoMessage: string): boolean {
+  function handleReportRequest(targetAgentId: string, ceoMessage: string, options: ReportRequestOptions = {}): boolean {
     const routing = resolveReportAssignee(targetAgentId);
     const reportAssignee = routing.assignee;
     if (!reportAssignee) return false;
@@ -251,8 +256,44 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
     const htmlSourceEntryPath = outputFormat === "ppt" ? `${htmlSourceDirPath}/index.html` : "";
     const researchNotesPath = `docs/reports/${fileStamp}-research-notes.md`;
     const fallbackMdPath = `docs/reports/${fileStamp}-report-fallback.md`;
-    let linkedProjectId: string | null = null;
-    let linkedProjectPath: string | null = detectedPath ?? null;
+    const explicitProjectId = normalizeTextField(options.projectId);
+    const explicitProjectPath = normalizeTextField(options.projectPath);
+    const explicitProjectContext = normalizeTextField(options.projectContext);
+    let linkedProjectId: string | null = explicitProjectId;
+    let linkedProjectPath: string | null = explicitProjectPath ?? detectedPath ?? null;
+    if (linkedProjectId) {
+      const projectById = db
+        .prepare(
+          `
+      SELECT id, project_path
+      FROM projects
+      WHERE id = ?
+      LIMIT 1
+    `,
+        )
+        .get(linkedProjectId) as { id: string; project_path: string | null } | undefined;
+      if (projectById) {
+        linkedProjectId = projectById.id;
+        linkedProjectPath = normalizeTextField(projectById.project_path) ?? linkedProjectPath;
+      }
+    }
+    if (!linkedProjectId && explicitProjectPath) {
+      const projectByExplicitPath = db
+        .prepare(
+          `
+      SELECT id, project_path
+      FROM projects
+      WHERE project_path = ?
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,
+        )
+        .get(explicitProjectPath) as { id: string; project_path: string } | undefined;
+      if (projectByExplicitPath) {
+        linkedProjectId = projectByExplicitPath.id;
+        linkedProjectPath = projectByExplicitPath.project_path;
+      }
+    }
     if (detectedPath) {
       const projectByPath = db
         .prepare(
@@ -312,6 +353,7 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
       "[REPORT FLOW] review_meeting=skip_for_report",
       outputFormat === "ppt" ? "[REPORT FLOW] design_review=pending" : "[REPORT FLOW] design_review=not_required",
       outputFormat === "ppt" ? "[REPORT FLOW] final_regen=pending" : "[REPORT FLOW] final_regen=not_required",
+      explicitProjectContext ? `[PROJECT CONTEXT] ${explicitProjectContext}` : "",
       "",
       `Primary output format: ${outputLabel}`,
       `Target file path: ${outputPath}`,
@@ -425,6 +467,7 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
         html_source_entry_path: htmlSourceEntryPath || null,
         research_notes_path: researchNotesPath,
         fallback_md_path: fallbackMdPath,
+        project_context: explicitProjectContext,
       },
     });
     if (linkedProjectId) {

@@ -1,13 +1,15 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Agent, Department, TaskType, WorkflowPackKey } from "../../types";
 import { useI18n } from "../../i18n";
 import { type CreateTaskDraft, type FormFeedback } from "./constants";
 import type { CreateTaskModalOverlaysProps } from "./create-modal/overlay-types";
 import CreateTaskModalView from "./create-modal/CreateTaskModalView";
-import { submitTaskWithProjectHandling } from "./create-modal/submit-task";
+import { type SubmitTaskOptions, submitTaskWithProjectHandling } from "./create-modal/submit-task";
 import { useDraftState } from "./create-modal/useDraftState";
 import { usePathHelperMessages } from "./create-modal/usePathHelperMessages";
 import { useProjectPickerState } from "./create-modal/useProjectPickerState";
+import type { GitHubGateReason } from "../project-creation/github-project-flow";
+import { useGitHubProjectScaffold } from "../project-creation/useGitHubProjectScaffold";
 
 interface CreateModalProps {
   agents: Agent[];
@@ -39,6 +41,8 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
   const [submitBusy, setSubmitBusy] = useState(false);
   const [submitWithoutProjectPromptOpen, setSubmitWithoutProjectPromptOpen] = useState(false);
   const [formFeedback, setFormFeedback] = useState<FormFeedback | null>(null);
+  const [githubConnectReason, setGithubConnectReason] = useState<GitHubGateReason | null>(null);
+  const [pendingGitHubSubmitOptions, setPendingGitHubSubmitOptions] = useState<SubmitTaskOptions | null>(null);
 
   const filteredAgents = useMemo(
     () => (departmentId ? agents.filter((agent) => agent.department_id === departmentId) : agents),
@@ -53,6 +57,17 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
     setFormFeedback,
     setSubmitWithoutProjectPromptOpen,
   });
+  const projectScaffold = useGitHubProjectScaffold({
+    active: projectPicker.createNewProjectMode,
+    projectName: projectPicker.projectQuery,
+    onProjectPathChange: projectPicker.setNewProjectPath,
+  });
+  const { resetGitHubProjectScaffold } = projectScaffold;
+
+  useEffect(() => {
+    if (projectPicker.createNewProjectMode) return;
+    resetGitHubProjectScaffold({ enabled: false });
+  }, [projectPicker.createNewProjectMode, resetGitHubProjectScaffold]);
 
   const applyFormStateFromDraft = useCallback(
     (draft: CreateTaskDraft) => {
@@ -119,6 +134,9 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
         projectQuery: projectPicker.projectQuery,
         createNewProjectMode: projectPicker.createNewProjectMode,
         newProjectPath: projectPicker.newProjectPath,
+        githubAutoCreateEnabled: projectScaffold.githubAutoCreateEnabled,
+        githubRepoName: projectScaffold.githubRepoName,
+        githubRepoPrivate: projectScaffold.githubRepoPrivate,
         selectedProject: projectPicker.selectedProject,
         projects: projectPicker.projects,
         submitBusy,
@@ -139,6 +157,10 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
         setNewProjectPath: projectPicker.setNewProjectPath,
         setPathApiUnsupported: projectPicker.setPathApiUnsupported,
         setProjectDropdownOpen: projectPicker.setProjectDropdownOpen,
+        onRequireGitHubConnection: (reason, nextOptions) => {
+          setGithubConnectReason(reason);
+          setPendingGitHubSubmitOptions(nextOptions);
+        },
       },
       options,
     );
@@ -178,6 +200,12 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
     missingPathPrompt: projectPicker.missingPathPrompt,
     nativePathPicking: projectPicker.nativePathPicking,
     nativePickerUnsupported: projectPicker.nativePickerUnsupported,
+    githubAutoCreateEnabled: projectScaffold.githubAutoCreateEnabled,
+    githubRepoName: projectScaffold.githubRepoName,
+    githubRepoPrivate: projectScaffold.githubRepoPrivate,
+    defaultProjectRoot: projectScaffold.defaultProjectRoot,
+    defaultProjectRootLoading: projectScaffold.defaultProjectRootLoading,
+    projectPathCustomized: projectScaffold.projectPathCustomized,
     onProjectQueryChange: projectPicker.handleProjectQueryChange,
     onProjectInputFocus: () => projectPicker.setProjectDropdownOpen(true),
     onProjectInputKeyDown: projectPicker.handleProjectInputKeyDown,
@@ -185,13 +213,52 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
     onSelectProject: projectPicker.selectProject,
     onProjectHover: projectPicker.handleProjectHover,
     onEnableCreateNewProject: projectPicker.handleEnableCreateNewProject,
-    onNewProjectPathChange: projectPicker.handleNewProjectPathChange,
-    onOpenManualPathBrowser: projectPicker.handleOpenManualPathBrowser,
+    onGitHubAutoCreateEnabledChange: (enabled: boolean) => {
+      setFormFeedback(null);
+      projectScaffold.setGitHubAutoCreateEnabled(enabled);
+    },
+    onGitHubRepoNameChange: (value: string) => {
+      setFormFeedback(null);
+      projectScaffold.setGitHubRepoName(value);
+    },
+    onGitHubRepoPrivateChange: (isPrivate: boolean) => {
+      setFormFeedback(null);
+      projectScaffold.setGitHubRepoPrivate(isPrivate);
+    },
+    onEnableProjectPathCustomization: () => {
+      setFormFeedback(null);
+      projectScaffold.setProjectPathCustomized(true);
+    },
+    onResetAutoProjectPath: () => {
+      setFormFeedback(null);
+      projectScaffold.setProjectPathCustomized(false);
+      projectScaffold.regenerateProjectPath();
+    },
+    onNewProjectPathChange: (value: string) => {
+      if (projectScaffold.githubAutoCreateEnabled) {
+        projectScaffold.setProjectPathCustomized(true);
+      }
+      projectPicker.handleNewProjectPathChange(value);
+    },
+    onOpenManualPathBrowser: () => {
+      if (projectScaffold.githubAutoCreateEnabled) {
+        projectScaffold.setProjectPathCustomized(true);
+      }
+      projectPicker.handleOpenManualPathBrowser();
+    },
     onTogglePathSuggestions: projectPicker.handleTogglePathSuggestions,
     onPickNativePath: () => {
+      if (projectScaffold.githubAutoCreateEnabled) {
+        projectScaffold.setProjectPathCustomized(true);
+      }
       void projectPicker.handlePickNativePath();
     },
-    onSelectPathSuggestion: projectPicker.handleSelectPathSuggestion,
+    onSelectPathSuggestion: (candidate: string) => {
+      if (projectScaffold.githubAutoCreateEnabled) {
+        projectScaffold.setProjectPathCustomized(true);
+      }
+      projectPicker.handleSelectPathSuggestion(candidate);
+    },
   } as const;
 
   const overlaysProps: CreateTaskModalOverlaysProps = {
@@ -212,6 +279,7 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
     manualPathEntries: projectPicker.manualPathEntries,
     manualPathTruncated: projectPicker.manualPathTruncated,
     manualPathError: projectPicker.manualPathError,
+    githubConnectReason,
     draftModalOpen,
     drafts,
     onSelectRestoreDraft: (draftId) => setSelectedRestoreDraftId(draftId),
@@ -242,9 +310,24 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
     },
     onSelectManualCurrentPath: () => {
       if (!projectPicker.manualPathCurrent) return;
+      if (projectScaffold.githubAutoCreateEnabled) {
+        projectScaffold.setProjectPathCustomized(true);
+      }
       projectPicker.setNewProjectPath(projectPicker.manualPathCurrent);
       projectPicker.setMissingPathPrompt(null);
       projectPicker.setManualPathPickerOpen(false);
+    },
+    onCloseGitHubConnectionPrompt: () => {
+      setGithubConnectReason(null);
+      setPendingGitHubSubmitOptions(null);
+    },
+    onGitHubConnected: () => {
+      const nextOptions = pendingGitHubSubmitOptions;
+      setGithubConnectReason(null);
+      setPendingGitHubSubmitOptions(null);
+      if (nextOptions) {
+        void submitTask(nextOptions);
+      }
     },
     onCloseDraftModal: () => setDraftModalOpen(false),
     onLoadDraft: (draft) => {

@@ -15,6 +15,7 @@ export type ProjectMetaPayload = {
   project_path?: string;
   project_context?: string;
   source?: string;
+  skipPlannedMeeting?: boolean;
 };
 
 export type PendingSendAction =
@@ -50,4 +51,3 @@ export const ROLE_LABELS: Record<string, LangText> = {
 export function isPromiseLike(value: unknown): value is Promise<void> {
   return !!value && typeof (value as { then?: unknown }).then === "function";
 }
-

@@ -21,7 +21,18 @@ interface PromptDeps {
   getDeptRoleConstraint: (deptId: string, deptName: string) => string;
   getRecentConversationContext: (agentId: string, limit?: number) => string;
   getAgentDisplayName: (agent: AgentRow, lang: string) => string;
-  buildTaskExecutionPrompt: (parts: string[], opts?: { allowWarningFix?: boolean }) => string;
+  buildTaskExecutionPrompt: (
+    parts: string[],
+    opts?: {
+      allowWarningFix?: boolean;
+      agent?: {
+        cli_provider?: string | null;
+        cli_model?: string | null;
+        run_mode?: string | null;
+      } | null;
+      lang?: string | null;
+    },
+  ) => string;
   hasExplicitWarningFixRequest: (...textParts: Array<string | null | undefined>) => boolean;
 }
 
@@ -300,6 +311,8 @@ export function createSubtaskDelegationPromptBuilder(deps: PromptDeps) {
             .filter((v): v is string => !!v)
             .join(" / "),
         ),
+        agent: execAgent,
+        lang,
       },
     );
   }

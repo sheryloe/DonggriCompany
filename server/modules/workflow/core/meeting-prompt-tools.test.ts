@@ -19,6 +19,7 @@ function createAgent(overrides: Partial<AgentRow> = {}): AgentRow {
     api_model: null,
     cli_model: null,
     cli_reasoning_level: null,
+    run_mode: "standard",
     ...overrides,
   };
 }
@@ -39,24 +40,39 @@ function createTools() {
 }
 
 describe("buildDirectReplyPrompt", () => {
-  it("includes character persona block when personality exists", () => {
+  it("includes agent growth profile block when personality exists", () => {
     const tools = createTools();
     const agent = createAgent({
       personality: "Playful design specialist. Call CEO '대표님' and keep warm expressive tone.",
     });
     const built = tools.buildDirectReplyPrompt(agent, "Can you help me now?", "chat");
-    expect(built.prompt).toContain("[Character Persona - Highest Priority]");
+    expect(built.prompt).toContain("[Agent Growth Profile]");
     expect(built.prompt).toContain("Playful design specialist");
-    expect(built.prompt).toContain("Stay in character consistently");
-    expect(built.prompt).toContain("Keep the reply aligned with the Character Persona.");
+    expect(built.prompt).toContain("Custom override (highest priority)");
+    expect(built.prompt).toContain("Keep the reply aligned with the Agent Growth Profile");
   });
 
-  it("omits persona block when personality is empty", () => {
+  it("keeps the base profile block and omits the custom override line when personality is empty", () => {
     const tools = createTools();
     const agent = createAgent({ personality: null });
     const built = tools.buildDirectReplyPrompt(agent, "Can you help me now?", "chat");
-    expect(built.prompt).not.toContain("[Character Persona - Highest Priority]");
-    expect(built.prompt).not.toContain("Keep the reply aligned with the Character Persona.");
+    expect(built.prompt).toContain("[Agent Growth Profile]");
+    expect(built.prompt).not.toContain("Custom override (highest priority)");
+  });
+
+  it("injects the Codex plan mode block only for eligible direct replies", () => {
+    const tools = createTools();
+    const built = tools.buildDirectReplyPrompt(
+      createAgent({
+        cli_provider: "codex",
+        cli_model: "gpt-5.4",
+        run_mode: "plan",
+      }),
+      "Can you help me now?",
+      "chat",
+    );
+    expect(built.prompt).toContain("[Codex Plan Mode]");
+    expect(built.prompt).toContain("Think plan-first internally before answering.");
   });
 });
 

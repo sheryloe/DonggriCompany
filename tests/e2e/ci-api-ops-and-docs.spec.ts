@@ -544,7 +544,7 @@ test.describe("CI API ops and docs coverage", () => {
       cleanup.taskIds.push(inboxTask.id);
       expect(inboxTask.project_id).toBe(projectId);
     } finally {
-      // Async directive/run flows are reset at the whole-run level.
+      await cleanupE2EResources(request, cleanup);
     }
   });
 

@@ -146,6 +146,10 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
     [skills, localeTag],
   );
 
+  const catalogSkillsCount = categorizedSkills.length;
+  const customSkillsCount = customState.customSkills.length;
+  const totalSkillsCount = catalogSkillsCount + customSkillsCount;
+
   const filtered = useMemo(() => {
     let result = categorizedSkills;
 
@@ -173,12 +177,12 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
   }, [categorizedSkills, localeTag, search, selectedCategory, sortBy]);
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: categorizedSkills.length };
+    const counts: Record<string, number> = { All: totalSkillsCount };
     for (const skill of categorizedSkills) {
       counts[skill.category] = (counts[skill.category] || 0) + 1;
     }
     return counts;
-  }, [categorizedSkills]);
+  }, [categorizedSkills, totalSkillsCount]);
 
   const learnedProvidersBySkill = useMemo(() => {
     const map = new Map<string, SkillHistoryProvider[]>();
@@ -416,6 +420,9 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
     learnedRepresentatives,
     categorizedSkills,
     filtered,
+    catalogSkillsCount,
+    customSkillsCount,
+    totalSkillsCount,
     categoryCounts,
     learnedProvidersBySkill,
     modalLearnedProviders,

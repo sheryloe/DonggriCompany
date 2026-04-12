@@ -1,94 +1,41 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useProjectPickerState } from "./useProjectPickerState";
+import { describe, expect, it } from "vitest";
+import { resolveNativePickerFailure, resolveProjectQueryChange } from "./useProjectPickerState.helpers";
 
-const apiMocks = vi.hoisted(() => ({
-  browseProjectPath: vi.fn(),
-  getProjectPathSuggestions: vi.fn(),
-  getProjects: vi.fn(),
-  isApiRequestError: vi.fn(),
-  pickProjectPathNative: vi.fn(),
-}));
-
-vi.mock("../../../api", () => ({
-  browseProjectPath: apiMocks.browseProjectPath,
-  getProjectPathSuggestions: apiMocks.getProjectPathSuggestions,
-  getProjects: apiMocks.getProjects,
-  isApiRequestError: apiMocks.isApiRequestError,
-  pickProjectPathNative: apiMocks.pickProjectPathNative,
-}));
-
-describe("useProjectPickerState native picker fallback", () => {
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    apiMocks.getProjects.mockResolvedValue({
-      projects: [],
-      page: 1,
-      page_size: 50,
-      total: 0,
-      total_pages: 1,
+describe("useProjectPickerState helpers", () => {
+  it("opens in-app folder browser when native picker fails", () => {
+    const resolution = resolveNativePickerFailure({
+      error: {
+        status: 500,
+        code: "native_picker_failed",
+      },
+      currentPath: "D:\\AI\\claw-empire",
+      unsupportedPathApiMessage: "unsupported",
+      resolvePathHelperErrorMessage: () =>
+        "OS folder picker is unavailable in this environment. Use in-app browser or manual input.",
+      isApiRequestError: (error): error is { status?: number; code?: string } =>
+        typeof error === "object" && error !== null && ("status" in error || "code" in error),
     });
-    apiMocks.getProjectPathSuggestions.mockResolvedValue([]);
-    apiMocks.browseProjectPath.mockResolvedValue({
-      current_path: "D:\\AI\\claw-empire",
-      parent_path: "D:\\AI",
-      entries: [],
-      truncated: false,
-    });
-    apiMocks.isApiRequestError.mockImplementation((error: unknown) => {
-      return Boolean((error as { __apiError?: boolean } | null)?.__apiError);
+
+    expect(resolution).toEqual({
+      mode: "manual_fallback",
+      nativePickerUnsupported: true,
+      browsePath: "D:\\AI\\claw-empire",
+      formFeedback: {
+        tone: "info",
+        message: "OS folder picker is unavailable in this environment. Use in-app browser or manual input.",
+      },
     });
   });
 
-  afterEach(() => {
-    consoleErrorSpy.mockRestore();
-    vi.clearAllMocks();
-  });
+  it("keeps create-new-project mode and path while editing the new project name", () => {
+    const resolution = resolveProjectQueryChange("claw-empire-v2", true);
 
-  it("opens in-app folder browser when native picker fails", async () => {
-    const setFormFeedback = vi.fn();
-    const setSubmitWithoutProjectPromptOpen = vi.fn();
-    apiMocks.pickProjectPathNative.mockRejectedValue({
-      __apiError: true,
-      status: 500,
-      code: "native_picker_failed",
-    });
-
-    const { result } = renderHook(() =>
-      useProjectPickerState({
-        unsupportedPathApiMessage: "unsupported",
-        resolvePathHelperErrorMessage: () =>
-          "OS folder picker is unavailable in this environment. Use in-app browser or manual input.",
-        setFormFeedback,
-        setSubmitWithoutProjectPromptOpen,
-      }),
-    );
-
-    await waitFor(() => {
-      expect(apiMocks.getProjects).toHaveBeenCalled();
-    });
-
-    act(() => {
-      result.current.setCreateNewProjectMode(true);
-      result.current.setNewProjectPath("D:\\AI\\claw-empire");
-    });
-
-    await act(async () => {
-      await result.current.handlePickNativePath();
-    });
-
-    await waitFor(() => {
-      expect(result.current.manualPathPickerOpen).toBe(true);
-    });
-
-    expect(result.current.nativePickerUnsupported).toBe(true);
-    expect(result.current.nativePathPicking).toBe(false);
-    expect(apiMocks.browseProjectPath).toHaveBeenCalledWith("D:\\AI\\claw-empire");
-    expect(setFormFeedback).toHaveBeenCalledWith({
-      tone: "info",
-      message: "OS folder picker is unavailable in this environment. Use in-app browser or manual input.",
+    expect(resolution).toEqual({
+      projectQuery: "claw-empire-v2",
+      projectId: "",
+      projectDropdownOpen: false,
+      keepCreateNewProjectMode: true,
+      resetNewProjectPath: false,
     });
   });
 });

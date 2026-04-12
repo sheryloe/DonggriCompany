@@ -72,6 +72,7 @@ describe("initializeOAuthRuntime", () => {
         api_model TEXT,
         cli_model TEXT,
         cli_reasoning_level TEXT,
+        workflow_profile TEXT,
         avatar_emoji TEXT NOT NULL DEFAULT '🤖',
         sprite_number INTEGER,
         personality TEXT,
@@ -118,6 +119,7 @@ describe("initializeOAuthRuntime", () => {
 
     expect(agentSql).toContain("'kimi'");
     expect(agentSql).toContain("'jules'");
+    expect(agentSql).toContain("run_mode");
     expect(historySql).toContain("'kimi'");
     expect(historySql).toContain("'jules'");
   });
@@ -142,6 +144,7 @@ describe("initializeOAuthRuntime", () => {
         api_model TEXT,
         cli_model TEXT,
         cli_reasoning_level TEXT,
+        workflow_profile TEXT,
         avatar_emoji TEXT NOT NULL DEFAULT '🤖',
         sprite_number INTEGER,
         personality TEXT,
@@ -151,8 +154,8 @@ describe("initializeOAuthRuntime", () => {
         stats_xp INTEGER DEFAULT 0,
         created_at INTEGER DEFAULT 0
       );
-      INSERT INTO agents (id, name, role, cli_provider, created_at)
-      VALUES ('legacy-agent', 'Legacy Agent', 'junior', 'claude', 123);
+      INSERT INTO agents (id, name, role, cli_provider, workflow_profile, created_at)
+      VALUES ('legacy-agent', 'Legacy Agent', 'junior', 'claude', '{"role":"reviewer","review_lenses":["security"]}', 123);
 
       DROP TABLE skill_learning_history;
       CREATE TABLE skill_learning_history (
@@ -203,10 +206,12 @@ describe("initializeOAuthRuntime", () => {
       }
     ).sql;
     const row = db
-      .prepare("SELECT workflow_pack_key, cli_provider, created_at FROM agents WHERE id = ?")
+      .prepare("SELECT workflow_pack_key, cli_provider, workflow_profile, run_mode, created_at FROM agents WHERE id = ?")
       .get("legacy-agent") as {
       workflow_pack_key: string;
       cli_provider: string;
+      workflow_profile: string | null;
+      run_mode: string;
       created_at: number;
     };
 
@@ -214,11 +219,14 @@ describe("initializeOAuthRuntime", () => {
     expect(agentSql).toContain("workflow_pack_key");
     expect(agentSql).toContain("'kimi'");
     expect(agentSql).toContain("'jules'");
+    expect(agentSql).toContain("run_mode");
     expect(historySql).toContain("'kimi'");
     expect(historySql).toContain("'jules'");
     expect(row).toEqual({
       workflow_pack_key: "development",
       cli_provider: "claude",
+      workflow_profile: '{"role":"reviewer","review_lenses":["security"]}',
+      run_mode: "standard",
       created_at: 123,
     });
   });

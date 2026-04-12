@@ -46,8 +46,14 @@ export function usePathHelperMessages(t: TFunction) {
   );
 
   const resolvePathHelperErrorMessage = useCallback(
-    (error: unknown, fallback: Record<Locale, string>) => {
-      if (!isApiRequestError(error)) return t(fallback);
+    (error: unknown, fallback: Partial<Record<Locale, string>> & Pick<Record<Locale, string>, "ko" | "en">) => {
+      const normalizedFallback: Record<Locale, string> = {
+        ko: fallback.ko,
+        en: fallback.en,
+        ja: fallback.ja ?? fallback.en,
+        zh: fallback.zh ?? fallback.en,
+      };
+      if (!isApiRequestError(error)) return t(normalizedFallback);
 
       if (error.status === 404) {
         return unsupportedPathApiMessage;
@@ -79,7 +85,7 @@ export function usePathHelperMessages(t: TFunction) {
           zh: "找不到该路径。",
         });
       }
-      return t(fallback);
+      return t(normalizedFallback);
     },
     [formatAllowedRootsMessage, nativePickerUnavailableMessage, t, unsupportedPathApiMessage],
   );

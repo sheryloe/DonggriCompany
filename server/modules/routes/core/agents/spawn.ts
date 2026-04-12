@@ -1,6 +1,7 @@
 import path from "node:path";
 import { notifyTaskStatus } from "../../../../gateway/client.ts";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
+import { buildAgentPromptProfileBlock } from "../../../workflow/agents/agent-profile.ts";
 import { buildWorkflowPackExecutionGuidance } from "../../../workflow/packs/execution-guidance.ts";
 import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-artifact.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/core/video-skill-bootstrap.ts";
@@ -49,6 +50,8 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
           cli_model: string | null;
           cli_reasoning_level: string | null;
           cli_account_pool_id: string | null;
+          workflow_profile?: string | null;
+          agent_profile_json?: string | null;
           personality: string | null;
           department_id: string | null;
           department_name: string | null;
@@ -86,6 +89,8 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
             cli_model: string | null;
             cli_reasoning_level: string | null;
             cli_account_pool_id: string | null;
+            workflow_profile?: string | null;
+            agent_profile_json?: string | null;
             personality: string | null;
             department_id: string | null;
             department_name: string | null;
@@ -185,6 +190,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
     const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(provider);
     const roleLabel =
       { team_leader: "Team Leader", senior: "Senior", junior: "Junior", intern: "Intern" }[agent.role] || agent.role;
+    const agentProfileBlock = buildAgentPromptProfileBlock(agent);
     const deptConstraint = agent.department_id
       ? getDeptRoleConstraint(agent.department_id, agent.department_name || agent.department_id)
       : "";
@@ -213,7 +219,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
         workflowPackGuidance ? `\n[Workflow Pack Execution Rules]\n${workflowPackGuidance}` : "",
         `NOTE: You are working in an isolated Git worktree branch (climpire/${taskId.slice(0, 8)}). Commit your changes normally.`,
         `Agent: ${agent.name} (${roleLabel}, ${agent.department_name || "Unassigned"})`,
-        agent.personality ? `Personality: ${agent.personality}` : "",
+        agentProfileBlock,
         deptConstraint,
         departmentPromptBlock,
         pickL(
@@ -228,6 +234,8 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
       ],
       {
         allowWarningFix: hasExplicitWarningFixRequest(task.title, task.description),
+        agent,
+        lang: taskLang,
       },
     );
 

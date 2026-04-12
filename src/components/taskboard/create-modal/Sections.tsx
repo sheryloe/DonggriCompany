@@ -2,10 +2,8 @@ import type { KeyboardEvent, RefObject } from "react";
 import type { Agent, Department, Project } from "../../../types";
 import AgentSelect from "../../AgentSelect";
 import {
-  TASK_TYPE_OPTIONS,
   priorityIcon,
   priorityLabel,
-  taskTypeLabel,
   type MissingPathPrompt,
   type TFunction,
 } from "../constants";
@@ -20,7 +18,7 @@ export function PrioritySection({ priority, t, onPriorityChange }: PrioritySecti
   return (
     <div>
       <label className="mb-2 block text-sm font-medium text-slate-300">
-        {t({ ko: "우선순위", en: "Priority", ja: "優先度", zh: "优先级" })}: {priorityIcon(priority)}{" "}
+        {t({ ko: "우선순위", en: "Priority", ja: "Priority", zh: "Priority" })}: {priorityIcon(priority)}{" "}
         {priorityLabel(priority, t)} ({priority}/5)
       </label>
       <div className="flex gap-2">
@@ -61,7 +59,7 @@ export function AssigneeSection({
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-slate-300">
-        {t({ ko: "담당 에이전트", en: "Assignee", ja: "担当エージェント", zh: "负责人" })}
+        {t({ ko: "담당 에이전트", en: "Assignee", ja: "Assignee", zh: "Assignee" })}
       </label>
       <AgentSelect
         agents={agents}
@@ -69,20 +67,20 @@ export function AssigneeSection({
         value={assignAgentId}
         onChange={(value) => onAssignAgentChange(value)}
         placeholder={t({
-          ko: "-- 미배정 --",
+          ko: "-- 미할당 --",
           en: "-- Unassigned --",
-          ja: "-- 未割り当て --",
-          zh: "-- 未分配 --",
+          ja: "-- Unassigned --",
+          zh: "-- Unassigned --",
         })}
         size="md"
       />
       {departmentId && agents.length === 0 && (
         <p className="mt-1 text-xs text-slate-500">
           {t({
-            ko: "해당 부서에 에이전트가 없습니다.",
+            ko: "이 부서에는 배정 가능한 에이전트가 없습니다.",
             en: "No agents are available in this department.",
-            ja: "この部署にはエージェントがいません。",
-            zh: "该部门暂无可用代理。",
+            ja: "No agents are available in this department.",
+            zh: "No agents are available in this department.",
           })}
         </p>
       )}
@@ -109,6 +107,12 @@ interface ProjectSectionProps {
   missingPathPrompt: MissingPathPrompt | null;
   nativePathPicking: boolean;
   nativePickerUnsupported: boolean;
+  githubAutoCreateEnabled: boolean;
+  githubRepoName: string;
+  githubRepoPrivate: boolean;
+  defaultProjectRoot: string;
+  defaultProjectRootLoading: boolean;
+  projectPathCustomized: boolean;
   onProjectQueryChange: (value: string) => void;
   onProjectInputFocus: () => void;
   onProjectInputKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
@@ -116,6 +120,11 @@ interface ProjectSectionProps {
   onSelectProject: (project: Project | null) => void;
   onProjectHover: (projectId: string) => void;
   onEnableCreateNewProject: () => void;
+  onGitHubAutoCreateEnabledChange: (enabled: boolean) => void;
+  onGitHubRepoNameChange: (value: string) => void;
+  onGitHubRepoPrivateChange: (isPrivate: boolean) => void;
+  onEnableProjectPathCustomization: () => void;
+  onResetAutoProjectPath: () => void;
   onNewProjectPathChange: (value: string) => void;
   onOpenManualPathBrowser: () => void;
   onTogglePathSuggestions: () => void;
@@ -142,6 +151,12 @@ export function ProjectSection({
   missingPathPrompt,
   nativePathPicking,
   nativePickerUnsupported,
+  githubAutoCreateEnabled,
+  githubRepoName,
+  githubRepoPrivate,
+  defaultProjectRoot,
+  defaultProjectRootLoading,
+  projectPathCustomized,
   onProjectQueryChange,
   onProjectInputFocus,
   onProjectInputKeyDown,
@@ -149,16 +164,23 @@ export function ProjectSection({
   onSelectProject,
   onProjectHover,
   onEnableCreateNewProject,
+  onGitHubAutoCreateEnabledChange,
+  onGitHubRepoNameChange,
+  onGitHubRepoPrivateChange,
+  onEnableProjectPathCustomization,
+  onResetAutoProjectPath,
   onNewProjectPathChange,
   onOpenManualPathBrowser,
   onTogglePathSuggestions,
   onPickNativePath,
   onSelectPathSuggestion,
 }: ProjectSectionProps) {
+  const githubAutoPathLocked = githubAutoCreateEnabled && !projectPathCustomized;
+
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-slate-300">
-        {t({ ko: "프로젝트명", en: "Project Name", ja: "プロジェクト名", zh: "项目名" })}
+        {t({ ko: "프로젝트명", en: "Project Name", ja: "Project Name", zh: "Project Name" })}
       </label>
       <div className="relative" ref={projectPickerRef}>
         <div className="flex items-center gap-2">
@@ -171,8 +193,8 @@ export function ProjectSection({
             placeholder={t({
               ko: "프로젝트 이름 또는 경로 입력",
               en: "Type project name or path",
-              ja: "プロジェクト名またはパスを入力",
-              zh: "输入项目名称或路径",
+              ja: "Type project name or path",
+              zh: "Type project name or path",
             })}
             className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
@@ -181,13 +203,13 @@ export function ProjectSection({
             onClick={onToggleProjectDropdown}
             className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-2 text-xs text-slate-300 transition hover:bg-slate-700 hover:text-white"
             title={t({
-              ko: "프로젝트 목록 토글",
+              ko: "프로젝트 목록 열기",
               en: "Toggle project list",
-              ja: "プロジェクト一覧の切替",
-              zh: "切换项目列表",
+              ja: "Toggle project list",
+              zh: "Toggle project list",
             })}
           >
-            {projectDropdownOpen ? "▲" : "▼"}
+            {projectDropdownOpen ? "▴" : "▾"}
           </button>
         </div>
 
@@ -201,30 +223,20 @@ export function ProjectSection({
               }}
               className="w-full border-b border-slate-800 px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800"
             >
-              {t({
-                ko: "-- 프로젝트 미지정 --",
-                en: "-- No project --",
-                ja: "-- プロジェクトなし --",
-                zh: "-- 无项目 --",
-              })}
+              {t({ ko: "-- 프로젝트 없음 --", en: "-- No project --", ja: "-- No project --", zh: "-- No project --" })}
             </button>
             {projectsLoading ? (
               <div className="px-3 py-2 text-sm text-slate-400">
-                {t({
-                  ko: "프로젝트 불러오는 중...",
-                  en: "Loading projects...",
-                  ja: "プロジェクトを読み込み中...",
-                  zh: "正在加载项目...",
-                })}
+                {t({ ko: "프로젝트를 불러오는 중...", en: "Loading projects...", ja: "Loading projects...", zh: "Loading projects..." })}
               </div>
             ) : filteredProjects.length === 0 ? (
               <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-slate-300">
                 <p className="pr-2">
                   {t({
-                    ko: "신규 프로젝트로 생성할까요?",
+                    ko: "새 프로젝트로 생성할까요?",
                     en: "Create as a new project?",
-                    ja: "新規プロジェクトとして作成しますか？",
-                    zh: "要创建为新项目吗？",
+                    ja: "Create as a new project?",
+                    zh: "Create as a new project?",
                   })}
                 </p>
                 <button
@@ -235,7 +247,7 @@ export function ProjectSection({
                   }}
                   className="ml-auto shrink-0 rounded-md border border-emerald-500 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500"
                 >
-                  {t({ ko: "예", en: "Yes", ja: "はい", zh: "是" })}
+                  {t({ ko: "예", en: "Yes", ja: "Yes", zh: "Yes" })}
                 </button>
               </div>
             ) : (
@@ -268,98 +280,203 @@ export function ProjectSection({
       {selectedProject && <p className="mt-1 break-all text-xs text-slate-400">{selectedProject.project_path}</p>}
 
       {createNewProjectMode && !selectedProject && (
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 space-y-3">
+          <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/70 p-3">
+            <label className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-200">
+                  {t({
+                    ko: "GitHub 레포 자동 생성",
+                    en: "Auto-create GitHub repository",
+                    ja: "Auto-create GitHub repository",
+                    zh: "Auto-create GitHub repository",
+                  })}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {t({
+                    ko: "프로젝트를 만들면서 원격 레포를 생성하고 바로 클론합니다.",
+                    en: "Create a remote repository and clone it while creating the project.",
+                    ja: "Create a remote repository and clone it while creating the project.",
+                    zh: "Create a remote repository and clone it while creating the project.",
+                  })}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={githubAutoCreateEnabled}
+                onClick={() => onGitHubAutoCreateEnabledChange(!githubAutoCreateEnabled)}
+                className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
+                  githubAutoCreateEnabled ? "border-emerald-400 bg-emerald-500/90" : "border-slate-600 bg-slate-700"
+                }`}
+              >
+                <span
+                  className={`mx-0.5 inline-block h-4 w-4 rounded-full bg-white transition ${
+                    githubAutoCreateEnabled ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </label>
+
+            {githubAutoCreateEnabled && (
+              <div className="space-y-3">
+                <label className="block text-xs text-slate-400">
+                  {t({ ko: "레포지토리 이름", en: "Repository Name", ja: "Repository Name", zh: "Repository Name" })}
+                  <input
+                    type="text"
+                    value={githubRepoName}
+                    onChange={(event) => onGitHubRepoNameChange(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </label>
+
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-400">
+                    {t({ ko: "공개 범위", en: "Visibility", ja: "Visibility", zh: "Visibility" })}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onGitHubRepoPrivateChange(true)}
+                      className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                        githubRepoPrivate
+                          ? "border-blue-500 bg-blue-500/15 text-blue-100"
+                          : "border-slate-700 bg-slate-900 text-slate-300"
+                      }`}
+                    >
+                      {t({ ko: "비공개", en: "Private", ja: "Private", zh: "Private" })}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onGitHubRepoPrivateChange(false)}
+                      className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                        !githubRepoPrivate
+                          ? "border-blue-500 bg-blue-500/15 text-blue-100"
+                          : "border-slate-700 bg-slate-900 text-slate-300"
+                      }`}
+                    >
+                      {t({ ko: "공개", en: "Public", ja: "Public", zh: "Public" })}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
+                  <p className="text-[11px] text-slate-400">
+                    {t({ ko: "기본 프로젝트 루트", en: "Default project root", ja: "Default project root", zh: "Default project root" })}
+                  </p>
+                  <p className="mt-1 break-all text-xs text-slate-200">
+                    {defaultProjectRootLoading
+                      ? t({
+                          ko: "기본 루트를 확인하는 중...",
+                          en: "Resolving default root...",
+                          ja: "Resolving default root...",
+                          zh: "Resolving default root...",
+                        })
+                      : defaultProjectRoot || "~/Projects"}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
           <label className="block text-xs text-slate-400">
-            {t({
-              ko: "신규 프로젝트 경로",
-              en: "New project path",
-              ja: "新規プロジェクトパス",
-              zh: "新项目路径",
-            })}
+            {githubAutoPathLocked
+              ? t({ ko: "새 프로젝트 경로 (자동)", en: "New project path (Auto)", ja: "New project path (Auto)", zh: "New project path (Auto)" })
+              : t({ ko: "새 프로젝트 경로", en: "New project path", ja: "New project path", zh: "New project path" })}
           </label>
           <input
             type="text"
             value={newProjectPath}
             onChange={(event) => onNewProjectPathChange(event.target.value)}
             placeholder="/absolute/path/to/project"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            readOnly={githubAutoPathLocked}
+            className={`w-full rounded-lg border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${
+              githubAutoPathLocked ? "bg-slate-950/80 text-slate-300" : "bg-slate-800"
+            }`}
           />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              disabled={pathApiUnsupported}
-              onClick={onOpenManualPathBrowser}
-              className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
+
+          {githubAutoCreateEnabled && (
+            <div className="flex justify-end gap-2">
+              {projectPathCustomized ? (
+                <button
+                  type="button"
+                  onClick={onResetAutoProjectPath}
+                  className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800"
+                >
+                  {t({ ko: "자동 경로로 되돌리기", en: "Use Auto Path", ja: "Use Auto Path", zh: "Use Auto Path" })}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onEnableProjectPathCustomization}
+                  className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800"
+                >
+                  {t({ ko: "경로 직접 수정", en: "Customize Path", ja: "Customize Path", zh: "Customize Path" })}
+                </button>
+              )}
+            </div>
+          )}
+
+          {githubAutoPathLocked && (
+            <p className="text-[11px] text-slate-400">
               {t({
-                ko: "앱 내 폴더 탐색",
-                en: "In-App Folder Browser",
-                ja: "アプリ内フォルダ閲覧",
-                zh: "应用内文件夹浏览",
+                ko: "첫 번째 허용 루트와 레포지토리 이름으로 자동 채워집니다. 고급 사용자는 직접 수정할 수 있습니다.",
+                en: "This path is generated from the first allowed root and the repository name. Advanced users can unlock it to customize.",
+                ja: "This path is generated from the first allowed root and the repository name. Advanced users can unlock it to customize.",
+                zh: "This path is generated from the first allowed root and the repository name. Advanced users can unlock it to customize.",
               })}
-            </button>
-            <button
-              type="button"
-              disabled={pathApiUnsupported}
-              onClick={onTogglePathSuggestions}
-              className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {pathSuggestionsOpen
-                ? t({
-                    ko: "자동 경로찾기 닫기",
-                    en: "Close Auto Finder",
-                    ja: "自動候補を閉じる",
-                    zh: "关闭自动查找",
-                  })
-                : t({ ko: "자동 경로찾기", en: "Auto Path Finder", ja: "自動パス検索", zh: "自动路径查找" })}
-            </button>
-            <button
-              type="button"
-              disabled={nativePathPicking}
-              onClick={onPickNativePath}
-              className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {nativePathPicking
-                ? t({
-                    ko: "수동 경로찾기 여는 중...",
-                    en: "Opening Manual Picker...",
-                    ja: "手動パス選択を開いています...",
-                    zh: "正在打开手动路径选择...",
-                  })
-                : nativePickerUnsupported
-                  ? t({
-                      ko: "수동 경로찾기(사용불가)",
-                      en: "Manual Path Finder (Unavailable)",
-                      ja: "手動パス選択（利用不可）",
-                      zh: "手动路径选择（不可用）",
-                    })
-                  : t({
-                      ko: "수동 경로찾기",
-                      en: "Manual Path Finder",
-                      ja: "手動パス選択",
-                      zh: "手动路径选择",
-                    })}
-            </button>
-          </div>
-          {pathSuggestionsOpen && (
+            </p>
+          )}
+
+          {!githubAutoPathLocked && (
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={pathApiUnsupported}
+                onClick={onOpenManualPathBrowser}
+                className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t({ ko: "앱 내 폴더 탐색", en: "In-App Folder Browser", ja: "In-App Folder Browser", zh: "In-App Folder Browser" })}
+              </button>
+              <button
+                type="button"
+                disabled={pathApiUnsupported}
+                onClick={onTogglePathSuggestions}
+                className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {pathSuggestionsOpen
+                  ? t({ ko: "자동 경로 찾기 닫기", en: "Close Auto Finder", ja: "Close Auto Finder", zh: "Close Auto Finder" })
+                  : t({ ko: "자동 경로 찾기", en: "Auto Path Finder", ja: "Auto Path Finder", zh: "Auto Path Finder" })}
+              </button>
+              <button
+                type="button"
+                disabled={nativePathPicking}
+                onClick={onPickNativePath}
+                className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {nativePathPicking
+                  ? t({ ko: "수동 선택기 여는 중...", en: "Opening Manual Picker...", ja: "Opening Manual Picker...", zh: "Opening Manual Picker..." })
+                  : nativePickerUnsupported
+                    ? t({
+                        ko: "수동 경로 선택기 (사용 불가)",
+                        en: "Manual Path Finder (Unavailable)",
+                        ja: "Manual Path Finder (Unavailable)",
+                        zh: "Manual Path Finder (Unavailable)",
+                      })
+                    : t({ ko: "수동 경로 선택기", en: "Manual Path Finder", ja: "Manual Path Finder", zh: "Manual Path Finder" })}
+              </button>
+            </div>
+          )}
+
+          {!githubAutoPathLocked && pathSuggestionsOpen && (
             <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-800/70">
               {pathSuggestionsLoading ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({
-                    ko: "경로 후보를 불러오는 중...",
-                    en: "Loading path suggestions...",
-                    ja: "パス候補を読み込み中...",
-                    zh: "正在加载路径候选...",
-                  })}
+                  {t({ ko: "경로 후보를 불러오는 중...", en: "Loading path suggestions...", ja: "Loading path suggestions...", zh: "Loading path suggestions..." })}
                 </p>
               ) : pathSuggestions.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({
-                    ko: "추천 경로가 없습니다. 직접 입력해주세요.",
-                    en: "No suggested path. Enter one manually.",
-                    ja: "候補パスがありません。手入力してください。",
-                    zh: "没有推荐路径，请手动输入。",
-                  })}
+                  {t({ ko: "추천 경로가 없습니다. 직접 입력해 주세요.", en: "No suggested path. Enter one manually.", ja: "No suggested path. Enter one manually.", zh: "No suggested path. Enter one manually." })}
                 </p>
               ) : (
                 pathSuggestions.map((candidate) => (
@@ -375,22 +492,23 @@ export function ProjectSection({
               )}
             </div>
           )}
+
           {missingPathPrompt && (
             <p className="text-xs text-amber-300">
               {t({
-                ko: "해당 경로가 아직 존재하지 않습니다. 생성 확인 후 진행됩니다.",
+                ko: "이 경로는 아직 존재하지 않습니다. 생성 전에 확인을 요청합니다.",
                 en: "This path does not exist yet. Creation confirmation will be requested.",
-                ja: "このパスはまだ存在しません。作成確認後に続行されます。",
-                zh: "该路径当前不存在，提交时会先请求创建确认。",
+                ja: "This path does not exist yet. Creation confirmation will be requested.",
+                zh: "This path does not exist yet. Creation confirmation will be requested.",
               })}
             </p>
           )}
           <p className="text-xs text-slate-500">
             {t({
-              ko: "설명 항목 내용이 신규 프로젝트의 핵심 목표(core_goal)로 저장됩니다.",
+              ko: "설명은 새 프로젝트의 핵심 목표로 저장됩니다.",
               en: "Description will be saved as the new project core goal.",
-              ja: "説明欄の内容が新規プロジェクトのコア目標として保存されます。",
-              zh: "说明内容会保存为新项目的核心目标。",
+              ja: "Description will be saved as the new project core goal.",
+              zh: "Description will be saved as the new project core goal.",
             })}
           </p>
         </div>
@@ -399,10 +517,10 @@ export function ProjectSection({
       {!projectsLoading && projects.length === 0 && (
         <p className="mt-1 text-xs text-slate-500">
           {t({
-            ko: "등록된 프로젝트가 없습니다. 프로젝트 관리에서 먼저 생성해주세요.",
+            ko: "등록된 프로젝트가 없습니다. 프로젝트 관리자에서 먼저 생성해 주세요.",
             en: "No registered project. Create one first in Project Manager.",
-            ja: "登録済みプロジェクトがありません。先にプロジェクト管理で作成してください。",
-            zh: "暂无已注册项目。请先在项目管理中创建。",
+            ja: "No registered project. Create one first in Project Manager.",
+            zh: "No registered project. Create one first in Project Manager.",
           })}
         </p>
       )}

@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type APIResponse } from "@playwright/test";
 import path from "node:path";
+import { cleanupE2EResources } from "./cleanup";
 
 type DepartmentResponse = {
   department: {
@@ -287,7 +288,7 @@ test.describe("CI manual assignment coverage", () => {
       const hasFallbackLog = leaderTaskDetail.logs.some((log) => log.message.includes("Manual assignment fallback"));
       expect(hasFallbackLog).toBe(true);
     } finally {
-      // Async directive flows are reset at the whole-run level.
+      await cleanupE2EResources(request, cleanup);
     }
   });
 });

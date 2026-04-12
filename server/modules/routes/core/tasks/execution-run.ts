@@ -4,6 +4,7 @@ import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { AgentRow } from "../../shared/types.ts";
 import { resolveConstrainedAgentScopeForTask, selectAutoAssignableAgentForTask } from "./execution-run-auto-assign.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
+import { buildAgentPromptProfileBlock } from "../../../workflow/agents/agent-profile.ts";
 import { buildWorkflowPackExecutionGuidance } from "../../../workflow/packs/execution-guidance.ts";
 import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-artifact.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/core/video-skill-bootstrap.ts";
@@ -304,7 +305,8 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
     const pendingInterruptPrompts = loadPendingInterruptPrompts(db as any, id, executionSession.sessionId);
     const interruptPromptBlock = buildInterruptPromptBlock(pendingInterruptPrompts);
 
-    const projectPath = resolveProjectPath(task) || (req.body?.project_path as string | undefined) || process.cwd();
+    const requestedProjectPath = normalizeTextField(req.body?.project_path);
+    const projectPath = requestedProjectPath || resolveProjectPath(task) || process.cwd();
     const logPath = path.join(logsDir, `${id}.log`);
 
     const worktreePath = createWorktree(projectPath, id, agent.name);
@@ -332,6 +334,7 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
 
     const roleLabel =
       { team_leader: "Team Leader", senior: "Senior", junior: "Junior", intern: "Intern" }[agent.role] || agent.role;
+    const agentProfileBlock = buildAgentPromptProfileBlock(agent);
     const deptConstraint = agent.department_id
       ? getDeptRoleConstraint(agent.department_id, agent.department_name || agent.department_id)
       : "";
@@ -477,7 +480,7 @@ Whenever you complete a subtask, report it in this format:
         conversationCtx,
         `\n---`,
         `Agent: ${agent.name} (${roleLabel}, ${agent.department_name || "Unassigned"})`,
-        agent.personality ? `Personality: ${agent.personality}` : "",
+        agentProfileBlock,
         deptConstraint,
         departmentPromptBlock,
         `NOTE: You are working in an isolated Git worktree branch (climpire/${id.slice(0, 8)}). Commit your changes normally.`,
@@ -489,6 +492,8 @@ Whenever you complete a subtask, report it in this format:
       ],
       {
         allowWarningFix: hasExplicitWarningFixRequest(task.title, task.description),
+        agent,
+        lang: taskLang,
       },
     );
 
@@ -525,7 +530,14 @@ Whenever you complete a subtask, report it in this format:
 
       const assigneeName = getAgentDisplayName(agent as unknown as AgentRow, taskLang);
       const worktreeNote = pickL(
-        l(
+        taskLang === "ko"
+          ? l(
+              [` (격리 브랜치: climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+            )
+          : l(
           [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
           [` (isolated branch: climpire/${id.slice(0, 8)})`],
           [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
@@ -535,7 +547,14 @@ Whenever you complete a subtask, report it in this format:
       );
       notifyCeo(
         pickL(
-          l(
+          taskLang === "ko"
+            ? l(
+                [`${assigneeName}이(가) '${task.title}' 작업을 시작했습니다.${worktreeNote}`],
+                [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+                [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+                [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+              )
+            : l(
             [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
             [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
             [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
@@ -582,7 +601,14 @@ Whenever you complete a subtask, report it in this format:
 
       const assigneeName = getAgentDisplayName(agent as unknown as AgentRow, taskLang);
       const worktreeNote = pickL(
-        l(
+        taskLang === "ko"
+          ? l(
+              [` (격리 브랜치: climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+              [` (isolated branch: climpire/${id.slice(0, 8)})`],
+            )
+          : l(
           [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
           [` (isolated branch: climpire/${id.slice(0, 8)})`],
           [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
@@ -592,7 +618,14 @@ Whenever you complete a subtask, report it in this format:
       );
       notifyCeo(
         pickL(
-          l(
+          taskLang === "ko"
+            ? l(
+                [`${assigneeName}이(가) '${task.title}' 작업을 시작했습니다.${worktreeNote}`],
+                [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+                [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+                [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+              )
+            : l(
             [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
             [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
             [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
@@ -641,7 +674,14 @@ Whenever you complete a subtask, report it in this format:
 
     const assigneeName = getAgentDisplayName(agent as unknown as AgentRow, taskLang);
     const worktreeNote = pickL(
-      l(
+      taskLang === "ko"
+        ? l(
+            [` (격리 브랜치: climpire/${id.slice(0, 8)})`],
+            [` (isolated branch: climpire/${id.slice(0, 8)})`],
+            [` (isolated branch: climpire/${id.slice(0, 8)})`],
+            [` (isolated branch: climpire/${id.slice(0, 8)})`],
+          )
+        : l(
         [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
         [` (isolated branch: climpire/${id.slice(0, 8)})`],
         [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
@@ -651,7 +691,14 @@ Whenever you complete a subtask, report it in this format:
     );
     notifyCeo(
       pickL(
-        l(
+        taskLang === "ko"
+          ? l(
+              [`${assigneeName}이(가) '${task.title}' 작업을 시작했습니다.${worktreeNote}`],
+              [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+              [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+              [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
+            )
+          : l(
           [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
           [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
           [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],

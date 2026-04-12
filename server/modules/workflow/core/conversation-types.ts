@@ -22,7 +22,9 @@ export interface AgentRow {
   api_model: string | null;
   cli_model: string | null;
   cli_reasoning_level: string | null;
+  run_mode?: "standard" | "plan" | null;
   cli_account_pool_id?: string | null;
+  agent_profile_json?: string | null;
   workflow_profile?: {
     role: "primary_author" | "reviewer";
     review_lenses: string[];

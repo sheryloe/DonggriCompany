@@ -8,6 +8,7 @@ import {
 } from "../../../api";
 import type { Project } from "../../../types";
 import type { FormFeedback, Locale, ManualPathEntry, MissingPathPrompt } from "../constants";
+import { resolveNativePickerFailure, resolveProjectQueryChange } from "./useProjectPickerState.helpers";
 
 type ResolvePathHelperErrorMessage = (error: unknown, fallback: Record<Locale, string>) => string;
 
@@ -16,6 +17,17 @@ interface UseProjectPickerStateParams {
   resolvePathHelperErrorMessage: ResolvePathHelperErrorMessage;
   setFormFeedback: (feedback: FormFeedback | null) => void;
   setSubmitWithoutProjectPromptOpen: (open: boolean) => void;
+}
+
+function mergeProjectsById(projects: Project[]): Project[] {
+  const seen = new Set<string>();
+  const merged: Project[] = [];
+  for (const project of projects) {
+    if (!project?.id || seen.has(project.id)) continue;
+    seen.add(project.id);
+    merged.push(project);
+  }
+  return merged;
 }
 
 export function useProjectPickerState({
@@ -30,6 +42,7 @@ export function useProjectPickerState({
   const [projectActiveIndex, setProjectActiveIndex] = useState(-1);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [selectedProjectSnapshot, setSelectedProjectSnapshot] = useState<Project | null>(null);
   const [createNewProjectMode, setCreateNewProjectMode] = useState(false);
   const [newProjectPath, setNewProjectPath] = useState("");
   const [pathSuggestionsOpen, setPathSuggestionsOpen] = useState(false);
@@ -50,30 +63,49 @@ export function useProjectPickerState({
 
   useEffect(() => {
     let cancelled = false;
-    setProjectsLoading(true);
-    getProjects({ page: 1, page_size: 50 })
-      .then((res) => {
-        if (cancelled) return;
-        setProjects(res.projects);
+    const trimmedQuery = projectQuery.trim();
+    const timeoutId = window.setTimeout(() => {
+      setProjectsLoading(true);
+      getProjects({
+        page: 1,
+        page_size: 30,
+        ...(trimmedQuery ? { search: trimmedQuery } : {}),
       })
-      .catch((err) => {
-        console.error("Failed to load projects for task creation:", err);
-        if (cancelled) return;
-        setProjects([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setProjectsLoading(false);
-      });
+        .then((res) => {
+          if (cancelled) return;
+          setProjects((prev) =>
+            mergeProjectsById([
+              ...res.projects,
+              ...(selectedProjectSnapshot ? [selectedProjectSnapshot] : []),
+              ...(!trimmedQuery ? prev.filter((project) => project.id === selectedProjectSnapshot?.id) : []),
+            ]),
+          );
+        })
+        .catch((err) => {
+          console.error("Failed to load projects for task creation:", err);
+          if (cancelled) return;
+          setProjects(selectedProjectSnapshot ? [selectedProjectSnapshot] : []);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setProjectsLoading(false);
+        });
+    }, trimmedQuery ? 180 : 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [projectQuery, selectedProjectSnapshot]);
 
   useEffect(() => {
+    if (!projectId) {
+      setSelectedProjectSnapshot(null);
+      return;
+    }
     const selected = projectId ? projects.find((project) => project.id === projectId) : undefined;
     if (!selected) return;
+    setSelectedProjectSnapshot(selected);
     setProjectQuery(selected.name);
   }, [projectId, projects]);
 
@@ -90,8 +122,12 @@ export function useProjectPickerState({
   }, []);
 
   const selectedProject = useMemo(
-    () => (projectId ? (projects.find((project) => project.id === projectId) ?? null) : null),
-    [projectId, projects],
+    () =>
+      projectId
+        ? (projects.find((project) => project.id === projectId) ??
+            (selectedProjectSnapshot?.id === projectId ? selectedProjectSnapshot : null))
+        : null,
+    [projectId, projects, selectedProjectSnapshot],
   );
 
   const filteredProjects = useMemo(() => {
@@ -226,6 +262,7 @@ export function useProjectPickerState({
       if (!project) {
         setProjectId("");
         setProjectQuery("");
+        setSelectedProjectSnapshot(null);
         setProjectDropdownOpen(false);
         setProjectActiveIndex(-1);
         setCreateNewProjectMode(false);
@@ -234,6 +271,7 @@ export function useProjectPickerState({
       }
       setProjectId(project.id);
       setProjectQuery(project.name);
+      setSelectedProjectSnapshot(project);
       setProjectDropdownOpen(false);
       setProjectActiveIndex(-1);
       setCreateNewProjectMode(false);
@@ -246,13 +284,17 @@ export function useProjectPickerState({
     (value: string) => {
       setFormFeedback(null);
       setSubmitWithoutProjectPromptOpen(false);
-      setProjectQuery(value);
-      setProjectId("");
-      setProjectDropdownOpen(true);
+      const next = resolveProjectQueryChange(value, createNewProjectMode);
+      setProjectQuery(next.projectQuery);
+      setProjectId(next.projectId);
+      setProjectDropdownOpen(next.projectDropdownOpen);
+      if (next.keepCreateNewProjectMode) return;
       setCreateNewProjectMode(false);
-      setNewProjectPath("");
+      if (next.resetNewProjectPath) {
+        setNewProjectPath("");
+      }
     },
-    [setFormFeedback, setSubmitWithoutProjectPromptOpen],
+    [createNewProjectMode, setFormFeedback, setSubmitWithoutProjectPromptOpen],
   );
 
   const handleToggleProjectDropdown = useCallback(() => {
@@ -308,27 +350,23 @@ export function useProjectPickerState({
       setFormFeedback(null);
     } catch (err) {
       console.error("Failed to open native path picker:", err);
-      if (isApiRequestError(err) && err.status === 404) {
+      const resolution = resolveNativePickerFailure({
+        error: err,
+        currentPath: newProjectPath,
+        unsupportedPathApiMessage,
+        resolvePathHelperErrorMessage,
+        isApiRequestError,
+      });
+      if (resolution.mode === "path_api_unsupported") {
         setPathApiUnsupported(true);
-        setFormFeedback({ tone: "info", message: unsupportedPathApiMessage });
+        setFormFeedback(resolution.formFeedback);
+      } else if (resolution.mode === "manual_fallback") {
+        setNativePickerUnsupported(true);
+        setManualPathPickerOpen(true);
+        await loadManualPathEntries(resolution.browsePath);
+        setFormFeedback(resolution.formFeedback);
       } else {
-        const message = resolvePathHelperErrorMessage(err, {
-          ko: "운영체제 폴더 선택기를 열지 못했습니다.",
-          en: "Failed to open OS folder picker.",
-          ja: "OSフォルダ選択を開けませんでした。",
-          zh: "无法打开系统文件夹选择器。",
-        });
-        if (
-          isApiRequestError(err) &&
-          (err.code === "native_picker_unavailable" || err.code === "native_picker_failed")
-        ) {
-          setNativePickerUnsupported(true);
-          setManualPathPickerOpen(true);
-          await loadManualPathEntries(newProjectPath.trim() || undefined);
-          setFormFeedback({ tone: "info", message });
-        } else {
-          setFormFeedback({ tone: "error", message });
-        }
+        setFormFeedback(resolution.formFeedback);
       }
     } finally {
       setNativePathPicking(false);

@@ -18,6 +18,9 @@ import TaskReportPopup from "./TaskReportPopup";
 import ManualAssignmentWarningDialog from "./project-manager/ManualAssignmentWarningDialog";
 import ManualPathPickerDialog from "./project-manager/ManualPathPickerDialog";
 import MissingPathPromptDialog from "./project-manager/MissingPathPromptDialog";
+import GitHubConnectionDialog from "./project-creation/GitHubConnectionDialog";
+import type { GitHubGateReason } from "./project-creation/github-project-flow";
+import { useGitHubProjectScaffold } from "./project-creation/useGitHubProjectScaffold";
 import ProjectEditorPanel from "./project-manager/ProjectEditorPanel";
 import ProjectInsightsPanel from "./project-manager/ProjectInsightsPanel";
 import ProjectSidebar from "./project-manager/ProjectSidebar";
@@ -55,6 +58,11 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
   const [coreGoal, setCoreGoal] = useState("");
   const [saving, setSaving] = useState(false);
   const [reportDetail, setReportDetail] = useState<TaskReportDetail | null>(null);
+  const [githubConnectReason, setGithubConnectReason] = useState<GitHubGateReason | null>(null);
+  const [pendingGitHubSave, setPendingGitHubSave] = useState<{
+    allowCreateMissingPath: boolean;
+    bypassManualWarning: boolean;
+  } | null>(null);
 
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>("auto");
   const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(new Set());
@@ -65,7 +73,6 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
 
   const viewedProject = detail?.project ?? null;
   const selectedProject = isCreating ? null : viewedProject;
-  const canSave = !!name.trim() && !!projectPath.trim() && !!coreGoal.trim();
   const pathToolsVisible = isCreating || !!editingProjectId;
 
   const pathTools = useProjectManagerPathTools({
@@ -73,6 +80,16 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     projectPath,
     pathToolsVisible,
   });
+  const gitHubProjectScaffold = useGitHubProjectScaffold({
+    active: isCreating && !editingProjectId,
+    projectName: name,
+    onProjectPathChange: setProjectPath,
+  });
+  const canSave =
+    !!name.trim() &&
+    !!projectPath.trim() &&
+    !!coreGoal.trim() &&
+    (!gitHubProjectScaffold.githubAutoCreateEnabled || !!gitHubProjectScaffold.githubRepoName.trim());
 
   const loadProjects = useCallback(
     async (targetPage: number, keyword: string) => {
@@ -127,6 +144,11 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
       })
       .finally(() => setLoadingDetail(false));
   }, [selectedProjectId, editingProjectId, isCreating]);
+
+  useEffect(() => {
+    if (isCreating && !editingProjectId) return;
+    gitHubProjectScaffold.resetGitHubProjectScaffold({ enabled: false });
+  }, [editingProjectId, gitHubProjectScaffold.resetGitHubProjectScaffold, isCreating]);
 
   const getManualAssignmentWarning = useCallback((): ManualAssignmentWarning["reason"] | null => {
     const selectedAgents = agents.filter((agent) => selectedAgentIds.has(agent.id));
@@ -207,8 +229,11 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     setAssignmentMode("auto");
     setSelectedAgentIds(new Set());
     setManualAssignmentWarning(null);
+    setGithubConnectReason(null);
+    setPendingGitHubSave(null);
+    gitHubProjectScaffold.resetGitHubProjectScaffold({ enabled: false });
     pathTools.resetPathHelperState();
-  }, [pathTools]);
+  }, [gitHubProjectScaffold, pathTools]);
 
   const startEditSelected = useCallback(() => {
     if (!viewedProject) return;
@@ -220,8 +245,11 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     setAssignmentMode(viewedProject.assignment_mode || "auto");
     setSelectedAgentIds(new Set(viewedProject.assigned_agent_ids || []));
     setManualAssignmentWarning(null);
+    setGithubConnectReason(null);
+    setPendingGitHubSave(null);
+    gitHubProjectScaffold.resetGitHubProjectScaffold({ enabled: false });
     pathTools.resetPathHelperState();
-  }, [pathTools, viewedProject]);
+  }, [gitHubProjectScaffold, pathTools, viewedProject]);
 
   const handleSave = useProjectSaveHandler({
     canSave,
@@ -237,6 +265,13 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     name,
     coreGoal,
     selectedAgentIds,
+    githubAutoCreateEnabled: !editingProjectId && gitHubProjectScaffold.githubAutoCreateEnabled,
+    githubRepoName: gitHubProjectScaffold.githubRepoName,
+    githubRepoPrivate: gitHubProjectScaffold.githubRepoPrivate,
+    onRequireGitHubConnection: (reason, options) => {
+      setGithubConnectReason(reason);
+      setPendingGitHubSave(options);
+    },
     loadProjects,
     search,
     setSelectedProjectId,
@@ -376,8 +411,20 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
                   detail={detail}
                   name={name}
                   setName={setName}
+                  githubAutoCreateAvailable={isCreating && !editingProjectId}
+                  githubAutoCreateEnabled={gitHubProjectScaffold.githubAutoCreateEnabled}
+                  setGitHubAutoCreateEnabled={gitHubProjectScaffold.setGitHubAutoCreateEnabled}
+                  githubRepoName={gitHubProjectScaffold.githubRepoName}
+                  setGitHubRepoName={gitHubProjectScaffold.setGitHubRepoName}
+                  githubRepoPrivate={gitHubProjectScaffold.githubRepoPrivate}
+                  setGitHubRepoPrivate={gitHubProjectScaffold.setGitHubRepoPrivate}
+                  defaultProjectRoot={gitHubProjectScaffold.defaultProjectRoot}
+                  defaultProjectRootLoading={gitHubProjectScaffold.defaultProjectRootLoading}
                   projectPath={projectPath}
                   setProjectPath={setProjectPath}
+                  projectPathCustomized={gitHubProjectScaffold.projectPathCustomized}
+                  setProjectPathCustomized={gitHubProjectScaffold.setProjectPathCustomized}
+                  onResetAutoProjectPath={gitHubProjectScaffold.regenerateProjectPath}
                   coreGoal={coreGoal}
                   setCoreGoal={setCoreGoal}
                   saving={saving}
@@ -418,6 +465,9 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
                   onCancelEdit={() => {
                     setIsCreating(false);
                     setEditingProjectId(null);
+                    setGithubConnectReason(null);
+                    setPendingGitHubSave(null);
+                    gitHubProjectScaffold.resetGitHubProjectScaffold({ enabled: false });
                     pathTools.resetPathHelperState();
                     if (viewedProject) {
                       setName(viewedProject.name);
@@ -466,7 +516,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
         onCancel={() => pathTools.setMissingPathPrompt(null)}
         onConfirmCreate={() => {
           pathTools.setMissingPathPrompt(null);
-          void handleSave(true);
+          void handleSave(true, assignmentMode === "manual");
         }}
       />
 
@@ -490,6 +540,24 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
           pathTools.setManualPathPickerOpen(false);
         }}
       />
+
+      {githubConnectReason && (
+        <GitHubConnectionDialog
+          reason={githubConnectReason}
+          onCancel={() => {
+            setGithubConnectReason(null);
+            setPendingGitHubSave(null);
+          }}
+          onConnected={() => {
+            const pendingSave = pendingGitHubSave;
+            setGithubConnectReason(null);
+            setPendingGitHubSave(null);
+            if (pendingSave) {
+              void handleSave(pendingSave.allowCreateMissingPath, pendingSave.bypassManualWarning);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

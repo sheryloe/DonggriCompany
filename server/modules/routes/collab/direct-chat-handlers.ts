@@ -1,5 +1,13 @@
 import type { DelegationOptions } from "./project-resolution.ts";
 import {
+  buildDirectChatConversationKey,
+  clearAllDirectChatProjectContextsForAgent,
+  clearDirectChatProjectContext,
+  isPersistentDirectChatConversationKey,
+  loadDirectChatProjectContext,
+  saveDirectChatProjectContext,
+} from "./direct-chat-project-context.ts";
+import {
   detectProjectKindChoice,
   isCancelReply,
   isProjectProgressInquiry,
@@ -21,7 +29,7 @@ import {
 import { sendProjectProgressReply } from "./direct-chat-progress-summary.ts";
 import { createDirectReplyRuntime } from "./direct-chat-runtime-reply.ts";
 import { createDirectTaskFlow } from "./direct-chat-task-flow.ts";
-import type { AgentRow, DirectChatDeps, PendingProjectBinding } from "./direct-chat-types.ts";
+import type { ActiveProjectContext, AgentRow, DirectChatDeps, PendingProjectBinding } from "./direct-chat-types.ts";
 import { hydrateOfficePackAgentFromSettings } from "./office-pack-agent-hydration.ts";
 
 export function createDirectChatHandlers(deps: DirectChatDeps) {
@@ -39,7 +47,7 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
     runAgentOneShot,
   } = deps;
 
-  const pendingProjectBindingByAgent = new Map<string, PendingProjectBinding>();
+  const pendingProjectBindingByConversation = new Map<string, PendingProjectBinding>();
   const replyRuntime = createDirectReplyRuntime(deps);
   const taskFlow = createDirectTaskFlow({
     ...deps,
@@ -53,6 +61,93 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
       messengerTargetId: incoming.messengerTargetId ?? base.messengerTargetId,
       messengerSessionKey: incoming.messengerSessionKey ?? base.messengerSessionKey,
     };
+  }
+
+  function loadActiveProjectContext(agentId: string, options: DelegationOptions): {
+    conversationKey: string;
+    activeProjectContext: ActiveProjectContext | null;
+  } {
+    const conversationKey = buildDirectChatConversationKey(agentId, options);
+    if (!isPersistentDirectChatConversationKey(conversationKey)) {
+      return { conversationKey, activeProjectContext: null };
+    }
+    return {
+      conversationKey,
+      activeProjectContext: loadDirectChatProjectContext(db as any, conversationKey, agentId),
+    };
+  }
+
+  function mergeProjectOptions(
+    options: DelegationOptions,
+    activeProjectContext: ActiveProjectContext | null,
+    messageProjectBinding:
+      | {
+          projectId?: string | null;
+          projectPath?: string | null;
+          projectContext?: string | null;
+        }
+      | null,
+  ): DelegationOptions {
+    const hasExplicitProjectBinding = Boolean(
+      normalizeTextField(options.projectId) ||
+        normalizeTextField(options.projectPath) ||
+        normalizeTextField(options.projectContext),
+    );
+    if (hasExplicitProjectBinding) {
+      return options;
+    }
+    if (messageProjectBinding && (messageProjectBinding.projectId || messageProjectBinding.projectPath)) {
+      return {
+        ...options,
+        ...messageProjectBinding,
+      };
+    }
+    if (!activeProjectContext) {
+      return options;
+    }
+    return {
+      ...options,
+      projectId: activeProjectContext.projectId,
+      projectPath: activeProjectContext.projectPath,
+      projectContext: activeProjectContext.projectContext,
+    };
+  }
+
+  function persistActiveProjectContext(
+    agentId: string,
+    conversationKey: string,
+    options: DelegationOptions,
+  ): ActiveProjectContext | null {
+    if (!isPersistentDirectChatConversationKey(conversationKey)) {
+      return null;
+    }
+    const resolvedProject = resolveProjectFromOptions(options);
+    const projectId = normalizeTextField(options.projectId) ?? resolvedProject.id;
+    const projectPath = normalizeTextField(options.projectPath) ?? resolvedProject.projectPath;
+    const projectContext = normalizeTextField(options.projectContext) ?? resolvedProject.coreGoal;
+    if (!projectId && !projectPath && !projectContext) {
+      return null;
+    }
+    const context: ActiveProjectContext = {
+      conversationKey,
+      agentId,
+      projectId: projectId ?? null,
+      projectPath: projectPath ?? null,
+      projectContext: projectContext ?? null,
+      updatedAt: nowMs(),
+    };
+    saveDirectChatProjectContext(db as any, context);
+    return context;
+  }
+
+  function clearPendingProjectBindingsForAgent(agentId: string): boolean {
+    let cleared = false;
+    for (const key of [...pendingProjectBindingByConversation.keys()]) {
+      if (key === `desktop:agent:${agentId}` || key.endsWith(`:agent:${agentId}`)) {
+        cleared = pendingProjectBindingByConversation.delete(key) || cleared;
+      }
+    }
+    return cleared;
   }
 
   function scheduleAgentReply(
@@ -77,17 +172,25 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
     }
 
     const now = nowMs();
-    const pendingBinding = pendingProjectBindingByAgent.get(agent.id);
+    const { conversationKey, activeProjectContext } = loadActiveProjectContext(agent.id, options);
+    const pendingBinding = pendingProjectBindingByConversation.get(conversationKey);
     if (pendingBinding) {
       if (now - pendingBinding.requestedAt > 60 * 60 * 1000) {
-        pendingProjectBindingByAgent.delete(agent.id);
+        pendingProjectBindingByConversation.delete(conversationKey);
       } else {
         const lang = resolveLang(ceoMessage);
         const relayOptions = mergePendingOptions(pendingBinding.options, options);
         if (isCancelReply(ceoMessage)) {
-          pendingProjectBindingByAgent.delete(agent.id);
+          pendingProjectBindingByConversation.delete(conversationKey);
           const cancelMsg = pickL(
-            l(
+            lang === "ko"
+              ? l(
+                  ["알겠습니다. 진행 중이던 프로젝트 지정 요청은 취소했습니다."],
+                  ["Understood. I canceled the pending project binding request."],
+                  ["Understood. I canceled the pending project binding request."],
+                  ["Understood. I canceled the pending project binding request."],
+                )
+              : l(
               ["알겠습니다. 프로젝트 지정 대기는 취소했습니다."],
               ["Understood. I canceled the pending project binding request."],
               ["承知しました。プロジェクト指定待ちはキャンセルしました。"],
@@ -112,14 +215,37 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
               RECENT_EXISTING_PROJECT_LIMIT,
             );
             const recentLines = formatExistingProjectCandidateLines(normalizeTextField, recentCandidates, lang);
-            pendingProjectBindingByAgent.set(agent.id, {
+            pendingProjectBindingByConversation.set(conversationKey, {
               ...binding,
               state: "ask_existing",
               requestedAt: nowMs(),
               existingCandidates: recentCandidates,
             });
             const askExisting = pickL(
-              l(
+              lang === "ko"
+                ? l(
+                    [
+                      recentLines.length > 0
+                        ? `기존 프로젝트를 선택해주세요. 최근 프로젝트 ${RECENT_EXISTING_PROJECT_LIMIT}개입니다.\n${recentLines.join("\n")}\n번호(1-${recentLines.length}) 또는 프로젝트 이름/절대 경로를 보내주세요.`
+                        : "최근 기존 프로젝트가 없습니다. 프로젝트 절대 경로(예: /Users/classys/Projects/climpire) 또는 기존 프로젝트 이름을 보내주세요.",
+                    ],
+                    [
+                      recentLines.length > 0
+                        ? `Choose an existing project. Recent ${RECENT_EXISTING_PROJECT_LIMIT} projects:\n${recentLines.join("\n")}\nSend a number (1-${recentLines.length}) or project name/absolute path.`
+                        : "No recent existing projects found. Send an absolute project path (e.g. /Users/classys/Projects/climpire) or an existing project name.",
+                    ],
+                    [
+                      recentLines.length > 0
+                        ? `Choose an existing project. Recent ${RECENT_EXISTING_PROJECT_LIMIT} projects:\n${recentLines.join("\n")}\nSend a number (1-${recentLines.length}) or project name/absolute path.`
+                        : "No recent existing projects found. Send an absolute project path (e.g. /Users/classys/Projects/climpire) or an existing project name.",
+                    ],
+                    [
+                      recentLines.length > 0
+                        ? `Choose an existing project. Recent ${RECENT_EXISTING_PROJECT_LIMIT} projects:\n${recentLines.join("\n")}\nSend a number (1-${recentLines.length}) or project name/absolute path.`
+                        : "No recent existing projects found. Send an absolute project path (e.g. /Users/classys/Projects/climpire) or an existing project name.",
+                    ],
+                  )
+                : l(
                 [
                   recentLines.length > 0
                     ? `기존 프로젝트를 선택해주세요. 최근 프로젝트 ${RECENT_EXISTING_PROJECT_LIMIT}개입니다.\n${recentLines.join("\n")}\n번호(1-${recentLines.length}) 또는 프로젝트 이름/절대경로를 보내주세요.`
@@ -155,13 +281,20 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
           };
 
           const promptNewProjectName = (binding: PendingProjectBinding): void => {
-            pendingProjectBindingByAgent.set(agent.id, {
+            pendingProjectBindingByConversation.set(conversationKey, {
               ...binding,
               state: "ask_new_name",
               requestedAt: nowMs(),
             });
             const askNewName = pickL(
-              l(
+              lang === "ko"
+                ? l(
+                    ["신규 프로젝트 이름을 먼저 알려주세요."],
+                    ["Please provide the new project name first."],
+                    ["Please provide the new project name first."],
+                    ["Please provide the new project name first."],
+                  )
+                : l(
                 ["신규 프로젝트 이름을 먼저 알려주세요."],
                 ["Please provide the new project name first."],
                 ["新規プロジェクト名を先に教えてください。"],
@@ -181,7 +314,14 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
 
           const askKindAgain = (): void => {
             const askKind = pickL(
-              l(
+              lang === "ko"
+                ? l(
+                    ["기존 프로젝트인가요, 신규 프로젝트인가요?\n1️⃣ 기존 프로젝트\n2️⃣ 신규 프로젝트"],
+                    ["Is this an existing project or a new project?\n1️⃣ Existing project\n2️⃣ New project"],
+                    ["Is this an existing project or a new project?\n1️⃣ Existing project\n2️⃣ New project"],
+                    ["Is this an existing project or a new project?\n1️⃣ Existing project\n2️⃣ New project"],
+                  )
+                : l(
                 ["기존 프로젝트인가요, 신규 프로젝트인가요?\n1️⃣ 기존 프로젝트\n2️⃣ 신규 프로젝트"],
                 ["Is this an existing project or a new project?\n1️⃣ Existing project\n2️⃣ New project"],
                 ["既存プロジェクトですか？新規プロジェクトですか？\n1️⃣ 既存\n2️⃣ 新規"],
@@ -212,7 +352,7 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
           const snapshotRequestedAt = pendingBinding.requestedAt;
           void (async () => {
             const inferred = await inferProjectKindWithModel({ runAgentOneShot }, agent, lang, ceoMessage);
-            const current = pendingProjectBindingByAgent.get(agent.id);
+            const current = pendingProjectBindingByConversation.get(conversationKey);
             if (!current || current.state !== "ask_kind") return;
             if (current.requestedAt !== snapshotRequestedAt) return;
 
@@ -261,14 +401,37 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
                   },
                   RECENT_EXISTING_PROJECT_LIMIT,
                 );
-            pendingProjectBindingByAgent.set(agent.id, {
+            pendingProjectBindingByConversation.set(conversationKey, {
               ...pendingBinding,
               requestedAt: nowMs(),
               existingCandidates: refreshedCandidates,
             });
             const recentLines = formatExistingProjectCandidateLines(normalizeTextField, refreshedCandidates, lang);
             const askExistingAgain = pickL(
-              l(
+              lang === "ko"
+                ? l(
+                    [
+                      recentLines.length > 0
+                        ? `해당 기존 프로젝트를 찾지 못했습니다. 아래 목록에서 번호(1-${recentLines.length}) 또는 정확한 프로젝트 이름/절대 경로를 다시 보내주세요.\n${recentLines.join("\n")}`
+                        : "해당 기존 프로젝트를 찾지 못했습니다. 프로젝트 절대 경로 또는 정확한 프로젝트 이름을 다시 보내주세요.",
+                    ],
+                    [
+                      recentLines.length > 0
+                        ? `I couldn't resolve that project. Reply with a number (1-${recentLines.length}) from the list or send the exact project name/absolute path.\n${recentLines.join("\n")}`
+                        : "I couldn't find that existing project. Send an absolute project path or the exact project name again.",
+                    ],
+                    [
+                      recentLines.length > 0
+                        ? `I couldn't resolve that project. Reply with a number (1-${recentLines.length}) from the list or send the exact project name/absolute path.\n${recentLines.join("\n")}`
+                        : "I couldn't find that existing project. Send an absolute project path or the exact project name again.",
+                    ],
+                    [
+                      recentLines.length > 0
+                        ? `I couldn't resolve that project. Reply with a number (1-${recentLines.length}) from the list or send the exact project name/absolute path.\n${recentLines.join("\n")}`
+                        : "I couldn't find that existing project. Send an absolute project path or the exact project name again.",
+                    ],
+                  )
+                : l(
                 [
                   recentLines.length > 0
                     ? `기존 프로젝트를 찾지 못했습니다. 아래 목록에서 번호(1-${recentLines.length}) 또는 정확한 프로젝트 이름/절대경로를 다시 보내주세요.\n${recentLines.join("\n")}`
@@ -304,11 +467,12 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
             return;
           }
 
-          pendingProjectBindingByAgent.delete(agent.id);
+          pendingProjectBindingByConversation.delete(conversationKey);
           const mergedOptions: DelegationOptions = {
             ...relayOptions,
             ...resolvedBinding,
           };
+          persistActiveProjectContext(agent.id, conversationKey, mergedOptions);
           taskFlow.runTaskFlowWithResolvedProject(agent, pendingBinding.taskMessage, mergedOptions, lang);
           return;
         }
@@ -317,7 +481,14 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
           const newProjectName = normalizeNewProjectNameInput(ceoMessage);
           if (!newProjectName) {
             const askNameAgain = pickL(
-              l(
+              lang === "ko"
+                ? l(
+                    ["신규 프로젝트 이름을 다시 알려주세요. 예: climpire-redesign"],
+                    ["Please provide the new project name again. Example: climpire-redesign"],
+                    ["Please provide the new project name again. Example: climpire-redesign"],
+                    ["Please provide the new project name again. Example: climpire-redesign"],
+                  )
+                : l(
                 ["신규 프로젝트 이름을 다시 알려주세요. 예: climpire-redesign"],
                 ["Please provide the new project name again. Example: climpire-redesign"],
                 ["新規プロジェクト名をもう一度送ってください。例: climpire-redesign"],
@@ -336,14 +507,21 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
             return;
           }
 
-          pendingProjectBindingByAgent.set(agent.id, {
+          pendingProjectBindingByConversation.set(conversationKey, {
             ...pendingBinding,
             state: "ask_new_path",
             requestedAt: now,
             newProjectName,
           });
           const askNewPath = pickL(
-            l(
+            lang === "ko"
+              ? l(
+                  ["신규 프로젝트의 절대 경로를 보내주세요. 예: /Users/classys/Projects/climpire-redesign"],
+                  ["Send the new project's absolute path. Example: /Users/classys/Projects/climpire-redesign"],
+                  ["Send the new project's absolute path. Example: /Users/classys/Projects/climpire-redesign"],
+                  ["Send the new project's absolute path. Example: /Users/classys/Projects/climpire-redesign"],
+                )
+              : l(
               ["신규 프로젝트 절대경로를 보내주세요. 예: /Users/classys/Projects/climpire-redesign"],
               ["Send the new project's absolute path. Example: /Users/classys/Projects/climpire-redesign"],
               ["新規プロジェクトの絶対パスを送ってください。例: /Users/classys/Projects/climpire-redesign"],
@@ -366,7 +544,14 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
           const providedPath = extractAbsolutePathFromText(ceoMessage);
           if (!providedPath) {
             const askPathAgain = pickL(
-              l(
+              lang === "ko"
+                ? l(
+                    ["절대 경로 형식으로 다시 보내주세요. 예: /Users/classys/Projects/climpire-redesign"],
+                    ["Please send it again as an absolute path. Example: /Users/classys/Projects/climpire-redesign"],
+                    ["Please send it again as an absolute path. Example: /Users/classys/Projects/climpire-redesign"],
+                    ["Please send it again as an absolute path. Example: /Users/classys/Projects/climpire-redesign"],
+                  )
+                : l(
                 ["절대경로 형식으로 다시 보내주세요. 예: /Users/classys/Projects/climpire-redesign"],
                 ["Please send it again as an absolute path. Example: /Users/classys/Projects/climpire-redesign"],
                 ["絶対パス形式で再送してください。例: /Users/classys/Projects/climpire-redesign"],
@@ -397,7 +582,14 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
           );
           if (!binding) {
             const askPathFail = pickL(
-              l(
+              lang === "ko"
+                ? l(
+                    ["프로젝트 생성에 실패했습니다. 신규 프로젝트 절대 경로를 다시 보내주세요."],
+                    ["Failed to create the project. Please send the new project's absolute path again."],
+                    ["Failed to create the project. Please send the new project's absolute path again."],
+                    ["Failed to create the project. Please send the new project's absolute path again."],
+                  )
+                : l(
                 ["프로젝트 생성에 실패했습니다. 신규 프로젝트 절대경로를 다시 보내주세요."],
                 ["Failed to create the project. Please send the new project's absolute path again."],
                 ["プロジェクト作成に失敗しました。新規プロジェクトの絶対パスを再送してください。"],
@@ -416,13 +608,14 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
             return;
           }
 
-          pendingProjectBindingByAgent.delete(agent.id);
+          pendingProjectBindingByConversation.delete(conversationKey);
           const mergedOptions: DelegationOptions = {
             ...relayOptions,
             projectId: binding.projectId,
             projectPath: binding.projectPath,
             projectContext: binding.projectContext,
           };
+          persistActiveProjectContext(agent.id, conversationKey, mergedOptions);
           taskFlow.runTaskFlowWithResolvedProject(agent, pendingBinding.taskMessage, mergedOptions, lang);
           return;
         }
@@ -490,6 +683,15 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
       `[scheduleAgentReply] useTaskFlow=${useTaskFlow}, messageType=${messageType}, msg="${ceoMessage.slice(0, 50)}", taskMsg="${taskMessage.slice(0, 50)}"`,
     );
     if (useTaskFlow) {
+      const messageProjectBinding = resolveProjectBindingFromText(
+        {
+          db,
+          detectProjectPath,
+          normalizeTextField,
+        },
+        taskMessage,
+      );
+      const taskOptions = mergeProjectOptions(options, activeProjectContext, messageProjectBinding);
       if (
         !hasProjectBinding(
           {
@@ -497,22 +699,29 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
             resolveProjectFromOptions,
           },
           taskMessage,
-          options,
+          taskOptions,
         )
       ) {
-        pendingProjectBindingByAgent.set(agent.id, {
+        pendingProjectBindingByConversation.set(conversationKey, {
           taskMessage,
           options: {
-            ...options,
-            messengerChannel: options.messengerChannel,
-            messengerTargetId: options.messengerTargetId,
-            messengerSessionKey: options.messengerSessionKey,
+            ...taskOptions,
+            messengerChannel: taskOptions.messengerChannel,
+            messengerTargetId: taskOptions.messengerTargetId,
+            messengerSessionKey: taskOptions.messengerSessionKey,
           },
           state: "ask_kind",
           requestedAt: now,
         });
         const askProject = pickL(
-          l(
+          resolveLang(ceoMessage) === "ko"
+            ? l(
+                ["프로젝트를 먼저 정해야 합니다. 기존 프로젝트인가요, 신규 프로젝트인가요?\n1️⃣ 기존 프로젝트\n2️⃣ 신규 프로젝트"],
+                ["I need to fix the project first. Is this an existing project or a new project?\n1️⃣ Existing project\n2️⃣ New project"],
+                ["I need to fix the project first. Is this an existing project or a new project?\n1️⃣ Existing project\n2️⃣ New project"],
+                ["I need to fix the project first. Is this an existing project or a new project?\n1️⃣ Existing project\n2️⃣ New project"],
+              )
+            : l(
             [
               "프로젝트를 먼저 정해야 합니다. 기존 프로젝트인가요, 신규 프로젝트인가요?\n1️⃣ 기존 프로젝트\n2️⃣ 신규 프로젝트",
             ],
@@ -534,11 +743,24 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
         });
         return;
       }
-      taskFlow.runTaskFlowWithResolvedProject(agent, taskMessage, options, resolveLang(ceoMessage));
+      persistActiveProjectContext(agent.id, conversationKey, taskOptions);
+      taskFlow.runTaskFlowWithResolvedProject(agent, taskMessage, taskOptions, resolveLang(ceoMessage));
       return;
     }
 
     if (isProjectProgressInquiry(ceoMessage, messageType)) {
+      const messageProjectBinding = resolveProjectBindingFromText(
+        {
+          db,
+          detectProjectPath,
+          normalizeTextField,
+        },
+        ceoMessage,
+      );
+      const progressOptions = mergeProjectOptions(options, activeProjectContext, messageProjectBinding);
+      if (messageProjectBinding && (messageProjectBinding.projectId || messageProjectBinding.projectPath)) {
+        persistActiveProjectContext(agent.id, conversationKey, progressOptions);
+      }
       sendProjectProgressReply(
         {
           db,
@@ -555,7 +777,7 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
         },
         agent,
         ceoMessage,
-        options,
+        progressOptions,
       );
       return;
     }
@@ -563,13 +785,39 @@ export function createDirectChatHandlers(deps: DirectChatDeps) {
     replyRuntime.runDirectReplyExecution(agent, ceoMessage, messageType, options);
   }
 
-  function resetDirectChatState(agentId: string): { clearedPendingProjectBinding: boolean } {
+  function resetDirectChatState(
+    agentId: string,
+    options: { conversationKey?: string | null } = {},
+  ): {
+    clearedPendingProjectBinding: boolean;
+    clearedActiveProjectContext: boolean;
+    clearedActiveProjectContexts: number;
+  } {
     const normalized = agentId.trim();
     if (!normalized) {
-      return { clearedPendingProjectBinding: false };
+      return {
+        clearedPendingProjectBinding: false,
+        clearedActiveProjectContext: false,
+        clearedActiveProjectContexts: 0,
+      };
     }
-    const clearedPendingProjectBinding = pendingProjectBindingByAgent.delete(normalized);
-    return { clearedPendingProjectBinding };
+    const conversationKey = normalizeTextField(options.conversationKey);
+    if (conversationKey) {
+      const clearedPendingProjectBinding = pendingProjectBindingByConversation.delete(conversationKey);
+      const clearedActiveProjectContext = clearDirectChatProjectContext(db as any, conversationKey, normalized);
+      return {
+        clearedPendingProjectBinding,
+        clearedActiveProjectContext,
+        clearedActiveProjectContexts: clearedActiveProjectContext ? 1 : 0,
+      };
+    }
+    const clearedPendingProjectBinding = clearPendingProjectBindingsForAgent(normalized);
+    const clearedActiveProjectContexts = clearAllDirectChatProjectContextsForAgent(db as any, normalized);
+    return {
+      clearedPendingProjectBinding,
+      clearedActiveProjectContext: clearedActiveProjectContexts > 0,
+      clearedActiveProjectContexts,
+    };
   }
 
   return {

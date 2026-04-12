@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import {
+  createPresetAgentProfile,
+  normalizeAgentProfile,
+  parseSpecialtiesText,
+  resolveAgentProfileOverrideText,
+  stringifySpecialties,
+} from "../agent-profile";
 import type { CliAccountPoolView } from "../api";
 import type { Agent, Department } from "../types";
 import { useI18n } from "../i18n";
@@ -151,9 +158,35 @@ export default function AgentManager({
       });
   }, []);
 
+  const buildResolvedAgentProfile = useCallback(
+    (role: Agent["role"], inputProfile?: Agent["agent_profile"] | null, overrideText?: string) =>
+      normalizeAgentProfile(
+        {
+          ...(inputProfile ?? createPresetAgentProfile(role)),
+          role_template: role,
+          specialties: inputProfile?.specialties ?? [],
+          custom_prompt_override: (overrideText ?? inputProfile?.custom_prompt_override ?? "").trim() || null,
+        },
+        role,
+      ),
+    [],
+  );
+
   const openCreate = useCallback(() => {
     setModalAgent(null);
-    setForm({ ...BLANK, department_id: deptTab !== "all" ? deptTab : departments[0]?.id || "" });
+    const nextRole: Agent["role"] = "junior";
+    const nextProfile = createPresetAgentProfile(nextRole);
+    setForm({
+      ...BLANK,
+      department_id: deptTab !== "all" ? deptTab : departments[0]?.id || "",
+      role: nextRole,
+      cli_model: "",
+      cli_reasoning_level: "",
+      run_mode: "standard",
+      personality: "",
+      specialties_text: stringifySpecialties(nextProfile.specialties),
+      agent_profile: nextProfile,
+    });
     setShowModal(true);
   }, [deptTab, departments]);
 
@@ -163,6 +196,7 @@ export default function AgentManager({
       const computed = agent.sprite_number ?? buildSpriteMap(agents).get(agent.id) ?? null;
       const workflowDefaults = deriveWorkflowDefaults(agent);
       const workflowProfile = agent.workflow_profile ?? null;
+      const agentProfile = buildResolvedAgentProfile(agent.role, agent.agent_profile, agent.personality || "");
       setForm({
         name: agent.name,
         name_ko: agent.name_ko,
@@ -171,6 +205,9 @@ export default function AgentManager({
         department_id: agent.department_id || "",
         role: agent.role,
         cli_provider: agent.cli_provider,
+        cli_model: agent.cli_provider === "codex" ? agent.cli_model ?? "" : "",
+        cli_reasoning_level: agent.cli_provider === "codex" ? agent.cli_reasoning_level ?? "" : "",
+        run_mode: agent.cli_provider === "codex" ? agent.run_mode ?? "standard" : "standard",
         cli_account_pool_id: agent.cli_account_pool_id ?? "",
         workflow_role: workflowProfile?.role ?? workflowDefaults.workflow_role,
         review_lenses_text: (workflowProfile?.review_lenses ?? []).join(", ") || workflowDefaults.review_lenses_text,
@@ -178,11 +215,13 @@ export default function AgentManager({
         max_review_rounds: workflowProfile?.max_review_rounds ?? workflowDefaults.max_review_rounds,
         avatar_emoji: agent.avatar_emoji,
         sprite_number: computed,
-        personality: agent.personality || "",
+        personality: resolveAgentProfileOverrideText(agentProfile, agent.personality),
+        specialties_text: stringifySpecialties(agentProfile.specialties),
+        agent_profile: agentProfile,
       });
       setShowModal(true);
     },
-    [agents, deriveWorkflowDefaults],
+    [agents, buildResolvedAgentProfile, deriveWorkflowDefaults],
   );
 
   const closeModal = useCallback(() => {
@@ -204,6 +243,26 @@ export default function AgentManager({
         setSaving(false);
         return;
       }
+      const resolvedAgentProfile = buildResolvedAgentProfile(
+        form.role,
+        {
+          ...form.agent_profile,
+          specialties: parseSpecialtiesText(form.specialties_text),
+        },
+        form.personality,
+      );
+      const shouldWriteCodexConfig = form.cli_provider === "codex" || modalAgent?.cli_provider === "codex";
+      const codexExecutionConfig: Partial<Pick<Agent, "cli_model" | "cli_reasoning_level" | "run_mode">> = shouldWriteCodexConfig
+        ? {
+            cli_model: form.cli_provider === "codex" ? form.cli_model.trim() || null : null,
+            cli_reasoning_level:
+              form.cli_provider === "codex" && form.cli_model.trim()
+                ? form.cli_reasoning_level.trim() || null
+                : null,
+            run_mode:
+              form.cli_provider === "codex" && form.cli_model.trim() && form.run_mode === "plan" ? "plan" : "standard",
+          }
+        : {};
       const basePayload = {
         name: form.name.trim(),
         name_ko: form.name_ko.trim(),
@@ -212,6 +271,7 @@ export default function AgentManager({
         role: form.role,
         cli_provider: form.cli_provider,
         cli_account_pool_id: normalizedCliAccountPoolId,
+        ...codexExecutionConfig,
         workflow_profile: {
           role: form.workflow_role,
           review_lenses: parseReviewLenses(form.review_lenses_text),
@@ -221,15 +281,9 @@ export default function AgentManager({
         },
         avatar_emoji: form.avatar_emoji || "🤖",
         sprite_number: form.sprite_number,
-        personality: form.personality.trim() || null,
+        personality: resolvedAgentProfile.custom_prompt_override || null,
+        agent_profile: resolvedAgentProfile,
       };
-      const codexResetPatch =
-        form.cli_provider === "codex"
-          ? {
-              cli_model: null as string | null,
-              cli_reasoning_level: null as string | null,
-            }
-          : {};
       if (isIsolatedPack) {
         if (useDbBackedPack) {
           if (modalAgent) {
@@ -237,7 +291,6 @@ export default function AgentManager({
               ...basePayload,
               department_id: departmentId || null,
               workflow_pack_key: officePackKey,
-              ...codexResetPatch,
             });
             const nextAgents = agents.map((agent) =>
               agent.id === modalAgent.id
@@ -245,12 +298,6 @@ export default function AgentManager({
                     ...agent,
                     ...basePayload,
                     department_id: departmentId || null,
-                    ...(form.cli_provider === "codex"
-                      ? {
-                          cli_model: null,
-                          cli_reasoning_level: null,
-                        }
-                      : {}),
                   }
                 : agent,
             );
@@ -272,12 +319,6 @@ export default function AgentManager({
                       ...agent,
                       ...basePayload,
                       department_id: departmentId || null,
-                      ...(form.cli_provider === "codex"
-                        ? {
-                            cli_model: null,
-                            cli_reasoning_level: null,
-                          }
-                        : {}),
                     }
                   : agent,
               )
@@ -290,12 +331,6 @@ export default function AgentManager({
                       : `agent-${Date.now()}`,
                   ...basePayload,
                   department_id: departmentId || null,
-                  ...(form.cli_provider === "codex"
-                    ? {
-                        cli_model: null,
-                        cli_reasoning_level: null,
-                      }
-                    : {}),
                   status: "idle" as const,
                   current_task_id: null,
                   stats_tasks_done: 0,
@@ -310,7 +345,6 @@ export default function AgentManager({
           await api.updateAgent(modalAgent.id, {
             ...basePayload,
             department_id: departmentId || null,
-            ...codexResetPatch,
           });
         } else {
           await api.createAgent({
@@ -328,12 +362,14 @@ export default function AgentManager({
     }
   }, [
     agents,
+    buildResolvedAgentProfile,
     closeModal,
     cliAccountPools,
     departments,
     form,
     isIsolatedPack,
     modalAgent,
+    officePackKey,
     onAgentsChange,
     parseReviewLenses,
     persistIsolatedProfile,
@@ -468,7 +504,7 @@ export default function AgentManager({
     } finally {
       setReorderSaving(false);
     }
-  }, [agents, deptOrder, isIsolatedPack, onAgentsChange, persistIsolatedProfile, useDbBackedPack]);
+  }, [agents, deptOrder, isIsolatedPack, officePackKey, onAgentsChange, persistIsolatedProfile, useDbBackedPack]);
 
   const resetDeptOrder = useCallback(() => {
     setDeptOrder([...departments].sort((a, b) => a.sort_order - b.sort_order));
@@ -688,6 +724,7 @@ export default function AgentManager({
           cliAccountPools={cliAccountPools}
           cliAccountPoolsLoading={cliAccountPoolsLoading}
           departments={departments}
+          currentXp={modalAgent?.stats_xp ?? 0}
           isEdit={!!modalAgent}
           saving={saving}
           onSave={handleSave}

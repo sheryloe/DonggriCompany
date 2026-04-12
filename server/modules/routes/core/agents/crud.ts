@@ -14,6 +14,16 @@ import {
   resolveAgentWorkflowProfile,
   serializeWorkflowProfile,
 } from "../../../workflow/agents/workflow-profile.ts";
+import {
+  buildAgentPromptProfileBlock,
+  normalizeAgentProfile,
+  resolveAgentProfileFromRow,
+  serializeAgentProfile,
+} from "../../../workflow/agents/agent-profile.ts";
+import {
+  parseAgentRunModePayload,
+  resolveAgentRunMode,
+} from "../../../workflow/agents/run-mode.ts";
 
 export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   const {
@@ -52,6 +62,22 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       return false;
     }
   })();
+  const hasAgentRunModeColumn = (() => {
+    try {
+      const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
+      return cols.some((col) => String(col.name ?? "").trim() === "run_mode");
+    } catch {
+      return false;
+    }
+  })();
+  const hasAgentProfileJsonColumn = (() => {
+    try {
+      const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
+      return cols.some((col) => String(col.name ?? "").trim() === "agent_profile_json");
+    } catch {
+      return false;
+    }
+  })();
   const hasCliAccountPoolsTable = (() => {
     try {
       const row = db
@@ -84,6 +110,23 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     return trimmed || null;
   }
 
+  function parseAgentProfilePayload(value: unknown, fallbackRole: unknown) {
+    if (value === undefined) return { profile: null as ReturnType<typeof normalizeAgentProfile> | null, json: null };
+    if (value === null || value === "") return { profile: null, json: null };
+    const fallback =
+      normalizeText(fallbackRole) === "team_leader" ||
+      normalizeText(fallbackRole) === "senior" ||
+      normalizeText(fallbackRole) === "junior" ||
+      normalizeText(fallbackRole) === "intern"
+        ? (normalizeText(fallbackRole) as "team_leader" | "senior" | "junior" | "intern")
+        : "junior";
+    const profile = normalizeAgentProfile(value, fallback);
+    return {
+      profile,
+      json: serializeAgentProfile(profile),
+    };
+  }
+
   function hasCliAccountPool(provider: string, accountPoolId: string): boolean {
     if (!hasCliAccountPoolsTable) return false;
     try {
@@ -105,11 +148,28 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     const row = record as Record<string, unknown>;
     return {
       ...row,
+      run_mode: resolveAgentRunMode({
+        runMode: row.run_mode,
+        cliProvider: row.cli_provider,
+        cliModel: row.cli_model,
+      }),
       workflow_profile: resolveAgentWorkflowProfile({
         workflowProfileRaw: row.workflow_profile ?? null,
         agentName: row.name,
         cliProvider: row.cli_provider,
         departmentId: row.department_id,
+      }),
+      agent_profile: resolveAgentProfileFromRow({
+        role: row.role,
+        agent_profile: row.agent_profile,
+        agent_profile_json: row.agent_profile_json,
+      }),
+      agent_prompt_profile_block: buildAgentPromptProfileBlock({
+        role: row.role,
+        agent_profile: row.agent_profile,
+        agent_profile_json: row.agent_profile_json,
+        personality: row.personality,
+        workflow_profile: row.workflow_profile,
       }),
     };
   }
@@ -391,6 +451,47 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         )
           ? body.cli_provider
           : "claude";
+      const supportsCliModelOverride = ["claude", "codex", "gemini", "opencode", "kimi"].includes(cli_provider);
+      const supportsCliReasoningOverride = cli_provider === "codex";
+      let cli_model: string | null = null;
+      if ("cli_model" in body) {
+        if (body.cli_model === "" || typeof body.cli_model === "undefined") {
+          cli_model = null;
+        } else if (body.cli_model !== null && typeof body.cli_model !== "string") {
+          return res.status(400).json({ error: "invalid_cli_model" });
+        } else if (body.cli_model && !supportsCliModelOverride) {
+          return res.status(400).json({ error: "cli_model_requires_cli_provider" });
+        } else {
+          cli_model = body.cli_model as string | null;
+        }
+      }
+      let cli_reasoning_level: string | null = null;
+      if ("cli_reasoning_level" in body) {
+        if (body.cli_reasoning_level === "" || typeof body.cli_reasoning_level === "undefined") {
+          cli_reasoning_level = null;
+        } else if (body.cli_reasoning_level !== null && typeof body.cli_reasoning_level !== "string") {
+          return res.status(400).json({ error: "invalid_cli_reasoning_level" });
+        } else if (body.cli_reasoning_level && !supportsCliReasoningOverride) {
+          return res.status(400).json({ error: "cli_reasoning_requires_codex_provider" });
+        } else {
+          cli_reasoning_level = body.cli_reasoning_level as string | null;
+        }
+      }
+      const parsedRunMode = parseAgentRunModePayload(body.run_mode);
+      if (parsedRunMode === "__invalid__") {
+        return res.status(400).json({ error: "invalid_run_mode" });
+      }
+      if (!hasAgentRunModeColumn && "run_mode" in body) {
+        return res.status(400).json({ error: "run_mode_not_supported" });
+      }
+      const runMode = resolveAgentRunMode({
+        runMode: parsedRunMode ?? "standard",
+        cliProvider: cli_provider,
+        cliModel: cli_model,
+      });
+      if (parsedRunMode === "plan" && runMode !== "plan") {
+        return res.status(400).json({ error: "run_mode_requires_codex_model" });
+      }
       let cli_account_pool_id: string | null = null;
       if (hasAgentCliAccountPoolColumn) {
         const normalizedPool = normalizeCliAccountPoolId(body.cli_account_pool_id);
@@ -418,6 +519,16 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       }
       const workflowProfileJson =
         parsedWorkflowProfile && hasAgentWorkflowProfileColumn ? serializeWorkflowProfile(parsedWorkflowProfile) : null;
+      if (!hasAgentProfileJsonColumn && "agent_profile" in body) {
+        return res.status(400).json({ error: "agent_profile_not_supported" });
+      }
+      const parsedAgentProfile = parseAgentProfilePayload(body.agent_profile, role);
+      const profileOverride =
+        typeof parsedAgentProfile.profile?.custom_prompt_override === "string"
+          ? parsedAgentProfile.profile.custom_prompt_override.trim() || null
+          : null;
+      const effectivePersonality = "agent_profile" in body ? profileOverride : personality;
+      const agentProfileJson = hasAgentProfileJsonColumn ? parsedAgentProfile.json : null;
 
       const id = randomUUID();
       try {
@@ -438,7 +549,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             cli_account_pool_id,
             avatar_emoji,
             sprite_number,
-            personality,
+            effectivePersonality,
           );
         } else if (hasAgentWorkflowPackColumn) {
           db.prepare(
@@ -456,7 +567,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             cli_provider,
             avatar_emoji,
             sprite_number,
-            personality,
+            effectivePersonality,
           );
         } else if (hasAgentCliAccountPoolColumn) {
           db.prepare(
@@ -474,7 +585,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             cli_account_pool_id,
             avatar_emoji,
             sprite_number,
-            personality,
+            effectivePersonality,
           );
         } else {
           db.prepare(
@@ -491,11 +602,22 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             cli_provider,
             avatar_emoji,
             sprite_number,
-            personality,
+            effectivePersonality,
           );
         }
         if (hasAgentWorkflowProfileColumn && workflowProfileJson) {
           db.prepare("UPDATE agents SET workflow_profile = ? WHERE id = ?").run(workflowProfileJson, id);
+        }
+        if (hasAgentProfileJsonColumn && agentProfileJson !== null) {
+          db.prepare("UPDATE agents SET agent_profile_json = ? WHERE id = ?").run(agentProfileJson, id);
+        }
+        db.prepare("UPDATE agents SET cli_model = ?, cli_reasoning_level = ? WHERE id = ?").run(
+          cli_model,
+          cli_reasoning_level,
+          id,
+        );
+        if (hasAgentRunModeColumn) {
+          db.prepare("UPDATE agents SET run_mode = ? WHERE id = ?").run(runMode, id);
         }
       } catch (err: any) {
         const msg = String(err?.message ?? err);
@@ -673,6 +795,34 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       }
     }
 
+    const parsedRunMode = parseAgentRunModePayload(body.run_mode);
+    if (parsedRunMode === "__invalid__") {
+      return res.status(400).json({ error: "invalid_run_mode" });
+    }
+    if ("run_mode" in body && !hasAgentRunModeColumn) {
+      return res.status(400).json({ error: "run_mode_not_supported" });
+    }
+    const nextCliModel =
+      "cli_model" in body ? (body.cli_model as string | null) : ((existing.cli_model as string | null | undefined) ?? null);
+    const resolvedRunMode = resolveAgentRunMode({
+      runMode: parsedRunMode ?? existing.run_mode ?? "standard",
+      cliProvider: nextProvider,
+      cliModel: nextCliModel,
+    });
+    if (parsedRunMode === "plan" && resolvedRunMode !== "plan") {
+      return res.status(400).json({ error: "run_mode_requires_codex_model" });
+    }
+    if (
+      hasAgentRunModeColumn &&
+      (providerChanged || "cli_model" in body || "run_mode" in body || resolvedRunMode !== resolveAgentRunMode({
+        runMode: existing.run_mode,
+        cliProvider: existing.cli_provider,
+        cliModel: existing.cli_model,
+      }))
+    ) {
+      body.run_mode = resolvedRunMode;
+    }
+
     if (hasAgentCliAccountPoolColumn && "cli_account_pool_id" in body) {
       const normalizedPool = normalizeCliAccountPoolId(body.cli_account_pool_id);
       if (normalizedPool === "__invalid__") {
@@ -734,6 +884,16 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       body.workflow_profile = serializeWorkflowProfile(parsedWorkflowProfile);
     }
 
+    if ("agent_profile" in body) {
+      if (!hasAgentProfileJsonColumn) {
+        return res.status(400).json({ error: "agent_profile_not_supported" });
+      }
+      const parsedAgentProfile = parseAgentProfilePayload(body.agent_profile, body.role ?? existing.role);
+      body.agent_profile_json = parsedAgentProfile.json;
+      body.personality = parsedAgentProfile.profile?.custom_prompt_override ?? null;
+      delete body.agent_profile;
+    }
+
     const allowedFields = [
       "name",
       "name_ko",
@@ -748,8 +908,10 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       "api_model",
       "cli_model",
       "cli_reasoning_level",
+      ...(hasAgentRunModeColumn ? (["run_mode"] as const) : []),
       ...(hasAgentCliAccountPoolColumn ? (["cli_account_pool_id"] as const) : []),
       ...(hasAgentWorkflowProfileColumn ? (["workflow_profile"] as const) : []),
+      ...(hasAgentProfileJsonColumn ? (["agent_profile_json"] as const) : []),
       "avatar_emoji",
       "sprite_number",
       "personality",

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactNode } from "react";
+import { createPresetAgentProfile } from "../agent-profile";
 import Sidebar from "../components/Sidebar";
 import OfficeView from "../components/OfficeView";
 import Dashboard from "../components/Dashboard";
@@ -257,6 +258,11 @@ export default function AppMainLayout({
       avatar_emoji: draft.avatar_emoji,
       sprite_number: draft.sprite_number,
       personality: draft.personality,
+      agent_profile: {
+        ...createPresetAgentProfile(draft.role),
+        specialties: [],
+        custom_prompt_override: draft.personality,
+      },
       status: "idle" as const,
       current_task_id: null,
       stats_tasks_done: 0,

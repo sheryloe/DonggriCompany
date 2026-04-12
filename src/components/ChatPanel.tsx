@@ -1,15 +1,14 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+
+import { checkProjectPath, createProject, createPrnDraft, getProjects, isApiRequestError } from "../api";
+import { useI18n } from "../i18n";
 import type { Agent, Message, Project, PrnDraftResponse } from "../types";
 import { buildSpriteMap } from "./AgentAvatar";
-import { useI18n } from "../i18n";
-import { createProject, createPrnDraft, getProjects } from "../api";
 import { parseDecisionRequest } from "./chat/decision-request";
 import type { DecisionOption } from "./chat/decision-request";
 import ChatComposer from "./chat-panel/ChatComposer";
 import ChatMessageList from "./chat-panel/ChatMessageList";
 import ChatPanelHeader from "./chat-panel/ChatPanelHeader";
-import PrnDraftModal from "./chat-panel/PrnDraftModal";
-import { useDecisionReplyHandlers } from "./chat-panel/useDecisionReply";
 import {
   ROLE_LABELS,
   STATUS_COLORS,
@@ -19,7 +18,11 @@ import {
   type ProjectMetaPayload,
   type StreamingMessage,
 } from "./chat-panel/model";
+import PrnDraftModal from "./chat-panel/PrnDraftModal";
 import ProjectFlowDialog from "./chat-panel/ProjectFlowDialog";
+import { useDecisionReplyHandlers } from "./chat-panel/useDecisionReply";
+import { usePathHelperMessages } from "./taskboard/create-modal/usePathHelperMessages";
+import { useProjectPickerState } from "./taskboard/create-modal/useProjectPickerState";
 
 interface ChatPanelProps {
   selectedAgent: Agent | null;
@@ -31,32 +34,117 @@ interface ChatPanelProps {
     receiverType: "agent" | "department" | "all",
     receiverId?: string,
     messageType?: string,
-    projectMeta?: {
-      project_id?: string;
-      project_path?: string;
-      project_context?: string;
-      source?: string;
-    },
+    projectMeta?: ProjectMetaPayload,
   ) => void | Promise<void>;
   onSendAnnouncement: (content: string) => void;
-  onSendDirective: (
-    content: string,
-    projectMeta?: {
-      project_id?: string;
-      project_path?: string;
-      project_context?: string;
-      source?: string;
-    },
-  ) => void | Promise<void>;
+  onSendDirective: (content: string, projectMeta?: ProjectMetaPayload) => void | Promise<void>;
   onClearMessages?: (agentId?: string) => void;
   onClose: () => void;
 }
+
+type ChatConversationContext = {
+  project: Project | null;
+  skipPlannedMeeting: boolean;
+};
+
+type ProjectOverrideResolution =
+  | { kind: "resolved"; project: Project }
+  | {
+      kind: "prefill";
+      suggestedName: string;
+      suggestedPath: string;
+      feedback?: { tone: "error" | "info"; message: string } | null;
+    };
+
+const GLOBAL_PROJECT_CONTEXT_KEY = "__global__";
 
 function extractPrnPrompt(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return "";
   if (!trimmed.toLowerCase().startsWith("/prn")) return trimmed;
   return trimmed.slice(4).trim();
+}
+
+function extractAbsoluteProjectPath(text: string): string | null {
+  const candidates: string[] = [];
+  for (const match of text.matchAll(/["'](([A-Za-z]:\\[^"']+)|(~?\/[^"']+))["']/g)) {
+    if (match[1]) candidates.push(match[1]);
+  }
+  for (const match of text.matchAll(/(?:^|\s)(([A-Za-z]:\\[^\s"'`,;]+)|(~?\/[^\s"'`,;]+))/g)) {
+    if (match[1]) candidates.push(match[1]);
+  }
+  for (const candidate of candidates) {
+    const cleaned = candidate.replace(/[),.!?]+$/g, "").trim();
+    if (!cleaned) continue;
+    if (/^[A-Za-z]:\\/.test(cleaned) || cleaned.startsWith("/") || cleaned.startsWith("~/")) {
+      return cleaned;
+    }
+  }
+  return null;
+}
+
+function getPathBaseName(projectPath: string): string {
+  const normalized = projectPath.replace(/[\\/]+$/g, "");
+  const segments = normalized.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] || projectPath;
+}
+
+function normalizeMatchValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function findExactProjectMatch(projects: Project[], candidate: string): Project | null {
+  const normalizedCandidate = normalizeMatchValue(candidate);
+  if (!normalizedCandidate) return null;
+  const matches = projects.filter((project) => {
+    const projectName = normalizeMatchValue(project.name);
+    const projectPath = normalizeMatchValue(project.project_path);
+    const pathBase = normalizeMatchValue(getPathBaseName(project.project_path));
+    return (
+      projectName === normalizedCandidate ||
+      projectPath === normalizedCandidate ||
+      pathBase === normalizedCandidate
+    );
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function extractExplicitProjectNameCandidate(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length > 180) return null;
+  const bracketed = trimmed.match(/^\[([^\]]{2,80})\]\s+/);
+  if (bracketed?.[1]) return bracketed[1].trim();
+  const prefixed = trimmed.match(/^([^:\n]{2,80})\s*:\s+/);
+  return prefixed?.[1]?.trim() || null;
+}
+
+function buildProjectMeta(
+  project: Project | null,
+  options: { source?: string; skipPlannedMeeting?: boolean } = {},
+): ProjectMetaPayload | undefined {
+  if (!project && !options.source && !options.skipPlannedMeeting) return undefined;
+  return {
+    ...(project
+      ? {
+          project_id: project.id,
+          project_path: project.project_path,
+          project_context: project.core_goal,
+        }
+      : {}),
+    ...(options.source ? { source: options.source } : {}),
+    ...(options.skipPlannedMeeting ? { skipPlannedMeeting: true } : {}),
+  };
+}
+
+function mergeProjectsById(projects: Project[]): Project[] {
+  const seen = new Set<string>();
+  const merged: Project[] = [];
+  for (const project of projects) {
+    if (!project?.id || seen.has(project.id)) continue;
+    seen.add(project.id);
+    merged.push(project);
+  }
+  return merged;
 }
 
 export function ChatPanel({
@@ -72,68 +160,15 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>(selectedAgent ? "task" : "announcement");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const spriteMap = useMemo(() => buildSpriteMap(agents), [agents]);
-  const { t, locale } = useI18n();
-  const isKorean = locale.startsWith("ko");
-
-  const tr = (ko: string, en: string, ja = en, zh = en) => t({ ko, en, ja, zh });
-
-  const getAgentName = (agent: Agent | null | undefined) => {
-    if (!agent) return "";
-    return isKorean ? agent.name_ko || agent.name : agent.name || agent.name_ko;
-  };
-
-  const getRoleLabel = (role: string) => {
-    const label = ROLE_LABELS[role];
-    return label ? t(label) : role;
-  };
-
-  const getStatusLabel = (status: string) => {
-    const label = STATUS_LABELS[status];
-    return label ? t(label) : status;
-  };
-
-  const selectedDeptName = selectedAgent?.department
-    ? isKorean
-      ? selectedAgent.department.name_ko || selectedAgent.department.name
-      : selectedAgent.department.name || selectedAgent.department.name_ko
-    : selectedAgent?.department_id;
-  const selectedTaskId = selectedAgent?.current_task_id;
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingMessage?.content]);
-
-  useEffect(() => {
-    if (!selectedAgent) {
-      setMode("announcement");
-    } else if (mode === "announcement") {
-      setMode("task");
-    }
-  }, [selectedAgent, mode]);
-
-  const isDirectiveMode = input.trimStart().startsWith("$");
-  const isPrnCommandMode = input.trimStart().toLowerCase().startsWith("/prn");
+  const [conversationContexts, setConversationContexts] = useState<Record<string, ChatConversationContext>>({});
   const [pendingSend, setPendingSend] = useState<PendingSendAction | null>(null);
   const [projectFlowOpen, setProjectFlowOpen] = useState(false);
-  const [projectFlowStep, setProjectFlowStep] = useState<"choose" | "existing" | "new" | "confirm">("choose");
-  const [projectItems, setProjectItems] = useState<Project[]>([]);
-  const [projectLoading, setProjectLoading] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [existingProjectInput, setExistingProjectInput] = useState("");
-  const [existingProjectError, setExistingProjectError] = useState("");
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectPath, setNewProjectPath] = useState("");
+  const [projectFlowMode, setProjectFlowMode] = useState<"apply" | "send">("send");
+  const [projectFlowConversationId, setProjectFlowConversationId] = useState<string | null>(null);
+  const [projectFlowFeedback, setProjectFlowFeedback] = useState<{ tone: "error" | "info"; message: string } | null>(
+    null,
+  );
+  const [projectFlowSkipMeeting, setProjectFlowSkipMeeting] = useState(false);
   const [newProjectGoal, setNewProjectGoal] = useState("");
   const [projectSaving, setProjectSaving] = useState(false);
   const [decisionReplyKey, setDecisionReplyKey] = useState<string | null>(null);
@@ -143,21 +178,151 @@ export function ChatPanel({
   const [prnDraft, setPrnDraft] = useState<PrnDraftResponse | null>(null);
   const [prnPrompt, setPrnPrompt] = useState("");
   const [prnProjectMeta, setPrnProjectMeta] = useState<ProjectMetaPayload | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const spriteMap = useMemo(() => buildSpriteMap(agents), [agents]);
+  const { t, locale } = useI18n();
+  const isKorean = locale.startsWith("ko");
+  const tr = useCallback((ko: string, en: string, ja = en, zh = en) => t({ ko, en, ja, zh }), [t]);
+  const taskboardT = useCallback(
+    (labels: { ko: string; en: string; ja?: string; zh?: string }) => t(labels),
+    [t],
+  );
+  const { unsupportedPathApiMessage, resolvePathHelperErrorMessage } = usePathHelperMessages(taskboardT);
+  const projectPicker = useProjectPickerState({
+    unsupportedPathApiMessage,
+    resolvePathHelperErrorMessage,
+    setFormFeedback: setProjectFlowFeedback,
+    setSubmitWithoutProjectPromptOpen: () => undefined,
+  });
+  const {
+    projectId,
+    setProjectId,
+    projectQuery,
+    setProjectQuery,
+    projects,
+    setProjects,
+    projectsLoading,
+    selectedProject,
+    filteredProjects,
+    createNewProjectMode,
+    setCreateNewProjectMode,
+    newProjectPath,
+    setNewProjectPath,
+    pathSuggestionsOpen,
+    setPathSuggestionsOpen,
+    pathSuggestionsLoading,
+    pathSuggestions,
+    missingPathPrompt,
+    setMissingPathPrompt,
+    manualPathPickerOpen,
+    setManualPathPickerOpen,
+    nativePathPicking,
+    manualPathLoading,
+    manualPathCurrent,
+    manualPathParent,
+    manualPathEntries,
+    manualPathTruncated,
+    manualPathError,
+    selectProject,
+    handleProjectQueryChange,
+    handleEnableCreateNewProject,
+    handleNewProjectPathChange,
+    handleOpenManualPathBrowser,
+    handleTogglePathSuggestions,
+    handlePickNativePath,
+    handleSelectPathSuggestion,
+    loadManualPathEntries,
+  } = projectPicker;
+  const selectedAgentId = selectedAgent?.id ?? null;
+  const currentConversationId = selectedAgentId ?? GLOBAL_PROJECT_CONTEXT_KEY;
+  const currentConversationContext = conversationContexts[currentConversationId] ?? null;
+  const currentProject = currentConversationContext?.project ?? null;
+  const currentSkipMeeting = currentConversationContext?.skipPlannedMeeting ?? false;
+  const isDirectiveMode = input.trimStart().startsWith("$");
+  const isPrnCommandMode = input.trimStart().toLowerCase().startsWith("/prn");
   const isDirectivePending = pendingSend?.kind === "directive";
   const isPrnPending = pendingSend?.kind === "prn";
+  const isAnnouncementMode = mode === "announcement";
 
-  const closeProjectFlow = () => {
+  const getAgentName = useCallback(
+    (agent: Agent | null | undefined) => {
+      if (!agent) return "";
+      return isKorean ? agent.name_ko || agent.name : agent.name || agent.name_ko;
+    },
+    [isKorean],
+  );
+
+  const getRoleLabel = useCallback(
+    (role: string) => {
+      const label = ROLE_LABELS[role];
+      return label ? t(label) : role;
+    },
+    [t],
+  );
+
+  const getStatusLabel = useCallback(
+    (status: string) => {
+      const label = STATUS_LABELS[status];
+      return label ? t(label) : status;
+    },
+    [t],
+  );
+
+  const selectedDeptName = selectedAgent?.department
+    ? isKorean
+      ? selectedAgent.department.name_ko || selectedAgent.department.name
+      : selectedAgent.department.name || selectedAgent.department.name_ko
+    : selectedAgent?.department_id;
+  const selectedTaskId = selectedAgent?.current_task_id;
+
+  const updateConversationContext = useCallback(
+    (
+      conversationId: string | null,
+      updater: ChatConversationContext | null | ((current: ChatConversationContext | null) => ChatConversationContext | null),
+    ) => {
+      if (!conversationId) return;
+      setConversationContexts((prev) => {
+        const current = prev[conversationId] ?? null;
+        const next = typeof updater === "function" ? updater(current) : updater;
+        if (!next || (!next.project && !next.skipPlannedMeeting)) {
+          const { [conversationId]: _removed, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [conversationId]: next };
+      });
+    },
+    [],
+  );
+
+  const closeProjectFlow = useCallback(() => {
     setProjectFlowOpen(false);
-    setProjectFlowStep("choose");
+    setProjectFlowMode("send");
+    setProjectFlowConversationId(null);
     setPendingSend(null);
-    setSelectedProject(null);
-    setExistingProjectInput("");
-    setExistingProjectError("");
-    setNewProjectName("");
+    setProjectFlowFeedback(null);
+    setProjectFlowSkipMeeting(false);
+    setProjectSaving(false);
+    setProjectId("");
+    setProjectQuery("");
+    setCreateNewProjectMode(false);
     setNewProjectPath("");
     setNewProjectGoal("");
-    setProjectItems([]);
-  };
+    setMissingPathPrompt(null);
+    setPathSuggestionsOpen(false);
+    setManualPathPickerOpen(false);
+    selectProject(null);
+  }, [
+    selectProject,
+    setCreateNewProjectMode,
+    setManualPathPickerOpen,
+    setMissingPathPrompt,
+    setNewProjectPath,
+    setPathSuggestionsOpen,
+    setProjectId,
+    setProjectQuery,
+  ]);
 
   const closePrnModal = useCallback(() => {
     setPrnModalOpen(false);
@@ -167,103 +332,6 @@ export function ChatPanel({
     setPrnPrompt("");
     setPrnProjectMeta(null);
   }, []);
-
-  const loadRecentProjects = useCallback(async () => {
-    setProjectLoading(true);
-    try {
-      const res = await getProjects({ page: 1, page_size: 10 });
-      setProjectItems(res.projects.slice(0, 10));
-    } catch (err) {
-      console.error("Failed to load projects:", err);
-    } finally {
-      setProjectLoading(false);
-    }
-  }, []);
-
-  const resolveExistingProjectSelection = useCallback(
-    (raw: string): Project | null => {
-      const trimmed = raw.trim();
-      if (!trimmed || projectItems.length === 0) return null;
-
-      if (/^\d+$/.test(trimmed)) {
-        const idx = Number.parseInt(trimmed, 10);
-        if (idx >= 1 && idx <= projectItems.length) {
-          return projectItems[idx - 1];
-        }
-      }
-
-      const query = trimmed.toLowerCase();
-      const tokens = query.split(/\s+/).filter(Boolean);
-      let best: { project: Project; score: number } | null = null;
-
-      for (const p of projectItems) {
-        const name = p.name.toLowerCase();
-        const path = p.project_path.toLowerCase();
-        const goal = p.core_goal.toLowerCase();
-        let score = 0;
-
-        if (name === query) score = Math.max(score, 100);
-        if (name.startsWith(query)) score = Math.max(score, 90);
-        if (name.includes(query)) score = Math.max(score, 80);
-        if (path === query) score = Math.max(score, 75);
-        if (path.includes(query)) score = Math.max(score, 65);
-        if (goal.includes(query)) score = Math.max(score, 50);
-
-        if (tokens.length > 0) {
-          const tokenHits = tokens.filter((tk) => name.includes(tk) || path.includes(tk) || goal.includes(tk)).length;
-          score = Math.max(score, tokenHits * 20);
-        }
-
-        if (!best || score > best.score) {
-          best = { project: p, score };
-        }
-      }
-
-      if (!best || best.score < 50) return null;
-      return best.project;
-    },
-    [projectItems],
-  );
-
-  const applyExistingProjectSelection = useCallback(() => {
-    const picked = resolveExistingProjectSelection(existingProjectInput);
-    if (!picked) {
-      setExistingProjectError(
-        tr(
-          "번호(1-10) 또는 프로젝트명을 다시 입력해주세요.",
-          "Please enter a number (1-10) or a project name.",
-          "番号(1-10)またはプロジェクト名を入力してください。",
-          "请输入编号(1-10)或项目名称。",
-        ),
-      );
-      return;
-    }
-    setExistingProjectError("");
-    setSelectedProject(picked);
-    setProjectFlowStep("confirm");
-  }, [existingProjectInput, resolveExistingProjectSelection, tr]);
-
-  const handleChooseExistingProject = useCallback(() => {
-    setProjectFlowStep("existing");
-    setExistingProjectInput("");
-    setExistingProjectError("");
-    void loadRecentProjects();
-  }, [loadRecentProjects]);
-
-  const handleSelectExistingProject = useCallback((project: Project, index: number) => {
-    setSelectedProject(project);
-    setExistingProjectInput(String(index + 1));
-    setExistingProjectError("");
-    setProjectFlowStep("confirm");
-  }, []);
-
-  const handleExistingProjectInputChange = useCallback(
-    (value: string) => {
-      setExistingProjectInput(value);
-      if (existingProjectError) setExistingProjectError("");
-    },
-    [existingProjectError],
-  );
 
   const requestPrnDraft = useCallback(
     async (prompt: string, projectMeta: ProjectMetaPayload) => {
@@ -280,14 +348,7 @@ export function ChatPanel({
         setPrnDraft(draft);
       } catch (err) {
         console.error("Failed to create PRN draft:", err);
-        setPrnDraftError(
-          tr(
-            "PRN 초안 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
-            "Failed to create PRN draft. Please try again.",
-            "PRN草案の生成に失敗しました。しばらくしてから再試行してください。",
-            "生成 PRN 草案失败，请稍后重试。",
-          ),
-        );
+        setPrnDraftError(tr("PRN 초안 생성에 실패했습니다.", "Failed to create PRN draft."));
       } finally {
         setPrnDraftLoading(false);
       }
@@ -331,53 +392,307 @@ export function ChatPanel({
     [onSendAnnouncement, onSendDirective, onSendMessage, requestPrnDraft],
   );
 
-  const handleConfirmProject = () => {
-    if (!pendingSend || !selectedProject) return;
-    const projectMeta: ProjectMetaPayload = {
-      project_id: selectedProject.id,
-      project_path: selectedProject.project_path,
-      project_context: selectedProject.core_goal,
-    };
-    dispatchPending(pendingSend, projectMeta);
-    setInput("");
-    textareaRef.current?.focus();
-    closeProjectFlow();
-  };
+  const openProjectFlow = useCallback(
+    (params: {
+      pendingAction?: PendingSendAction | null;
+      mode: "apply" | "send";
+      conversationId: string | null;
+      project?: Project | null;
+      suggestedName?: string;
+      suggestedPath?: string;
+      suggestedGoal?: string;
+      skipPlannedMeeting?: boolean;
+      feedback?: { tone: "error" | "info"; message: string } | null;
+    }) => {
+      setPendingSend(params.pendingAction ?? null);
+      setProjectFlowMode(params.mode);
+      setProjectFlowConversationId(params.conversationId);
+      setProjectFlowOpen(true);
+      setProjectFlowFeedback(params.feedback ?? null);
+      setProjectFlowSkipMeeting(Boolean(params.skipPlannedMeeting));
+      setProjectSaving(false);
 
-  const handleCreateProject = async () => {
-    const goal = isDirectivePending ? (pendingSend?.content ?? "").trim() : newProjectGoal.trim();
-    if (!newProjectName.trim() || !newProjectPath.trim() || !goal || projectSaving) return;
+      if (params.project) {
+        selectProject(params.project);
+        setProjectId(params.project.id);
+        setProjectQuery(params.project.name);
+        setCreateNewProjectMode(false);
+        setNewProjectPath(params.project.project_path);
+        setNewProjectGoal(params.suggestedGoal ?? params.project.core_goal);
+        return;
+      }
+
+      selectProject(null);
+      setProjectId("");
+      setMissingPathPrompt(null);
+      setPathSuggestionsOpen(false);
+      setManualPathPickerOpen(false);
+      setNewProjectGoal(
+        params.suggestedGoal ??
+          (params.pendingAction?.kind === "directive" || params.pendingAction?.kind === "prn"
+            ? params.pendingAction.content
+            : ""),
+      );
+      if (params.suggestedName || params.suggestedPath) {
+        setCreateNewProjectMode(true);
+        setProjectQuery(params.suggestedName ?? "");
+        setNewProjectPath(params.suggestedPath ?? "");
+        return;
+      }
+      setCreateNewProjectMode(false);
+      setProjectQuery("");
+      setNewProjectPath("");
+    },
+    [
+      selectProject,
+      setCreateNewProjectMode,
+      setManualPathPickerOpen,
+      setMissingPathPrompt,
+      setNewProjectPath,
+      setPathSuggestionsOpen,
+      setProjectId,
+      setProjectQuery,
+    ],
+  );
+
+  const resolveProjectOverride = useCallback(
+    async (action: PendingSendAction): Promise<ProjectOverrideResolution | null> => {
+      const pathCandidate = extractAbsoluteProjectPath(action.content);
+      if (pathCandidate) {
+        try {
+          const response = await getProjects({ page: 1, page_size: 10, search: pathCandidate });
+          const existingProject = findExactProjectMatch(response.projects, pathCandidate);
+          if (existingProject) return { kind: "resolved", project: existingProject };
+          const inspected = await checkProjectPath(pathCandidate);
+          return {
+            kind: "prefill",
+            suggestedName: getPathBaseName(inspected.normalized_path),
+            suggestedPath: inspected.normalized_path,
+          };
+        } catch (error) {
+          if (isApiRequestError(error)) {
+            return {
+              kind: "prefill",
+              suggestedName: getPathBaseName(pathCandidate),
+              suggestedPath: pathCandidate,
+              feedback: {
+                tone: error.status >= 400 && error.status < 500 ? "info" : "error",
+                message: resolvePathHelperErrorMessage(error, {
+                  ko: "프로젝트 경로를 확인하지 못했습니다.",
+                  en: "Failed to validate the project path.",
+                  ja: "Failed to validate the project path.",
+                  zh: "Failed to validate the project path.",
+                }),
+              },
+            };
+          }
+        }
+      }
+
+      const nameCandidate = extractExplicitProjectNameCandidate(action.content);
+      if (!nameCandidate) return null;
+      try {
+        const response = await getProjects({ page: 1, page_size: 10, search: nameCandidate });
+        const existingProject = findExactProjectMatch(response.projects, nameCandidate);
+        if (existingProject) return { kind: "resolved", project: existingProject };
+      } catch (error) {
+        console.error("Failed to resolve project from message:", error);
+      }
+      return null;
+    },
+    [resolvePathHelperErrorMessage],
+  );
+
+  const executeAction = useCallback(
+    async (action: PendingSendAction) => {
+      const requiresProject =
+        action.kind === "directive" || action.kind === "prn" || action.kind === "task" || action.kind === "report";
+      if (!requiresProject) {
+        dispatchPending(action);
+        setInput("");
+        textareaRef.current?.focus();
+        return;
+      }
+
+      const conversationId = selectedAgentId ?? GLOBAL_PROJECT_CONTEXT_KEY;
+      const context = conversationContexts[conversationId] ?? null;
+      const override = await resolveProjectOverride(action);
+
+      if (override?.kind === "resolved") {
+        updateConversationContext(conversationId, {
+          project: override.project,
+          skipPlannedMeeting: context?.skipPlannedMeeting ?? false,
+        });
+        dispatchPending(
+          action,
+          buildProjectMeta(override.project, {
+            skipPlannedMeeting:
+              (action.kind === "directive" || action.kind === "prn") && Boolean(context?.skipPlannedMeeting),
+          }),
+        );
+        setInput("");
+        textareaRef.current?.focus();
+        return;
+      }
+
+      if (override?.kind === "prefill") {
+        openProjectFlow({
+          pendingAction: action,
+          mode: "send",
+          conversationId,
+          suggestedName: override.suggestedName,
+          suggestedPath: override.suggestedPath,
+          suggestedGoal:
+            action.kind === "directive" || action.kind === "prn" ? action.content : context?.project?.core_goal ?? "",
+          skipPlannedMeeting: context?.skipPlannedMeeting ?? false,
+          feedback: override.feedback ?? null,
+        });
+        return;
+      }
+
+      if (context?.project) {
+        dispatchPending(
+          action,
+          buildProjectMeta(context.project, {
+            skipPlannedMeeting:
+              (action.kind === "directive" || action.kind === "prn") && context.skipPlannedMeeting,
+          }),
+        );
+        setInput("");
+        textareaRef.current?.focus();
+        return;
+      }
+
+      openProjectFlow({
+        pendingAction: action,
+        mode: "send",
+        conversationId,
+        skipPlannedMeeting: context?.skipPlannedMeeting ?? false,
+      });
+    },
+    [conversationContexts, dispatchPending, openProjectFlow, resolveProjectOverride, selectedAgentId, updateConversationContext],
+  );
+
+  const handleConfirmProject = useCallback(() => {
+    if (!selectedProject) return;
+    updateConversationContext(projectFlowConversationId, {
+      project: selectedProject,
+      skipPlannedMeeting: projectFlowSkipMeeting,
+    });
+    if (pendingSend) {
+      dispatchPending(
+        pendingSend,
+        buildProjectMeta(selectedProject, {
+          skipPlannedMeeting:
+            (pendingSend.kind === "directive" || pendingSend.kind === "prn") && projectFlowSkipMeeting,
+        }),
+      );
+      setInput("");
+      textareaRef.current?.focus();
+    }
+    closeProjectFlow();
+  }, [
+    closeProjectFlow,
+    dispatchPending,
+    pendingSend,
+    projectFlowConversationId,
+    projectFlowSkipMeeting,
+    selectedProject,
+    updateConversationContext,
+  ]);
+
+  const handleCreateProject = useCallback(async () => {
+    const goal = newProjectGoal.trim();
+    if (!projectQuery.trim() || !newProjectPath.trim() || !goal || projectSaving) return;
     setProjectSaving(true);
     try {
       const created = await createProject({
-        name: newProjectName.trim(),
+        name: projectQuery.trim(),
         project_path: newProjectPath.trim(),
         core_goal: goal,
+        create_path_if_missing: true,
       });
-      setSelectedProject(created);
-      setProjectFlowStep("confirm");
-    } catch (err) {
-      console.error("Failed to create project:", err);
+      setProjects((prev) => mergeProjectsById([created, ...prev]));
+      selectProject(created);
+      setProjectId(created.id);
+      setProjectQuery(created.name);
+      setCreateNewProjectMode(false);
+      setProjectFlowFeedback(null);
+    } catch (error) {
+      console.error("Failed to create project:", error);
+      if (isApiRequestError(error) && error.code === "project_path_conflict") {
+        const details =
+          (error.details as {
+            existing_project_id?: unknown;
+            existing_project_name?: unknown;
+            existing_project_path?: unknown;
+          } | null) ?? null;
+        const existingProjectId = typeof details?.existing_project_id === "string" ? details.existing_project_id : "";
+        const existingProjectName =
+          typeof details?.existing_project_name === "string" ? details.existing_project_name : projectQuery.trim();
+        const existingProjectPath =
+          typeof details?.existing_project_path === "string" ? details.existing_project_path : newProjectPath.trim();
+        try {
+          const response = await getProjects({
+            page: 1,
+            page_size: 10,
+            search: existingProjectPath || existingProjectName,
+          });
+          const conflictingProject =
+            response.projects.find((project) => project.id === existingProjectId) ??
+            findExactProjectMatch(response.projects, existingProjectPath) ??
+            findExactProjectMatch(response.projects, existingProjectName) ??
+            response.projects.find((project) => project.project_path === existingProjectPath) ??
+            response.projects.find((project) => project.name === existingProjectName) ??
+            null;
+          if (conflictingProject) {
+            setProjects((prev) => mergeProjectsById([conflictingProject, ...prev]));
+            selectProject(conflictingProject);
+            setProjectId(conflictingProject.id);
+            setProjectQuery(conflictingProject.name);
+            setCreateNewProjectMode(false);
+            setProjectFlowFeedback({
+              tone: "info",
+              message: tr(
+                `'${conflictingProject.name}' 프로젝트가 같은 경로를 이미 사용 중이라 해당 프로젝트로 전환했습니다.`,
+                `Switched to '${conflictingProject.name}' because that path is already registered.`,
+              ),
+            });
+            return;
+          }
+        } catch (lookupError) {
+          console.error("Failed to load conflicting project:", lookupError);
+        }
+      }
+      setProjectFlowFeedback({
+        tone: isApiRequestError(error) && error.code === "project_path_conflict" ? "info" : "error",
+        message: isApiRequestError(error)
+          ? resolvePathHelperErrorMessage(error, { ko: "프로젝트 생성에 실패했습니다.", en: "Failed to create a project." })
+          : tr("프로젝트 생성에 실패했습니다.", "Failed to create a project."),
+      });
     } finally {
       setProjectSaving(false);
     }
-  };
+  }, [
+    isDirectivePending,
+    isPrnPending,
+    newProjectGoal,
+    newProjectPath,
+    pendingSend?.content,
+    projectQuery,
+    projectSaving,
+    resolvePathHelperErrorMessage,
+    selectProject,
+    setCreateNewProjectMode,
+    setProjectId,
+    setProjectQuery,
+    setProjects,
+    tr,
+  ]);
 
-  const openProjectBranch = (action: PendingSendAction) => {
-    setPendingSend(action);
-    setProjectFlowOpen(true);
-    setProjectFlowStep("choose");
-    setSelectedProject(null);
-    setExistingProjectInput("");
-    setExistingProjectError("");
-    setProjectItems([]);
-    setNewProjectGoal(action.kind === "directive" || action.kind === "prn" ? action.content : "");
-  };
-
-  const handleSend = () => {
+  const handleSend = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
-
     let action: PendingSendAction;
     if (trimmed.startsWith("$")) {
       const directiveContent = trimmed.slice(1).trim();
@@ -392,51 +707,102 @@ export function ChatPanel({
     } else if (mode === "task" && selectedAgent) {
       action = { kind: "task", content: trimmed, receiverId: selectedAgent.id };
     } else if (mode === "report" && selectedAgent) {
-      action = {
-        kind: "report",
-        content: `[${tr("보고 요청", "Report Request", "レポート依頼", "报告请求")}] ${trimmed}`,
-        receiverId: selectedAgent.id,
-      };
+      action = { kind: "report", content: `[${tr("보고 요청", "Report Request")}] ${trimmed}`, receiverId: selectedAgent.id };
     } else if (selectedAgent) {
       action = { kind: "chat", content: trimmed, receiverId: selectedAgent.id };
     } else {
       action = { kind: "broadcast", content: trimmed };
     }
+    await executeAction(action);
+  }, [executeAction, input, mode, selectedAgent, tr]);
 
-    const requiresProject =
-      action.kind === "directive" || action.kind === "prn" || action.kind === "task" || action.kind === "report";
+  const handleKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        void handleSend();
+      }
+    },
+    [handleSend],
+  );
 
-    if (requiresProject) {
-      openProjectBranch(action);
-      return;
-    }
+  const handleCreatePrn = useCallback(async () => {
+    const prompt = extractPrnPrompt(input);
+    if (!prompt) return;
+    await executeAction({ kind: "prn", content: prompt });
+  }, [executeAction, input]);
 
-    dispatchPending(action);
+  const handleRegeneratePrn = useCallback(() => {
+    if (!prnPrompt || !prnProjectMeta) return;
+    void requestPrnDraft(prnPrompt, prnProjectMeta);
+  }, [prnPrompt, prnProjectMeta, requestPrnDraft]);
+
+  const handleSendPrnDirective = useCallback(() => {
+    if (!prnDraft || !prnProjectMeta) return;
+    onSendDirective(prnDraft.directive_text, { ...prnProjectMeta, source: "prn_ui" });
     setInput("");
     textareaRef.current?.focus();
-  };
+    closePrnModal();
+  }, [closePrnModal, onSendDirective, prnDraft, prnProjectMeta]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  const handleOpenProjectContextManager = useCallback(() => {
+    openProjectFlow({
+      mode: "apply",
+      conversationId: currentConversationId,
+      project: currentProject,
+      skipPlannedMeeting: currentSkipMeeting,
+    });
+  }, [currentConversationId, currentProject, currentSkipMeeting, openProjectFlow]);
+
+  const handleClearProjectContext = useCallback(() => {
+    updateConversationContext(currentConversationId, (current) =>
+      current ? { project: null, skipPlannedMeeting: current.skipPlannedMeeting } : null,
+    );
+  }, [currentConversationId, updateConversationContext]);
+
+  const handleToggleContextMeetingMode = useCallback(() => {
+    updateConversationContext(currentConversationId, (current) => ({
+      project: current?.project ?? null,
+      skipPlannedMeeting: !current?.skipPlannedMeeting,
+    }));
+  }, [currentConversationId, updateConversationContext]);
 
   useEffect(() => {
-    if (!projectFlowOpen) return;
-    if (projectFlowStep !== "existing") return;
-    void loadRecentProjects();
-  }, [projectFlowOpen, projectFlowStep, loadRecentProjects]);
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, streamingMessage?.content]);
+
+  useEffect(() => {
+    if (!selectedAgent) {
+      setMode("announcement");
+    } else if (mode === "announcement") {
+      setMode("task");
+    }
+  }, [mode, selectedAgent]);
 
   const canCreateProject =
-    Boolean(newProjectName.trim()) &&
+    Boolean(projectQuery.trim()) &&
     Boolean(newProjectPath.trim()) &&
-    Boolean(isDirectivePending ? (pendingSend?.content ?? "").trim() : newProjectGoal.trim());
+    Boolean(newProjectGoal.trim());
 
-  const isAnnouncementMode = mode === "announcement";
+  const contextBarVisible = Boolean(currentProject || currentSkipMeeting);
 
-  const selectedAgentId = selectedAgent?.id;
+  const { handleDecisionOptionReply, handleDecisionManualDraft } = useDecisionReplyHandlers({
+    tr,
+    onSendMessage,
+    setDecisionReplyKey,
+    setMode,
+    setInput,
+    textareaRef,
+  });
+
   const visibleMessages = useMemo(
     () =>
       messages.filter((msg) => {
@@ -465,37 +831,6 @@ export function ChatPanel({
     }
     return mapped;
   }, [selectedAgentId, visibleMessages]);
-
-  const handleCreatePrn = useCallback(() => {
-    const prompt = extractPrnPrompt(input);
-    if (!prompt) return;
-    openProjectBranch({ kind: "prn", content: prompt });
-  }, [input]);
-
-  const handleRegeneratePrn = useCallback(() => {
-    if (!prnPrompt || !prnProjectMeta) return;
-    void requestPrnDraft(prnPrompt, prnProjectMeta);
-  }, [prnPrompt, prnProjectMeta, requestPrnDraft]);
-
-  const handleSendPrnDirective = useCallback(() => {
-    if (!prnDraft || !prnProjectMeta) return;
-    onSendDirective(prnDraft.directive_text, {
-      ...prnProjectMeta,
-      source: "prn_ui",
-    });
-    setInput("");
-    textareaRef.current?.focus();
-    closePrnModal();
-  }, [closePrnModal, onSendDirective, prnDraft, prnProjectMeta]);
-
-  const { handleDecisionOptionReply, handleDecisionManualDraft } = useDecisionReplyHandlers({
-    tr,
-    onSendMessage,
-    setDecisionReplyKey,
-    setMode,
-    setInput,
-    textareaRef,
-  });
 
   return (
     <div className="fixed inset-0 z-50 flex h-full w-full flex-col bg-gray-900 shadow-2xl lg:relative lg:inset-auto lg:z-auto lg:w-96 lg:border-l lg:border-gray-700">
@@ -530,37 +865,124 @@ export function ChatPanel({
         messagesEndRef={messagesEndRef}
       />
 
+      {contextBarVisible && (
+        <div className="border-t border-slate-800 bg-slate-950/80 px-4 py-3">
+          <div className="rounded-2xl border border-slate-700 bg-slate-900/80 px-3 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  {tr("현재 대화 프로젝트", "Conversation Project")}
+                </p>
+                {currentProject ? (
+                  <>
+                    <p className="mt-1 truncate text-sm font-semibold text-white">{currentProject.name}</p>
+                    <p className="mt-1 break-all text-[11px] text-slate-400">{currentProject.project_path}</p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-300">{tr("프로젝트 미선택", "No project selected")}</p>
+                )}
+              </div>
+              <div className="rounded-full border border-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-200">
+                {currentSkipMeeting ? tr("회의 생략", "No Meeting") : tr("기본 회의 정책", "Default Meeting")}
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleOpenProjectContextManager}
+                className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-slate-800 hover:text-white"
+              >
+                {tr("프로젝트 변경", "Change Project")}
+              </button>
+              <button
+                type="button"
+                onClick={handleClearProjectContext}
+                className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-slate-800 hover:text-white"
+              >
+                {tr("프로젝트 해제", "Clear Project")}
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleContextMeetingMode}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  currentSkipMeeting
+                    ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
+                    : "border border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                {currentSkipMeeting ? tr("회의 없이 실행", "Execute Without Meeting") : tr("회의 모드 변경", "Change Meeting Mode")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ProjectFlowDialog
         open={projectFlowOpen}
-        step={projectFlowStep}
+        pendingMode={projectFlowMode}
         isDirectivePending={isDirectivePending}
         isPrnPending={isPrnPending}
         pendingContent={pendingSend?.content ?? ""}
-        projectLoading={projectLoading}
-        projectItems={projectItems}
+        projectQuery={projectQuery}
+        projectsLoading={projectsLoading}
+        filteredProjects={filteredProjects}
         selectedProject={selectedProject}
-        existingProjectInput={existingProjectInput}
-        existingProjectError={existingProjectError}
-        newProjectName={newProjectName}
+        createNewProjectMode={createNewProjectMode}
         newProjectPath={newProjectPath}
         newProjectGoal={newProjectGoal}
-        projectSaving={projectSaving}
-        canCreateProject={canCreateProject}
+        formFeedback={projectFlowFeedback}
+        pathSuggestionsOpen={pathSuggestionsOpen}
+        pathSuggestionsLoading={pathSuggestionsLoading}
+        pathSuggestions={pathSuggestions}
+        missingPathPrompt={missingPathPrompt}
+        manualPathPickerOpen={manualPathPickerOpen}
+        manualPathLoading={manualPathLoading}
+        manualPathCurrent={manualPathCurrent}
+        manualPathParent={manualPathParent}
+        manualPathEntries={manualPathEntries}
+        manualPathTruncated={manualPathTruncated}
+        manualPathError={manualPathError}
+        nativePathPicking={nativePathPicking}
+        canCreateProject={canCreateProject && !projectSaving}
+        skipPlannedMeeting={projectFlowSkipMeeting}
         tr={tr}
         onClose={closeProjectFlow}
-        onChooseExisting={handleChooseExistingProject}
-        onChooseNew={() => setProjectFlowStep("new")}
-        onBackToChoose={() => setProjectFlowStep("choose")}
-        onSelectExistingProject={handleSelectExistingProject}
-        onExistingProjectInputChange={handleExistingProjectInputChange}
-        onApplyExistingProjectSelection={applyExistingProjectSelection}
-        onNewProjectNameChange={setNewProjectName}
-        onNewProjectPathChange={setNewProjectPath}
+        onProjectQueryChange={handleProjectQueryChange}
+        onSelectProject={selectProject}
+        onEnableCreateNewProject={handleEnableCreateNewProject}
+        onCancelCreateNewProject={() => {
+          selectProject(null);
+          setProjectId("");
+          setCreateNewProjectMode(false);
+          setProjectFlowFeedback(null);
+        }}
+        onNewProjectNameChange={(value) => {
+          selectProject(null);
+          setProjectId("");
+          setProjectQuery(value);
+        }}
+        onNewProjectPathChange={handleNewProjectPathChange}
         onNewProjectGoalChange={setNewProjectGoal}
+        onTogglePathSuggestions={handleTogglePathSuggestions}
+        onSelectPathSuggestion={handleSelectPathSuggestion}
+        onOpenManualPathBrowser={handleOpenManualPathBrowser}
+        onCloseManualPathBrowser={() => setManualPathPickerOpen(false)}
+        onOpenManualPathParent={() => {
+          if (manualPathParent) void loadManualPathEntries(manualPathParent);
+        }}
+        onOpenManualPathEntry={(path) => {
+          setNewProjectPath(path);
+          setProjectFlowFeedback(null);
+          setManualPathPickerOpen(false);
+        }}
+        onPickNativePath={() => {
+          void handlePickNativePath();
+        }}
         onCreateProject={() => {
           void handleCreateProject();
         }}
         onConfirm={handleConfirmProject}
+        onToggleSkipPlannedMeeting={() => setProjectFlowSkipMeeting((prev) => !prev)}
       />
 
       <PrnDraftModal
@@ -586,8 +1008,12 @@ export function ChatPanel({
         textareaRef={textareaRef}
         onModeChange={setMode}
         onInputChange={setInput}
-        onSend={handleSend}
-        onCreatePrn={handleCreatePrn}
+        onSend={() => {
+          void handleSend();
+        }}
+        onCreatePrn={() => {
+          void handleCreatePrn();
+        }}
         onKeyDown={handleKeyDown}
       />
     </div>

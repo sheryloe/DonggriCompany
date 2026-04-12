@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createPromptSkillsHelper } from "./prompt-skills.ts";
+import { buildAgentRunModePromptBlock } from "../agents/run-mode.ts";
 
 type DbLike = {
   prepare: (sql: string) => {
@@ -60,10 +61,28 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
 
   function buildTaskExecutionPrompt(
     parts: Array<string | null | undefined>,
-    opts: { allowWarningFix?: boolean } = {},
+    opts: {
+      allowWarningFix?: boolean;
+      agent?: {
+        cli_provider?: string | null;
+        cli_model?: string | null;
+        run_mode?: string | null;
+      } | null;
+      lang?: string | null;
+    } = {},
   ): string {
+    const runModeBlock = opts.agent
+      ? buildAgentRunModePromptBlock({
+          runMode: opts.agent.run_mode,
+          cliProvider: opts.agent.cli_provider,
+          cliModel: opts.agent.cli_model,
+          promptKind: "task",
+          lang: opts.lang ?? "en",
+        })
+      : "";
     return [
       ...parts,
+      runModeBlock,
       EXECUTION_CONTINUITY_POLICY_LINES.join("\n"),
       buildMvpCodeReviewPolicyBlock(Boolean(opts.allowWarningFix)),
     ]

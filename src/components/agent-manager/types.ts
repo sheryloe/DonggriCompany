@@ -1,4 +1,4 @@
-import type { Agent, Department, OfficePackProfile, WorkflowPackKey } from "../../types";
+import type { Agent, AgentProfile, Department, OfficePackProfile, WorkflowPackKey } from "../../types";
 
 export type Translator = (ko: string, en: string) => string;
 
@@ -19,6 +19,9 @@ export interface FormData {
   department_id: string;
   role: import("../../types").AgentRole;
   cli_provider: import("../../types").CliProvider;
+  cli_model: string;
+  cli_reasoning_level: string;
+  run_mode: import("../../types").AgentRunMode;
   cli_account_pool_id: string;
   workflow_role: import("../../types").AgentWorkflowRole;
   review_lenses_text: string;
@@ -27,6 +30,8 @@ export interface FormData {
   avatar_emoji: string;
   sprite_number: number | null;
   personality: string;
+  specialties_text: string;
+  agent_profile: AgentProfile;
 }
 
 export interface DeptForm {

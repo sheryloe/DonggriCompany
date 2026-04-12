@@ -1,5 +1,7 @@
 import type { MessengerChannel } from "../../../messenger/channels.ts";
+import type { AgentProfile } from "../../workflow/agents/agent-profile.ts";
 import type { AgentWorkflowProfile } from "../../workflow/agents/workflow-profile.ts";
+import type { AgentRunMode } from "../../workflow/agents/run-mode.ts";
 
 export interface AgentRow {
   id: string;
@@ -17,8 +19,11 @@ export interface AgentRow {
   api_model: string | null;
   cli_model: string | null;
   cli_reasoning_level: string | null;
+  run_mode?: AgentRunMode | null;
   cli_account_pool_id?: string | null;
   workflow_profile?: AgentWorkflowProfile | null;
+  agent_profile_json?: string | null;
+  agent_profile?: AgentProfile | null;
 }
 
 export type DelegationOptions = {

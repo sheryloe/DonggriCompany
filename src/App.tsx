@@ -20,6 +20,7 @@ import type {
 } from "./types";
 import type { TaskReportDetail } from "./api";
 import * as api from "./api";
+import { createPresetAgentProfile } from "./agent-profile";
 import { detectBrowserLanguage, normalizeLanguage } from "./i18n";
 import { useTheme } from "./ThemeContext";
 import { ROOM_THEMES_STORAGE_KEY, UPDATE_BANNER_DISMISS_STORAGE_KEY } from "./app/constants";
@@ -187,6 +188,11 @@ export default function App() {
       avatar_emoji: draft.avatar_emoji,
       sprite_number: draft.sprite_number,
       personality: draft.personality,
+      agent_profile: {
+        ...createPresetAgentProfile(draft.role),
+        specialties: [],
+        custom_prompt_override: draft.personality,
+      },
       status: "idle",
       current_task_id: null,
       stats_tasks_done: 0,

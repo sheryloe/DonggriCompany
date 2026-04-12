@@ -1,4 +1,5 @@
 import type { CreateTaskDraft, ManualPathEntry, MissingPathPrompt, TFunction } from "../constants";
+import type { GitHubGateReason } from "../../project-creation/github-project-flow";
 
 export interface CreateTaskModalOverlaysProps {
   t: TFunction;
@@ -18,6 +19,7 @@ export interface CreateTaskModalOverlaysProps {
   manualPathEntries: ManualPathEntry[];
   manualPathTruncated: boolean;
   manualPathError: string | null;
+  githubConnectReason: GitHubGateReason | null;
   draftModalOpen: boolean;
   drafts: CreateTaskDraft[];
   onSelectRestoreDraft: (draftId: string) => void;
@@ -32,6 +34,8 @@ export interface CreateTaskModalOverlaysProps {
   onManualPathRefresh: () => void;
   onOpenManualPathEntry: (path: string) => void;
   onSelectManualCurrentPath: () => void;
+  onCloseGitHubConnectionPrompt: () => void;
+  onGitHubConnected: () => void;
   onCloseDraftModal: () => void;
   onLoadDraft: (draft: CreateTaskDraft) => void;
   onDeleteDraft: (draftId: string) => void;

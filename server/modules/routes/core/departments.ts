@@ -15,6 +15,22 @@ export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
   const { app, db, broadcast, normalizeTextField, runInTransaction } = deps;
 
   const PROTECTED_DEPARTMENT_IDS = new Set(["planning", "dev", "design", "qa", "devsecops", "operations"]);
+  const allowReservedCiDepartmentIds = (() => {
+    const dbPath = String(process.env.DB_PATH ?? "")
+      .replace(/\\/g, "/")
+      .toLowerCase();
+    return (
+      process.env.NODE_ENV === "test" ||
+      Boolean(process.env.VITEST) ||
+      dbPath.includes("/.tmp/e2e-runtime/") ||
+      dbPath.endsWith("/claw-empire.e2e.sqlite")
+    );
+  })();
+
+  function isReservedCiDepartmentId(id: string): boolean {
+    return /^ci_/i.test(id);
+  }
+
   const hasAgentWorkflowPackColumn = (() => {
     try {
       const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
@@ -157,6 +173,9 @@ export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
       if (!id || !name) return res.status(400).json({ error: "id_and_name_required" });
       if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(id)) {
         return res.status(400).json({ error: "invalid_department_id" });
+      }
+      if (!allowReservedCiDepartmentIds && isReservedCiDepartmentId(id)) {
+        return res.status(403).json({ error: "reserved_department_id" });
       }
 
       const existing =

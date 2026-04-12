@@ -10,6 +10,7 @@ import {
 } from "../../../../messenger/session-agent-routing.ts";
 import { safeSecretEquals } from "../../../../security/auth.ts";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
+import { buildDirectChatConversationKey } from "../../collab/direct-chat-project-context.ts";
 import type { AgentRow, DelegationOptions, StoredMessage } from "../../shared/types.ts";
 import type { DecisionReplyBridgeInput, DecisionReplyBridgeResult } from "./decision-inbox-routes.ts";
 import { resolveDirectiveLeaderCandidateScope } from "./directive-leader-scope.ts";
@@ -59,10 +60,108 @@ function detectLangForResetAck(text: string): "ko" | "en" | "ja" | "zh" {
 
 function buildSessionResetAck(text: string): string {
   const lang = detectLangForResetAck(text);
-  if (lang === "ko") return "🧹 현재 대화 세션을 초기화했습니다. 새 대화를 시작할게요.";
-  if (lang === "ja") return "🧹 現在の会話セッションを初期化しました。新しい会話を開始します。";
-  if (lang === "zh") return "🧹 已重置当前会话。现在开始新的对话。";
-  return "🧹 Current conversation session was reset. Starting a new chat.";
+  if (lang === "ko") return "현재 대화 세션을 초기화했습니다. 새 대화를 시작할게요.";
+  if (lang === "ja") return "現在の会話セッションを初期化しました。新しい会話を開始します。";
+  if (lang === "zh") return "已重置当前会话。现在开始新的对话。";
+  return "Current conversation session was reset. Starting a new chat.";
+}
+
+type ResolvedProjectBinding = {
+  provided: boolean;
+  resolved: boolean;
+  projectId: string | null;
+  projectPath: string | null;
+  projectContext: string | null;
+};
+
+function normalizeProjectPathForLookup(projectPath: string): string {
+  const normalized = projectPath.trim().replace(/\\/g, "/").replace(/\/+$/g, "");
+  return normalized || "/";
+}
+
+function buildProjectPathLookupCandidates(projectPath: string): string[] {
+  const normalized = normalizeProjectPathForLookup(projectPath);
+  if (!normalized) return [];
+  const candidates = new Set<string>([normalized, normalized.replace(/\//g, "\\")]);
+  if (/^[A-Za-z]:\//.test(normalized)) {
+    candidates.add(normalized.replace(/\//g, "\\"));
+  }
+  if (/^[A-Za-z]:\\/.test(projectPath.trim())) {
+    candidates.add(projectPath.trim());
+  }
+  return [...candidates].filter(Boolean);
+}
+
+function resolveProjectBindingFromRequest(
+  db: DirectiveAndInboxRouteCtx["db"],
+  normalizeTextField: DirectiveAndInboxRouteDeps["normalizeTextField"],
+  binding: {
+    projectId?: string | null;
+    projectPath?: string | null;
+    projectContext?: string | null;
+  },
+): ResolvedProjectBinding {
+  const projectId = normalizeTextField(binding.projectId);
+  const projectPath = normalizeTextField(binding.projectPath);
+  const projectContext = normalizeTextField(binding.projectContext);
+  const provided = Boolean(projectId || projectPath || projectContext);
+  if (!provided) {
+    return {
+      provided: false,
+      resolved: false,
+      projectId: null,
+      projectPath: null,
+      projectContext: null,
+    };
+  }
+
+  const rowById = projectId
+    ? (db
+        .prepare(
+          `
+            SELECT id, project_path, core_goal
+            FROM projects
+            WHERE id = ?
+            LIMIT 1
+          `,
+        )
+        .get(projectId) as { id: string; project_path: string | null; core_goal: string | null } | undefined)
+    : undefined;
+
+  const pathCandidates = projectPath ? buildProjectPathLookupCandidates(projectPath) : [];
+  const rowByPath =
+    !rowById && pathCandidates.length > 0
+      ? (db
+          .prepare(
+            `
+              SELECT id, project_path, core_goal
+              FROM projects
+              WHERE project_path IN (${pathCandidates.map(() => "?").join(", ")})
+              ORDER BY last_used_at DESC, updated_at DESC
+              LIMIT 1
+            `,
+          )
+          .get(...pathCandidates) as { id: string; project_path: string | null; core_goal: string | null } | undefined)
+      : undefined;
+
+  const row = rowById ?? rowByPath;
+  if (!row) {
+    return {
+      provided: true,
+      resolved: false,
+      projectId,
+      projectPath,
+      projectContext,
+    };
+  }
+
+  return {
+    provided: true,
+    resolved: true,
+    projectId: normalizeTextField(row.id),
+    projectPath: normalizeTextField(row.project_path),
+    projectContext: normalizeTextField(row.core_goal) ?? projectContext,
+  };
 }
 
 const buildAgentUpgradeRequiredPayload = () => {
@@ -366,6 +465,11 @@ export function registerDirectiveAndInboxRoutes(
     const explicitProjectContext = normalizeTextField(body.project_context);
     const explicitSource = normalizeTextField(body.source);
     const explicitChat = normalizeTextField(body.chat);
+    const resolvedExplicitProject = resolveProjectBindingFromRequest(db, normalizeTextField, {
+      projectId: explicitProjectId,
+      projectPath: explicitProjectPath,
+      projectContext: explicitProjectContext,
+    });
     if (!content || typeof content !== "string") {
       if (
         !recordMessageIngressAuditOr503(res, {
@@ -382,7 +486,7 @@ export function registerDirectiveAndInboxRoutes(
       return res.status(400).json({ error: "content_required" });
     }
 
-    if (enforceDirectiveProjectBinding && !explicitProjectId) {
+    if (enforceDirectiveProjectBinding && !resolvedExplicitProject.provided) {
       if (
         !recordMessageIngressAuditOr503(res, {
           endpoint: "/api/directives",
@@ -396,6 +500,24 @@ export function registerDirectiveAndInboxRoutes(
       )
         return;
       return res.status(428).json(buildAgentUpgradeRequiredPayload());
+    }
+    if (resolvedExplicitProject.provided && !resolvedExplicitProject.resolved) {
+      if (
+        !recordMessageIngressAuditOr503(res, {
+          endpoint: "/api/directives",
+          req,
+          body,
+          idempotencyKey,
+          outcome: "validation_error",
+          statusCode: 422,
+          detail: "project_binding_not_found",
+        })
+      )
+        return;
+      return res.status(422).json({
+        error: "project_binding_not_found",
+        message: "Project binding could not be resolved.",
+      });
     }
 
     let storedMessage: StoredMessage;
@@ -501,9 +623,9 @@ export function registerDirectiveAndInboxRoutes(
     const delegationOptions: DelegationOptions = {
       skipPlannedMeeting: explicitSkip || directivePolicy.skipPlannedMeeting,
       skipPlanSubtasks: explicitSkip || directivePolicy.skipPlanSubtasks,
-      projectId: explicitProjectId,
-      projectPath: explicitProjectPath,
-      projectContext: explicitProjectContext,
+      projectId: resolvedExplicitProject.projectId,
+      projectPath: resolvedExplicitProject.projectPath,
+      projectContext: resolvedExplicitProject.projectContext,
       messengerChannel: directiveReplyRoute?.channel,
       messengerTargetId: directiveReplyRoute?.targetId,
       messengerSessionKey: directiveSessionRoute
@@ -516,7 +638,7 @@ export function registerDirectiveAndInboxRoutes(
       if (!directiveLeaderScopeByDept.has(normalizedDeptId)) {
         directiveLeaderScopeByDept.set(
           normalizedDeptId,
-          resolveDirectiveLeaderCandidateScope(db as any, explicitProjectId ?? null, normalizedDeptId),
+          resolveDirectiveLeaderCandidateScope(db as any, resolvedExplicitProject.projectId ?? null, normalizedDeptId),
         );
       }
       return directiveLeaderScopeByDept.get(normalizedDeptId) ?? null;
@@ -526,7 +648,7 @@ export function registerDirectiveAndInboxRoutes(
       // 4. Auto-delegate to planning team leader
       const planningLeader = findDirectiveLeader(
         "planning",
-        explicitProjectId ?? null,
+        resolvedExplicitProject.projectId ?? null,
         getDirectiveLeaderScope("planning"),
       );
       if (planningLeader) {
@@ -546,7 +668,11 @@ export function registerDirectiveAndInboxRoutes(
           for (const deptId of mentions.deptIds) {
             if (processedDepts.has(deptId)) continue;
             processedDepts.add(deptId);
-            const leader = findDirectiveLeader(deptId, explicitProjectId ?? null, getDirectiveLeaderScope(deptId));
+            const leader = findDirectiveLeader(
+              deptId,
+              resolvedExplicitProject.projectId ?? null,
+              getDirectiveLeaderScope(deptId),
+            );
             if (leader) {
               handleTaskDelegation(leader, content, "", delegationOptions);
             }
@@ -558,7 +684,7 @@ export function registerDirectiveAndInboxRoutes(
               processedDepts.add(mentioned.department_id);
               const leader = findDirectiveLeader(
                 mentioned.department_id,
-                explicitProjectId ?? null,
+                resolvedExplicitProject.projectId ?? null,
                 getDirectiveLeaderScope(mentioned.department_id),
               );
               if (leader) {
@@ -631,6 +757,11 @@ export function registerDirectiveAndInboxRoutes(
     const inboxProjectId = normalizeTextField(body.project_id);
     const inboxProjectPath = normalizeTextField(body.project_path);
     const inboxProjectContext = normalizeTextField(body.project_context);
+    const resolvedInboxProject = resolveProjectBindingFromRequest(db, normalizeTextField, {
+      projectId: inboxProjectId,
+      projectPath: inboxProjectPath,
+      projectContext: inboxProjectContext,
+    });
     const inboxSource = normalizeTextField(body.source);
     const inboxChat = normalizeTextField(body.chat);
     const directiveSessionRoute = resolveSessionTargetRouteFromDb({
@@ -659,7 +790,7 @@ export function registerDirectiveAndInboxRoutes(
       return res.status(400).json({ error: "empty_content" });
     }
 
-    if (enforceDirectiveProjectBinding && isDirective && !inboxProjectId) {
+    if (enforceDirectiveProjectBinding && isDirective && !resolvedInboxProject.provided) {
       if (
         !recordMessageIngressAuditOr503(res, {
           endpoint: "/api/inbox",
@@ -673,6 +804,24 @@ export function registerDirectiveAndInboxRoutes(
       )
         return;
       return res.status(428).json(buildAgentUpgradeRequiredPayload());
+    }
+    if (resolvedInboxProject.provided && !resolvedInboxProject.resolved) {
+      if (
+        !recordMessageIngressAuditOr503(res, {
+          endpoint: "/api/inbox",
+          req,
+          body,
+          idempotencyKey,
+          outcome: "validation_error",
+          statusCode: 422,
+          detail: "project_binding_not_found",
+        })
+      )
+        return;
+      return res.status(422).json({
+        error: "project_binding_not_found",
+        message: "Project binding could not be resolved.",
+      });
     }
 
     const sessionRoute = !isDirective
@@ -723,8 +872,16 @@ export function registerDirectiveAndInboxRoutes(
         `,
         )
         .run(sessionRoute.agentId, sessionRoute.agentId);
-      const resetState = resetDirectChatState(sessionRoute.agentId) as
-        | { clearedPendingProjectBinding?: boolean }
+      const conversationKey = buildDirectChatConversationKey(sessionRoute.agentId, {
+        messengerChannel: sessionRoute.channel,
+        messengerSessionKey: `${sessionRoute.channel}:${sessionRoute.sessionId}`,
+      });
+      const resetState = resetDirectChatState(sessionRoute.agentId, { conversationKey }) as
+        | {
+            clearedPendingProjectBinding?: boolean;
+            clearedActiveProjectContext?: boolean;
+            clearedActiveProjectContexts?: number;
+          }
         | undefined;
       const sessionKey = `${sessionRoute.channel}:${sessionRoute.sessionId}`;
       const ack = buildSessionResetAck(content);
@@ -888,9 +1045,10 @@ export function registerDirectiveAndInboxRoutes(
     if (!isDirective && shouldRouteToSessionAgent && sessionRoute) {
       broadcast("new_message", msg);
       const directReplyOptions: DelegationOptions = {
-        projectId: inboxProjectId,
-        projectPath: inboxProjectPath,
-        projectContext: inboxProjectContext,
+        projectId: resolvedInboxProject.projectId,
+        projectPath: resolvedInboxProject.projectPath,
+        projectContext: resolvedInboxProject.projectContext,
+        skipPlannedMeeting: body.skipPlannedMeeting === true,
         messengerChannel: sessionRoute.channel,
         messengerTargetId: sessionRoute.targetId,
         messengerSessionKey: `${sessionRoute.channel}:${sessionRoute.sessionId}`,
@@ -923,9 +1081,9 @@ export function registerDirectiveAndInboxRoutes(
     const directiveDelegationOptions: DelegationOptions = {
       skipPlannedMeeting: inboxExplicitSkip || !!directivePolicy?.skipPlannedMeeting,
       skipPlanSubtasks: inboxExplicitSkip || !!directivePolicy?.skipPlanSubtasks,
-      projectId: inboxProjectId,
-      projectPath: inboxProjectPath,
-      projectContext: inboxProjectContext,
+      projectId: resolvedInboxProject.projectId,
+      projectPath: resolvedInboxProject.projectPath,
+      projectContext: resolvedInboxProject.projectContext,
       messengerChannel: directiveReplyRoute?.channel,
       messengerTargetId: directiveReplyRoute?.targetId,
       messengerSessionKey: directiveSessionRoute

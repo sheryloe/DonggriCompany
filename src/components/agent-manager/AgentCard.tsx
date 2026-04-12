@@ -1,4 +1,5 @@
 import type { Agent, Department } from "../../types";
+import { buildAgentCapabilityCompactSummary, normalizeAgentProfile } from "../../agent-profile";
 import { localeName } from "../../i18n";
 import AgentAvatar from "../AgentAvatar";
 import { ROLE_BADGE, ROLE_LABEL, STATUS_DOT } from "./constants";
@@ -35,6 +36,12 @@ export default function AgentCard({
 }: AgentCardProps) {
   const isDeleting = confirmDeleteId === agent.id;
   const dept = departments.find((d) => d.id === agent.department_id);
+  const profile = normalizeAgentProfile(agent.agent_profile, agent.role);
+  const capabilitySummary = buildAgentCapabilityCompactSummary(profile, locale, [
+    "execution",
+    "architecture",
+    "review",
+  ]);
 
   return (
     <div
@@ -67,6 +74,12 @@ export default function AgentCard({
             <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${ROLE_BADGE[agent.role] || ""}`}>
               {isKo ? ROLE_LABEL[agent.role]?.ko : ROLE_LABEL[agent.role]?.en}
             </span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-md"
+              style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
+            >
+              Tier {profile.growth_tier}
+            </span>
             {dept && (
               <span
                 className="text-[10px] px-1.5 py-0.5 rounded-md"
@@ -90,15 +103,9 @@ export default function AgentCard({
           >
             {agent.cli_provider}
           </span>
-          {agent.personality && (
-            <span
-              className="text-[10px] truncate max-w-[120px]"
-              style={{ color: "var(--th-text-muted)" }}
-              title={agent.personality}
-            >
-              {agent.personality}
-            </span>
-          )}
+        </div>
+        <div className="max-w-[170px] truncate text-[10px]" style={{ color: "var(--th-text-muted)" }} title={capabilitySummary}>
+          {capabilitySummary}
         </div>
         <div
           className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"

@@ -1,8 +1,10 @@
-import type { TFunction } from "./model";
+﻿import type { TFunction } from "./model";
 
 interface SkillsHeaderProps {
   t: TFunction;
-  skillsCount: number;
+  totalSkillsCount: number;
+  catalogSkillsCount: number;
+  customSkillsCount: number;
   search: string;
   onSearchChange: (value: string) => void;
   sortBy: "rank" | "name" | "installs";
@@ -12,7 +14,9 @@ interface SkillsHeaderProps {
 
 export default function SkillsHeader({
   t,
-  skillsCount,
+  totalSkillsCount,
+  catalogSkillsCount,
+  customSkillsCount,
   search,
   onSearchChange,
   sortBy,
@@ -52,13 +56,26 @@ export default function SkillsHeader({
               zh: "添加自定义技能",
             })}
           >
-            <span className="text-base">✏️</span>
-            {t({ ko: "커스텀 스킬 추가", en: "Add Custom Skill", ja: "カスタムスキル追加", zh: "添加自定义技能" })}
+            <span className="text-base">✨</span>
+            {t({
+              ko: "커스텀 스킬 추가",
+              en: "Add Custom Skill",
+              ja: "カスタムスキル追加",
+              zh: "添加自定义技能",
+            })}
           </button>
           <div className="text-right">
-            <div className="text-2xl font-bold text-empire-gold">{skillsCount}</div>
+            <div className="text-2xl font-bold text-empire-gold">{totalSkillsCount}</div>
             <div className="text-xs text-slate-500">
               {t({ ko: "등록된 스킬", en: "Registered skills", ja: "登録済みスキル", zh: "已收录技能" })}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">
+              {t({
+                ko: `총 ${totalSkillsCount} (skills.sh ${catalogSkillsCount} + custom ${customSkillsCount})`,
+                en: `Total ${totalSkillsCount} (skills.sh ${catalogSkillsCount} + custom ${customSkillsCount})`,
+                ja: `合計 ${totalSkillsCount} (skills.sh ${catalogSkillsCount} + custom ${customSkillsCount})`,
+                zh: `总计 ${totalSkillsCount} (skills.sh ${catalogSkillsCount} + custom ${customSkillsCount})`,
+              })}
             </div>
           </div>
         </div>
@@ -73,7 +90,7 @@ export default function SkillsHeader({
             placeholder={t({
               ko: "스킬 검색... (이름, 저장소, 카테고리)",
               en: "Search skills... (name, repo, category)",
-              ja: "スキル検索...（名前・リポジトリ・カテゴリ）",
+              ja: "スキル検索... (名前、リポジトリ、カテゴリ)",
               zh: "搜索技能...（名称、仓库、分类）",
             })}
             className="w-full bg-slate-900/60 border border-slate-600/50 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/25"
@@ -94,9 +111,7 @@ export default function SkillsHeader({
           className="bg-slate-900/60 border border-slate-600/50 rounded-lg px-3 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500/50"
         >
           <option value="rank">{t({ ko: "순위순", en: "By Rank", ja: "順位順", zh: "按排名" })}</option>
-          <option value="installs">
-            {t({ ko: "설치순", en: "By Installs", ja: "インストール順", zh: "按安装量" })}
-          </option>
+          <option value="installs">{t({ ko: "설치순", en: "By Installs", ja: "インストール順", zh: "按安装量" })}</option>
           <option value="name">{t({ ko: "이름순", en: "By Name", ja: "名前順", zh: "按名称" })}</option>
         </select>
       </div>

@@ -16,6 +16,7 @@ export type ProjectMetaPayload = {
   project_path?: string;
   project_context?: string;
   source?: string;
+  skipPlannedMeeting?: boolean;
 };
 
 export type CliSubAgentEvent =

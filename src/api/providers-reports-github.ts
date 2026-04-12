@@ -341,6 +341,26 @@ export interface GitHubStatus {
   account_id?: string;
 }
 
+export interface GitHubCreateRepoInput {
+  name: string;
+  private: boolean;
+}
+
+export interface GitHubCreateRepoResponse {
+  repo: {
+    name: string;
+    full_name: string;
+    private: boolean;
+    default_branch: string | null;
+    html_url: string | null;
+    clone_url: string | null;
+  };
+}
+
+function isValidGitHubCreateRepoResponse(response: GitHubCreateRepoResponse | null | undefined): response is GitHubCreateRepoResponse {
+  return Boolean(response?.repo?.name && response.repo.full_name);
+}
+
 export interface CloneStatus {
   clone_id: string;
   status: string;
@@ -352,6 +372,18 @@ export interface CloneStatus {
 
 export async function getGitHubStatus(): Promise<GitHubStatus> {
   return request<GitHubStatus>("/api/github/status");
+}
+
+export async function createGitHubRepo(input: GitHubCreateRepoInput): Promise<GitHubCreateRepoResponse> {
+  const response = await request<GitHubCreateRepoResponse>("/api/github/repos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!isValidGitHubCreateRepoResponse(response)) {
+    throw new Error("GitHub repository metadata is missing from the server response.");
+  }
+  return response;
 }
 
 export async function getGitHubRepos(params?: {

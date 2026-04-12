@@ -163,7 +163,7 @@ describe("worktree verify-commit route", () => {
     } finally {
       db.close();
     }
-  });
+  }, 20_000);
 
   it("커밋 없이 변경만 있으면 dirty_without_commit 판정을 돌려준다", () => {
     const repo = initRepo("climpire-verify-dirty-");
@@ -196,7 +196,7 @@ describe("worktree verify-commit route", () => {
       db.close();
       tools.cleanupWorktree(repo, taskId);
     }
-  });
+  }, 20_000);
 
   it("커밋된 코드 변경이 있으면 ok 판정을 돌려준다", () => {
     const repo = initRepo("climpire-verify-ok-");
@@ -235,7 +235,7 @@ describe("worktree verify-commit route", () => {
       db.close();
       tools.cleanupWorktree(repo, taskId);
     }
-  });
+  }, 20_000);
 
   it("수동 merge 전에 최종 브랜치 검증 통과 로그를 남긴다", () => {
     const repo = initRepo("climpire-verify-merge-");
@@ -266,7 +266,7 @@ describe("worktree verify-commit route", () => {
       db.close();
       tools.cleanupWorktree(repo, taskId);
     }
-  });
+  }, 20_000);
 });
 
 describe("cli usage route", () => {

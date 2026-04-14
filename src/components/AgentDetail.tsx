@@ -609,16 +609,7 @@ export default function AgentDetail({
                       </div>
                       {supportsCliModelOverride && (
                         <div className="flex flex-wrap items-center gap-1 pb-0.5">
-                          {cliModelsLoading ? (
-                            <span className="text-[10px] text-slate-400">
-                              {t({
-                                ko: "모델 로딩 중...",
-                                en: "Loading models...",
-                                ja: "Loading models...",
-                                zh: "Loading models...",
-                              })}
-                            </span>
-                          ) : selectedCliModelOptions.length > 0 ? (
+                          {selectedCliModelOptions.length > 0 ? (
                             <>
                               <select
                                 aria-label={selectedCli === "codex" ? "Codex model" : "CLI model"}
@@ -648,7 +639,7 @@ export default function AgentDetail({
                               >
                                 <option value="">
                                   {t({
-                                    ko: "Codex 모델 선택",
+                                    ko: selectedCli === "codex" ? "Codex \uBAA8\uB378 \uC120\uD0DD" : "\uBAA8\uB378 \uC120\uD0DD",
                                     en: selectedCli === "codex" ? "Select Codex model" : "Select model",
                                     ja: selectedCli === "codex" ? "Select Codex model" : "Select model",
                                     zh: selectedCli === "codex" ? "Select Codex model" : "Select model",
@@ -660,6 +651,16 @@ export default function AgentDetail({
                                   </option>
                                 ))}
                               </select>
+                              {cliModelsLoading && (
+                                <span className="text-[10px] text-slate-400">
+                                  {t({
+                                    ko: "\uBAA8\uB378 \uBAA9\uB85D \uB3D9\uAE30\uD654 \uC911...",
+                                    en: "Syncing models...",
+                                    ja: "Syncing models...",
+                                    zh: "Syncing models...",
+                                  })}
+                                </span>
+                              )}
                               {selectedCli === "codex" && selectedCliModel.trim() ? (
                                 <>
                                   <select
@@ -694,7 +695,7 @@ export default function AgentDetail({
                               ) : selectedCli === "codex" ? (
                                 <span className="text-[10px] text-slate-400">
                                   {t({
-                                    ko: "모델을 지정하면 추론/플랜 옵션이 열립니다.",
+                                    ko: "\uBAA8\uB378\uC744 \uC9C0\uC815\uD558\uBA74 \uCD94\uB860/\uD50C\uB79C \uC635\uC158\uC774 \uD65C\uC131\uD654\uB429\uB2C8\uB2E4.",
                                     en: "Reasoning and plan options appear after selecting a model.",
                                     ja: "Reasoning and plan options appear after selecting a model.",
                                     zh: "Reasoning and plan options appear after selecting a model.",
@@ -705,10 +706,12 @@ export default function AgentDetail({
                           ) : (
                             <span className="text-[10px] text-slate-400">
                               {t({
-                                ko: "사용 가능한 Codex 모델이 없습니다.",
-                                en: selectedCli === "codex" ? "No Codex models available" : "No model list available",
-                                ja: selectedCli === "codex" ? "No Codex models available" : "No model list available",
-                                zh: selectedCli === "codex" ? "No Codex models available" : "No model list available",
+                                ko: cliModelsLoading
+                                  ? "\uBAA8\uB378 \uB85C\uB529 \uC911..."
+                                  : "\uBAA8\uB378 \uBAA9\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+                                en: cliModelsLoading ? "Loading models..." : "No model list available",
+                                ja: cliModelsLoading ? "Loading models..." : "No model list available",
+                                zh: cliModelsLoading ? "Loading models..." : "No model list available",
                               })}
                             </span>
                           )}
@@ -796,16 +799,7 @@ export default function AgentDetail({
                         </span>
                       )}
                       {supportsCliModelOverride &&
-                        (cliModelsLoading ? (
-                          <span className="text-[10px] text-slate-400">
-                            {t({
-                              ko: "모델 로딩...",
-                              en: "Loading models...",
-                              ja: "モデル読み込み中...",
-                              zh: "正在加载模型...",
-                            })}
-                          </span>
-                        ) : selectedCliModelOptions.length > 0 ? (
+                        (selectedCliModelOptions.length > 0 ? (
                           <>
                             <select
                               value={selectedCliModel}
@@ -817,10 +811,10 @@ export default function AgentDetail({
                             >
                               <option value="">
                                 {t({
-                                  ko: "기본값(설정창 모델)",
+                                  ko: "\uAE30\uBCF8\uAC12(\uC124\uC815 \uBAA8\uB378)",
                                   en: "Default (Settings model)",
-                                  ja: "デフォルト（設定モデル）",
-                                  zh: "默认（设置中的模型）",
+                                  ja: "Default (Settings model)",
+                                  zh: "Default (Settings model)",
                                 })}
                               </option>
                               {selectedCliModelOptions.map((model) => (
@@ -830,21 +824,30 @@ export default function AgentDetail({
                               ))}
                             </select>
                             <span className="text-[10px] text-slate-400">
-                              {t({
-                                ko: "알바생 모델은 설정창 값을 따릅니다",
-                                en: "Sub-agent model follows Settings",
-                                ja: "サブエージェントモデルは設定値を使用",
-                                zh: "子代理模型沿用设置值",
-                              })}
+                              {cliModelsLoading
+                                ? t({
+                                    ko: "\uBAA8\uB378 \uBAA9\uB85D \uB3D9\uAE30\uD654 \uC911...",
+                                    en: "Syncing models...",
+                                    ja: "Syncing models...",
+                                    zh: "Syncing models...",
+                                  })
+                                : t({
+                                    ko: "\uC11C\uBE0C\uC5D0\uC774\uC804\uD2B8 \uBAA8\uB378\uC740 \uC124\uC815 \uAC12\uC744 \uB530\uB985\uB2C8\uB2E4.",
+                                    en: "Sub-agent model follows Settings",
+                                    ja: "Sub-agent model follows Settings",
+                                    zh: "Sub-agent model follows Settings",
+                                  })}
                             </span>
                           </>
                         ) : (
                           <span className="text-[10px] text-slate-400">
                             {t({
-                              ko: "모델 목록이 없습니다",
-                              en: "No model list available",
-                              ja: "モデル一覧がありません",
-                              zh: "暂无模型列表",
+                              ko: cliModelsLoading
+                                ? "\uBAA8\uB378 \uB85C\uB529 \uC911..."
+                                : "\uBAA8\uB378 \uBAA9\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+                              en: cliModelsLoading ? "Loading models..." : "No model list available",
+                              ja: cliModelsLoading ? "Loading models..." : "No model list available",
+                              zh: cliModelsLoading ? "Loading models..." : "No model list available",
                             })}
                           </span>
                         ))}

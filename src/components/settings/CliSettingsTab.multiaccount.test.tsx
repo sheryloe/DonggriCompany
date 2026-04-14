@@ -82,4 +82,51 @@ describe("CliSettingsTab multi-account", () => {
 
     expect(onVerifyPool).toHaveBeenCalledWith("codex", "codex-main");
   });
+
+  it("shows gemini fallback model select even while model list is loading", () => {
+    render(
+      <CliSettingsTab
+        t={(messages) => messages.en}
+        cliStatus={null}
+        cliModels={null}
+        cliModelsLoading
+        officeExecutionProviders={providers}
+        cliAccountPools={[]}
+        officeRunners={[]}
+        officeRunnerQueue={[]}
+        runnerMeta={{ maxActive: 5, idleTtlMs: 900000, dockerEnabled: false }}
+        cliAuthBusyKey={null}
+        selectedPoolByProvider={{ codex: "", gemini: "", claude: "", jules: "" }}
+        form={{ ...(DEFAULT_SETTINGS as LocalSettings), language: "en" }}
+        setForm={vi.fn()}
+        persistSettings={vi.fn()}
+        onRefresh={vi.fn()}
+        onPoolSelect={vi.fn()}
+        onCreatePool={vi.fn(async () => undefined)}
+        onUpdatePool={vi.fn(async () => undefined)}
+        onDeletePool={vi.fn(async () => undefined)}
+        onVerifyPool={vi.fn(async () => ({
+          pool: {
+            id: "x",
+            provider: "gemini",
+            accountPoolId: "x",
+            label: "x",
+            profileHome: "/tmp/x",
+            status: "connected" as const,
+            lastVerifiedAt: Date.now(),
+            lastError: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          binaryInstalled: true,
+          authArtifactFound: true,
+        }))}
+        onCopyLoginCommand={vi.fn(async () => undefined)}
+        onActivateRunner={vi.fn(async () => undefined)}
+        onDeactivateRunner={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(screen.getByRole("option", { name: "Gemini 3 Pro Preview" })).toBeInTheDocument();
+  });
 });

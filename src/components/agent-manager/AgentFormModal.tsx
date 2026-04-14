@@ -566,12 +566,10 @@ export default function AgentFormModal({
                   }}
                   className={inputClass}
                   style={inputStyle}
-                  disabled={cliModelsLoading}
+                  disabled={selectedProviderModelOptions.length <= 0}
                 >
                   <option value="">
-                    {cliModelsLoading
-                      ? tr("모델 목록 불러오는 중...", "Loading models...")
-                      : tr(`${providerDisplayName} 모델 선택`, `Select ${providerDisplayName} model`)}
+                    {tr(`${providerDisplayName} 모델 선택`, `Select ${providerDisplayName} model`)}
                   </option>
                   {selectedProviderModelOptions.map((model) => (
                     <option key={model.slug} value={model.slug}>
@@ -580,7 +578,13 @@ export default function AgentFormModal({
                   ))}
                 </select>
 
-                {!cliModelsLoading && selectedProviderModelOptions.length <= 0 ? (
+                {cliModelsLoading ? (
+                  <div className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                    {tr("모델 목록 동기화 중...", "Syncing models...")}
+                  </div>
+                ) : null}
+
+                {selectedProviderModelOptions.length <= 0 ? (
                   <div className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
                     {tr("사용 가능한 모델이 없습니다.", "No models available.")}
                   </div>

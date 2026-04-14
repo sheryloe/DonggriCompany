@@ -328,40 +328,45 @@ export default function CliSettingsTab({
                 <span className="text-xs text-slate-400">
                   {t({ ko: "모델", en: "Model", ja: "モデル", zh: "模型" })}
                 </span>
-                {cliModelsLoading ? (
-                  <span className="text-xs text-slate-500">
-                    {t({ ko: "모델 로딩 중...", en: "Loading models...", ja: "モデル読込中...", zh: "模型加载中..." })}
-                  </span>
-                ) : providerModels.length > 0 ? (
-                  <select
-                    value={selectedModel}
-                    onChange={(event) => {
-                      const nextConfig = {
-                        ...(form.providerModelConfig ?? {}),
-                        [provider]: {
-                          ...(form.providerModelConfig?.[provider] ?? {}),
-                          model: event.target.value,
-                        },
-                      };
-                      const nextForm = {
-                        ...form,
-                        providerModelConfig: nextConfig,
-                      };
-                      setForm(nextForm);
-                      persistSettings(nextForm);
-                    }}
-                    className="rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
-                  >
-                    <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
-                    {providerModels.map((model) => (
-                      <option key={model.slug} value={model.slug}>
-                        {model.displayName || model.slug}
-                      </option>
-                    ))}
-                  </select>
+                {providerModels.length > 0 ? (
+                  <div className="space-y-1">
+                    <select
+                      value={selectedModel}
+                      onChange={(event) => {
+                        const nextConfig = {
+                          ...(form.providerModelConfig ?? {}),
+                          [provider]: {
+                            ...(form.providerModelConfig?.[provider] ?? {}),
+                            model: event.target.value,
+                          },
+                        };
+                        const nextForm = {
+                          ...form,
+                          providerModelConfig: nextConfig,
+                        };
+                        setForm(nextForm);
+                        persistSettings(nextForm);
+                      }}
+                      className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
+                    >
+                      <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
+                      {providerModels.map((model) => (
+                        <option key={model.slug} value={model.slug}>
+                          {model.displayName || model.slug}
+                        </option>
+                      ))}
+                    </select>
+                    {cliModelsLoading ? (
+                      <span className="text-[11px] text-slate-500">
+                        {t({ ko: "모델 목록 동기화 중...", en: "Syncing models...", ja: "Syncing models...", zh: "Syncing models..." })}
+                      </span>
+                    ) : null}
+                  </div>
                 ) : (
                   <span className="text-xs text-slate-500">
-                    {t({ ko: "모델 목록 없음", en: "No models", ja: "モデルなし", zh: "无模型" })}
+                    {cliModelsLoading
+                      ? t({ ko: "모델 로딩 중...", en: "Loading models...", ja: "モデル読込中...", zh: "模型加载中..." })
+                      : t({ ko: "모델 목록 없음", en: "No models", ja: "モデルなし", zh: "无模型" })}
                   </span>
                 )}
               </div>

@@ -259,4 +259,96 @@ describe("AgentDetail codex account pool", () => {
       }),
     );
   });
+
+  it("keeps gemini model selector visible while model API is still loading", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(api, "updateAgent").mockResolvedValue();
+    vi.spyOn(api, "getOAuthStatus").mockResolvedValue({
+      storageReady: true,
+      providers: {},
+    });
+    vi.spyOn(api, "getCliModels").mockImplementation(
+      () =>
+        new Promise<Record<string, import("../types").CliModelInfo[]>>(() => {
+          // intentionally unresolved for loading-state verification
+        }),
+    );
+    vi.spyOn(api, "getCliAccountPools").mockResolvedValue([
+      {
+        id: "pool-g1",
+        provider: "gemini",
+        accountPoolId: "gemini-main",
+        label: "Gemini Main",
+        profileHome: "/app/.office-accounts/gemini/gemini-main",
+        status: "connected",
+        lastVerifiedAt: Date.now(),
+        lastError: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+
+    const department: Department = {
+      id: "dev",
+      name: "Development",
+      name_ko: "Development",
+      name_ja: "Development",
+      name_zh: "Development",
+      icon: "D",
+      color: "#3b82f6",
+      description: null,
+      prompt: null,
+      sort_order: 1,
+      created_at: 1,
+    };
+    const agent: Agent = {
+      id: "agent-g2",
+      name: "Gemini Agent",
+      name_ko: "Gemini Agent",
+      name_ja: "Gemini Agent",
+      name_zh: "Gemini Agent",
+      department_id: "dev",
+      role: "junior",
+      cli_provider: "gemini",
+      oauth_account_id: null,
+      api_provider_id: null,
+      api_model: null,
+      cli_model: null,
+      cli_reasoning_level: null,
+      run_mode: "standard",
+      cli_account_pool_id: null,
+      avatar_emoji: "G",
+      sprite_number: null,
+      personality: null,
+      status: "idle",
+      current_task_id: null,
+      stats_tasks_done: 0,
+      stats_xp: 0,
+      created_at: 1,
+    };
+
+    render(
+      <I18nProvider language="en">
+        <AgentDetail
+          agent={agent}
+          agents={[agent]}
+          department={department}
+          departments={[department]}
+          tasks={[]}
+          subAgents={[]}
+          subtasks={[]}
+          activeOfficeWorkflowPack="development"
+          onClose={() => {}}
+          onChat={() => {}}
+          onAssignTask={() => {}}
+          onAgentUpdated={() => {}}
+        />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByTitle("Click to change CLI"));
+
+    expect(await screen.findByRole("option", { name: "Gemini 3 Pro Preview" })).toBeInTheDocument();
+    expect(screen.getByText("Syncing models...")).toBeInTheDocument();
+  });
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CliAccountPoolView, OAuthStatus } from "../api";
 import * as api from "../api";
+import { withCliModelFallback } from "../app/cli-model-fallbacks";
 import { localeName, useI18n } from "../i18n";
 import type { Agent, AgentRunMode, CliModelInfo, Department, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
 import {
@@ -93,7 +94,10 @@ export default function AgentDetail({
   const requiresApiProvider = selectedCli === "api";
   const requiresCliPool = CLI_POOL_PROVIDERS.includes(selectedCli);
   const supportsCliModelOverride = CLI_MODEL_OVERRIDE_PROVIDERS.includes(selectedCli);
-  const selectedCliModelOptions = useMemo(() => cliModels[selectedCli] ?? [], [cliModels, selectedCli]);
+  const selectedCliModelOptions = useMemo(
+    () => withCliModelFallback(selectedCli, cliModels[selectedCli]),
+    [cliModels, selectedCli],
+  );
   const selectedCliModelInfo = useMemo(
     () => selectedCliModelOptions.find((model) => model.slug === selectedCliModel) ?? null,
     [selectedCliModel, selectedCliModelOptions],

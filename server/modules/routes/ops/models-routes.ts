@@ -173,6 +173,94 @@ export function registerModelRoutes(ctx: RuntimeContext): void {
     }
   }
 
+  function normalizeCliModelEntry(entry: unknown): CliModelInfoServer | null {
+    if (typeof entry === "string") {
+      const slug = entry.trim();
+      return slug ? { slug, displayName: slug } : null;
+    }
+    if (!entry || typeof entry !== "object") return null;
+    const obj = entry as {
+      slug?: unknown;
+      displayName?: unknown;
+      description?: unknown;
+      reasoningLevels?: unknown;
+      defaultReasoningLevel?: unknown;
+    };
+    const slug = typeof obj.slug === "string" ? obj.slug.trim() : "";
+    if (!slug) return null;
+    return {
+      slug,
+      displayName: typeof obj.displayName === "string" && obj.displayName.trim() ? obj.displayName.trim() : slug,
+      description: typeof obj.description === "string" ? obj.description : undefined,
+      reasoningLevels: Array.isArray(obj.reasoningLevels)
+        ? (obj.reasoningLevels.filter((item) => item && typeof item === "object") as Array<{
+            effort: string;
+            description: string;
+          }>)
+        : undefined,
+      defaultReasoningLevel:
+        typeof obj.defaultReasoningLevel === "string" && obj.defaultReasoningLevel.trim()
+          ? obj.defaultReasoningLevel.trim()
+          : undefined,
+    };
+  }
+
+  function dedupeCliModelList(models: ReadonlyArray<CliModelInfoServer>): CliModelInfoServer[] {
+    const seen = new Set<string>();
+    const out: CliModelInfoServer[] = [];
+    for (const model of models) {
+      const slug = String(model.slug ?? "").trim();
+      if (!slug || seen.has(slug)) continue;
+      seen.add(slug);
+      out.push({
+        slug,
+        displayName: model.displayName || slug,
+        description: model.description,
+        reasoningLevels: model.reasoningLevels,
+        defaultReasoningLevel: model.defaultReasoningLevel,
+      });
+    }
+    return out;
+  }
+
+  function normalizeCliModelsPayload(
+    raw: unknown,
+    codexFallback: CliModelInfoServer[],
+  ): Record<string, CliModelInfoServer[]> {
+    const parsed = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const defaults: Record<string, CliModelInfoServer[]> = {
+      claude: [
+        "opus",
+        "sonnet",
+        "haiku",
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
+        "claude-haiku-4-5",
+      ].map(toModelInfo),
+      codex: codexFallback,
+      gemini: fetchGeminiModels(),
+      opencode: [],
+    };
+
+    const normalized: Record<string, CliModelInfoServer[]> = {};
+
+    for (const [provider, fallbackModels] of Object.entries(defaults)) {
+      const source = Array.isArray(parsed[provider]) ? (parsed[provider] as unknown[]) : [];
+      const normalizedSource = source.map(normalizeCliModelEntry).filter((entry): entry is CliModelInfoServer => !!entry);
+      normalized[provider] = dedupeCliModelList(normalizedSource.length > 0 ? normalizedSource : fallbackModels);
+    }
+
+    for (const [provider, list] of Object.entries(parsed)) {
+      if (provider in normalized) continue;
+      if (!Array.isArray(list)) continue;
+      const normalizedList = list.map(normalizeCliModelEntry).filter((entry): entry is CliModelInfoServer => !!entry);
+      normalized[provider] = dedupeCliModelList(normalizedList);
+    }
+
+    return normalized;
+  }
+
   function toModelInfo(slug: string): CliModelInfoServer {
     return { slug, displayName: slug };
   }
@@ -199,15 +287,29 @@ export function registerModelRoutes(ctx: RuntimeContext): void {
 
   app.get("/api/cli-models", async (req, res) => {
     const refresh = req.query.refresh === "true";
+    const codexModels = readCodexModelsCache();
+    const codexFallback =
+      codexModels.length > 0
+        ? codexModels
+        : ["gpt-5.3-codex", "gpt-5.2-codex", "gpt-5.1-codex-max", "gpt-5.2", "gpt-5.1-codex-mini"].map(toModelInfo);
 
     if (!refresh) {
       if (cachedCliModels) {
-        return res.json({ models: cachedCliModels.data });
+        const normalizedCached = normalizeCliModelsPayload(cachedCliModels.data, codexFallback);
+        if (JSON.stringify(normalizedCached) !== JSON.stringify(cachedCliModels.data)) {
+          cachedCliModels = { data: normalizedCached, loadedAt: Date.now() };
+          writeModelCache("cli_models_cache", normalizedCached);
+        }
+        return res.json({ models: normalizedCached });
       }
       const dbCached = readModelCache("cli_models_cache");
       if (dbCached) {
-        cachedCliModels = { data: dbCached, loadedAt: Date.now() };
-        return res.json({ models: dbCached });
+        const normalizedCached = normalizeCliModelsPayload(dbCached, codexFallback);
+        cachedCliModels = { data: normalizedCached, loadedAt: Date.now() };
+        if (JSON.stringify(normalizedCached) !== JSON.stringify(dbCached)) {
+          writeModelCache("cli_models_cache", normalizedCached);
+        }
+        return res.json({ models: normalizedCached });
       }
     }
 
@@ -225,11 +327,7 @@ export function registerModelRoutes(ctx: RuntimeContext): void {
       opencode: [],
     };
 
-    const codexModels = readCodexModelsCache();
-    models.codex =
-      codexModels.length > 0
-        ? codexModels
-        : ["gpt-5.3-codex", "gpt-5.2-codex", "gpt-5.1-codex-max", "gpt-5.2", "gpt-5.1-codex-mini"].map(toModelInfo);
+    models.codex = codexFallback;
 
     try {
       const ocModels = await fetchOpenCodeModels();
@@ -244,9 +342,10 @@ export function registerModelRoutes(ctx: RuntimeContext): void {
       // keep defaults
     }
 
-    cachedCliModels = { data: models, loadedAt: Date.now() };
-    writeModelCache("cli_models_cache", models);
-    res.json({ models });
+    const normalizedModels = normalizeCliModelsPayload(models, codexFallback);
+    cachedCliModels = { data: normalizedModels, loadedAt: Date.now() };
+    writeModelCache("cli_models_cache", normalizedModels);
+    res.json({ models: normalizedModels });
   });
 
   app.get("/api/oauth/models", async (req, res) => {

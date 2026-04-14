@@ -3,6 +3,7 @@ import { createPresetAgentProfile } from "../../agent-profile";
 import type { AgentRole, CliModelInfo, Department } from "../../types";
 import type { CliAccountPoolView } from "../../api";
 import * as api from "../../api";
+import { withCliModelFallback } from "../../app/cli-model-fallbacks";
 import {
   getCodexReasoningOptions,
   isCodexPlanModeEligible,
@@ -72,7 +73,10 @@ export default function AgentFormModal({
     () => cliAccountPools.filter((pool) => pool.provider === form.cli_provider),
     [cliAccountPools, form.cli_provider],
   );
-  const selectedProviderModelOptions = useMemo(() => cliModels[form.cli_provider] ?? [], [cliModels, form.cli_provider]);
+  const selectedProviderModelOptions = useMemo(
+    () => withCliModelFallback(form.cli_provider, cliModels[form.cli_provider]),
+    [cliModels, form.cli_provider],
+  );
   const providerDisplayName = useMemo(() => {
     if (form.cli_provider === "codex") return "Codex";
     if (form.cli_provider === "gemini") return "Gemini";

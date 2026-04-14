@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState } from "react";
 import type { OfficeExecutionProvider } from "../../api";
+import { withCliModelFallback } from "../../app/cli-model-fallbacks";
 import type { CliSettingsTabProps } from "./types";
 
 type CliPoolStatus = "connected" | "auth_required" | "install_required" | "profile_error";
@@ -123,7 +124,7 @@ export default function CliSettingsTab({
           const keyPrefix = `${provider}:${selectedPool?.accountPoolId ?? "none"}`;
           const isBusy = Boolean(cliAuthBusyKey && cliAuthBusyKey.startsWith(keyPrefix));
           const cliTool = cliStatus?.[provider];
-          const providerModels = cliModels?.[provider] ?? [];
+          const providerModels = withCliModelFallback(provider, cliModels?.[provider] ?? []);
           const selectedModel = form.providerModelConfig?.[provider]?.model || "";
 
           return (

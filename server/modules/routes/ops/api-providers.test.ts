@@ -424,4 +424,43 @@ describe("api provider routes", () => {
       db.close();
     }
   });
+
+  it("falls back to /api/tags for ollama model probing when /v1/models is unavailable", async () => {
+    const { app, db } = await createHarness();
+
+    try {
+      const createResponse = await request(app).post("/api/api-providers").send({
+        name: "Local Ollama",
+        type: "ollama",
+        base_url: "http://localhost:11434/v1",
+      });
+
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(new Response("not found", { status: 404 }))
+        .mockResolvedValueOnce(jsonResponse({ models: [{ name: "qwen2.5-coder:latest" }, { name: "llama3.2:3b" }] }));
+      vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+      const response = await request(app).post(`/api/api-providers/${createResponse.body.id}/test`).expect(200);
+
+      expect(response.body.ok).toBe(true);
+      expect(response.body.models).toEqual(["llama3.2:3b", "qwen2.5-coder:latest"]);
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        "http://localhost:11434/v1/models",
+        expect.objectContaining({
+          headers: expect.objectContaining({ Accept: "application/json" }),
+        }),
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        "http://localhost:11434/api/tags",
+        expect.objectContaining({
+          headers: expect.objectContaining({ Accept: "application/json" }),
+        }),
+      );
+    } finally {
+      db.close();
+    }
+  });
 });

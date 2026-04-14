@@ -216,6 +216,12 @@ function buildModelsUrl(type: ApiProviderType, baseUrl: string, apiKey: string):
   return url;
 }
 
+function buildOllamaTagsUrl(baseUrl: string): string {
+  const normalized = normalizeApiBaseUrl(baseUrl);
+  const withoutV1 = normalized.replace(/\/v1(?:beta)?$/i, "");
+  return `${withoutV1}/api/tags`;
+}
+
 function extractModelIds(type: ApiProviderType, data: unknown): string[] {
   const models: string[] = [];
   const payload = data as {
@@ -251,6 +257,18 @@ function extractModelIds(type: ApiProviderType, data: unknown): string[] {
   return models.sort();
 }
 
+function extractOllamaTagModelIds(data: unknown): string[] {
+  const payload = data as { models?: Array<{ name?: string; model?: string }> };
+  if (!Array.isArray(payload.models)) return [];
+  const models: string[] = [];
+  for (const entry of payload.models) {
+    const model = String(entry?.name ?? entry?.model ?? "").trim();
+    if (!model) continue;
+    models.push(model);
+  }
+  return models.sort();
+}
+
 function parseModelsCache(value: string | null): string[] {
   if (!value) return [];
   try {
@@ -281,6 +299,37 @@ function validateOfficialPresetApiKey(preset: OfficialApiProviderPreset | null, 
     return `API key for ${preset.label} must start with ${preset.required_api_key_prefix}`;
   }
   return null;
+}
+
+type ModelFetchResult =
+  | { ok: true; models: string[] }
+  | { ok: false; status: number; error: string };
+
+async function fetchModelsFromUrl(params: {
+  url: string;
+  headers: Record<string, string>;
+  parse: (payload: unknown) => string[];
+  fallbackModels: ReadonlyArray<string>;
+}): Promise<ModelFetchResult> {
+  try {
+    const resp = await fetch(params.url, {
+      headers: params.headers,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!resp.ok) {
+      const errBody = await resp.text().catch(() => "");
+      return { ok: false, status: resp.status, error: errBody.slice(0, 500) };
+    }
+    const data = await resp.json();
+    const models = mergeModelLists(params.fallbackModels, params.parse(data));
+    return { ok: true, models };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 502,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function resolveApiKeyForPresetValidation(params: {
@@ -485,33 +534,40 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
 
     const officialPreset = readOfficialPreset(row.preset_key)?.preset ?? null;
     const apiKey = row.api_key_enc ? decryptSecret(row.api_key_enc) : "";
-    const url = buildModelsUrl(row.type, row.base_url, apiKey);
-    const headers = buildApiProviderHeaders(row.type, apiKey);
+    const fallbackModels = officialPreset?.fallback_models ?? [];
+    const primary = await fetchModelsFromUrl({
+      url: buildModelsUrl(row.type, row.base_url, apiKey),
+      headers: buildApiProviderHeaders(row.type, apiKey),
+      parse: (payload) => extractModelIds(row.type, payload),
+      fallbackModels,
+    });
 
-    try {
-      const resp = await fetch(url, {
-        headers,
-        signal: AbortSignal.timeout(15_000),
+    const shouldTryOllamaTagFallback = row.type === "ollama" && (!primary.ok || (primary.ok && primary.models.length === 0));
+    let resolved = primary;
+    if (shouldTryOllamaTagFallback) {
+      const tagFallback = await fetchModelsFromUrl({
+        url: buildOllamaTagsUrl(row.base_url),
+        headers: { Accept: "application/json" },
+        parse: extractOllamaTagModelIds,
+        fallbackModels,
       });
-      if (!resp.ok) {
-        const errBody = await resp.text().catch(() => "");
-        return res.json({ ok: false, status: resp.status, error: errBody.slice(0, 500) });
+      if (tagFallback.ok) {
+        resolved = tagFallback;
       }
-
-      const data = await resp.json();
-      const models = mergeModelLists(officialPreset?.fallback_models ?? [], extractModelIds(row.type, data));
-      const now = nowMs();
-      db.prepare("UPDATE api_providers SET models_cache = ?, models_cached_at = ?, updated_at = ? WHERE id = ?").run(
-        JSON.stringify(models),
-        now,
-        now,
-        id,
-      );
-      res.json({ ok: true, model_count: models.length, models });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      res.json({ ok: false, error: message });
     }
+
+    if (!resolved.ok) {
+      return res.json({ ok: false, status: resolved.status, error: resolved.error });
+    }
+
+    const now = nowMs();
+    db.prepare("UPDATE api_providers SET models_cache = ?, models_cached_at = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify(resolved.models),
+      now,
+      now,
+      id,
+    );
+    res.json({ ok: true, model_count: resolved.models.length, models: resolved.models });
   });
 
   app.get("/api/api-providers/:id/models", async (req, res) => {
@@ -527,34 +583,43 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
     }
 
     const apiKey = row.api_key_enc ? decryptSecret(row.api_key_enc) : "";
-    const url = buildModelsUrl(row.type, row.base_url, apiKey);
-    const headers = buildApiProviderHeaders(row.type, apiKey);
+    const fallbackModels = officialPreset?.fallback_models ?? [];
+    const primary = await fetchModelsFromUrl({
+      url: buildModelsUrl(row.type, row.base_url, apiKey),
+      headers: buildApiProviderHeaders(row.type, apiKey),
+      parse: (payload) => extractModelIds(row.type, payload),
+      fallbackModels,
+    });
 
-    try {
-      const resp = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
-      if (!resp.ok) {
-        if (row.models_cache) {
-          return res.json({ ok: true, models: cachedModels, cached: true, stale: true });
-        }
-        return res.status(502).json({ error: `upstream returned ${resp.status}` });
+    const shouldTryOllamaTagFallback = row.type === "ollama" && (!primary.ok || (primary.ok && primary.models.length === 0));
+    let resolved = primary;
+    if (shouldTryOllamaTagFallback) {
+      const tagFallback = await fetchModelsFromUrl({
+        url: buildOllamaTagsUrl(row.base_url),
+        headers: { Accept: "application/json" },
+        parse: extractOllamaTagModelIds,
+        fallbackModels,
+      });
+      if (tagFallback.ok) {
+        resolved = tagFallback;
       }
-      const data = await resp.json();
-      const models = mergeModelLists(officialPreset?.fallback_models ?? [], extractModelIds(row.type, data));
-      const now = nowMs();
-      db.prepare("UPDATE api_providers SET models_cache = ?, models_cached_at = ?, updated_at = ? WHERE id = ?").run(
-        JSON.stringify(models),
-        now,
-        now,
-        id,
-      );
-      res.json({ ok: true, models, cached: false });
-    } catch (error) {
+    }
+
+    if (!resolved.ok) {
       if (row.models_cache) {
         return res.json({ ok: true, models: cachedModels, cached: true, stale: true });
       }
-      const message = error instanceof Error ? error.message : String(error);
-      res.status(502).json({ error: message });
+      return res.status(502).json({ error: resolved.error || `upstream returned ${resolved.status}` });
     }
+
+    const now = nowMs();
+    db.prepare("UPDATE api_providers SET models_cache = ?, models_cached_at = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify(resolved.models),
+      now,
+      now,
+      id,
+    );
+    res.json({ ok: true, models: resolved.models, cached: false });
   });
 
   app.get("/api/api-providers/presets", (_req, res) => {

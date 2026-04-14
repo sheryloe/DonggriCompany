@@ -15,6 +15,7 @@ import EmojiPicker from "./EmojiPicker";
 import type { FormData } from "./types";
 
 const CLI_POOL_PROVIDERS: FormData["cli_provider"][] = ["codex", "gemini", "jules"];
+const CLI_MODEL_OVERRIDE_PROVIDERS: FormData["cli_provider"][] = ["claude", "codex", "gemini", "opencode", "kimi"];
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -65,15 +66,25 @@ export default function AgentFormModal({
   const [cliModelsLoaded, setCliModelsLoaded] = useState(false);
 
   const requiresCliPool = CLI_POOL_PROVIDERS.includes(form.cli_provider);
+  const supportsCliModelOverride = CLI_MODEL_OVERRIDE_PROVIDERS.includes(form.cli_provider);
   const showCodexExecutionSettings = form.cli_provider === "codex";
   const selectedProviderPools = useMemo(
     () => cliAccountPools.filter((pool) => pool.provider === form.cli_provider),
     [cliAccountPools, form.cli_provider],
   );
-  const codexModelOptions = useMemo(() => cliModels.codex ?? [], [cliModels]);
+  const selectedProviderModelOptions = useMemo(() => cliModels[form.cli_provider] ?? [], [cliModels, form.cli_provider]);
+  const providerDisplayName = useMemo(() => {
+    if (form.cli_provider === "codex") return "Codex";
+    if (form.cli_provider === "gemini") return "Gemini";
+    if (form.cli_provider === "claude") return "Claude";
+    if (form.cli_provider === "opencode") return "OpenCode";
+    if (form.cli_provider === "kimi") return "Kimi";
+    if (form.cli_provider === "jules") return "Jules";
+    return String(form.cli_provider);
+  }, [form.cli_provider]);
   const selectedCodexModel = useMemo(
-    () => codexModelOptions.find((model) => model.slug === form.cli_model) ?? null,
-    [codexModelOptions, form.cli_model],
+    () => selectedProviderModelOptions.find((model) => model.slug === form.cli_model) ?? null,
+    [selectedProviderModelOptions, form.cli_model],
   );
   const codexReasoningOptions = useMemo(() => getCodexReasoningOptions(selectedCodexModel), [selectedCodexModel]);
 
@@ -90,7 +101,7 @@ export default function AgentFormModal({
   }, [form.sprite_number]);
 
   useEffect(() => {
-    if (!showCodexExecutionSettings || cliModelsLoaded) return;
+    if (!supportsCliModelOverride || cliModelsLoaded) return;
     let cancelled = false;
     setCliModelsLoading(true);
     api
@@ -108,7 +119,7 @@ export default function AgentFormModal({
     return () => {
       cancelled = true;
     };
-  }, [cliModelsLoaded, showCodexExecutionSettings]);
+  }, [cliModelsLoaded, supportsCliModelOverride]);
 
   useEffect(() => {
     if (!requiresCliPool) {
@@ -127,7 +138,7 @@ export default function AgentFormModal({
   }, [form, requiresCliPool, selectedProviderPools, setForm]);
 
   useEffect(() => {
-    if (showCodexExecutionSettings) return;
+    if (supportsCliModelOverride) return;
     if (!form.cli_model && !form.cli_reasoning_level && form.run_mode === "standard") return;
     setForm({
       ...form,
@@ -135,7 +146,17 @@ export default function AgentFormModal({
       cli_reasoning_level: "",
       run_mode: "standard",
     });
-  }, [form, setForm, showCodexExecutionSettings]);
+  }, [form, setForm, supportsCliModelOverride]);
+
+  useEffect(() => {
+    if (form.cli_provider === "codex") return;
+    if (!form.cli_reasoning_level && form.run_mode === "standard") return;
+    setForm({
+      ...form,
+      cli_reasoning_level: "",
+      run_mode: "standard",
+    });
+  }, [form, setForm]);
 
   useEffect(() => {
     if (!showCodexExecutionSettings) return;
@@ -448,10 +469,14 @@ export default function AgentFormModal({
                         setForm({
                           ...form,
                           cli_provider: provider,
-                          cli_model: provider === "codex" ? form.cli_model : "",
-                          cli_reasoning_level: provider === "codex" ? form.cli_reasoning_level : "",
+                          cli_model:
+                            CLI_MODEL_OVERRIDE_PROVIDERS.includes(provider) && provider === form.cli_provider
+                              ? form.cli_model
+                              : "",
+                          cli_reasoning_level:
+                            provider === "codex" && provider === form.cli_provider ? form.cli_reasoning_level : "",
                           run_mode:
-                            provider === "codex"
+                            provider === "codex" && provider === form.cli_provider
                               ? normalizeCodexRunMode(provider, form.cli_model, form.run_mode)
                               : "standard",
                           cli_account_pool_id: nextPoolId,
@@ -500,33 +525,39 @@ export default function AgentFormModal({
               </div>
             )}
 
-            {showCodexExecutionSettings && (
+            {supportsCliModelOverride && (
               <div className="space-y-3 rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
                 <div>
                   <label className="block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
-                    {tr("Codex 모델", "Codex Model")}
+                    {tr(`${providerDisplayName} 모델`, `${providerDisplayName} Model`)}
                   </label>
-                  <p className="mt-1 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
-                    {tr(
-                      "Codex 플랜 모드는 이 에이전트에 Codex 모델이 명시적으로 지정된 경우에만 사용할 수 있습니다.",
-                      "Codex plan mode is available only when this agent explicitly selects a Codex model.",
-                    )}
-                  </p>
+                  {showCodexExecutionSettings ? (
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                      {tr(
+                        "Codex 플랜 모드는 이 에이전트에 Codex 모델이 명시적으로 지정된 경우에만 사용할 수 있습니다.",
+                        "Codex plan mode is available only when this agent explicitly selects a Codex model.",
+                      )}
+                    </p>
+                  ) : null}
                 </div>
 
                 <select
-                  aria-label={tr("Codex 모델", "Codex Model")}
+                  aria-label={tr(`${providerDisplayName} 모델`, `${providerDisplayName} Model`)}
                   value={form.cli_model}
                   onChange={(event) => {
                     const nextModel = event.target.value;
-                    const nextSelectedModel = codexModelOptions.find((model) => model.slug === nextModel) ?? null;
+                    const nextSelectedModel = selectedProviderModelOptions.find((model) => model.slug === nextModel) ?? null;
                     setForm({
                       ...form,
                       cli_model: nextModel,
-                      cli_reasoning_level: nextModel
-                        ? resolveCodexReasoningLevel(nextSelectedModel, form.cli_reasoning_level)
-                        : "",
-                      run_mode: nextModel ? normalizeCodexRunMode("codex", nextModel, form.run_mode) : "standard",
+                      cli_reasoning_level:
+                        form.cli_provider === "codex" && nextModel
+                          ? resolveCodexReasoningLevel(nextSelectedModel, form.cli_reasoning_level)
+                          : "",
+                      run_mode:
+                        form.cli_provider === "codex" && nextModel
+                          ? normalizeCodexRunMode("codex", nextModel, form.run_mode)
+                          : "standard",
                     });
                   }}
                   className={inputClass}
@@ -536,16 +567,22 @@ export default function AgentFormModal({
                   <option value="">
                     {cliModelsLoading
                       ? tr("모델 목록 불러오는 중...", "Loading models...")
-                      : tr("Codex 모델 선택", "Select Codex model")}
+                      : tr(`${providerDisplayName} 모델 선택`, `Select ${providerDisplayName} model`)}
                   </option>
-                  {codexModelOptions.map((model) => (
+                  {selectedProviderModelOptions.map((model) => (
                     <option key={model.slug} value={model.slug}>
                       {model.displayName || model.slug}
                     </option>
                   ))}
                 </select>
 
-                {form.cli_model.trim() ? (
+                {!cliModelsLoading && selectedProviderModelOptions.length <= 0 ? (
+                  <div className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                    {tr("사용 가능한 모델이 없습니다.", "No models available.")}
+                  </div>
+                ) : null}
+
+                {showCodexExecutionSettings && form.cli_model.trim() ? (
                   <>
                     <div>
                       <label className="block text-xs mb-1.5 font-medium" style={{ color: "var(--th-text-secondary)" }}>
@@ -585,14 +622,14 @@ export default function AgentFormModal({
                       <span>{tr("Codex 플랜 모드", "Codex Plan Mode")}</span>
                     </label>
                   </>
-                ) : (
+                ) : showCodexExecutionSettings ? (
                   <div className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
                     {tr(
                       "먼저 Codex 모델을 선택하면 추론 레벨과 플랜 모드가 활성화됩니다.",
                       "Select a Codex model first to enable reasoning level and plan mode.",
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
             )}
           </div>

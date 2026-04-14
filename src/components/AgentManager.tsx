@@ -22,6 +22,7 @@ import type { AgentManagerProps, FormData } from "./agent-manager/types";
 import { pickRandomSpritePair } from "./agent-manager/utils";
 
 const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "gemini", "jules"];
+const CLI_MODEL_OVERRIDE_PROVIDERS: Agent["cli_provider"][] = ["claude", "codex", "gemini", "opencode", "kimi"];
 
 export default function AgentManager({
   agents,
@@ -205,7 +206,7 @@ export default function AgentManager({
         department_id: agent.department_id || "",
         role: agent.role,
         cli_provider: agent.cli_provider,
-        cli_model: agent.cli_provider === "codex" ? (agent.cli_model ?? "") : "",
+        cli_model: CLI_MODEL_OVERRIDE_PROVIDERS.includes(agent.cli_provider) ? (agent.cli_model ?? "") : "",
         cli_reasoning_level: agent.cli_provider === "codex" ? (agent.cli_reasoning_level ?? "") : "",
         run_mode: agent.cli_provider === "codex" ? (agent.run_mode ?? "standard") : "standard",
         cli_account_pool_id: agent.cli_account_pool_id ?? "",
@@ -250,11 +251,13 @@ export default function AgentManager({
         },
         form.personality,
       );
-      const shouldWriteCodexConfig = form.cli_provider === "codex" || modalAgent?.cli_provider === "codex";
-      const codexExecutionConfig: Partial<Pick<Agent, "cli_model" | "cli_reasoning_level" | "run_mode">> =
-        shouldWriteCodexConfig
+      const shouldWriteCliExecutionConfig =
+        CLI_MODEL_OVERRIDE_PROVIDERS.includes(form.cli_provider) ||
+        (modalAgent ? CLI_MODEL_OVERRIDE_PROVIDERS.includes(modalAgent.cli_provider) : false);
+      const cliExecutionConfig: Partial<Pick<Agent, "cli_model" | "cli_reasoning_level" | "run_mode">> =
+        shouldWriteCliExecutionConfig
           ? {
-              cli_model: form.cli_provider === "codex" ? form.cli_model.trim() || null : null,
+              cli_model: CLI_MODEL_OVERRIDE_PROVIDERS.includes(form.cli_provider) ? form.cli_model.trim() || null : null,
               cli_reasoning_level:
                 form.cli_provider === "codex" && form.cli_model.trim() ? form.cli_reasoning_level.trim() || null : null,
               run_mode:
@@ -271,7 +274,7 @@ export default function AgentManager({
         role: form.role,
         cli_provider: form.cli_provider,
         cli_account_pool_id: normalizedCliAccountPoolId,
-        ...codexExecutionConfig,
+        ...cliExecutionConfig,
         workflow_profile: {
           role: form.workflow_role,
           review_lenses: parseReviewLenses(form.review_lenses_text),

@@ -85,6 +85,12 @@ describe("AgentFormModal agent profile builder", () => {
           defaultReasoningLevel: "high",
         },
       ],
+      gemini: [
+        {
+          slug: "gemini-2.5-flash",
+          displayName: "Gemini 2.5 Flash",
+        },
+      ],
     });
   });
 
@@ -149,5 +155,20 @@ describe("AgentFormModal agent profile builder", () => {
       expect(screen.getByLabelText("Reasoning Level")).toBeInTheDocument();
       expect(screen.getByLabelText("Codex Plan Mode")).toBeInTheDocument();
     });
+  });
+
+  it("shows Gemini model selector without Codex-only controls", async () => {
+    const user = userEvent.setup();
+    render(<ModalHarness />);
+
+    await user.click(screen.getByRole("button", { name: "gemini" }));
+
+    const geminiModelSelect = await screen.findByLabelText("Gemini Model");
+    expect(geminiModelSelect).toBeInTheDocument();
+
+    await user.selectOptions(geminiModelSelect, "gemini-2.5-flash");
+
+    expect(screen.queryByLabelText("Reasoning Level")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Codex Plan Mode")).not.toBeInTheDocument();
   });
 });

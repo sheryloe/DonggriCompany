@@ -90,7 +90,7 @@ export function applyDefaultSeeds(db: DbLike): void {
           claude: { model: "claude-opus-4-6", subModel: "claude-sonnet-4-6" },
           codex: {
             model: "gpt-5.3-codex",
-            reasoningLevel: "xhigh",
+            reasoningLevel: "high",
             subModel: "gpt-5.3-codex",
             subModelReasoningLevel: "high",
           },

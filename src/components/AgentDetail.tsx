@@ -603,7 +603,7 @@ export default function AgentDetail({
                           </select>
                         )}
                       </div>
-                      {selectedCli === "codex" && (
+                      {supportsCliModelOverride && (
                         <div className="flex flex-wrap items-center gap-1 pb-0.5">
                           {cliModelsLoading ? (
                             <span className="text-[10px] text-slate-400">
@@ -617,30 +617,37 @@ export default function AgentDetail({
                           ) : selectedCliModelOptions.length > 0 ? (
                             <>
                               <select
-                                aria-label="Codex model"
+                                aria-label={selectedCli === "codex" ? "Codex model" : "CLI model"}
                                 value={selectedCliModel}
                                 onChange={(event) => {
                                   const nextModel = event.target.value;
                                   const nextModelInfo =
                                     selectedCliModelOptions.find((model) => model.slug === nextModel) ?? null;
                                   setSelectedCliModel(nextModel);
-                                  setSelectedCliReasoningLevel(
-                                    nextModel
-                                      ? resolveCodexReasoningLevel(nextModelInfo, selectedCliReasoningLevel)
-                                      : "",
-                                  );
-                                  setSelectedRunMode(
-                                    nextModel ? normalizeCodexRunMode("codex", nextModel, selectedRunMode) : "standard",
-                                  );
+                                  if (selectedCli === "codex") {
+                                    setSelectedCliReasoningLevel(
+                                      nextModel
+                                        ? resolveCodexReasoningLevel(nextModelInfo, selectedCliReasoningLevel)
+                                        : "",
+                                    );
+                                    setSelectedRunMode(
+                                      nextModel
+                                        ? normalizeCodexRunMode("codex", nextModel, selectedRunMode)
+                                        : "standard",
+                                    );
+                                  } else {
+                                    setSelectedCliReasoningLevel("");
+                                    setSelectedRunMode("standard");
+                                  }
                                 }}
                                 className="w-[180px] max-w-full bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
                               >
                                 <option value="">
                                   {t({
                                     ko: "Codex 모델 선택",
-                                    en: "Select Codex model",
-                                    ja: "Select Codex model",
-                                    zh: "Select Codex model",
+                                    en: selectedCli === "codex" ? "Select Codex model" : "Select model",
+                                    ja: selectedCli === "codex" ? "Select Codex model" : "Select model",
+                                    zh: selectedCli === "codex" ? "Select Codex model" : "Select model",
                                   })}
                                 </option>
                                 {selectedCliModelOptions.map((model) => (
@@ -649,7 +656,7 @@ export default function AgentDetail({
                                   </option>
                                 ))}
                               </select>
-                              {selectedCliModel.trim() ? (
+                              {selectedCli === "codex" && selectedCliModel.trim() ? (
                                 <>
                                   <select
                                     aria-label="Codex reasoning level"
@@ -680,7 +687,7 @@ export default function AgentDetail({
                                     <span>Codex Plan</span>
                                   </label>
                                 </>
-                              ) : (
+                              ) : selectedCli === "codex" ? (
                                 <span className="text-[10px] text-slate-400">
                                   {t({
                                     ko: "모델을 지정하면 추론/플랜 옵션이 열립니다.",
@@ -689,15 +696,15 @@ export default function AgentDetail({
                                     zh: "Reasoning and plan options appear after selecting a model.",
                                   })}
                                 </span>
-                              )}
+                              ) : null}
                             </>
                           ) : (
                             <span className="text-[10px] text-slate-400">
                               {t({
                                 ko: "사용 가능한 Codex 모델이 없습니다.",
-                                en: "No Codex models available",
-                                ja: "No Codex models available",
-                                zh: "No Codex models available",
+                                en: selectedCli === "codex" ? "No Codex models available" : "No model list available",
+                                ja: selectedCli === "codex" ? "No Codex models available" : "No model list available",
+                                zh: selectedCli === "codex" ? "No Codex models available" : "No model list available",
                               })}
                             </span>
                           )}

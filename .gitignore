@@ -38,6 +38,7 @@ docs/reports/*
 !docs/reports/PPT_Sample.pptx
 docs/.bkit-*
 docs/.pdca-*
+reports/
 .climpire-worktrees/
 .climpire/
 

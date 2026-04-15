@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import {
   createPresetAgentProfile,
   normalizeAgentProfile,
@@ -633,8 +633,8 @@ export default function AgentManager({
             label: tr("직원 관리", "Agents"),
             icon: <StackedSpriteIcon sprites={randomIconSprites.tab} />,
           },
-          { key: "departments" as const, label: tr("부서 관리", "Departments"), icon: "?룫" },
-          { key: "subagents" as const, label: tr("서브에이전트", "Sub-agents"), icon: "?㎥" },
+          { key: "departments" as const, label: tr("부서 관리", "Departments"), icon: "Dept" },
+          { key: "subagents" as const, label: tr("서브에이전트", "Sub-agents"), icon: "Sub" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -745,4 +745,3 @@ export default function AgentManager({
     </div>
   );
 }
-

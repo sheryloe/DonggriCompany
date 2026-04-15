@@ -40,10 +40,10 @@ export const STATUS_DOT: Record<string, string> = {
 export const ICON_SPRITE_POOL = Array.from({ length: 44 }, (_, index) => index + 1);
 
 export const EMOJI_GROUPS: { label: string; labelEn: string; emojis: string[] }[] = [
-  { label: "업무", labelEn: "Work", emojis: ["💼", "🛠️", "📌", "📎", "📁", "📚", "📈", "🧠"] },
-  { label: "사람", labelEn: "People", emojis: ["🧑", "👩", "👨", "🧑‍💻", "👩‍💼", "👨‍💼", "🧑‍🔬", "👨‍🔧"] },
-  { label: "도구", labelEn: "Tools", emojis: ["🔧", "⚙️", "🗂️", "📝", "💻", "🖥️", "📡", "🧪"] },
-  { label: "기타", labelEn: "Misc", emojis: ["⭐", "🔹", "🔸", "🛰️", "🧭", "🧱", "🔍", "📦"] },
+  { label: "업무", labelEn: "Work", emojis: ["💼", "🧠", "🛠️", "📋", "🧪", "📦", "📈", "🔍"] },
+  { label: "사람", labelEn: "People", emojis: ["🙂", "🧑", "👩", "👨", "🧑‍💻", "👩‍💻", "👨‍💻", "🫡"] },
+  { label: "도구", labelEn: "Tools", emojis: ["⚙️", "🖥️", "⌨️", "🗂️", "🔧", "🛰️", "📡", "🧰"] },
+  { label: "기타", labelEn: "Misc", emojis: ["⭐", "🚀", "🌐", "📚", "🧭", "🗃️", "🛡️", "🎯"] },
 ];
 
 export const BLANK: FormData = {
@@ -59,7 +59,7 @@ export const BLANK: FormData = {
   review_lenses_text: "general",
   two_pass_required: true,
   max_review_rounds: null,
-  avatar_emoji: "🧠",
+  avatar_emoji: "💼",
   sprite_number: null,
   personality: "",
   specialties_text: "",

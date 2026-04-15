@@ -55,10 +55,10 @@ export const CLI_LABELS: Record<string, string> = {
 };
 
 export const SUBTASK_STATUS_ICON: Record<string, string> = {
-  pending: "\u23F3",
-  in_progress: "\uD83D\uDD28",
-  done: "\u2705",
-  blocked: "\uD83D\uDEAB",
+  pending: "⏳",
+  in_progress: "🔨",
+  done: "✅",
+  blocked: "🚫",
 };
 
 export function oauthAccountLabel(account: OAuthAccountInfo): string {
@@ -68,11 +68,11 @@ export function oauthAccountLabel(account: OAuthAccountInfo): string {
 export function statusLabel(status: string, t: TFunction) {
   switch (status) {
     case "idle":
-      return t({ ko: "대기중", en: "Idle", ja: "待機中", zh: "空闲" });
+      return t({ ko: "대기 중", en: "Idle", ja: "待機中", zh: "待机中" });
     case "working":
-      return t({ ko: "근무중", en: "Working", ja: "作業中", zh: "工作中" });
+      return t({ ko: "작업 중", en: "Working", ja: "作業中", zh: "工作中" });
     case "break":
-      return t({ ko: "휴식중", en: "Break", ja: "休憩中", zh: "休息中" });
+      return t({ ko: "휴식 중", en: "Break", ja: "休憩中", zh: "休息中" });
     case "offline":
       return t({ ko: "오프라인", en: "Offline", ja: "オフライン", zh: "离线" });
     default:
@@ -93,7 +93,7 @@ export function taskStatusLabel(status: string, t: TFunction) {
     case "done":
       return t({ ko: "완료", en: "Done", ja: "完了", zh: "完成" });
     case "pending":
-      return t({ ko: "보류", en: "Pending", ja: "保留", zh: "待处理" });
+      return t({ ko: "보류", en: "Pending", ja: "保留", zh: "待定" });
     case "cancelled":
       return t({ ko: "취소", en: "Cancelled", ja: "キャンセル", zh: "已取消" });
     default:
@@ -112,7 +112,7 @@ export function taskTypeLabel(type: string, t: TFunction) {
     case "analysis":
       return t({ ko: "분석", en: "Analysis", ja: "分析", zh: "分析" });
     case "presentation":
-      return t({ ko: "발표", en: "Presentation", ja: "プレゼン", zh: "演示" });
+      return t({ ko: "발표", en: "Presentation", ja: "発表", zh: "演示" });
     case "documentation":
       return t({ ko: "문서화", en: "Documentation", ja: "ドキュメント", zh: "文档" });
     default:

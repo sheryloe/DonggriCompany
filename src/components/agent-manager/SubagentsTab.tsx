@@ -277,10 +277,10 @@ export default function SubagentsTab({
 
                   <div className="mt-3 grid gap-2 text-xs">
                     <div style={{ color: "var(--th-text-secondary)" }}>
-                      <strong>{tr("Class path", "Class path")}:</strong> {formatClassPath(agent)}
+                      <strong>{tr("클래스 경로", "Class path")}:</strong> {formatClassPath(agent)}
                     </div>
                     <div style={{ color: "var(--th-text-secondary)" }}>
-                      <strong>{tr("Source", "Source")}:</strong> <code>{agent.upstreamPath}</code>
+                      <strong>{tr("원본 경로", "Source")}:</strong> <code>{agent.upstreamPath}</code>
                     </div>
                   </div>
                 </article>

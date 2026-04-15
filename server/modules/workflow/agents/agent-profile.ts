@@ -19,6 +19,23 @@ export interface AgentPromptStyle {
   collaboration: AgentLevelValue;
 }
 
+export interface AgentClassPath {
+  stage1?: string | null;
+  stage2?: string | null;
+  stage3?: string | null;
+  class_stage_1?: string | null;
+  class_stage_2?: string | null;
+  class_stage_3?: string | null;
+}
+
+export interface AgentPromotionPolicy {
+  auto_promote_at_xp?: number;
+  from_role?: string;
+  to_role?: string;
+  team_leader_manual?: boolean;
+  notes?: string;
+}
+
 export interface AgentProfile {
   role_template: AgentRoleTemplate;
   growth_tier: AgentLevelValue;
@@ -26,6 +43,8 @@ export interface AgentProfile {
   prompt_style: AgentPromptStyle;
   specialties: string[];
   custom_prompt_override: string | null;
+  class_path?: AgentClassPath | string | string[] | null;
+  promotion_policy?: AgentPromotionPolicy | string | null;
 }
 
 const PROFILE_PRESETS: Record<AgentRoleTemplate, AgentProfile> = {
@@ -48,6 +67,8 @@ const PROFILE_PRESETS: Record<AgentRoleTemplate, AgentProfile> = {
     },
     specialties: [],
     custom_prompt_override: null,
+    class_path: null,
+    promotion_policy: null,
   },
   senior: {
     role_template: "senior",
@@ -68,6 +89,8 @@ const PROFILE_PRESETS: Record<AgentRoleTemplate, AgentProfile> = {
     },
     specialties: [],
     custom_prompt_override: null,
+    class_path: null,
+    promotion_policy: null,
   },
   junior: {
     role_template: "junior",
@@ -88,26 +111,30 @@ const PROFILE_PRESETS: Record<AgentRoleTemplate, AgentProfile> = {
     },
     specialties: [],
     custom_prompt_override: null,
+    class_path: null,
+    promotion_policy: null,
   },
   intern: {
-    role_template: "intern",
-    growth_tier: 1,
+    role_template: "junior",
+    growth_tier: 2,
     capabilities: {
-      execution: 2,
-      architecture: 1,
-      review: 1,
-      research: 2,
-      communication: 2,
-      leadership: 1,
+      execution: 3,
+      architecture: 2,
+      review: 2,
+      research: 3,
+      communication: 3,
+      leadership: 2,
     },
     prompt_style: {
-      tone: 2,
-      autonomy: 1,
+      tone: 3,
+      autonomy: 2,
       strictness: 3,
       collaboration: 4,
     },
     specialties: [],
     custom_prompt_override: null,
+    class_path: null,
+    promotion_policy: null,
   },
 };
 
@@ -117,7 +144,8 @@ function normalizeText(value: unknown): string {
 
 function normalizeRoleTemplate(value: unknown, fallback: AgentRoleTemplate): AgentRoleTemplate {
   const raw = normalizeText(value);
-  if (raw === "team_leader" || raw === "senior" || raw === "junior" || raw === "intern") return raw;
+  if (raw === "team_leader" || raw === "senior" || raw === "junior") return raw;
+  if (raw === "intern") return "junior";
   return fallback;
 }
 
@@ -141,6 +169,44 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
   }
   if (typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function normalizeClassPath(value: unknown): AgentProfile["class_path"] {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string") return value.trim() || null;
+  if (Array.isArray(value)) {
+    const list = value.map((entry) => normalizeText(entry)).filter((entry) => entry.length > 0);
+    return list.length > 0 ? list : null;
+  }
+  if (typeof value !== "object") return null;
+  const source = value as Record<string, unknown>;
+  const output: AgentClassPath = {};
+  for (const key of ["stage1", "stage2", "stage3", "class_stage_1", "class_stage_2", "class_stage_3"] as const) {
+    const text = normalizeText(source[key]);
+    if (text) output[key] = text;
+  }
+  return Object.keys(output).length > 0 ? output : null;
+}
+
+function normalizePromotionPolicy(value: unknown): AgentProfile["promotion_policy"] {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string") return value.trim() || null;
+  if (typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const output: AgentPromotionPolicy = {};
+  if (Number.isFinite(Number(source.auto_promote_at_xp))) {
+    output.auto_promote_at_xp = Number(source.auto_promote_at_xp);
+  }
+  const fromRole = normalizeText(source.from_role);
+  if (fromRole) output.from_role = fromRole;
+  const toRole = normalizeText(source.to_role);
+  if (toRole) output.to_role = toRole;
+  if (typeof source.team_leader_manual === "boolean") {
+    output.team_leader_manual = source.team_leader_manual;
+  }
+  const notes = normalizeText(source.notes);
+  if (notes) output.notes = notes;
+  return Object.keys(output).length > 0 ? output : null;
 }
 
 function normalizeSpecialties(value: unknown, fallback: string[] = []): string[] {
@@ -222,12 +288,13 @@ function collaborationWord(level: AgentLevelValue): string {
 }
 
 export function createPresetAgentProfile(role: AgentRoleTemplate): AgentProfile {
-  return JSON.parse(JSON.stringify(PROFILE_PRESETS[role])) as AgentProfile;
+  const normalizedRole = normalizeRoleTemplate(role, "junior");
+  return JSON.parse(JSON.stringify(PROFILE_PRESETS[normalizedRole])) as AgentProfile;
 }
 
 export function normalizeAgentProfile(value: unknown, fallbackRole: AgentRoleTemplate = "junior"): AgentProfile {
   const source = parseJsonObject(value) ?? {};
-  const roleTemplate = normalizeRoleTemplate(source.role_template, fallbackRole);
+  const roleTemplate = normalizeRoleTemplate(source.role_template, normalizeRoleTemplate(fallbackRole, "junior"));
   const preset = createPresetAgentProfile(roleTemplate);
   return {
     role_template: roleTemplate,
@@ -236,6 +303,8 @@ export function normalizeAgentProfile(value: unknown, fallbackRole: AgentRoleTem
     prompt_style: normalizePromptStyle(source.prompt_style, preset.prompt_style),
     specialties: normalizeSpecialties(source.specialties, preset.specialties),
     custom_prompt_override: normalizeText(source.custom_prompt_override) || null,
+    class_path: normalizeClassPath(source.class_path),
+    promotion_policy: normalizePromotionPolicy(source.promotion_policy),
   };
 }
 
@@ -304,6 +373,29 @@ export function buildAgentPromptProfileBlock(input: {
         ? "single_pass"
         : "force_2_pass"
       : "";
+  const classPathText = (() => {
+    const value = profile.class_path;
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) return value.join(" > ");
+    const stage1 = normalizeText(value.stage1 ?? value.class_stage_1);
+    const stage2 = normalizeText(value.stage2 ?? value.class_stage_2);
+    const stage3 = normalizeText(value.stage3 ?? value.class_stage_3);
+    return [stage1, stage2, stage3].filter(Boolean).join(" > ");
+  })();
+  const promotionPolicyText = (() => {
+    const value = profile.promotion_policy;
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    const fromRole = normalizeText(value.from_role);
+    const toRole = normalizeText(value.to_role);
+    const atXp = Number.isFinite(Number(value.auto_promote_at_xp)) ? Number(value.auto_promote_at_xp) : null;
+    const teamLeaderManual = value.team_leader_manual === true ? "team_leader_manual" : "";
+    const base = [fromRole, toRole].filter(Boolean).length > 0 ? `${fromRole || "?"} -> ${toRole || "?"}` : "";
+    const xpPart = atXp !== null ? `@xp>=${atXp}` : "";
+    const notePart = normalizeText(value.notes);
+    return [base, xpPart, teamLeaderManual, notePart].filter(Boolean).join(" ");
+  })();
   const overrideText = normalizeText(profile.custom_prompt_override) || legacyPersonality;
 
   return [
@@ -311,6 +403,8 @@ export function buildAgentPromptProfileBlock(input: {
     `- Role template: ${profile.role_template}`,
     `- Applied growth tier: ${profile.growth_tier}/5`,
     workflowRole ? `- 2x workflow role: ${workflowRole}` : "",
+    classPathText ? `- Class path: ${classPathText}` : "",
+    promotionPolicyText ? `- Promotion policy: ${promotionPolicyText}` : "",
     `- Capability matrix: ${capabilitySummary}`,
     `- Working style: ${styleSummary}`,
     specialties ? `- Specialties: ${specialties}` : "",

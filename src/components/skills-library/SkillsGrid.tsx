@@ -9,6 +9,7 @@ import {
   cliProviderIcon,
   formatFirstSeen,
   getRankBadge,
+  isRankedSkill,
   learnedProviderLabel,
   localizeAuditStatus,
   type CategorizedSkill,
@@ -56,7 +57,8 @@ export default function SkillsGrid({
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {filtered.map((skill) => {
-          const badge = getRankBadge(skill.rank);
+          const ranked = isRankedSkill(skill);
+          const badge = ranked ? getRankBadge(skill.rank) : null;
           const catColor = CATEGORY_COLORS[skill.category] || CATEGORY_COLORS.Other;
           const detailId = skill.skillId || skill.name;
           const detailKey = `${skill.repo}/${detailId}`;
@@ -75,7 +77,21 @@ export default function SkillsGrid({
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900/60 text-sm font-bold">
-                    {badge.icon ? <span>{badge.icon}</span> : <span className={badge.color}>#{skill.rank}</span>}
+                    {badge ? (
+                      badge.icon ? <span>{badge.icon}</span> : <span className={badge.color}>#{skill.rank}</span>
+                    ) : (
+                      <span
+                        className="text-[10px] tracking-wide text-slate-400"
+                        title={t({
+                          ko: "카탈로그 전용 항목",
+                          en: "Catalog-only entry",
+                          ja: "カタログ専用項目",
+                          zh: "仅目录条目",
+                        })}
+                      >
+                        CAT
+                      </span>
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-white">{skill.name}</div>

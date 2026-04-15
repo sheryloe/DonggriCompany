@@ -12,15 +12,37 @@ describe("server agent profile helpers", () => {
       {
         capabilities: { execution: 5 },
         prompt_style: { autonomy: 5 },
+        class_path: {
+          class_stage_1: "engineering",
+          class_stage_2: "backend",
+          class_stage_3: "platform",
+        },
+        promotion_policy: {
+          from_role: "junior",
+          to_role: "senior",
+          auto_promote_at_xp: 300,
+          team_leader_manual: true,
+        },
       },
       "intern",
     );
 
-    expect(profile.role_template).toBe("intern");
+    expect(profile.role_template).toBe("junior");
     expect(profile.capabilities.execution).toBe(5);
-    expect(profile.capabilities.review).toBe(1);
+    expect(profile.capabilities.review).toBe(2);
     expect(profile.prompt_style.autonomy).toBe(5);
     expect(profile.prompt_style.strictness).toBe(3);
+    expect(profile.class_path).toEqual({
+      class_stage_1: "engineering",
+      class_stage_2: "backend",
+      class_stage_3: "platform",
+    });
+    expect(profile.promotion_policy).toEqual({
+      from_role: "junior",
+      to_role: "senior",
+      auto_promote_at_xp: 300,
+      team_leader_manual: true,
+    });
   });
 
   it("maps xp to the recommended tier thresholds", () => {
@@ -39,6 +61,12 @@ describe("server agent profile helpers", () => {
         growth_tier: 5,
         specialties: ["backend", "agent orchestration"],
         custom_prompt_override: "Escalate risk early and justify tradeoffs.",
+        class_path: ["engineering", "backend", "platform"],
+        promotion_policy: {
+          from_role: "junior",
+          to_role: "senior",
+          auto_promote_at_xp: 300,
+        },
       },
       workflow_profile: {
         role: "reviewer",
@@ -51,6 +79,8 @@ describe("server agent profile helpers", () => {
     expect(block).toContain("[Agent Growth Profile]");
     expect(block).toContain("Applied growth tier: 5/5");
     expect(block).toContain("2x workflow role: reviewer");
+    expect(block).toContain("Class path: engineering > backend > platform");
+    expect(block).toContain("Promotion policy: junior -> senior @xp>=300");
     expect(block).toContain("Specialties: backend, agent orchestration");
     expect(block).toContain("Review lenses to emphasize: security, performance");
     expect(block).toContain("Review depth: force_2_pass");

@@ -1,0 +1,995 @@
+{
+  "sourceRepo": "VoltAgent/awesome-codex-subagents",
+  "sourceRef": "main",
+  "sourceUrl": "https://github.com/VoltAgent/awesome-codex-subagents",
+  "generatedAt": "2026-04-14T15:03:08.015Z",
+  "total": 136,
+  "stage1ByDepartment": {
+    "planning": "planning-core",
+    "dev": "development-core",
+    "design": "design-core",
+    "qa": "quality-core",
+    "devsecops": "devsecops-core",
+    "operations": "operations-core"
+  },
+  "stage2ByCategory": {
+    "01-core-development": "core-engineering",
+    "02-language-specialists": "language-specialists",
+    "03-infrastructure": "platform-infrastructure",
+    "04-quality-security": "quality-and-security",
+    "05-data-ai": "data-and-ai",
+    "06-developer-experience": "developer-experience",
+    "07-specialized-domains": "domain-specialists",
+    "08-business-product": "business-and-product",
+    "09-meta-orchestration": "orchestration",
+    "10-research-analysis": "research-and-analysis"
+  },
+  "departments": [
+    {
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "total": 25,
+      "stage_2": [
+        {
+          "id": "business-and-product",
+          "total": 9,
+          "agents": [
+            {
+              "name": "business-analyst",
+              "class_stage_3": "business-analyst",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/business-analyst.toml"
+            },
+            {
+              "name": "content-marketer",
+              "class_stage_3": "content-marketer",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/content-marketer.toml"
+            },
+            {
+              "name": "legal-advisor",
+              "class_stage_3": "legal-advisor",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/legal-advisor.toml"
+            },
+            {
+              "name": "product-manager",
+              "class_stage_3": "product-manager",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/product-manager.toml"
+            },
+            {
+              "name": "project-manager",
+              "class_stage_3": "project-manager",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/project-manager.toml"
+            },
+            {
+              "name": "sales-engineer",
+              "class_stage_3": "sales-engineer",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/sales-engineer.toml"
+            },
+            {
+              "name": "scrum-master",
+              "class_stage_3": "scrum-master",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/scrum-master.toml"
+            },
+            {
+              "name": "technical-writer",
+              "class_stage_3": "technical-writer",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/technical-writer.toml"
+            },
+            {
+              "name": "wordpress-master",
+              "class_stage_3": "wordpress-master",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/wordpress-master.toml"
+            }
+          ]
+        },
+        {
+          "id": "orchestration",
+          "total": 9,
+          "agents": [
+            {
+              "name": "agent-installer",
+              "class_stage_3": "agent-installer",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/agent-installer.toml"
+            },
+            {
+              "name": "agent-organizer",
+              "class_stage_3": "agent-organizer",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/agent-organizer.toml"
+            },
+            {
+              "name": "context-manager",
+              "class_stage_3": "context-manager",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/context-manager.toml"
+            },
+            {
+              "name": "error-coordinator",
+              "class_stage_3": "error-coordinator",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/error-coordinator.toml"
+            },
+            {
+              "name": "knowledge-synthesizer",
+              "class_stage_3": "knowledge-synthesizer",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/knowledge-synthesizer.toml"
+            },
+            {
+              "name": "multi-agent-coordinator",
+              "class_stage_3": "multi-agent-coordinator",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/multi-agent-coordinator.toml"
+            },
+            {
+              "name": "performance-monitor",
+              "class_stage_3": "performance-monitor",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/performance-monitor.toml"
+            },
+            {
+              "name": "task-distributor",
+              "class_stage_3": "task-distributor",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/task-distributor.toml"
+            },
+            {
+              "name": "workflow-orchestrator",
+              "class_stage_3": "workflow-orchestrator",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/workflow-orchestrator.toml"
+            }
+          ]
+        },
+        {
+          "id": "research-and-analysis",
+          "total": 7,
+          "agents": [
+            {
+              "name": "competitive-analyst",
+              "class_stage_3": "competitive-analyst",
+              "upstreamCategory": "10-research-analysis",
+              "upstreamPath": "categories/10-research-analysis/competitive-analyst.toml"
+            },
+            {
+              "name": "data-researcher",
+              "class_stage_3": "data-researcher",
+              "upstreamCategory": "10-research-analysis",
+              "upstreamPath": "categories/10-research-analysis/data-researcher.toml"
+            },
+            {
+              "name": "docs-researcher",
+              "class_stage_3": "docs-researcher",
+              "upstreamCategory": "10-research-analysis",
+              "upstreamPath": "categories/10-research-analysis/docs-researcher.toml"
+            },
+            {
+              "name": "market-researcher",
+              "class_stage_3": "market-researcher",
+              "upstreamCategory": "10-research-analysis",
+              "upstreamPath": "categories/10-research-analysis/market-researcher.toml"
+            },
+            {
+              "name": "research-analyst",
+              "class_stage_3": "research-analyst",
+              "upstreamCategory": "10-research-analysis",
+              "upstreamPath": "categories/10-research-analysis/research-analyst.toml"
+            },
+            {
+              "name": "search-specialist",
+              "class_stage_3": "search-specialist",
+              "upstreamCategory": "10-research-analysis",
+              "upstreamPath": "categories/10-research-analysis/search-specialist.toml"
+            },
+            {
+              "name": "trend-analyst",
+              "class_stage_3": "trend-analyst",
+              "upstreamCategory": "10-research-analysis",
+              "upstreamPath": "categories/10-research-analysis/trend-analyst.toml"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "total": 73,
+      "stage_2": [
+        {
+          "id": "core-engineering",
+          "total": 10,
+          "agents": [
+            {
+              "name": "api-designer",
+              "class_stage_3": "api-designer",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/api-designer.toml"
+            },
+            {
+              "name": "backend-developer",
+              "class_stage_3": "backend-developer",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/backend-developer.toml"
+            },
+            {
+              "name": "code-mapper",
+              "class_stage_3": "code-mapper",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/code-mapper.toml"
+            },
+            {
+              "name": "electron-pro",
+              "class_stage_3": "electron-pro",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/electron-pro.toml"
+            },
+            {
+              "name": "frontend-developer",
+              "class_stage_3": "frontend-developer",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/frontend-developer.toml"
+            },
+            {
+              "name": "fullstack-developer",
+              "class_stage_3": "fullstack-developer",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/fullstack-developer.toml"
+            },
+            {
+              "name": "graphql-architect",
+              "class_stage_3": "graphql-architect",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/graphql-architect.toml"
+            },
+            {
+              "name": "microservices-architect",
+              "class_stage_3": "microservices-architect",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/microservices-architect.toml"
+            },
+            {
+              "name": "mobile-developer",
+              "class_stage_3": "mobile-developer",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/mobile-developer.toml"
+            },
+            {
+              "name": "websocket-engineer",
+              "class_stage_3": "websocket-engineer",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/websocket-engineer.toml"
+            }
+          ]
+        },
+        {
+          "id": "data-and-ai",
+          "total": 12,
+          "agents": [
+            {
+              "name": "ai-engineer",
+              "class_stage_3": "ai-engineer",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/ai-engineer.toml"
+            },
+            {
+              "name": "data-analyst",
+              "class_stage_3": "data-analyst",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/data-analyst.toml"
+            },
+            {
+              "name": "data-engineer",
+              "class_stage_3": "data-engineer",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/data-engineer.toml"
+            },
+            {
+              "name": "data-scientist",
+              "class_stage_3": "data-scientist",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/data-scientist.toml"
+            },
+            {
+              "name": "database-optimizer",
+              "class_stage_3": "database-optimizer",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/database-optimizer.toml"
+            },
+            {
+              "name": "llm-architect",
+              "class_stage_3": "llm-architect",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/llm-architect.toml"
+            },
+            {
+              "name": "machine-learning-engineer",
+              "class_stage_3": "machine-learning-engineer",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/machine-learning-engineer.toml"
+            },
+            {
+              "name": "ml-engineer",
+              "class_stage_3": "ml-engineer",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/ml-engineer.toml"
+            },
+            {
+              "name": "mlops-engineer",
+              "class_stage_3": "mlops-engineer",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/mlops-engineer.toml"
+            },
+            {
+              "name": "nlp-engineer",
+              "class_stage_3": "nlp-engineer",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/nlp-engineer.toml"
+            },
+            {
+              "name": "postgres-pro",
+              "class_stage_3": "postgres-pro",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/postgres-pro.toml"
+            },
+            {
+              "name": "prompt-engineer",
+              "class_stage_3": "prompt-engineer",
+              "upstreamCategory": "05-data-ai",
+              "upstreamPath": "categories/05-data-ai/prompt-engineer.toml"
+            }
+          ]
+        },
+        {
+          "id": "developer-experience",
+          "total": 13,
+          "agents": [
+            {
+              "name": "build-engineer",
+              "class_stage_3": "build-engineer",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/build-engineer.toml"
+            },
+            {
+              "name": "cli-developer",
+              "class_stage_3": "cli-developer",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/cli-developer.toml"
+            },
+            {
+              "name": "dependency-manager",
+              "class_stage_3": "dependency-manager",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/dependency-manager.toml"
+            },
+            {
+              "name": "documentation-engineer",
+              "class_stage_3": "documentation-engineer",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/documentation-engineer.toml"
+            },
+            {
+              "name": "dx-optimizer",
+              "class_stage_3": "dx-optimizer",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/dx-optimizer.toml"
+            },
+            {
+              "name": "git-workflow-manager",
+              "class_stage_3": "git-workflow-manager",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/git-workflow-manager.toml"
+            },
+            {
+              "name": "legacy-modernizer",
+              "class_stage_3": "legacy-modernizer",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/legacy-modernizer.toml"
+            },
+            {
+              "name": "mcp-developer",
+              "class_stage_3": "mcp-developer",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/mcp-developer.toml"
+            },
+            {
+              "name": "powershell-module-architect",
+              "class_stage_3": "powershell-module-architect",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/powershell-module-architect.toml"
+            },
+            {
+              "name": "powershell-ui-architect",
+              "class_stage_3": "powershell-ui-architect",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/powershell-ui-architect.toml"
+            },
+            {
+              "name": "refactoring-specialist",
+              "class_stage_3": "refactoring-specialist",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/refactoring-specialist.toml"
+            },
+            {
+              "name": "slack-expert",
+              "class_stage_3": "slack-expert",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/slack-expert.toml"
+            },
+            {
+              "name": "tooling-engineer",
+              "class_stage_3": "tooling-engineer",
+              "upstreamCategory": "06-developer-experience",
+              "upstreamPath": "categories/06-developer-experience/tooling-engineer.toml"
+            }
+          ]
+        },
+        {
+          "id": "domain-specialists",
+          "total": 11,
+          "agents": [
+            {
+              "name": "api-documenter",
+              "class_stage_3": "api-documenter",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/api-documenter.toml"
+            },
+            {
+              "name": "blockchain-developer",
+              "class_stage_3": "blockchain-developer",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/blockchain-developer.toml"
+            },
+            {
+              "name": "embedded-systems",
+              "class_stage_3": "embedded-systems",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/embedded-systems.toml"
+            },
+            {
+              "name": "fintech-engineer",
+              "class_stage_3": "fintech-engineer",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/fintech-engineer.toml"
+            },
+            {
+              "name": "game-developer",
+              "class_stage_3": "game-developer",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/game-developer.toml"
+            },
+            {
+              "name": "iot-engineer",
+              "class_stage_3": "iot-engineer",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/iot-engineer.toml"
+            },
+            {
+              "name": "mobile-app-developer",
+              "class_stage_3": "mobile-app-developer",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/mobile-app-developer.toml"
+            },
+            {
+              "name": "payment-integration",
+              "class_stage_3": "payment-integration",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/payment-integration.toml"
+            },
+            {
+              "name": "quant-analyst",
+              "class_stage_3": "quant-analyst",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/quant-analyst.toml"
+            },
+            {
+              "name": "risk-manager",
+              "class_stage_3": "risk-manager",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/risk-manager.toml"
+            },
+            {
+              "name": "seo-specialist",
+              "class_stage_3": "seo-specialist",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/seo-specialist.toml"
+            }
+          ]
+        },
+        {
+          "id": "language-specialists",
+          "total": 27,
+          "agents": [
+            {
+              "name": "angular-architect",
+              "class_stage_3": "angular-architect",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/angular-architect.toml"
+            },
+            {
+              "name": "cpp-pro",
+              "class_stage_3": "cpp-pro",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/cpp-pro.toml"
+            },
+            {
+              "name": "csharp-developer",
+              "class_stage_3": "csharp-developer",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/csharp-developer.toml"
+            },
+            {
+              "name": "django-developer",
+              "class_stage_3": "django-developer",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/django-developer.toml"
+            },
+            {
+              "name": "dotnet-core-expert",
+              "class_stage_3": "dotnet-core-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/dotnet-core-expert.toml"
+            },
+            {
+              "name": "dotnet-framework-4.8-expert",
+              "class_stage_3": "dotnet-framework-4.8-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/dotnet-framework-4.8-expert.toml"
+            },
+            {
+              "name": "elixir-expert",
+              "class_stage_3": "elixir-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/elixir-expert.toml"
+            },
+            {
+              "name": "erlang-expert",
+              "class_stage_3": "erlang-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/erlang-expert.toml"
+            },
+            {
+              "name": "flutter-expert",
+              "class_stage_3": "flutter-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/flutter-expert.toml"
+            },
+            {
+              "name": "golang-pro",
+              "class_stage_3": "golang-pro",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/golang-pro.toml"
+            },
+            {
+              "name": "java-architect",
+              "class_stage_3": "java-architect",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/java-architect.toml"
+            },
+            {
+              "name": "javascript-pro",
+              "class_stage_3": "javascript-pro",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/javascript-pro.toml"
+            },
+            {
+              "name": "kotlin-specialist",
+              "class_stage_3": "kotlin-specialist",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/kotlin-specialist.toml"
+            },
+            {
+              "name": "laravel-specialist",
+              "class_stage_3": "laravel-specialist",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/laravel-specialist.toml"
+            },
+            {
+              "name": "nextjs-developer",
+              "class_stage_3": "nextjs-developer",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/nextjs-developer.toml"
+            },
+            {
+              "name": "php-pro",
+              "class_stage_3": "php-pro",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/php-pro.toml"
+            },
+            {
+              "name": "powershell-5.1-expert",
+              "class_stage_3": "powershell-5.1-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/powershell-5.1-expert.toml"
+            },
+            {
+              "name": "powershell-7-expert",
+              "class_stage_3": "powershell-7-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/powershell-7-expert.toml"
+            },
+            {
+              "name": "python-pro",
+              "class_stage_3": "python-pro",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/python-pro.toml"
+            },
+            {
+              "name": "rails-expert",
+              "class_stage_3": "rails-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/rails-expert.toml"
+            },
+            {
+              "name": "react-specialist",
+              "class_stage_3": "react-specialist",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/react-specialist.toml"
+            },
+            {
+              "name": "rust-engineer",
+              "class_stage_3": "rust-engineer",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/rust-engineer.toml"
+            },
+            {
+              "name": "spring-boot-engineer",
+              "class_stage_3": "spring-boot-engineer",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/spring-boot-engineer.toml"
+            },
+            {
+              "name": "sql-pro",
+              "class_stage_3": "sql-pro",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/sql-pro.toml"
+            },
+            {
+              "name": "swift-expert",
+              "class_stage_3": "swift-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/swift-expert.toml"
+            },
+            {
+              "name": "typescript-pro",
+              "class_stage_3": "typescript-pro",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/typescript-pro.toml"
+            },
+            {
+              "name": "vue-expert",
+              "class_stage_3": "vue-expert",
+              "upstreamCategory": "02-language-specialists",
+              "upstreamPath": "categories/02-language-specialists/vue-expert.toml"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "department": "design",
+      "class_stage_1": "design-core",
+      "total": 4,
+      "stage_2": [
+        {
+          "id": "business-and-product",
+          "total": 1,
+          "agents": [
+            {
+              "name": "ux-researcher",
+              "class_stage_3": "ux-researcher",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/ux-researcher.toml"
+            }
+          ]
+        },
+        {
+          "id": "core-engineering",
+          "total": 2,
+          "agents": [
+            {
+              "name": "ui-designer",
+              "class_stage_3": "ui-designer",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/ui-designer.toml"
+            },
+            {
+              "name": "ui-fixer",
+              "class_stage_3": "ui-fixer",
+              "upstreamCategory": "01-core-development",
+              "upstreamPath": "categories/01-core-development/ui-fixer.toml"
+            }
+          ]
+        },
+        {
+          "id": "quality-and-security",
+          "total": 1,
+          "agents": [
+            {
+              "name": "accessibility-tester",
+              "class_stage_3": "accessibility-tester",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/accessibility-tester.toml"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "total": 10,
+      "stage_2": [
+        {
+          "id": "quality-and-security",
+          "total": 10,
+          "agents": [
+            {
+              "name": "architect-reviewer",
+              "class_stage_3": "architect-reviewer",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/architect-reviewer.toml"
+            },
+            {
+              "name": "browser-debugger",
+              "class_stage_3": "browser-debugger",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/browser-debugger.toml"
+            },
+            {
+              "name": "chaos-engineer",
+              "class_stage_3": "chaos-engineer",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/chaos-engineer.toml"
+            },
+            {
+              "name": "code-reviewer",
+              "class_stage_3": "code-reviewer",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/code-reviewer.toml"
+            },
+            {
+              "name": "debugger",
+              "class_stage_3": "debugger",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/debugger.toml"
+            },
+            {
+              "name": "error-detective",
+              "class_stage_3": "error-detective",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/error-detective.toml"
+            },
+            {
+              "name": "performance-engineer",
+              "class_stage_3": "performance-engineer",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/performance-engineer.toml"
+            },
+            {
+              "name": "qa-expert",
+              "class_stage_3": "qa-expert",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/qa-expert.toml"
+            },
+            {
+              "name": "reviewer",
+              "class_stage_3": "reviewer",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/reviewer.toml"
+            },
+            {
+              "name": "test-automator",
+              "class_stage_3": "test-automator",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/test-automator.toml"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "total": 17,
+      "stage_2": [
+        {
+          "id": "platform-infrastructure",
+          "total": 12,
+          "agents": [
+            {
+              "name": "azure-infra-engineer",
+              "class_stage_3": "azure-infra-engineer",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/azure-infra-engineer.toml"
+            },
+            {
+              "name": "cloud-architect",
+              "class_stage_3": "cloud-architect",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/cloud-architect.toml"
+            },
+            {
+              "name": "database-administrator",
+              "class_stage_3": "database-administrator",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/database-administrator.toml"
+            },
+            {
+              "name": "deployment-engineer",
+              "class_stage_3": "deployment-engineer",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/deployment-engineer.toml"
+            },
+            {
+              "name": "devops-engineer",
+              "class_stage_3": "devops-engineer",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/devops-engineer.toml"
+            },
+            {
+              "name": "docker-expert",
+              "class_stage_3": "docker-expert",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/docker-expert.toml"
+            },
+            {
+              "name": "kubernetes-specialist",
+              "class_stage_3": "kubernetes-specialist",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/kubernetes-specialist.toml"
+            },
+            {
+              "name": "network-engineer",
+              "class_stage_3": "network-engineer",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/network-engineer.toml"
+            },
+            {
+              "name": "platform-engineer",
+              "class_stage_3": "platform-engineer",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/platform-engineer.toml"
+            },
+            {
+              "name": "security-engineer",
+              "class_stage_3": "security-engineer",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/security-engineer.toml"
+            },
+            {
+              "name": "terraform-engineer",
+              "class_stage_3": "terraform-engineer",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/terraform-engineer.toml"
+            },
+            {
+              "name": "terragrunt-expert",
+              "class_stage_3": "terragrunt-expert",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/terragrunt-expert.toml"
+            }
+          ]
+        },
+        {
+          "id": "quality-and-security",
+          "total": 5,
+          "agents": [
+            {
+              "name": "ad-security-reviewer",
+              "class_stage_3": "ad-security-reviewer",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/ad-security-reviewer.toml"
+            },
+            {
+              "name": "compliance-auditor",
+              "class_stage_3": "compliance-auditor",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/compliance-auditor.toml"
+            },
+            {
+              "name": "penetration-tester",
+              "class_stage_3": "penetration-tester",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/penetration-tester.toml"
+            },
+            {
+              "name": "powershell-security-hardening",
+              "class_stage_3": "powershell-security-hardening",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/powershell-security-hardening.toml"
+            },
+            {
+              "name": "security-auditor",
+              "class_stage_3": "security-auditor",
+              "upstreamCategory": "04-quality-security",
+              "upstreamPath": "categories/04-quality-security/security-auditor.toml"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "department": "operations",
+      "class_stage_1": "operations-core",
+      "total": 7,
+      "stage_2": [
+        {
+          "id": "business-and-product",
+          "total": 1,
+          "agents": [
+            {
+              "name": "customer-success-manager",
+              "class_stage_3": "customer-success-manager",
+              "upstreamCategory": "08-business-product",
+              "upstreamPath": "categories/08-business-product/customer-success-manager.toml"
+            }
+          ]
+        },
+        {
+          "id": "domain-specialists",
+          "total": 1,
+          "agents": [
+            {
+              "name": "m365-admin",
+              "class_stage_3": "m365-admin",
+              "upstreamCategory": "07-specialized-domains",
+              "upstreamPath": "categories/07-specialized-domains/m365-admin.toml"
+            }
+          ]
+        },
+        {
+          "id": "orchestration",
+          "total": 1,
+          "agents": [
+            {
+              "name": "it-ops-orchestrator",
+              "class_stage_3": "it-ops-orchestrator",
+              "upstreamCategory": "09-meta-orchestration",
+              "upstreamPath": "categories/09-meta-orchestration/it-ops-orchestrator.toml"
+            }
+          ]
+        },
+        {
+          "id": "platform-infrastructure",
+          "total": 4,
+          "agents": [
+            {
+              "name": "devops-incident-responder",
+              "class_stage_3": "devops-incident-responder",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/devops-incident-responder.toml"
+            },
+            {
+              "name": "incident-responder",
+              "class_stage_3": "incident-responder",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/incident-responder.toml"
+            },
+            {
+              "name": "sre-engineer",
+              "class_stage_3": "sre-engineer",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/sre-engineer.toml"
+            },
+            {
+              "name": "windows-infra-admin",
+              "class_stage_3": "windows-infra-admin",
+              "upstreamCategory": "03-infrastructure",
+              "upstreamPath": "categories/03-infrastructure/windows-infra-admin.toml"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

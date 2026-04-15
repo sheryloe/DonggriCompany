@@ -7,13 +7,18 @@ import { I18nProvider } from "../i18n";
 import type { Agent, Department } from "../types";
 import AgentManager from "./AgentManager";
 
-vi.mock("../api", () => ({
-  getCliAccountPools: vi.fn(),
-  updateAgent: vi.fn(),
-  createAgent: vi.fn(),
-  deleteAgent: vi.fn(),
-  reorderDepartments: vi.fn(),
-}));
+vi.mock("../api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api")>();
+  return {
+    ...actual,
+    getCliAccountPools: vi.fn(),
+    getCliModels: vi.fn(),
+    updateAgent: vi.fn(),
+    createAgent: vi.fn(),
+    deleteAgent: vi.fn(),
+    reorderDepartments: vi.fn(),
+  };
+});
 
 vi.mock("./AgentAvatar", () => ({
   buildSpriteMap: () => new Map<string, number>(),
@@ -39,6 +44,7 @@ vi.mock("./agent-manager/DepartmentFormModal", () => ({
 }));
 
 const getCliAccountPoolsMock = vi.mocked(api.getCliAccountPools);
+const getCliModelsMock = vi.mocked(api.getCliModels);
 
 const DEPARTMENT: Department = {
   id: "dev",
@@ -46,7 +52,7 @@ const DEPARTMENT: Department = {
   name_ko: "개발",
   name_ja: "開発",
   name_zh: "开发",
-  icon: "🛠️",
+  icon: "DEV",
   color: "#3b82f6",
   description: null,
   prompt: null,
@@ -59,11 +65,11 @@ const LEGACY_AGENT: Agent = {
   name: "Legacy Agent",
   name_ko: "레거시 에이전트",
   name_ja: "レガシーエージェント",
-  name_zh: "旧代理",
+  name_zh: "旧版智能体",
   department_id: "dev",
   role: "junior",
   cli_provider: "claude",
-  avatar_emoji: "🤖",
+  avatar_emoji: "BOT",
   personality: "Legacy override",
   status: "idle",
   current_task_id: null,
@@ -81,6 +87,7 @@ function getPreviewTextarea(): HTMLTextAreaElement {
 describe("AgentManager legacy agent profile fallback", () => {
   beforeEach(() => {
     getCliAccountPoolsMock.mockResolvedValue([]);
+    getCliModelsMock.mockResolvedValue({});
   });
 
   it("renders default growth profile values when editing a legacy agent without agent_profile", async () => {

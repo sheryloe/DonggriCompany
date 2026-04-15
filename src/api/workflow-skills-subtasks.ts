@@ -142,11 +142,41 @@ export interface SkillEntry {
   skillId: string;
   repo: string;
   installs: number;
+  isRanked?: boolean;
 }
 
 export async function getSkills(): Promise<SkillEntry[]> {
   const j = await request<{ skills: SkillEntry[] }>("/api/skills");
   return j.skills;
+}
+
+// Codex sub-agents catalog (VoltAgent/awesome-codex-subagents mirror output)
+export type CodexSubagentDepartment = "planning" | "dev" | "design" | "qa" | "devsecops" | "operations";
+
+export interface CodexSubagentEntry {
+  name: string;
+  description: string;
+  upstreamCategory: string;
+  upstreamPath: string;
+  department: CodexSubagentDepartment;
+  class_stage_1?: string;
+  class_stage_2?: string;
+  class_stage_3?: string;
+}
+
+export interface CodexSubagentCatalogSnapshot {
+  sourceRepo: string;
+  sourceRef: string;
+  sourceUrl: string;
+  generatedAt: string;
+  total: number;
+  departmentSummary: Record<string, number>;
+  agents: CodexSubagentEntry[];
+}
+
+export async function getCodexSubagentCatalog(): Promise<CodexSubagentCatalogSnapshot> {
+  const j = await request<{ catalog: CodexSubagentCatalogSnapshot }>("/api/subagents/catalog");
+  return j.catalog;
 }
 
 export interface SkillDetail {

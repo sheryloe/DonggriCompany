@@ -180,6 +180,16 @@ describe("SkillsLibrary count aggregation", () => {
     expect(screen.getByRole("button", { name: /All.*600/ })).toBeInTheDocument();
   }, 20000);
 
+  it("shows counts above the old 600 cap when the full catalog is returned", async () => {
+    getSkillsMock.mockResolvedValueOnce(makeCatalogSkills(1400));
+    getCustomSkillsMock.mockResolvedValueOnce([]);
+
+    render(<SkillsLibrary agents={[TEST_AGENT]} />);
+
+    await expectSummary(1400, 1400, 0);
+    expect(screen.getByRole("button", { name: /All.*1400/ })).toBeInTheDocument();
+  }, 20000);
+
   it("aggregates total/all with custom skills while keeping other category counts catalog-only", async () => {
     getSkillsMock.mockResolvedValueOnce(makeMixedCategoryCatalog());
     getCustomSkillsMock.mockResolvedValueOnce(makeCustomSkills(2));

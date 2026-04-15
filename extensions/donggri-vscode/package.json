@@ -1,0 +1,311 @@
+{
+  "name": "donggri-vscode",
+  "displayName": "Donggri VSCode",
+  "description": "Native VS Code AI collaboration client for DonggriCompany",
+  "version": "0.1.0",
+  "publisher": "donggri",
+  "private": true,
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": ["AI", "Chat", "Other"],
+  "keywords": ["donggri", "chat", "tasks", "ai", "workflow"],
+  "main": "./out/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "donggri",
+          "title": "Donggri",
+          "icon": "resources/donggri.svg"
+        }
+      ]
+    },
+    "views": {
+      "donggri": [
+        {
+          "id": "donggri.overview",
+          "name": "Overview"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "donggri.overview",
+        "contents": "Donggri workspace binding is not ready.\n[Bind current workspace](command:donggri.bindProject)"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "donggri-vscode.donggri",
+        "name": "donggri",
+        "fullName": "Donggri",
+        "description": "Review current code, bind workspace, and promote work to DonggriCompany tasks",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "review",
+            "description": "Review the current selection, file, or working diff"
+          },
+          {
+            "name": "fix",
+            "description": "Suggest or prepare an edit for the current selection or file"
+          },
+          {
+            "name": "task",
+            "description": "Promote the current context to a Donggri task"
+          },
+          {
+            "name": "run",
+            "description": "Run a Donggri task from the bound project"
+          },
+          {
+            "name": "log",
+            "description": "Summarize the latest Donggri task log"
+          },
+          {
+            "name": "bind",
+            "description": "Bind the current workspace to a Donggri project"
+          }
+        ]
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "donggri_read_active_editor",
+        "displayName": "Read Active Editor",
+        "toolReferenceName": "donggriEditor",
+        "modelDescription": "Read the active file in VS Code with file path, language, selection, and file contents when available. Use this when you need exact local code context from the editor.",
+        "userDescription": "Read the active editor context from VS Code",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(file-code)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "includeFileText": {
+              "type": "boolean",
+              "description": "When true, include the active file text in the result.",
+              "default": true
+            }
+          }
+        }
+      },
+      {
+        "name": "donggri_read_selection",
+        "displayName": "Read Selection",
+        "toolReferenceName": "donggriSelection",
+        "modelDescription": "Read the currently selected text in the active editor with exact file path and line range. Use this when the user is focused on a specific code region.",
+        "userDescription": "Read the current selection from VS Code",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(selection)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "donggri_read_working_diff",
+        "displayName": "Read Working Diff",
+        "toolReferenceName": "donggriDiff",
+        "modelDescription": "Read git working diff for the active file or the workspace. Use this when you need pending changes and context that has not been committed.",
+        "userDescription": "Read the current git working diff",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(diff)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "type": "string",
+              "description": "Which diff scope to read.",
+              "enum": ["activeFile", "workspace"],
+              "default": "activeFile"
+            }
+          }
+        }
+      },
+      {
+        "name": "donggri_read_project_binding",
+        "displayName": "Read Project Binding",
+        "toolReferenceName": "donggriBinding",
+        "modelDescription": "Read the current VS Code workspace to Donggri project binding including project id, path, and core goal. Use this before task promotion or execution control.",
+        "userDescription": "Read the current Donggri workspace binding",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(link)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "donggri_create_task",
+        "displayName": "Create Donggri Task",
+        "toolReferenceName": "donggriCreateTask",
+        "modelDescription": "Create a Donggri task in the currently bound project from exact editor context. Use this only when the user explicitly wants to promote work to the company task system.",
+        "userDescription": "Create a Donggri task from the current context",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(add)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Task title."
+            },
+            "prompt": {
+              "type": "string",
+              "description": "Detailed task request."
+            },
+            "runAfterCreate": {
+              "type": "boolean",
+              "description": "When true, run the task immediately after creation.",
+              "default": false
+            }
+          },
+          "required": ["title", "prompt"]
+        }
+      },
+      {
+        "name": "donggri_control_task",
+        "displayName": "Control Donggri Task",
+        "toolReferenceName": "donggriTaskControl",
+        "modelDescription": "Run, pause, or resume an existing Donggri task by id. Use this only when the task id is already known.",
+        "userDescription": "Run, pause, or resume a Donggri task",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(run-all)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "description": "Donggri task id."
+            },
+            "action": {
+              "type": "string",
+              "description": "Control action to apply.",
+              "enum": ["run", "pause", "resume"]
+            }
+          },
+          "required": ["taskId", "action"]
+        }
+      },
+      {
+        "name": "donggri_read_task_terminal",
+        "displayName": "Read Task Terminal",
+        "toolReferenceName": "donggriTaskLog",
+        "modelDescription": "Read the latest terminal output and task logs for a Donggri task. Use this for progress checks, debugging, and concise execution summaries.",
+        "userDescription": "Read the latest Donggri task terminal output",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(terminal)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "description": "Donggri task id."
+            },
+            "lines": {
+              "type": "number",
+              "description": "Maximum number of terminal lines to fetch.",
+              "default": 120
+            }
+          },
+          "required": ["taskId"]
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "donggri.bindProject",
+        "title": "Bind Current Workspace",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.reviewSelection",
+        "title": "Review Current Selection",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.reviewDiff",
+        "title": "Review Working Diff",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.createTask",
+        "title": "Create Task From Current Context",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.runTask",
+        "title": "Run Donggri Task",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.pauseTask",
+        "title": "Pause Donggri Task",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.resumeTask",
+        "title": "Resume Donggri Task",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.openDecisionInbox",
+        "title": "Open Decision Inbox",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.applyPendingEdit",
+        "title": "Apply Pending Donggri Edit",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.refreshState",
+        "title": "Refresh Donggri State",
+        "category": "Donggri"
+      }
+    ],
+    "configuration": {
+      "title": "Donggri",
+      "properties": {
+        "donggri.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8790",
+          "description": "DonggriCompany server base URL."
+        },
+        "donggri.apiToken": {
+          "type": "string",
+          "default": "",
+          "description": "Optional bearer token for DonggriCompany API access."
+        },
+        "donggri.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically connect to DonggriCompany and start websocket sync when VS Code opens."
+        },
+        "donggri.defaultProjectBindingMode": {
+          "type": "string",
+          "default": "match-or-create",
+          "enum": ["match-only", "match-or-create"],
+          "description": "Workspace binding mode used by automatic Donggri project binding."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/vscode": "^1.100.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.3"
+  }
+}

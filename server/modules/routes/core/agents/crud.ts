@@ -21,6 +21,7 @@ import {
   serializeAgentProfile,
 } from "../../../workflow/agents/agent-profile.ts";
 import { parseAgentRunModePayload, resolveAgentRunMode } from "../../../workflow/agents/run-mode.ts";
+import { archiveAgentGuideFile, upsertAgentGuideFile } from "./agent-guide-files.ts";
 
 export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   const {
@@ -87,6 +88,36 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   })();
   const CLI_ACCOUNT_POOL_PROVIDERS = new Set(["codex", "gemini", "jules"]);
   const agentPackExpr = hasAgentWorkflowPackColumn ? "COALESCE(a.workflow_pack_key, 'development')" : "'development'";
+  const workflowProfileExpr = hasAgentWorkflowProfileColumn ? "workflow_profile" : "NULL AS workflow_profile";
+  const agentProfileExpr = hasAgentProfileJsonColumn ? "agent_profile_json" : "NULL AS agent_profile_json";
+
+  try {
+    db.prepare("UPDATE agents SET role = 'junior' WHERE role = 'intern'").run();
+  } catch (err) {
+    console.warn("[agents] intern->junior migration skipped:", err);
+  }
+
+  try {
+    const existingAgents = db
+      .prepare(
+        `SELECT id, name, role, department_id, ${workflowProfileExpr}, ${agentProfileExpr}, stats_tasks_done, stats_xp FROM agents ORDER BY created_at ASC`,
+      )
+      .all() as Array<Record<string, unknown>>;
+    for (const row of existingAgents) {
+      upsertAgentGuideFile({
+        id: String(row.id ?? ""),
+        name: String(row.name ?? row.id ?? "agent"),
+        role: row.role as string | null | undefined,
+        departmentId: row.department_id as string | null | undefined,
+        workflowProfileJson: row.workflow_profile as string | null | undefined,
+        agentProfileJson: row.agent_profile_json as string | null | undefined,
+        statsTasksDone: Number(row.stats_tasks_done ?? 0),
+        statsXp: Number(row.stats_xp ?? 0),
+      });
+    }
+  } catch (err) {
+    console.warn("[agents] initial guide sync skipped:", err);
+  }
 
   function parseIncludeSeedParam(input: unknown): boolean {
     if (Array.isArray(input)) input = input[0];
@@ -100,6 +131,17 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     return typeof value === "string" ? value.trim() : "";
   }
 
+  function normalizeIncomingRole(
+    value: unknown,
+    fallback: "team_leader" | "senior" | "junior" = "junior",
+  ): "team_leader" | "senior" | "junior" | "__invalid__" {
+    if (typeof value !== "string") return fallback;
+    const role = value.trim();
+    if (role === "team_leader" || role === "senior" || role === "junior") return role;
+    if (role === "intern") return "junior";
+    return "__invalid__";
+  }
+
   function normalizeCliAccountPoolId(value: unknown): string | null | "__invalid__" {
     if (value === null || value === "" || typeof value === "undefined") return null;
     if (typeof value !== "string") return "__invalid__";
@@ -110,13 +152,8 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   function parseAgentProfilePayload(value: unknown, fallbackRole: unknown) {
     if (value === undefined) return { profile: null as ReturnType<typeof normalizeAgentProfile> | null, json: null };
     if (value === null || value === "") return { profile: null, json: null };
-    const fallback =
-      normalizeText(fallbackRole) === "team_leader" ||
-      normalizeText(fallbackRole) === "senior" ||
-      normalizeText(fallbackRole) === "junior" ||
-      normalizeText(fallbackRole) === "intern"
-        ? (normalizeText(fallbackRole) as "team_leader" | "senior" | "junior" | "intern")
-        : "junior";
+    const fallbackRoleValue = normalizeIncomingRole(fallbackRole, "junior");
+    const fallback = fallbackRoleValue === "__invalid__" ? "junior" : fallbackRoleValue;
     const profile = normalizeAgentProfile(value, fallback);
     return {
       profile,
@@ -437,10 +474,9 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         if (!deptExists) return res.status(400).json({ error: "department_not_found" });
       }
 
-      const role =
-        typeof body.role === "string" && ["team_leader", "senior", "junior", "intern"].includes(body.role)
-          ? body.role
-          : "junior";
+      const parsedRole = normalizeIncomingRole(body.role, "junior");
+      if (parsedRole === "__invalid__") return res.status(400).json({ error: "invalid_role" });
+      const role = parsedRole;
       const cli_provider =
         typeof body.cli_provider === "string" &&
         ["claude", "codex", "gemini", "jules", "opencode", "kimi", "copilot", "antigravity", "api"].includes(
@@ -654,6 +690,20 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
           )
           .get(id);
       }
+      const createdRow = created as Record<string, unknown> | undefined;
+      if (createdRow) {
+        upsertAgentGuideFile({
+          id: String(createdRow.id ?? id),
+          name: String(createdRow.name ?? name),
+          role: (createdRow.role as string | null | undefined) ?? role,
+          departmentId: (createdRow.department_id as string | null | undefined) ?? department_id,
+          workflowProfileJson:
+            (createdRow.workflow_profile as string | null | undefined) ?? workflowProfileJson ?? null,
+          agentProfileJson: (createdRow.agent_profile_json as string | null | undefined) ?? agentProfileJson ?? null,
+          statsTasksDone: Number(createdRow.stats_tasks_done ?? 0),
+          statsXp: Number(createdRow.stats_xp ?? 0),
+        });
+      }
       const normalizedCreated = normalizeAgentRecord(created);
       broadcast("agent_created", normalizedCreated);
       res.status(201).json({ ok: true, agent: normalizedCreated });
@@ -669,6 +719,8 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       const existing = db.prepare("SELECT * FROM agents WHERE id = ?").get(id) as Record<string, unknown> | undefined;
       if (!existing) return res.status(404).json({ error: "not_found" });
       if (existing.status === "working") return res.status(400).json({ error: "cannot_delete_working_agent" });
+
+      archiveAgentGuideFile(id);
 
       runInTransaction(() => {
         db.prepare("UPDATE tasks SET assigned_agent_id = NULL WHERE assigned_agent_id = ?").run(id);
@@ -876,6 +928,14 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       }
     }
 
+    if ("role" in body) {
+      const normalizedRole = normalizeIncomingRole(body.role, "junior");
+      if (normalizedRole === "__invalid__") {
+        return res.status(400).json({ error: "invalid_role" });
+      }
+      body.role = normalizedRole;
+    }
+
     if ("workflow_profile" in body) {
       if (!hasAgentWorkflowProfileColumn) {
         return res.status(400).json({ error: "workflow_profile_not_supported" });
@@ -1054,6 +1114,19 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     }
 
     const updated = db.prepare("SELECT * FROM agents WHERE id = ?").get(id);
+    const updatedRow = updated as Record<string, unknown> | undefined;
+    if (updatedRow) {
+      upsertAgentGuideFile({
+        id: String(updatedRow.id ?? id),
+        name: String(updatedRow.name ?? ""),
+        role: updatedRow.role as string | null | undefined,
+        departmentId: updatedRow.department_id as string | null | undefined,
+        workflowProfileJson: updatedRow.workflow_profile as string | null | undefined,
+        agentProfileJson: updatedRow.agent_profile_json as string | null | undefined,
+        statsTasksDone: Number(updatedRow.stats_tasks_done ?? 0),
+        statsXp: Number(updatedRow.stats_xp ?? 0),
+      });
+    }
     const normalizedUpdated = normalizeAgentRecord(updated);
     broadcast("agent_status", normalizedUpdated);
     res.json({ ok: true, agent: normalizedUpdated });

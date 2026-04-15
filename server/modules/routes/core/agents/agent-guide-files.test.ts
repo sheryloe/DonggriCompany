@@ -1,0 +1,98 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { archiveAgentGuideFile, upsertAgentGuideFile } from "./agent-guide-files.ts";
+
+const previousGuideRoot = process.env.AGENT_GUIDE_ROOT;
+const tempRoots: string[] = [];
+
+function createGuideRoot(): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-guides-"));
+  tempRoots.push(root);
+  process.env.AGENT_GUIDE_ROOT = root;
+  return root;
+}
+
+afterEach(() => {
+  for (const root of tempRoots.splice(0, tempRoots.length)) {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+
+  if (previousGuideRoot === undefined) {
+    delete process.env.AGENT_GUIDE_ROOT;
+  } else {
+    process.env.AGENT_GUIDE_ROOT = previousGuideRoot;
+  }
+});
+
+describe("agent guide files", () => {
+  it("creates bundle files under agents/<department>/<name>/", () => {
+    const root = createGuideRoot();
+
+    const savedPath = upsertAgentGuideFile({
+      id: "agent-alpha",
+      name: "Alpha",
+      role: "team_leader",
+      departmentId: "planning",
+      workflowProfileJson: '{"primary":"yes"}',
+      statsTasksDone: 5,
+      statsXp: 230,
+    });
+
+    const agentDir = path.join(root, "planning", "Alpha");
+    expect(savedPath).toBe(path.join(agentDir, "Alpha_AGENTS.md"));
+    expect(fs.existsSync(path.join(agentDir, "Alpha_skills.md"))).toBe(true);
+    expect(fs.existsSync(path.join(agentDir, ".Alpha_설정"))).toBe(true);
+
+    const content = fs.readFileSync(path.join(agentDir, "Alpha_AGENTS.md"), "utf8");
+    expect(content).toContain("Bundle Path: agents/planning/Alpha");
+    expect(content).toContain("Tasks Done: 5");
+    expect(content).toContain("XP: 230");
+    expect(content).toContain("Level: 3");
+  });
+
+  it("moves the bundle folder when agent name or department changes", () => {
+    const root = createGuideRoot();
+
+    const firstPath = upsertAgentGuideFile({
+      id: "agent-beta",
+      name: "Beta",
+      role: "senior",
+      departmentId: "planning",
+      workflowProfileJson: null,
+    });
+
+    const movedPath = upsertAgentGuideFile({
+      id: "agent-beta",
+      name: "BetaPrime",
+      role: "junior",
+      departmentId: "design",
+      workflowProfileJson: null,
+    });
+
+    expect(firstPath).toBe(path.join(root, "planning", "Beta", "Beta_AGENTS.md"));
+    expect(fs.existsSync(path.join(root, "planning", "Beta"))).toBe(false);
+    expect(movedPath).toBe(path.join(root, "design", "BetaPrime", "BetaPrime_AGENTS.md"));
+    expect(fs.existsSync(movedPath)).toBe(true);
+  });
+
+  it("archives the entire bundle path while preserving the department folder", () => {
+    const root = createGuideRoot();
+    upsertAgentGuideFile({
+      id: "agent-gamma",
+      name: "Gamma",
+      role: "intern",
+      departmentId: "qa",
+      workflowProfileJson: null,
+    });
+
+    const archivedPath = archiveAgentGuideFile("agent-gamma");
+    expect(archivedPath).toBeTruthy();
+    expect(String(archivedPath)).toContain(path.join("archive"));
+    expect(String(archivedPath)).toContain(path.join("qa", "Gamma"));
+    expect(fs.existsSync(String(archivedPath))).toBe(true);
+    expect(fs.existsSync(path.join(root, "qa", "Gamma"))).toBe(false);
+  });
+});

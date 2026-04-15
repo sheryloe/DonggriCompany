@@ -181,6 +181,38 @@ export function formatInstalls(n: number, localeTag: string): string {
   }).format(n);
 }
 
+export function isRankedSkill(skill: Pick<SkillEntry, "isRanked">): boolean {
+  return skill.isRanked !== false;
+}
+
+export function compareSkillsByRank(
+  left: Pick<SkillEntry, "name" | "repo" | "skillId" | "rank" | "isRanked" | "installs">,
+  right: Pick<SkillEntry, "name" | "repo" | "skillId" | "rank" | "isRanked" | "installs">,
+  localeTag: string,
+): number {
+  const leftRanked = isRankedSkill(left);
+  const rightRanked = isRankedSkill(right);
+  if (leftRanked !== rightRanked) {
+    return leftRanked ? -1 : 1;
+  }
+  if (leftRanked && rightRanked) {
+    return left.rank - right.rank || right.installs - left.installs || left.name.localeCompare(right.name, localeTag);
+  }
+  return (
+    left.name.localeCompare(right.name, localeTag) ||
+    left.repo.localeCompare(right.repo, localeTag) ||
+    left.skillId.localeCompare(right.skillId, localeTag)
+  );
+}
+
+export function compareSkillsByInstalls(
+  left: Pick<SkillEntry, "name" | "repo" | "skillId" | "rank" | "isRanked" | "installs">,
+  right: Pick<SkillEntry, "name" | "repo" | "skillId" | "rank" | "isRanked" | "installs">,
+  localeTag: string,
+): number {
+  return right.installs - left.installs || compareSkillsByRank(left, right, localeTag);
+}
+
 export const CATEGORIES = [
   "All",
   "Frontend",

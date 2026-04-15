@@ -4,6 +4,7 @@ export interface SkillEntry {
   skillId: string;
   repo: string;
   installs: number;
+  isRanked?: boolean;
 }
 
 export interface SkillDetail {

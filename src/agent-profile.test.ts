@@ -22,8 +22,19 @@ describe("agent-profile helpers", () => {
         capabilities: { execution: 5 },
         prompt_style: { autonomy: 5 },
         specialties: ["backend", "backend", "prompting"],
+        class_path: {
+          class_stage_1: "engineering",
+          class_stage_2: "backend",
+          class_stage_3: "platform",
+        },
+        promotion_policy: {
+          from_role: "junior",
+          to_role: "senior",
+          auto_promote_at_xp: 300,
+          team_leader_manual: true,
+        },
       },
-      "junior",
+      "intern",
     );
 
     expect(profile.role_template).toBe("junior");
@@ -32,6 +43,17 @@ describe("agent-profile helpers", () => {
     expect(profile.capabilities.architecture).toBe(2);
     expect(profile.prompt_style.autonomy).toBe(5);
     expect(profile.specialties).toEqual(["backend", "prompting"]);
+    expect(profile.class_path).toEqual({
+      class_stage_1: "engineering",
+      class_stage_2: "backend",
+      class_stage_3: "platform",
+    });
+    expect(profile.promotion_policy).toEqual({
+      from_role: "junior",
+      to_role: "senior",
+      auto_promote_at_xp: 300,
+      team_leader_manual: true,
+    });
   });
 
   it("maps xp to the recommended growth tier thresholds", () => {
@@ -48,6 +70,12 @@ describe("agent-profile helpers", () => {
         ...createPresetAgentProfile("senior"),
         specialties: ["backend", "orchestration"],
         custom_prompt_override: "Always propose the cleanest implementation.",
+        class_path: ["engineering", "backend", "platform"],
+        promotion_policy: {
+          from_role: "junior",
+          to_role: "senior",
+          auto_promote_at_xp: 300,
+        },
       },
       workflowProfile: {
         role: "reviewer",
@@ -60,6 +88,8 @@ describe("agent-profile helpers", () => {
 
     expect(preview).toContain("Role template: Senior");
     expect(preview).toContain("2x role: Reviewer");
+    expect(preview).toContain("Class path: engineering > backend > platform");
+    expect(preview).toContain("Promotion policy: junior -> senior @xp>=300");
     expect(preview).toContain("Specialties: backend, orchestration");
     expect(preview).toContain("Review lenses: security, performance");
     expect(preview).toContain("Review depth: Force 2-pass");

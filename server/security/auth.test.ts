@@ -1,8 +1,8 @@
-import express from "express";
-import request from "supertest";
+import express, { type Request, type Response } from "express";
 import type { IncomingMessage } from "node:http";
+import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
-import type { Request, Response } from "express";
+
 import { SESSION_AUTH_TOKEN, SESSION_COOKIE_NAME } from "../config/runtime.ts";
 import {
   bearerToken,
@@ -46,7 +46,7 @@ function mockRequest(headers: Record<string, string | undefined>): Request {
 }
 
 describe("auth helpers", () => {
-  it("loopback 판별이 정확하다", () => {
+  it("detects loopback hosts and addresses", () => {
     expect(isLoopbackHostname("localhost")).toBe(true);
     expect(isLoopbackHostname("127.0.0.1")).toBe(true);
     expect(isLoopbackHostname("example.com")).toBe(false);
@@ -59,7 +59,7 @@ describe("auth helpers", () => {
     expect(isLoopbackRequest({ socket: { remoteAddress: "10.1.2.3" } })).toBe(false);
   });
 
-  it("쿠키/토큰 파싱과 인증 판별이 동작한다", () => {
+  it("parses bearer tokens, cookies, and authentication", () => {
     const reqWithBearer = mockRequest({
       authorization: `Bearer ${SESSION_AUTH_TOKEN}`,
     });
@@ -80,7 +80,7 @@ describe("auth helpers", () => {
     });
   });
 
-  it("origin/path/secure-cookie 규칙을 판별한다", () => {
+  it("handles trusted origins, public paths, and secure cookie rules", () => {
     expect(isTrustedOrigin("http://localhost:8800")).toBe(true);
     expect(isTrustedOrigin("https://dev.ts.net")).toBe(true);
     expect(isTrustedOrigin("file://tmp/test")).toBe(false);
@@ -127,7 +127,7 @@ describe("auth helpers", () => {
     expect(isTrustedSessionBootstrapRequest(untrustedBootstrapReq)).toBe(false);
   });
 
-  it("session cookie 발급 시 append를 호출하고 중복 발급은 방지한다", () => {
+  it("issues a session cookie only once", () => {
     const append = vi.fn();
     const res = { append } as unknown as Response;
 
@@ -148,7 +148,7 @@ describe("auth helpers", () => {
     expect(append).not.toHaveBeenCalled();
   });
 
-  it("IncomingMessage 인증/원본 판별이 동작한다", () => {
+  it("handles IncomingMessage auth and trusted origins", () => {
     const incoming = {
       headers: {
         authorization: `Bearer ${SESSION_AUTH_TOKEN}`,
@@ -163,13 +163,13 @@ describe("auth helpers", () => {
     expect(isIncomingMessageOriginTrusted(incoming)).toBe(true);
   });
 
-  it("safeSecretEquals는 값이 같을 때만 true다", () => {
+  it("compares secrets safely", () => {
     expect(safeSecretEquals("abc123", "abc123")).toBe(true);
     expect(safeSecretEquals("abc123", "abc124")).toBe(false);
     expect(safeSecretEquals("short", "much-longer")).toBe(false);
   });
 
-  it("csrf / task-interrupt 제어 토큰 검증이 동작한다", () => {
+  it("validates csrf and task interrupt tokens", () => {
     const csrf = getCsrfToken();
     const req = {
       ...mockRequest({
@@ -196,7 +196,7 @@ describe("auth helpers", () => {
 });
 
 describe("installSecurityMiddleware", () => {
-  it("세션 발급 후 보호 API 접근을 허용한다", async () => {
+  it("issues a session cookie and protects non-public APIs", async () => {
     const app = express();
     installSecurityMiddleware(app);
     app.get("/api/protected", (_req, res) => {
@@ -211,5 +211,29 @@ describe("installSecurityMiddleware", () => {
     expect(sessionRes.body?.csrf_token).toBeTypeOf("string");
 
     await request(app).get("/api/protected").set("Cookie", String(cookieHeader)).expect(200, { ok: true });
+  });
+
+  it("protects /api/agents and /api/subagents/catalog until a session is established", async () => {
+    const app = express();
+    installSecurityMiddleware(app);
+    app.get("/api/agents", (_req, res) => {
+      res.json({ ok: true, scope: "agents" });
+    });
+    app.get("/api/subagents/catalog", (_req, res) => {
+      res.json({ ok: true, scope: "subagents" });
+    });
+
+    await request(app).get("/api/agents").expect(401);
+    await request(app).get("/api/subagents/catalog").expect(401);
+
+    const sessionRes = await request(app).get("/api/auth/session").expect(200);
+    const cookieHeader = sessionRes.headers["set-cookie"]?.[0];
+    expect(cookieHeader).toContain(`${SESSION_COOKIE_NAME}=`);
+
+    await request(app).get("/api/agents").set("Cookie", String(cookieHeader)).expect(200, { ok: true, scope: "agents" });
+    await request(app)
+      .get("/api/subagents/catalog")
+      .set("Cookie", String(cookieHeader))
+      .expect(200, { ok: true, scope: "subagents" });
   });
 });

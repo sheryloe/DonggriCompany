@@ -15,6 +15,8 @@ import {
 import type { Agent } from "../../types";
 import {
   categorize,
+  compareSkillsByInstalls,
+  compareSkillsByRank,
   formatInstalls,
   LEARN_PROVIDER_ORDER,
   LEARNED_PROVIDER_ORDER,
@@ -170,7 +172,9 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
     if (sortBy === "name") {
       result = [...result].sort((a, b) => a.name.localeCompare(b.name, localeTag));
     } else if (sortBy === "installs") {
-      result = [...result].sort((a, b) => b.installs - a.installs);
+      result = [...result].sort((a, b) => compareSkillsByInstalls(a, b, localeTag));
+    } else {
+      result = [...result].sort((a, b) => compareSkillsByRank(a, b, localeTag));
     }
 
     return result;

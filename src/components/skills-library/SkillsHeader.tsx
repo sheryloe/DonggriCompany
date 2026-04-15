@@ -38,10 +38,10 @@ export default function SkillsHeader({
           </h2>
           <p className="text-sm text-slate-400 mt-1">
             {t({
-              ko: "AI 에이전트 스킬 디렉토리 · skills.sh 실시간 데이터",
-              en: "AI agent skill directory · live skills.sh data",
-              ja: "AI エージェントスキルディレクトリ · skills.sh リアルタイムデータ",
-              zh: "AI 代理技能目录 · skills.sh 实时数据",
+              ko: "AI 에이전트 스킬 디렉토리 · skills.sh 전체 카탈로그",
+              en: "AI agent skill directory · full skills.sh catalog",
+              ja: "AI エージェントスキルディレクトリ · skills.sh 全体カタログ",
+              zh: "AI 代理技能目录 · skills.sh 全量目录",
             })}
           </p>
         </div>

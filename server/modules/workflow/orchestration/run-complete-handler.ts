@@ -6,6 +6,7 @@ import {
   resolveVideoArtifactSpecForTask,
 } from "../packs/video-artifact.ts";
 import { evaluateRemotionOnlyGateFromLogFiles } from "../packs/video-render-engine-gate.ts";
+import { upsertAgentGuideFile } from "../../routes/core/agents/agent-guide-files.ts";
 
 type CreateRunCompleteHandlerDeps = Record<string, any>;
 
@@ -289,13 +290,41 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
 
       if (finalExitCode === 0) {
         db.prepare(
-          "UPDATE agents SET stats_tasks_done = stats_tasks_done + 1, stats_xp = stats_xp + 10 WHERE id = ?",
+          `
+            UPDATE agents
+            SET
+              stats_tasks_done = stats_tasks_done + 1,
+              stats_xp = stats_xp + 10,
+              role = CASE
+                WHEN role = 'intern' THEN 'junior'
+                WHEN role = 'junior' AND (stats_xp + 10) >= 300 THEN 'senior'
+                ELSE role
+              END
+            WHERE id = ?
+          `,
         ).run(task.assigned_agent_id);
       }
 
       const agent = db.prepare("SELECT * FROM agents WHERE id = ?").get(task.assigned_agent_id) as
         | Record<string, unknown>
         | undefined;
+      if (agent && finalExitCode === 0) {
+        try {
+          upsertAgentGuideFile({
+            id: String(agent.id ?? task.assigned_agent_id),
+            name: String(agent.name ?? task.assigned_agent_id),
+            role: (agent.role as string | null | undefined) ?? null,
+            departmentId: (agent.department_id as string | null | undefined) ?? null,
+            workflowProfileJson: (agent.workflow_profile as string | null | undefined) ?? null,
+            agentProfileJson: (agent.agent_profile_json as string | null | undefined) ?? null,
+            statsTasksDone: Number(agent.stats_tasks_done ?? 0),
+            statsXp: Number(agent.stats_xp ?? 0),
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          appendTaskLog(taskId, "system", `Agent guide snapshot update skipped: ${msg}`);
+        }
+      }
       broadcast("agent_status", agent);
     }
 

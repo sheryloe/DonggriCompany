@@ -3,19 +3,91 @@ import type { SkillDetail, SkillEntry } from "./types.ts";
 
 const SKILLS_CACHE_TTL = 3600_000;
 const SKILL_DETAIL_CACHE_TTL = 3600_000;
+const SKILLS_SITE_URL = "https://skills.sh";
+const SKILLS_TRENDING_URL = `${SKILLS_SITE_URL}/trending`;
+const SKILLS_SITEMAP_URL = `${SKILLS_SITE_URL}/sitemap.xml`;
+
+const RESERVED_ROOT_SEGMENTS = new Set([
+  ".well-known",
+  "api",
+  "audits",
+  "debug-security",
+  "docs",
+  "hot",
+  "internal",
+  "official",
+  "package",
+  "s",
+  "search",
+  "site",
+  "trending",
+]);
+
+type RawSkillFeedItem = {
+  source?: string;
+  skillId?: string;
+  name?: string;
+  installs?: number;
+};
 
 let cachedSkills: { data: SkillEntry[]; loadedAt: number } | null = null;
 const skillDetailCache = new Map<string, { data: SkillDetail; loadedAt: number }>();
 
-async function fetchSkillsFromSite(): Promise<SkillEntry[]> {
+function buildSkillKey(repo: string, skillId: string): string {
+  return `${repo}::${skillId}`;
+}
+
+function normalizeRepo(value: unknown): string {
+  return typeof value === "string" ? value.trim().replace(/^\/+|\/+$/g, "") : "";
+}
+
+function normalizeSkillId(value: unknown): string {
+  return typeof value === "string" ? value.trim().replace(/^\/+|\/+$/g, "") : "";
+}
+
+function compareSkillNames(left: Pick<SkillEntry, "name" | "repo" | "skillId">, right: Pick<SkillEntry, "name" | "repo" | "skillId">): number {
+  return (
+    left.name.localeCompare(right.name) ||
+    left.repo.localeCompare(right.repo) ||
+    left.skillId.localeCompare(right.skillId)
+  );
+}
+
+function compareRankedSkills(left: SkillEntry, right: SkillEntry): number {
+  return (
+    left.rank - right.rank ||
+    right.installs - left.installs ||
+    compareSkillNames(left, right)
+  );
+}
+
+function compareCatalogSkills(left: SkillEntry, right: SkillEntry): number {
+  const leftRanked = left.isRanked !== false;
+  const rightRanked = right.isRanked !== false;
+  if (leftRanked !== rightRanked) {
+    return leftRanked ? -1 : 1;
+  }
+  if (leftRanked && rightRanked) {
+    return compareRankedSkills(left, right);
+  }
+  return compareSkillNames(left, right);
+}
+
+async function fetchText(url: string): Promise<string> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
-    const resp = await fetch("https://skills.sh", { signal: controller.signal });
+    const resp = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
-    if (!resp.ok) return [];
-    const html = await resp.text();
+    if (!resp.ok) return "";
+    return await resp.text();
+  } catch {
+    return "";
+  }
+}
 
+export function extractInitialSkills(html: string): RawSkillFeedItem[] {
+  try {
     const anchor = html.indexOf("initialSkills");
     if (anchor === -1) return [];
     const bracketStart = html.indexOf(":[", anchor);
@@ -34,18 +106,91 @@ async function fetchSkillsFromSite(): Promise<SkillEntry[]> {
     }
 
     const raw = html.slice(arrStart, arrEnd).replace(/\\"/g, '"');
-    const items: Array<{ source?: string; skillId?: string; name?: string; installs?: number }> = JSON.parse(raw);
-
-    return items.map((obj, i) => ({
-      rank: i + 1,
-      name: obj.name ?? obj.skillId ?? "",
-      skillId: obj.skillId ?? obj.name ?? "",
-      repo: obj.source ?? "",
-      installs: typeof obj.installs === "number" ? obj.installs : 0,
-    }));
+    const items = JSON.parse(raw) as RawSkillFeedItem[];
+    return Array.isArray(items) ? items : [];
   } catch {
     return [];
   }
+}
+
+function buildRankedSkillEntries(items: RawSkillFeedItem[]): SkillEntry[] {
+  const ranked = new Map<string, SkillEntry>();
+
+  items.forEach((item, index) => {
+    const repo = normalizeRepo(item.source);
+    const skillId = normalizeSkillId(item.skillId ?? item.name);
+    if (!repo || !skillId) return;
+
+    const key = buildSkillKey(repo, skillId);
+    const next: SkillEntry = {
+      rank: index + 1,
+      name: normalizeSkillId(item.name) || skillId,
+      skillId,
+      repo,
+      installs: typeof item.installs === "number" ? item.installs : 0,
+      isRanked: true,
+    };
+    const current = ranked.get(key);
+    if (!current) {
+      ranked.set(key, next);
+      return;
+    }
+
+    if (next.rank < current.rank) {
+      current.rank = next.rank;
+    }
+    if (next.installs > current.installs) {
+      current.installs = next.installs;
+    }
+    if (current.name === current.skillId && next.name !== next.skillId) {
+      current.name = next.name;
+    }
+  });
+
+  return [...ranked.values()].sort(compareRankedSkills);
+}
+
+export function extractSkillsFromSitemap(xml: string): SkillEntry[] {
+  const catalog = new Map<string, SkillEntry>();
+  const matches = xml.matchAll(/<loc>(.*?)<\/loc>/g);
+
+  for (const match of matches) {
+    const rawLoc = decodeHtmlEntities(match[1] ?? "").trim();
+    if (!rawLoc) continue;
+
+    let url: URL;
+    try {
+      url = new URL(rawLoc);
+    } catch {
+      continue;
+    }
+    if (url.origin !== SKILLS_SITE_URL) continue;
+
+    const parts = url.pathname
+      .split("/")
+      .filter(Boolean)
+      .map((part) => decodeURIComponent(part));
+    if (parts.length < 3) continue;
+    if (RESERVED_ROOT_SEGMENTS.has(parts[0])) continue;
+
+    const repo = `${parts[0]}/${parts[1]}`;
+    const skillId = parts.slice(2).join("/");
+    if (!repo || !skillId) continue;
+
+    const key = buildSkillKey(repo, skillId);
+    if (catalog.has(key)) continue;
+
+    catalog.set(key, {
+      rank: 0,
+      name: parts[parts.length - 1] || skillId,
+      skillId,
+      repo,
+      installs: 0,
+      isRanked: false,
+    });
+  }
+
+  return [...catalog.values()].sort(compareSkillNames);
 }
 
 function decodeHtmlEntities(input: string): string {
@@ -65,6 +210,53 @@ function decodeHtmlEntities(input: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
     .replace(/&nbsp;/g, " ");
+}
+
+export function mergeSkillCatalog(input: {
+  sitemapSkills: SkillEntry[];
+  rankedSkills: SkillEntry[];
+}): SkillEntry[] {
+  const merged = new Map<string, SkillEntry>();
+
+  for (const skill of input.sitemapSkills) {
+    merged.set(buildSkillKey(skill.repo, skill.skillId), { ...skill, isRanked: false });
+  }
+
+  for (const skill of input.rankedSkills) {
+    const key = buildSkillKey(skill.repo, skill.skillId);
+    const current = merged.get(key);
+    if (!current) {
+      merged.set(key, { ...skill, isRanked: true });
+      continue;
+    }
+
+    current.name = current.name === current.skillId && skill.name !== skill.skillId ? skill.name : current.name;
+    current.installs = Math.max(current.installs, skill.installs);
+    current.rank = current.rank > 0 ? Math.min(current.rank, skill.rank) : skill.rank;
+    current.isRanked = true;
+  }
+
+  return [...merged.values()].sort(compareCatalogSkills);
+}
+
+async function fetchSkillsFromSite(): Promise<SkillEntry[]> {
+  const [sitemapXml, homeHtml, trendingHtml] = await Promise.all([
+    fetchText(SKILLS_SITEMAP_URL),
+    fetchText(SKILLS_SITE_URL),
+    fetchText(SKILLS_TRENDING_URL),
+  ]);
+
+  const rankedSkills = buildRankedSkillEntries([
+    ...extractInitialSkills(homeHtml),
+    ...extractInitialSkills(trendingHtml),
+  ]);
+  const sitemapSkills = extractSkillsFromSitemap(sitemapXml);
+
+  if (sitemapSkills.length === 0) {
+    return rankedSkills;
+  }
+
+  return mergeSkillCatalog({ sitemapSkills, rankedSkills });
 }
 
 function stripHtml(input: string): string {
@@ -222,7 +414,7 @@ export function registerSkillCatalogRoutes(ctx: RuntimeContext): void {
     if (skills.length > 0) {
       cachedSkills = { data: skills, loadedAt: Date.now() };
     }
-    res.json({ skills });
+    res.json({ skills: skills.length > 0 ? skills : cachedSkills?.data ?? [] });
   });
 
   app.get("/api/skills/detail", async (req, res) => {

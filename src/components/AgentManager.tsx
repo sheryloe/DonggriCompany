@@ -17,6 +17,7 @@ import AgentsTab from "./agent-manager/AgentsTab";
 import { BLANK, ICON_SPRITE_POOL } from "./agent-manager/constants";
 import DepartmentFormModal from "./agent-manager/DepartmentFormModal";
 import DepartmentsTab from "./agent-manager/DepartmentsTab";
+import SubagentsTab from "./agent-manager/SubagentsTab";
 import { StackedSpriteIcon } from "./agent-manager/EmojiPicker";
 import type { AgentManagerProps, FormData } from "./agent-manager/types";
 import { pickRandomSpritePair } from "./agent-manager/utils";
@@ -39,7 +40,7 @@ export default function AgentManager({
   const isIsolatedPack = officePackKey !== "development";
   const useDbBackedPack = isIsolatedPack && dbBackedOfficePack;
 
-  const [subTab, setSubTab] = useState<"agents" | "departments">("agents");
+  const [subTab, setSubTab] = useState<"agents" | "departments" | "subagents">("agents");
   const [search, setSearch] = useState("");
   const [deptTab, setDeptTab] = useState("all");
   const [modalAgent, setModalAgent] = useState<Agent | null>(null);
@@ -656,6 +657,7 @@ export default function AgentManager({
             icon: <StackedSpriteIcon sprites={randomIconSprites.tab} />,
           },
           { key: "departments" as const, label: tr("부서관리", "Departments"), icon: "🏢" },
+          { key: "subagents" as const, label: tr("서브에이전트", "Sub-agents"), icon: "🧩" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -714,6 +716,19 @@ export default function AgentManager({
           onDragOver={handleDeptDragOver}
           onDrop={handleDeptDrop}
           onDragEnd={clearDeptDragState}
+        />
+      )}
+
+      {subTab === "subagents" && (
+        <SubagentsTab
+          tr={tr}
+          locale={locale}
+          isKo={isKo}
+          departments={departments}
+          deptTab={deptTab}
+          setDeptTab={setDeptTab}
+          search={search}
+          setSearch={setSearch}
         />
       )}
 

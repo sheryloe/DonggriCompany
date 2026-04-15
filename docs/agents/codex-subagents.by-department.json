@@ -1,0 +1,1377 @@
+{
+  "sourceRepo": "VoltAgent/awesome-codex-subagents",
+  "sourceRef": "main",
+  "sourceUrl": "https://github.com/VoltAgent/awesome-codex-subagents",
+  "generatedAt": "2026-04-14T15:03:08.015Z",
+  "total": 136,
+  "departmentSummary": {
+    "planning": 25,
+    "dev": 73,
+    "design": 4,
+    "qa": 10,
+    "devsecops": 17,
+    "operations": 7
+  },
+  "agents": [
+    {
+      "name": "accessibility-tester",
+      "description": "Use when a task needs an accessibility audit of UI changes, interaction flows, or component behavior.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/accessibility-tester.toml",
+      "department": "design",
+      "class_stage_1": "design-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "accessibility-tester"
+    },
+    {
+      "name": "ad-security-reviewer",
+      "description": "Use when a task needs Active Directory security review across identity boundaries, delegation, GPO exposure, or directory hardening.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/ad-security-reviewer.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "ad-security-reviewer"
+    },
+    {
+      "name": "agent-installer",
+      "description": "Use when a task needs help selecting, copying, or organizing custom agent files from this repository into Codex agent directories.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/agent-installer.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "agent-installer"
+    },
+    {
+      "name": "agent-organizer",
+      "description": "Use when the parent agent needs help choosing subagents and dividing a larger task into clean delegated threads.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/agent-organizer.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "agent-organizer"
+    },
+    {
+      "name": "ai-engineer",
+      "description": "Use when a task needs implementation or debugging of model-backed application features, agent flows, or evaluation hooks.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/ai-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "ai-engineer"
+    },
+    {
+      "name": "angular-architect",
+      "description": "Use when a task needs Angular-specific help for component architecture, dependency injection, routing, signals, or enterprise application structure.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/angular-architect.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "angular-architect"
+    },
+    {
+      "name": "api-designer",
+      "description": "Use when a task needs API contract design, evolution planning, or compatibility review before implementation starts.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/api-designer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "api-designer"
+    },
+    {
+      "name": "api-documenter",
+      "description": "Use when a task needs consumer-facing API documentation generated from the real implementation, schema, and examples.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/api-documenter.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "api-documenter"
+    },
+    {
+      "name": "architect-reviewer",
+      "description": "Use when a task needs architectural review for coupling, system boundaries, long-term maintainability, or design coherence.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/architect-reviewer.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "architect-reviewer"
+    },
+    {
+      "name": "azure-infra-engineer",
+      "description": "Use when a task needs Azure-specific infrastructure review or implementation across resources, networking, identity, or automation.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/azure-infra-engineer.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "azure-infra-engineer"
+    },
+    {
+      "name": "backend-developer",
+      "description": "Use when a task needs scoped backend implementation or backend bug fixes after the owning path is known.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/backend-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "backend-developer"
+    },
+    {
+      "name": "blockchain-developer",
+      "description": "Use when a task needs blockchain or Web3 implementation and review across smart-contract integration, wallet flows, or transaction lifecycle handling.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/blockchain-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "blockchain-developer"
+    },
+    {
+      "name": "browser-debugger",
+      "description": "Use when a task needs browser-based reproduction, UI evidence gathering, or client-side debugging through a browser MCP server.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/browser-debugger.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "browser-debugger"
+    },
+    {
+      "name": "build-engineer",
+      "description": "Use when a task needs build-graph debugging, bundling fixes, compiler pipeline work, or CI build stabilization.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/build-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "build-engineer"
+    },
+    {
+      "name": "business-analyst",
+      "description": "Use when a task needs requirements clarified, scope normalized, or acceptance criteria extracted from messy inputs before engineering work starts.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/business-analyst.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "business-analyst"
+    },
+    {
+      "name": "chaos-engineer",
+      "description": "Use when a task needs resilience analysis for dependency failure, degraded modes, recovery behavior, or controlled fault-injection planning.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/chaos-engineer.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "chaos-engineer"
+    },
+    {
+      "name": "cli-developer",
+      "description": "Use when a task needs a command-line interface feature, UX review, argument parsing change, or shell-facing workflow improvement.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/cli-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "cli-developer"
+    },
+    {
+      "name": "cloud-architect",
+      "description": "Use when a task needs cloud architecture review across compute, storage, networking, reliability, or multi-service design.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/cloud-architect.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "cloud-architect"
+    },
+    {
+      "name": "code-mapper",
+      "description": "Use when the parent agent needs a high-confidence map of code paths, ownership boundaries, and execution flow before changes are made.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/code-mapper.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "code-mapper"
+    },
+    {
+      "name": "code-reviewer",
+      "description": "Use when a task needs a broader code-health review covering maintainability, design clarity, and risky implementation choices in addition to correctness.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/code-reviewer.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "code-reviewer"
+    },
+    {
+      "name": "competitive-analyst",
+      "description": "Use when a task needs a grounded comparison of tools, products, libraries, or implementation options.",
+      "upstreamCategory": "10-research-analysis",
+      "upstreamPath": "categories/10-research-analysis/competitive-analyst.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "research-and-analysis",
+      "class_stage_3": "competitive-analyst"
+    },
+    {
+      "name": "compliance-auditor",
+      "description": "Use when a task needs compliance-oriented review of controls, auditability, policy alignment, or evidence gaps in a regulated workflow.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/compliance-auditor.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "compliance-auditor"
+    },
+    {
+      "name": "content-marketer",
+      "description": "Use when a task needs product-adjacent content strategy or messaging that still has to stay grounded in real technical capabilities.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/content-marketer.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "content-marketer"
+    },
+    {
+      "name": "context-manager",
+      "description": "Use when a task needs a compact project context summary that other subagents can rely on before deeper work begins.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/context-manager.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "context-manager"
+    },
+    {
+      "name": "cpp-pro",
+      "description": "Use when a task needs C++ work involving performance-sensitive code, memory ownership, concurrency, or systems-level integration.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/cpp-pro.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "cpp-pro"
+    },
+    {
+      "name": "csharp-developer",
+      "description": "Use when a task needs C# or .NET application work involving services, APIs, async flows, or application architecture.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/csharp-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "csharp-developer"
+    },
+    {
+      "name": "customer-success-manager",
+      "description": "Use when a task needs support-pattern synthesis, adoption risk analysis, or customer-facing operational guidance from engineering context.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/customer-success-manager.toml",
+      "department": "operations",
+      "class_stage_1": "operations-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "customer-success-manager"
+    },
+    {
+      "name": "data-analyst",
+      "description": "Use when a task needs data interpretation, metric breakdown, trend explanation, or decision support from existing analytics outputs.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/data-analyst.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "data-analyst"
+    },
+    {
+      "name": "data-engineer",
+      "description": "Use when a task needs ETL, ingestion, transformation, warehouse, or data-pipeline implementation and debugging.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/data-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "data-engineer"
+    },
+    {
+      "name": "data-researcher",
+      "description": "Use when a task needs source gathering and synthesis around datasets, metrics, data pipelines, or evidence-backed quantitative questions.",
+      "upstreamCategory": "10-research-analysis",
+      "upstreamPath": "categories/10-research-analysis/data-researcher.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "research-and-analysis",
+      "class_stage_3": "data-researcher"
+    },
+    {
+      "name": "data-scientist",
+      "description": "Use when a task needs statistical reasoning, experiment interpretation, feature analysis, or model-oriented data exploration.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/data-scientist.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "data-scientist"
+    },
+    {
+      "name": "database-administrator",
+      "description": "Use when a task needs operational database administration review for availability, backups, recovery, permissions, or runtime health.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/database-administrator.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "database-administrator"
+    },
+    {
+      "name": "database-optimizer",
+      "description": "Use when a task needs database performance analysis for query plans, schema design, indexing, or data access patterns.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/database-optimizer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "database-optimizer"
+    },
+    {
+      "name": "debugger",
+      "description": "Use when a task needs deep bug isolation across code paths, stack traces, runtime behavior, or failing tests.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/debugger.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "debugger"
+    },
+    {
+      "name": "dependency-manager",
+      "description": "Use when a task needs dependency upgrades, package graph analysis, version-policy cleanup, or third-party library risk assessment.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/dependency-manager.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "dependency-manager"
+    },
+    {
+      "name": "deployment-engineer",
+      "description": "Use when a task needs deployment workflow changes, release strategy updates, or rollout and rollback safety analysis.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/deployment-engineer.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "deployment-engineer"
+    },
+    {
+      "name": "devops-engineer",
+      "description": "Use when a task needs CI, deployment pipeline, release automation, or environment configuration work.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/devops-engineer.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "devops-engineer"
+    },
+    {
+      "name": "devops-incident-responder",
+      "description": "Use when a task needs rapid operational triage across CI, deployments, infrastructure automation, and service delivery failures.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/devops-incident-responder.toml",
+      "department": "operations",
+      "class_stage_1": "operations-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "devops-incident-responder"
+    },
+    {
+      "name": "django-developer",
+      "description": "Use when a task needs Django-specific work across models, views, forms, ORM behavior, or admin and middleware flows.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/django-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "django-developer"
+    },
+    {
+      "name": "docker-expert",
+      "description": "Use when a task needs Dockerfile review, image optimization, multi-stage build fixes, or container runtime debugging.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/docker-expert.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "docker-expert"
+    },
+    {
+      "name": "docs-researcher",
+      "description": "Use when a task needs documentation-backed verification of APIs, version-specific behavior, or framework options.",
+      "upstreamCategory": "10-research-analysis",
+      "upstreamPath": "categories/10-research-analysis/docs-researcher.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "research-and-analysis",
+      "class_stage_3": "docs-researcher"
+    },
+    {
+      "name": "documentation-engineer",
+      "description": "Use when a task needs technical documentation that must stay faithful to current code, tooling, and operator workflows.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/documentation-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "documentation-engineer"
+    },
+    {
+      "name": "dotnet-core-expert",
+      "description": "Use when a task needs modern .NET and ASP.NET Core expertise for APIs, hosting, middleware, or cross-platform application behavior.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/dotnet-core-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "dotnet-core-expert"
+    },
+    {
+      "name": "dotnet-framework-4.8-expert",
+      "description": "Use when a task needs .NET Framework 4.8 expertise for legacy enterprise applications, compatibility constraints, or Windows-bound integrations.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/dotnet-framework-4.8-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "dotnet-framework-4.8-expert"
+    },
+    {
+      "name": "dx-optimizer",
+      "description": "Use when a task needs developer-experience improvements in setup time, local workflows, feedback loops, or day-to-day tooling friction.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/dx-optimizer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "dx-optimizer"
+    },
+    {
+      "name": "electron-pro",
+      "description": "Use when a task needs Electron-specific implementation or debugging across main/renderer/preload boundaries, packaging, and desktop runtime behavior.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/electron-pro.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "electron-pro"
+    },
+    {
+      "name": "elixir-expert",
+      "description": "Use when a task needs Elixir and OTP expertise for processes, supervision, fault tolerance, or Phoenix application behavior.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/elixir-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "elixir-expert"
+    },
+    {
+      "name": "embedded-systems",
+      "description": "Use when a task needs embedded or hardware-adjacent work involving device constraints, firmware boundaries, timing, or low-level integration.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/embedded-systems.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "embedded-systems"
+    },
+    {
+      "name": "erlang-expert",
+      "description": "Use when a task needs Erlang/OTP and rebar3 expertise for BEAM processes, testing, releases, upgrades, or distributed runtime behavior.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/erlang-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "erlang-expert"
+    },
+    {
+      "name": "error-coordinator",
+      "description": "Use when multiple errors or symptoms need to be grouped, prioritized, and assigned to the right debugging or review agents.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/error-coordinator.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "error-coordinator"
+    },
+    {
+      "name": "error-detective",
+      "description": "Use when a task needs log, exception, or stack-trace analysis to identify the most probable failure source quickly.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/error-detective.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "error-detective"
+    },
+    {
+      "name": "fintech-engineer",
+      "description": "Use when a task needs financial systems engineering across ledgers, reconciliation, transfers, settlement, or compliance-sensitive transactional flows.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/fintech-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "fintech-engineer"
+    },
+    {
+      "name": "flutter-expert",
+      "description": "Use when a task needs Flutter expertise for widget behavior, state management, rendering issues, or mobile cross-platform implementation.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/flutter-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "flutter-expert"
+    },
+    {
+      "name": "frontend-developer",
+      "description": "Use when a task needs scoped frontend implementation or UI bug fixes with production-level behavior and quality.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/frontend-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "frontend-developer"
+    },
+    {
+      "name": "fullstack-developer",
+      "description": "Use when one bounded feature or bug spans frontend and backend and a single worker should own the entire path.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/fullstack-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "fullstack-developer"
+    },
+    {
+      "name": "game-developer",
+      "description": "Use when a task needs game-specific implementation or debugging involving gameplay systems, rendering loops, asset flow, or player-state behavior.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/game-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "game-developer"
+    },
+    {
+      "name": "git-workflow-manager",
+      "description": "Use when a task needs help with branching strategy, merge flow, release branching, or repository collaboration conventions.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/git-workflow-manager.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "git-workflow-manager"
+    },
+    {
+      "name": "golang-pro",
+      "description": "Use when a task needs Go expertise for concurrency, service implementation, interfaces, tooling, or performance-sensitive backend paths.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/golang-pro.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "golang-pro"
+    },
+    {
+      "name": "graphql-architect",
+      "description": "Use when a task needs GraphQL schema evolution, resolver architecture, federation design, or distributed graph performance/security review.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/graphql-architect.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "graphql-architect"
+    },
+    {
+      "name": "incident-responder",
+      "description": "Use when a task needs broad production incident triage, containment planning, or evidence-driven root cause analysis.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/incident-responder.toml",
+      "department": "operations",
+      "class_stage_1": "operations-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "incident-responder"
+    },
+    {
+      "name": "iot-engineer",
+      "description": "Use when a task needs IoT system work involving devices, telemetry, edge communication, or cloud-device coordination.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/iot-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "iot-engineer"
+    },
+    {
+      "name": "it-ops-orchestrator",
+      "description": "Use when a task needs coordinated operational planning across infrastructure, incident response, identity, endpoint, and admin workflows.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/it-ops-orchestrator.toml",
+      "department": "operations",
+      "class_stage_1": "operations-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "it-ops-orchestrator"
+    },
+    {
+      "name": "java-architect",
+      "description": "Use when a task needs Java application or service architecture help across framework boundaries, JVM behavior, or large codebase structure.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/java-architect.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "java-architect"
+    },
+    {
+      "name": "javascript-pro",
+      "description": "Use when a task needs JavaScript-focused work for runtime behavior, browser or Node execution, or application-level code that is not TypeScript-led.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/javascript-pro.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "javascript-pro"
+    },
+    {
+      "name": "knowledge-synthesizer",
+      "description": "Use when multiple agents have returned findings and the parent agent needs a distilled, non-redundant synthesis.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/knowledge-synthesizer.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "knowledge-synthesizer"
+    },
+    {
+      "name": "kotlin-specialist",
+      "description": "Use when a task needs Kotlin expertise for JVM applications, Android code, coroutines, or modern strongly typed service logic.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/kotlin-specialist.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "kotlin-specialist"
+    },
+    {
+      "name": "kubernetes-specialist",
+      "description": "Use when a task needs Kubernetes manifest review, rollout safety analysis, or cluster workload debugging.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/kubernetes-specialist.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "kubernetes-specialist"
+    },
+    {
+      "name": "laravel-specialist",
+      "description": "Use when a task needs Laravel-specific work across routing, Eloquent, queues, validation, or application structure.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/laravel-specialist.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "laravel-specialist"
+    },
+    {
+      "name": "legacy-modernizer",
+      "description": "Use when a task needs a modernization path for older code, frameworks, or architecture without losing behavioral safety.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/legacy-modernizer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "legacy-modernizer"
+    },
+    {
+      "name": "legal-advisor",
+      "description": "Use when a task needs legal-risk spotting in product or engineering behavior, especially around terms, data handling, or externally visible commitments.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/legal-advisor.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "legal-advisor"
+    },
+    {
+      "name": "llm-architect",
+      "description": "Use when a task needs architecture review for prompts, tool use, retrieval, evaluation, or multi-step LLM workflows.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/llm-architect.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "llm-architect"
+    },
+    {
+      "name": "m365-admin",
+      "description": "Use when a task needs Microsoft 365 administration help across Exchange Online, Teams, SharePoint, identity, or tenant-level automation.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/m365-admin.toml",
+      "department": "operations",
+      "class_stage_1": "operations-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "m365-admin"
+    },
+    {
+      "name": "machine-learning-engineer",
+      "description": "Use when a task needs ML system implementation work across training pipelines, feature flow, model serving, or inference integration.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/machine-learning-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "machine-learning-engineer"
+    },
+    {
+      "name": "market-researcher",
+      "description": "Use when a task needs market landscape, positioning, or demand-side research tied to a technical product or category.",
+      "upstreamCategory": "10-research-analysis",
+      "upstreamPath": "categories/10-research-analysis/market-researcher.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "research-and-analysis",
+      "class_stage_3": "market-researcher"
+    },
+    {
+      "name": "mcp-developer",
+      "description": "Use when a task needs work on MCP servers, MCP clients, tool wiring, or protocol-aware integrations.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/mcp-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "mcp-developer"
+    },
+    {
+      "name": "microservices-architect",
+      "description": "Use when a task needs service-boundary design, inter-service contract review, or distributed-system architecture decisions.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/microservices-architect.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "microservices-architect"
+    },
+    {
+      "name": "ml-engineer",
+      "description": "Use when a task needs practical machine learning implementation across feature engineering, inference wiring, and model-backed application logic.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/ml-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "ml-engineer"
+    },
+    {
+      "name": "mlops-engineer",
+      "description": "Use when a task needs model deployment, registry, pipeline, monitoring, or environment orchestration for machine learning systems.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/mlops-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "mlops-engineer"
+    },
+    {
+      "name": "mobile-app-developer",
+      "description": "Use when a task needs app-level mobile product work across screens, state, API integration, and release-sensitive mobile behavior.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/mobile-app-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "mobile-app-developer"
+    },
+    {
+      "name": "mobile-developer",
+      "description": "Use when a task needs mobile implementation or debugging across app lifecycle, API integration, and device/platform-specific UX constraints.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/mobile-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "mobile-developer"
+    },
+    {
+      "name": "multi-agent-coordinator",
+      "description": "Use when a task needs a concrete multi-agent plan with clear role separation, dependencies, and result integration.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/multi-agent-coordinator.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "multi-agent-coordinator"
+    },
+    {
+      "name": "network-engineer",
+      "description": "Use when a task needs network-path analysis, service connectivity debugging, load-balancer review, or infrastructure network design input.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/network-engineer.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "network-engineer"
+    },
+    {
+      "name": "nextjs-developer",
+      "description": "Use when a task needs Next.js-specific work across routing, rendering modes, server actions, data fetching, or deployment-sensitive frontend behavior.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/nextjs-developer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "nextjs-developer"
+    },
+    {
+      "name": "nlp-engineer",
+      "description": "Use when a task needs NLP-specific implementation or analysis involving text processing, embeddings, ranking, or language-model-adjacent pipelines.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/nlp-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "nlp-engineer"
+    },
+    {
+      "name": "payment-integration",
+      "description": "Use when a task needs payment-flow review or implementation for checkout, idempotency, webhooks, retries, or settlement state handling.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/payment-integration.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "payment-integration"
+    },
+    {
+      "name": "penetration-tester",
+      "description": "Use when a task needs adversarial review of an application path for exploitability, abuse cases, or practical attack surface analysis.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/penetration-tester.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "penetration-tester"
+    },
+    {
+      "name": "performance-engineer",
+      "description": "Use when a task needs performance investigation for slow requests, hot paths, rendering regressions, or scalability bottlenecks.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/performance-engineer.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "performance-engineer"
+    },
+    {
+      "name": "performance-monitor",
+      "description": "Use when a task needs ongoing performance-signal interpretation across build, runtime, or operational metrics before deeper optimization starts.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/performance-monitor.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "performance-monitor"
+    },
+    {
+      "name": "php-pro",
+      "description": "Use when a task needs PHP expertise for application logic, framework integration, runtime debugging, or server-side code evolution.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/php-pro.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "php-pro"
+    },
+    {
+      "name": "platform-engineer",
+      "description": "Use when a task needs internal platform, golden-path, or self-service infrastructure design for developers.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/platform-engineer.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "platform-engineer"
+    },
+    {
+      "name": "postgres-pro",
+      "description": "Use when a task needs PostgreSQL-specific expertise for schema design, performance behavior, locking, or operational database features.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/postgres-pro.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "postgres-pro"
+    },
+    {
+      "name": "powershell-5.1-expert",
+      "description": "Use when a task needs Windows PowerShell 5.1 expertise for legacy automation, full .NET Framework interop, or Windows administration scripts.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/powershell-5.1-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "powershell-5.1-expert"
+    },
+    {
+      "name": "powershell-7-expert",
+      "description": "Use when a task needs modern PowerShell 7 expertise for cross-platform automation, scripting, or .NET-based operational tooling.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/powershell-7-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "powershell-7-expert"
+    },
+    {
+      "name": "powershell-module-architect",
+      "description": "Use when a task needs PowerShell module structure, command design, packaging, or profile architecture work.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/powershell-module-architect.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "powershell-module-architect"
+    },
+    {
+      "name": "powershell-security-hardening",
+      "description": "Use when a task needs PowerShell-focused hardening across script safety, admin automation, execution controls, or Windows security posture.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/powershell-security-hardening.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "powershell-security-hardening"
+    },
+    {
+      "name": "powershell-ui-architect",
+      "description": "Use when a task needs PowerShell-based UI work for terminals, forms, WPF, or admin-oriented interactive tooling.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/powershell-ui-architect.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "powershell-ui-architect"
+    },
+    {
+      "name": "product-manager",
+      "description": "Use when a task needs product framing, prioritization, or feature-shaping based on engineering reality and user impact.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/product-manager.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "product-manager"
+    },
+    {
+      "name": "project-manager",
+      "description": "Use when a task needs dependency mapping, milestone planning, sequencing, or delivery-risk coordination across multiple workstreams.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/project-manager.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "project-manager"
+    },
+    {
+      "name": "prompt-engineer",
+      "description": "Use when a task needs prompt revision, instruction design, eval-oriented prompt comparison, or prompt-output contract tightening.",
+      "upstreamCategory": "05-data-ai",
+      "upstreamPath": "categories/05-data-ai/prompt-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "data-and-ai",
+      "class_stage_3": "prompt-engineer"
+    },
+    {
+      "name": "python-pro",
+      "description": "Use when a task needs a Python-focused subagent for runtime behavior, packaging, typing, testing, or framework-adjacent implementation.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/python-pro.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "python-pro"
+    },
+    {
+      "name": "qa-expert",
+      "description": "Use when a task needs test strategy, acceptance coverage planning, or risk-based QA guidance for a feature or release.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/qa-expert.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "qa-expert"
+    },
+    {
+      "name": "quant-analyst",
+      "description": "Use when a task needs quantitative analysis of models, strategies, simulations, or numeric decision logic.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/quant-analyst.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "quant-analyst"
+    },
+    {
+      "name": "rails-expert",
+      "description": "Use when a task needs Ruby on Rails expertise for models, controllers, jobs, callbacks, or convention-driven application changes.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/rails-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "rails-expert"
+    },
+    {
+      "name": "react-specialist",
+      "description": "Use when a task needs a React-focused agent for component behavior, state flow, rendering bugs, or modern React patterns.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/react-specialist.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "react-specialist"
+    },
+    {
+      "name": "refactoring-specialist",
+      "description": "Use when a task needs a low-risk structural refactor that preserves behavior while improving readability, modularity, or maintainability.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/refactoring-specialist.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "refactoring-specialist"
+    },
+    {
+      "name": "research-analyst",
+      "description": "Use when a task needs a structured investigation of a technical topic, implementation approach, or design question.",
+      "upstreamCategory": "10-research-analysis",
+      "upstreamPath": "categories/10-research-analysis/research-analyst.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "research-and-analysis",
+      "class_stage_3": "research-analyst"
+    },
+    {
+      "name": "reviewer",
+      "description": "Use when a task needs PR-style review focused on correctness, security, behavior regressions, and missing tests.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/reviewer.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "reviewer"
+    },
+    {
+      "name": "risk-manager",
+      "description": "Use when a task needs explicit risk analysis for product, operational, financial, or architectural decisions.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/risk-manager.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "risk-manager"
+    },
+    {
+      "name": "rust-engineer",
+      "description": "Use when a task needs Rust expertise for ownership-heavy systems code, async runtime behavior, or performance-sensitive implementation.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/rust-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "rust-engineer"
+    },
+    {
+      "name": "sales-engineer",
+      "description": "Use when a task needs technically accurate solution positioning, customer-question handling, or implementation tradeoff explanation for pre-sales contexts.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/sales-engineer.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "sales-engineer"
+    },
+    {
+      "name": "scrum-master",
+      "description": "Use when a task needs process facilitation, iteration planning, or workflow friction analysis for an engineering team.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/scrum-master.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "scrum-master"
+    },
+    {
+      "name": "search-specialist",
+      "description": "Use when a task needs fast, high-signal searching of the codebase or external sources before deeper analysis begins.",
+      "upstreamCategory": "10-research-analysis",
+      "upstreamPath": "categories/10-research-analysis/search-specialist.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "research-and-analysis",
+      "class_stage_3": "search-specialist"
+    },
+    {
+      "name": "security-auditor",
+      "description": "Use when a task needs focused security review of code, auth flows, secrets handling, input validation, or infrastructure configuration.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/security-auditor.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "security-auditor"
+    },
+    {
+      "name": "security-engineer",
+      "description": "Use when a task needs infrastructure and platform security engineering across IAM, secrets, network controls, or hardening work.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/security-engineer.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "security-engineer"
+    },
+    {
+      "name": "seo-specialist",
+      "description": "Use when a task needs search-focused technical review across crawlability, metadata, rendering, information architecture, or content discoverability.",
+      "upstreamCategory": "07-specialized-domains",
+      "upstreamPath": "categories/07-specialized-domains/seo-specialist.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "domain-specialists",
+      "class_stage_3": "seo-specialist"
+    },
+    {
+      "name": "slack-expert",
+      "description": "Use when a task needs Slack platform work involving bots, interactivity, events, workflows, or Slack-specific integration behavior.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/slack-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "slack-expert"
+    },
+    {
+      "name": "spring-boot-engineer",
+      "description": "Use when a task needs Spring Boot expertise for service behavior, configuration, data access, or enterprise API implementation.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/spring-boot-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "spring-boot-engineer"
+    },
+    {
+      "name": "sql-pro",
+      "description": "Use when a task needs SQL query design, query review, schema-aware debugging, or database migration analysis.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/sql-pro.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "sql-pro"
+    },
+    {
+      "name": "sre-engineer",
+      "description": "Use when a task needs reliability engineering work involving SLOs, alerting, error budgets, operational safety, or service resilience.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/sre-engineer.toml",
+      "department": "operations",
+      "class_stage_1": "operations-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "sre-engineer"
+    },
+    {
+      "name": "swift-expert",
+      "description": "Use when a task needs Swift expertise for iOS or macOS code, async flows, Apple platform APIs, or strongly typed application logic.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/swift-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "swift-expert"
+    },
+    {
+      "name": "task-distributor",
+      "description": "Use when a broad task needs to be broken into concrete sub-tasks with clear boundaries for multiple agents or contributors.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/task-distributor.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "task-distributor"
+    },
+    {
+      "name": "technical-writer",
+      "description": "Use when a task needs release notes, migration notes, onboarding material, or developer-facing prose derived from real code changes.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/technical-writer.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "technical-writer"
+    },
+    {
+      "name": "terraform-engineer",
+      "description": "Use when a task needs Terraform module design, plan review, state-aware change analysis, or IaC refactoring.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/terraform-engineer.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "terraform-engineer"
+    },
+    {
+      "name": "terragrunt-expert",
+      "description": "Use when a task needs Terragrunt-specific help for module orchestration, environment layering, dependency wiring, or DRY infrastructure structure.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/terragrunt-expert.toml",
+      "department": "devsecops",
+      "class_stage_1": "devsecops-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "terragrunt-expert"
+    },
+    {
+      "name": "test-automator",
+      "description": "Use when a task needs implementation of automated tests, test harness improvements, or targeted regression coverage.",
+      "upstreamCategory": "04-quality-security",
+      "upstreamPath": "categories/04-quality-security/test-automator.toml",
+      "department": "qa",
+      "class_stage_1": "quality-core",
+      "class_stage_2": "quality-and-security",
+      "class_stage_3": "test-automator"
+    },
+    {
+      "name": "tooling-engineer",
+      "description": "Use when a task needs internal developer tooling, scripts, automation glue, or workflow support utilities.",
+      "upstreamCategory": "06-developer-experience",
+      "upstreamPath": "categories/06-developer-experience/tooling-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "developer-experience",
+      "class_stage_3": "tooling-engineer"
+    },
+    {
+      "name": "trend-analyst",
+      "description": "Use when a task needs trend synthesis across technology shifts, adoption patterns, or emerging implementation directions.",
+      "upstreamCategory": "10-research-analysis",
+      "upstreamPath": "categories/10-research-analysis/trend-analyst.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "research-and-analysis",
+      "class_stage_3": "trend-analyst"
+    },
+    {
+      "name": "typescript-pro",
+      "description": "Use when a task needs strong TypeScript help for types, interfaces, refactors, or compiler-driven fixes.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/typescript-pro.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "typescript-pro"
+    },
+    {
+      "name": "ui-designer",
+      "description": "Use when a task needs concrete UI decisions, interaction design, and implementation-ready design guidance before or during development.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/ui-designer.toml",
+      "department": "design",
+      "class_stage_1": "design-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "ui-designer"
+    },
+    {
+      "name": "ui-fixer",
+      "description": "Use when a UI issue is already reproduced and the parent agent wants the smallest safe patch.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/ui-fixer.toml",
+      "department": "design",
+      "class_stage_1": "design-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "ui-fixer"
+    },
+    {
+      "name": "ux-researcher",
+      "description": "Use when a task needs UI feedback synthesized into actionable product and implementation guidance.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/ux-researcher.toml",
+      "department": "design",
+      "class_stage_1": "design-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "ux-researcher"
+    },
+    {
+      "name": "vue-expert",
+      "description": "Use when a task needs Vue expertise for component behavior, Composition API patterns, routing, or state and rendering issues.",
+      "upstreamCategory": "02-language-specialists",
+      "upstreamPath": "categories/02-language-specialists/vue-expert.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "language-specialists",
+      "class_stage_3": "vue-expert"
+    },
+    {
+      "name": "websocket-engineer",
+      "description": "Use when a task needs real-time transport and state work across WebSocket lifecycle, message contracts, and reconnect/failure behavior.",
+      "upstreamCategory": "01-core-development",
+      "upstreamPath": "categories/01-core-development/websocket-engineer.toml",
+      "department": "dev",
+      "class_stage_1": "development-core",
+      "class_stage_2": "core-engineering",
+      "class_stage_3": "websocket-engineer"
+    },
+    {
+      "name": "windows-infra-admin",
+      "description": "Use when a task needs Windows infrastructure administration across Active Directory, DNS, DHCP, GPO, or Windows automation.",
+      "upstreamCategory": "03-infrastructure",
+      "upstreamPath": "categories/03-infrastructure/windows-infra-admin.toml",
+      "department": "operations",
+      "class_stage_1": "operations-core",
+      "class_stage_2": "platform-infrastructure",
+      "class_stage_3": "windows-infra-admin"
+    },
+    {
+      "name": "wordpress-master",
+      "description": "Use when a task needs WordPress-specific implementation or debugging across themes, plugins, content architecture, or operational site behavior.",
+      "upstreamCategory": "08-business-product",
+      "upstreamPath": "categories/08-business-product/wordpress-master.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "business-and-product",
+      "class_stage_3": "wordpress-master"
+    },
+    {
+      "name": "workflow-orchestrator",
+      "description": "Use when the parent agent needs an explicit Codex subagent workflow for a complex task with multiple stages.",
+      "upstreamCategory": "09-meta-orchestration",
+      "upstreamPath": "categories/09-meta-orchestration/workflow-orchestrator.toml",
+      "department": "planning",
+      "class_stage_1": "planning-core",
+      "class_stage_2": "orchestration",
+      "class_stage_3": "workflow-orchestrator"
+    }
+  ]
+}

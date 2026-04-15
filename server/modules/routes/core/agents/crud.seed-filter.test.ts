@@ -1,5 +1,8 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { registerAgentCrudRoutes } from "./crud.ts";
 
@@ -122,6 +125,26 @@ function createHarness(): { db: DatabaseSync; routes: Map<string, RouteHandler> 
 }
 
 describe("agent CRUD seed filter", () => {
+  const previousGuideRoot = process.env.AGENT_GUIDE_ROOT;
+  let tempGuideRoot: string | null = null;
+
+  beforeEach(() => {
+    tempGuideRoot = fs.mkdtempSync(path.join(os.tmpdir(), "crud-agent-guides-"));
+    process.env.AGENT_GUIDE_ROOT = tempGuideRoot;
+  });
+
+  afterEach(() => {
+    if (tempGuideRoot) {
+      fs.rmSync(tempGuideRoot, { recursive: true, force: true });
+      tempGuideRoot = null;
+    }
+    if (previousGuideRoot === undefined) {
+      delete process.env.AGENT_GUIDE_ROOT;
+    } else {
+      process.env.AGENT_GUIDE_ROOT = previousGuideRoot;
+    }
+  });
+
   it("GET /api/agents 기본 응답은 seed 에이전트를 제외한다", () => {
     const { db, routes } = createHarness();
     try {
@@ -360,6 +383,108 @@ describe("agent CRUD seed filter", () => {
         | { agent_profile_json?: string | null }
         | undefined;
       expect(row?.agent_profile_json).toContain('"growth_tier":5');
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents rejects invalid roles", () => {
+    const { db, routes } = createHarness();
+    try {
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Invalid Role Agent",
+            role: "staff",
+            cli_provider: "claude",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect((res.payload as { error?: string }).error).toBe("invalid_role");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("PATCH /api/agents/:id rejects invalid roles", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare(
+        "INSERT INTO agents (id, name, role, cli_provider, status, created_at) VALUES (?, ?, 'junior', 'claude', 'idle', 1)",
+      ).run("agent-1", "Agent One");
+
+      const handler = routes.get("PATCH /api/agents/:id");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          params: { id: "agent-1" },
+          body: {
+            role: "staff",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect((res.payload as { error?: string }).error).toBe("invalid_role");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents normalizes intern role input to junior", () => {
+    const { db, routes } = createHarness();
+    try {
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Legacy Intern",
+            role: "intern",
+            cli_provider: "claude",
+            agent_profile: {
+              capabilities: {
+                execution: 5,
+              },
+            },
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(201);
+      const payload = res.payload as {
+        agent?: {
+          id?: string;
+          role?: string;
+          agent_profile?: {
+            role_template?: string;
+            capabilities?: { execution?: number };
+          };
+        };
+      };
+      expect(payload.agent?.role).toBe("junior");
+      expect(payload.agent?.agent_profile?.role_template).toBe("junior");
+      expect(payload.agent?.agent_profile?.capabilities?.execution).toBe(5);
+
+      const agentId = payload.agent?.id ?? "";
+      const row = db.prepare("SELECT role, agent_profile_json FROM agents WHERE id = ?").get(agentId) as
+        | { role?: string | null; agent_profile_json?: string | null }
+        | undefined;
+      expect(row?.role).toBe("junior");
+      expect(row?.agent_profile_json).toContain('"role_template":"junior"');
     } finally {
       db.close();
     }

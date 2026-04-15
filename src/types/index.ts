@@ -62,6 +62,23 @@ export interface AgentPromptStyle {
   collaboration: AgentLevelValue;
 }
 
+export interface AgentClassPath {
+  stage1?: string | null;
+  stage2?: string | null;
+  stage3?: string | null;
+  class_stage_1?: string | null;
+  class_stage_2?: string | null;
+  class_stage_3?: string | null;
+}
+
+export interface AgentPromotionPolicy {
+  auto_promote_at_xp?: number;
+  from_role?: string;
+  to_role?: string;
+  team_leader_manual?: boolean;
+  notes?: string;
+}
+
 export interface AgentProfile {
   role_template: AgentRole;
   growth_tier: AgentLevelValue;
@@ -69,6 +86,8 @@ export interface AgentProfile {
   prompt_style: AgentPromptStyle;
   specialties: string[];
   custom_prompt_override: string | null;
+  class_path?: AgentClassPath | string | string[] | null;
+  promotion_policy?: AgentPromotionPolicy | string | null;
 }
 
 export interface Agent {

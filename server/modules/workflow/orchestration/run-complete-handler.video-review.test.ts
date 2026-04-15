@@ -40,9 +40,12 @@ function createDb(): DatabaseSync {
       id TEXT PRIMARY KEY,
       name TEXT,
       name_ko TEXT,
+      role TEXT NOT NULL DEFAULT 'junior',
       status TEXT,
       current_task_id TEXT,
       department_id TEXT,
+      workflow_profile TEXT,
+      agent_profile_json TEXT,
       stats_tasks_done INTEGER DEFAULT 0,
       stats_xp INTEGER DEFAULT 0
     );

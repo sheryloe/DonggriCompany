@@ -21,7 +21,7 @@ const DEPARTMENTS: Department[] = [
     name_ko: "개발",
     name_ja: "開発",
     name_zh: "开发",
-    icon: "🛠️",
+    icon: "DEV",
     color: "#3b82f6",
     description: null,
     prompt: null,

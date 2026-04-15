@@ -2,7 +2,8 @@ import { createPresetAgentProfile } from "../../agent-profile";
 import type { AgentRole, CliProvider } from "../../types";
 import type { DeptForm, FormData } from "./types";
 
-export const ROLES: AgentRole[] = ["team_leader", "senior", "junior", "intern"];
+// Keep `intern` only as a legacy read alias. New and edited agents use the three active presets below.
+export const ROLES: AgentRole[] = ["team_leader", "senior", "junior"];
 
 export const CLI_PROVIDERS: CliProvider[] = [
   "claude",
@@ -37,28 +38,28 @@ export const STATUS_DOT: Record<string, string> = {
   idle: "bg-slate-500",
 };
 
-export const ICON_SPRITE_POOL = Array.from({ length: 44 }, (_, i) => i + 1);
+export const ICON_SPRITE_POOL = Array.from({ length: 44 }, (_, index) => index + 1);
 
 export const EMOJI_GROUPS: { label: string; labelEn: string; emojis: string[] }[] = [
   {
     label: "업무",
     labelEn: "Work",
-    emojis: ["💼", "🧠", "🧪", "📊", "📈", "🛠️", "🔧", "🧭", "🗂️", "🧾", "🧱", "⚙️", "🖥️", "📌", "📎", "📝"],
+    emojis: ["💼", "🧠", "🛠️", "📊", "📈", "💻", "🧪", "📝", "📌", "⚙️", "🔧", "🗂️", "📎", "🔍", "📡", "🧭"],
   },
   {
     label: "사람",
     labelEn: "People",
-    emojis: ["😀", "🙂", "😎", "🧑", "👩", "👨", "👩‍💻", "👨‍💻", "🧑‍💼", "👩‍🔧", "👨‍🔧", "🧑‍🎨", "👑", "🫡", "🤝", "🗣️"],
+    emojis: ["🙂", "😎", "🤝", "🧑‍💻", "👩‍💻", "🧑‍🔬", "👩‍🔬", "🧑‍🎨", "👩‍🎨", "🧑‍💼", "👩‍💼", "🧑‍🏫", "👩‍🏫", "🧑‍🚀", "🧑‍🔧", "🧑‍⚖️"],
   },
   {
     label: "오브젝트",
     labelEn: "Objects",
-    emojis: ["📦", "🎯", "🏷️", "🔒", "🔑", "🧷", "📍", "💡", "📚", "🧾", "🗄️", "🧰", "🛰️", "🔋", "🕹️", "⏱️"],
+    emojis: ["📦", "🗃️", "🗄️", "💡", "🧲", "🔒", "🧱", "🛰️", "⌨️", "🖥️", "🧰", "📱", "🎛️", "🔌", "📍", "🪪"],
   },
   {
     label: "자연",
     labelEn: "Nature",
-    emojis: ["🌿", "🌱", "🍀", "🌸", "🌞", "🌙", "⭐", "🌊", "⛰️", "🔥", "☁️", "🌧️", "🌈", "🌲", "🍃", "🌻"],
+    emojis: ["🌿", "🌱", "🌊", "🔥", "☁️", "🌙", "⭐", "🌞", "🪐", "🌧️", "⛰️", "🌸", "🍀", "🌲", "🌈", "❄️"],
   },
 ];
 
@@ -78,7 +79,7 @@ export const BLANK: FormData = {
   review_lenses_text: "general",
   two_pass_required: true,
   max_review_rounds: null,
-  avatar_emoji: "😀",
+  avatar_emoji: "🤖",
   sprite_number: null,
   personality: "",
   specialties_text: "",

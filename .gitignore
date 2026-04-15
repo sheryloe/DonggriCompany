@@ -53,6 +53,7 @@ tasks.md
 # Coverage / test artifacts
 coverage/
 .nyc_output/
+.tmp/
 
 # NPM auth
 .npmrc
@@ -69,6 +70,8 @@ Thumbs.db
 
 # Playwright artifacts
 test-results/
+extensions/donggri-vscode/out/
+extensions/donggri-vscode/coverage/
 
 # Codex optimization gate (2026-04-10)
 tools/ollama-image-local/.venv/

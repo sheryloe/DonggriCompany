@@ -137,7 +137,8 @@ export default function ProjectEditorPanel({
   onDelete,
 }: ProjectEditorPanelProps) {
   const githubAutoPathLocked = githubAutoCreateAvailable && githubAutoCreateEnabled && !projectPathCustomized;
-  const showPathTools = pathToolsVisible && (!githubAutoCreateAvailable || !githubAutoCreateEnabled || projectPathCustomized);
+  const showPathTools =
+    pathToolsVisible && (!githubAutoCreateAvailable || !githubAutoCreateEnabled || projectPathCustomized);
 
   return (
     <div className="min-w-0 space-y-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4">
@@ -160,7 +161,12 @@ export default function ProjectEditorPanel({
           <label className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-slate-200">
-                {t({ ko: "GitHub 저장소 자동 생성", en: "Auto-create GitHub repository", ja: "Auto-create GitHub repository", zh: "Auto-create GitHub repository" })}
+                {t({
+                  ko: "GitHub 저장소 자동 생성",
+                  en: "Auto-create GitHub repository",
+                  ja: "Auto-create GitHub repository",
+                  zh: "Auto-create GitHub repository",
+                })}
               </p>
               <p className="mt-1 text-[11px] text-slate-400">
                 {t({
@@ -244,11 +250,21 @@ export default function ProjectEditorPanel({
 
               <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
                 <p className="text-[11px] text-slate-400">
-                  {t({ ko: "기본 프로젝트 루트", en: "Default project root", ja: "Default project root", zh: "Default project root" })}
+                  {t({
+                    ko: "기본 프로젝트 루트",
+                    en: "Default project root",
+                    ja: "Default project root",
+                    zh: "Default project root",
+                  })}
                 </p>
                 <p className="mt-1 break-all text-xs text-slate-200">
                   {defaultProjectRootLoading
-                    ? t({ ko: "기본 루트를 확인하는 중...", en: "Resolving default root...", ja: "Resolving default root...", zh: "Resolving default root..." })
+                    ? t({
+                        ko: "기본 루트를 확인하는 중...",
+                        en: "Resolving default root...",
+                        ja: "Resolving default root...",
+                        zh: "Resolving default root...",
+                      })
                     : defaultProjectRoot || "~/Projects"}
                 </p>
               </div>
@@ -259,7 +275,12 @@ export default function ProjectEditorPanel({
 
       <label className="block text-xs text-slate-400">
         {githubAutoPathLocked
-          ? t({ ko: "프로젝트 경로 (자동)", en: "Project Path (Auto)", ja: "Project Path (Auto)", zh: "Project Path (Auto)" })
+          ? t({
+              ko: "프로젝트 경로 (자동)",
+              en: "Project Path (Auto)",
+              ja: "Project Path (Auto)",
+              zh: "Project Path (Auto)",
+            })
           : t({ ko: "프로젝트 경로", en: "Project Path", ja: "Project Path", zh: "Project Path" })}
         <input
           type="text"
@@ -334,7 +355,12 @@ export default function ProjectEditorPanel({
               }}
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {t({ ko: "인앱 폴더 탐색", en: "In-App Folder Browser", ja: "In-App Folder Browser", zh: "In-App Folder Browser" })}
+              {t({
+                ko: "인앱 폴더 탐색",
+                en: "In-App Folder Browser",
+                ja: "In-App Folder Browser",
+                zh: "In-App Folder Browser",
+              })}
             </button>
             <button
               type="button"
@@ -346,7 +372,12 @@ export default function ProjectEditorPanel({
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {pathSuggestionsOpen
-                ? t({ ko: "자동 경로 찾기 닫기", en: "Close Auto Finder", ja: "Close Auto Finder", zh: "Close Auto Finder" })
+                ? t({
+                    ko: "자동 경로 찾기 닫기",
+                    en: "Close Auto Finder",
+                    ja: "Close Auto Finder",
+                    zh: "Close Auto Finder",
+                  })
                 : t({ ko: "자동 경로 찾기", en: "Auto Path Finder", ja: "Auto Path Finder", zh: "Auto Path Finder" })}
             </button>
             <button
@@ -394,10 +425,25 @@ export default function ProjectEditorPanel({
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {nativePathPicking
-                ? t({ ko: "폴더 선택기 여는 중...", en: "Opening Manual Picker...", ja: "Opening Manual Picker...", zh: "Opening Manual Picker..." })
+                ? t({
+                    ko: "폴더 선택기 여는 중...",
+                    en: "Opening Manual Picker...",
+                    ja: "Opening Manual Picker...",
+                    zh: "Opening Manual Picker...",
+                  })
                 : nativePickerUnsupported
-                  ? t({ ko: "수동 경로 선택기 (사용 불가)", en: "Manual Path Finder (Unavailable)", ja: "Manual Path Finder (Unavailable)", zh: "Manual Path Finder (Unavailable)" })
-                  : t({ ko: "수동 경로 선택기", en: "Manual Path Finder", ja: "Manual Path Finder", zh: "Manual Path Finder" })}
+                  ? t({
+                      ko: "수동 경로 선택기 (사용 불가)",
+                      en: "Manual Path Finder (Unavailable)",
+                      ja: "Manual Path Finder (Unavailable)",
+                      zh: "Manual Path Finder (Unavailable)",
+                    })
+                  : t({
+                      ko: "수동 경로 선택기",
+                      en: "Manual Path Finder",
+                      ja: "Manual Path Finder",
+                      zh: "Manual Path Finder",
+                    })}
             </button>
           </div>
 
@@ -405,11 +451,21 @@ export default function ProjectEditorPanel({
             <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-800/70">
               {pathSuggestionsLoading ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({ ko: "경로 후보를 불러오는 중...", en: "Loading path suggestions...", ja: "Loading path suggestions...", zh: "Loading path suggestions..." })}
+                  {t({
+                    ko: "경로 후보를 불러오는 중...",
+                    en: "Loading path suggestions...",
+                    ja: "Loading path suggestions...",
+                    zh: "Loading path suggestions...",
+                  })}
                 </p>
               ) : pathSuggestions.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({ ko: "추천 경로가 없습니다. 직접 입력하세요.", en: "No suggested path. Enter one manually.", ja: "No suggested path. Enter one manually.", zh: "No suggested path. Enter one manually." })}
+                  {t({
+                    ko: "추천 경로가 없습니다. 직접 입력하세요.",
+                    en: "No suggested path. Enter one manually.",
+                    ja: "No suggested path. Enter one manually.",
+                    zh: "No suggested path. Enter one manually.",
+                  })}
                 </p>
               ) : (
                 pathSuggestions.map((candidate) => (
@@ -434,7 +490,12 @@ export default function ProjectEditorPanel({
 
           {missingPathPrompt && (
             <p className="text-xs text-amber-300">
-              {t({ ko: "이 경로는 아직 없습니다. 저장 시 생성 여부를 다시 확인합니다.", en: "This path does not exist yet. Saving will ask whether to create it.", ja: "This path does not exist yet. Saving will ask whether to create it.", zh: "This path does not exist yet. Saving will ask whether to create it." })}
+              {t({
+                ko: "이 경로는 아직 없습니다. 저장 시 생성 여부를 다시 확인합니다.",
+                en: "This path does not exist yet. Saving will ask whether to create it.",
+                ja: "This path does not exist yet. Saving will ask whether to create it.",
+                zh: "This path does not exist yet. Saving will ask whether to create it.",
+              })}
             </p>
           )}
         </div>

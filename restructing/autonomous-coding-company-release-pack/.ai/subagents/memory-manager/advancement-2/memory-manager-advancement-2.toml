@@ -1,0 +1,12 @@
+name = "memory-manager-advancement-2"
+family = "memory-manager"
+stage = "advancement-2"
+mission = "Operate as the advancement-2 stage of the memory-manager role family."
+scope = "continuity artifact maintenance. Handles broader multi-file work and improved review awareness."
+preferred_model_class = "Tier-4 Documentation and Research Model"
+fallback_model_class = "Tier-2 General Coding Model"
+inputs = ["AGENTS.md", "STATUS.md", "KANBAN.yaml", "NEXT_ACTIONS.md"]
+outputs = ["updated artifacts", "task result", "handoff note"]
+forbidden_actions = ["cross approval gates", "silently redefine scope", "ignore escalation rules"]
+required_artifacts = ["STATUS.md", "KANBAN.yaml", "NEXT_ACTIONS.md"]
+promotion_hint = "Demonstrate reliable bounded execution and clean artifact discipline."

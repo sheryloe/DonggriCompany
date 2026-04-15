@@ -31,6 +31,24 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     return scope.split(/[\s,]+/).includes("repo");
   }
 
+  function buildGitHubHeaders(token: string, extra?: Record<string, string>): Record<string, string> {
+    return {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(extra ?? {}),
+    };
+  }
+
+  function normalizeTargetPath(rawPath: unknown, fallbackRepoName = "repo"): string {
+    const candidate = typeof rawPath === "string" ? rawPath.trim() : "";
+    const defaultTarget = path.join(os.homedir(), "Projects", fallbackRepoName);
+    let targetPath = candidate || defaultTarget;
+    if (targetPath === "~") targetPath = os.homedir();
+    else if (targetPath.startsWith("~/")) targetPath = path.join(os.homedir(), targetPath.slice(2));
+    return path.resolve(targetPath);
+  }
+
   const activeClones = new Map<
     string,
     { status: string; progress: number; error?: string; targetPath: string; repoFullName: string }
@@ -51,9 +69,7 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
       try {
         const token = decryptSecret(row.access_token_enc);
         const authHeaders = {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
+          ...buildGitHubHeaders(token),
         };
 
         const probe = await fetch("https://api.github.com/user", {
@@ -115,11 +131,7 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
         url = `https://api.github.com/user/repos?per_page=${perPage}&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`;
       }
       const resp = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers: buildGitHubHeaders(token),
         signal: AbortSignal.timeout(15000),
       });
       if (!resp.ok) {
@@ -159,12 +171,7 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     try {
       const resp = await fetch("https://api.github.com/user/repos", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-          "Content-Type": "application/json",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers: buildGitHubHeaders(token, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           name: repoName,
           private: isPrivate,
@@ -225,6 +232,54 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     }
   });
 
+  app.delete("/api/github/repos/:owner/:repo", async (req, res) => {
+    const token = getGitHubAccessToken();
+    if (!token) return res.status(401).json({ error: "github_not_connected" });
+
+    const owner = String(req.params.owner || "").trim();
+    const repo = String(req.params.repo || "").trim();
+    if (!owner || !repo) return res.status(400).json({ error: "owner_and_repo_required" });
+
+    try {
+      const resp = await fetch(
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+        {
+          method: "DELETE",
+          headers: buildGitHubHeaders(token),
+          signal: AbortSignal.timeout(15000),
+        },
+      );
+      if (resp.status === 204) {
+        return res.json({ ok: true });
+      }
+
+      const responseText = await resp.text().catch(() => "");
+      let detail: unknown = responseText || null;
+      if (responseText) {
+        try {
+          detail = JSON.parse(responseText);
+        } catch {
+          detail = responseText;
+        }
+      }
+
+      if (resp.status === 404) {
+        return res.status(404).json({ error: "repo_not_found", detail });
+      }
+
+      return res.status(resp.status).json({
+        error: "github_repo_delete_failed",
+        status: resp.status,
+        detail,
+      });
+    } catch (err) {
+      return res.status(502).json({
+        error: "github_repo_delete_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
   app.get("/api/github/repos/:owner/:repo/branches", async (req, res) => {
     const pat = typeof req.headers["x-github-pat"] === "string" ? req.headers["x-github-pat"].trim() : null;
     const token = pat || getGitHubAccessToken();
@@ -236,9 +291,8 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
         `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=100`,
         {
           headers: {
+            ...buildGitHubHeaders(token),
             Authorization: authHeader,
-            Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
           },
           signal: AbortSignal.timeout(15000),
         },
@@ -260,9 +314,8 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
         `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
         {
           headers: {
+            ...buildGitHubHeaders(token),
             Authorization: authHeader,
-            Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
           },
           signal: AbortSignal.timeout(10000),
         },
@@ -289,10 +342,7 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     if (!owner || !repo) return res.status(400).json({ error: "owner_and_repo_required" });
 
     const repoFullName = `${owner}/${repo}`;
-    const defaultTarget = path.join(os.homedir(), "Projects", repo);
-    let targetPath = target_path?.trim() || defaultTarget;
-    if (targetPath === "~") targetPath = os.homedir();
-    else if (targetPath.startsWith("~/")) targetPath = path.join(os.homedir(), targetPath.slice(2));
+    const targetPath = normalizeTargetPath(target_path, String(repo));
 
     if (fs.existsSync(targetPath) && fs.existsSync(path.join(targetPath, ".git"))) {
       return res.json({ clone_id: null, already_exists: true, target_path: targetPath });
@@ -367,6 +417,44 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     });
 
     res.json({ clone_id: cloneId, target_path: targetPath });
+  });
+
+  app.delete("/api/github/local-path", (req, res) => {
+    const token = getGitHubAccessToken();
+    if (!token) return res.status(401).json({ error: "github_not_connected" });
+    const rawTargetPath = typeof req.body?.target_path === "string" ? req.body.target_path.trim() : "";
+    if (!rawTargetPath) return res.status(400).json({ error: "target_path_required" });
+    const targetPath = normalizeTargetPath(rawTargetPath);
+    if (!path.isAbsolute(targetPath)) {
+      return res.status(400).json({ error: "absolute_path_required" });
+    }
+    if (!fs.existsSync(targetPath)) {
+      return res.json({ ok: true, removed: false, target_path: targetPath });
+    }
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(targetPath);
+    } catch (err) {
+      return res.status(400).json({
+        error: "local_path_stat_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ error: "local_path_not_directory" });
+    }
+    if (!fs.existsSync(path.join(targetPath, ".git"))) {
+      return res.status(409).json({ error: "local_cleanup_requires_git_clone" });
+    }
+    try {
+      fs.rmSync(targetPath, { recursive: true, force: true });
+      return res.json({ ok: true, removed: true, target_path: targetPath });
+    } catch (err) {
+      return res.status(500).json({
+        error: "local_path_cleanup_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
   });
 
   app.get("/api/github/clone/:cloneId", (req, res) => {

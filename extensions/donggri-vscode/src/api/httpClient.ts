@@ -89,7 +89,11 @@ export class DonggriHttpClient {
         const response = await fetch(`${candidate}${path}`, init);
         this.captureSession(response);
 
-        if (!response.ok && [404, 405, 502, 503].includes(response.status) && candidate !== candidates[candidates.length - 1]) {
+        if (
+          !response.ok &&
+          [404, 405, 502, 503].includes(response.status) &&
+          candidate !== candidates[candidates.length - 1]
+        ) {
           lastResponse = response;
           continue;
         }
@@ -197,7 +201,7 @@ export class DonggriHttpClient {
       const body = (await response.json().catch(() => null)) as { error?: unknown; message?: unknown } | null;
       const code = typeof body?.error === "string" ? body.error : undefined;
       const message =
-        typeof body?.message === "string" ? body.message : code ?? `Donggri request failed (${response.status})`;
+        typeof body?.message === "string" ? body.message : (code ?? `Donggri request failed (${response.status})`);
       throw new DonggriHttpError(message, response.status, code, body);
     }
 

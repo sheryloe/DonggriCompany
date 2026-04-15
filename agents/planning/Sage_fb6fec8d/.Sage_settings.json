@@ -1,0 +1,13 @@
+{
+  "agent_id": "fb6fec8d-34f1-4659-9c59-58dcfb72f1dd",
+  "agent_name": "Sage",
+  "role": "team_leader",
+  "department_id": "planning",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:30:57.272Z"
+}

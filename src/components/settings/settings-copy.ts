@@ -99,7 +99,10 @@ export function getGatewaySettingsCopy(t: TFunction) {
     allowedChats: t({ ko: "허용된 채팅 수", en: "Allowed chats" }),
     polledChannels: t({ ko: "폴링 채널 수", en: "Polled channels" }),
     targetSession: t({ ko: "대상 세션", en: "Target Session" }),
-    noSavedSession: t({ ko: "저장된 세션이 없습니다. 먼저 채팅을 추가하세요.", en: "No saved session. Add a chat first." }),
+    noSavedSession: t({
+      ko: "저장된 세션이 없습니다. 먼저 채팅을 추가하세요.",
+      en: "No saved session. Add a chat first.",
+    }),
     testMessagePlaceholder: t({ ko: "테스트 메시지를 입력하세요...", en: "Type a test message..." }),
     transportNotReady: t({
       ko: "이 채널은 설정과 매핑은 가능하지만 직접 전송 런타임은 아직 준비되지 않았습니다.",
@@ -114,7 +117,10 @@ export function getGatewaySettingsCopy(t: TFunction) {
     tokenRequired: t({ ko: "토큰을 입력해 주세요.", en: "Please enter a token." }),
     chatNameRequired: t({ ko: "채팅 이름을 입력해 주세요.", en: "Please enter a chat name." }),
     targetIdRequired: t({ ko: "채널 또는 대상 ID를 입력해 주세요.", en: "Please enter a channel or target ID." }),
-    saveChatFailed: t({ ko: "채팅 저장에 실패했습니다. 다시 시도해 주세요.", en: "Failed to save chat. Please try again." }),
+    saveChatFailed: t({
+      ko: "채팅 저장에 실패했습니다. 다시 시도해 주세요.",
+      en: "Failed to save chat. Please try again.",
+    }),
     runtimeSessions: t({ ko: "런타임 세션", en: "Runtime Sessions" }),
   };
 }

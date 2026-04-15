@@ -1,14 +1,48 @@
 import * as vscode from "vscode";
 import { registerDonggriChatParticipant } from "./chat";
-import { isDonggriConfigChange } from "./config";
+import {
+  clearDonggriApiToken,
+  initializeDonggriServerConfig,
+  isDonggriConfigChange,
+  setDonggriApiToken,
+} from "./config";
 import { DonggriExtensionController } from "./controller";
 import { registerDonggriTools } from "./tools";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  await initializeDonggriServerConfig(context);
   const controller = new DonggriExtensionController(context);
   context.subscriptions.push(controller);
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("donggri.setApiToken", async () => {
+      const token = await vscode.window.showInputBox({
+        prompt: "Donggri API token",
+        password: true,
+        ignoreFocusOut: true,
+      });
+      if (token === undefined) {
+        return;
+      }
+      await setDonggriApiToken(context, token);
+      await controller.refreshState(false);
+      await controller.wsClient.connect();
+      void vscode.window.showInformationMessage("Donggri API token saved in Secret Storage.");
+    }),
+    vscode.commands.registerCommand("donggri.clearApiToken", async () => {
+      const choice = await vscode.window.showWarningMessage(
+        "Clear stored Donggri API token?",
+        { modal: true },
+        "Clear",
+      );
+      if (choice !== "Clear") {
+        return;
+      }
+      await clearDonggriApiToken(context);
+      await controller.refreshState(false);
+      await controller.wsClient.connect();
+      void vscode.window.showInformationMessage("Donggri API token cleared.");
+    }),
     vscode.commands.registerCommand("donggri.bindProject", async () => {
       await controller.bindProject(true);
       await controller.refreshState(false);

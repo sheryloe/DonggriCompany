@@ -1,0 +1,13 @@
+project:
+  key: SAMPLE
+  name: Sample Project
+board:
+  lanes:
+    backlog: []
+    ready: []
+    in_progress: []
+    review: []
+    qa: []
+    blocked: []
+    done: []
+cards: []

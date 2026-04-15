@@ -1,6 +1,8 @@
 ﻿import { useMemo, useState } from "react";
 import type { OfficeExecutionProvider } from "../../api";
 import { withCliModelFallback } from "../../app/cli-model-fallbacks";
+import type { CliModelInfo } from "../../types";
+import { getCodexReasoningOptions, resolveCodexReasoningLevel } from "../../utils/codex-execution";
 import type { CliSettingsTabProps } from "./types";
 
 type CliPoolStatus = "connected" | "auth_required" | "install_required" | "profile_error";
@@ -24,6 +26,32 @@ function runnerChipClass(status: "active" | "idle" | "stopping" | "error"): stri
   if (status === "idle") return "bg-slate-500/15 text-slate-300 border border-slate-400/30";
   if (status === "stopping") return "bg-amber-500/15 text-amber-300 border border-amber-500/30";
   return "bg-rose-500/15 text-rose-300 border border-rose-500/30";
+}
+
+function normalizeReasoningOptions(provider: OfficeExecutionProvider, model: CliModelInfo | null) {
+  if (provider === "codex") {
+    return getCodexReasoningOptions(model);
+  }
+  return model?.reasoningLevels ?? [];
+}
+
+function resolveReasoningValue(
+  provider: OfficeExecutionProvider,
+  model: CliModelInfo | null,
+  currentLevel: string | null | undefined,
+): string {
+  if (provider === "codex") {
+    return resolveCodexReasoningLevel(model, currentLevel);
+  }
+  const options = normalizeReasoningOptions(provider, model);
+  if (currentLevel && options.some((option) => option.effort === currentLevel)) {
+    return currentLevel;
+  }
+  const defaultLevel = String(model?.defaultReasoningLevel ?? "").trim();
+  if (defaultLevel && options.some((option) => option.effort === defaultLevel)) {
+    return defaultLevel;
+  }
+  return options[0]?.effort ?? "";
 }
 
 export default function CliSettingsTab({
@@ -53,6 +81,33 @@ export default function CliSettingsTab({
 }: CliSettingsTabProps) {
   const [verifyMessageByKey, setVerifyMessageByKey] = useState<Record<string, string>>({});
   const [labelDraftByKey, setLabelDraftByKey] = useState<Record<string, string>>({});
+
+  const updateProviderPolicy = (
+    provider: OfficeExecutionProvider,
+    updater: (current: {
+      model?: string;
+      subModel?: string;
+      reasoningLevel?: string;
+      subModelReasoningLevel?: string;
+    }) => {
+      model?: string;
+      subModel?: string;
+      reasoningLevel?: string;
+      subModelReasoningLevel?: string;
+    },
+  ) => {
+    const current = form.providerModelConfig?.[provider] ?? {};
+    const nextProviderConfig = updater(current);
+    const nextForm = {
+      ...form,
+      providerModelConfig: {
+        ...(form.providerModelConfig ?? {}),
+        [provider]: nextProviderConfig,
+      },
+    };
+    setForm(nextForm);
+    persistSettings(nextForm);
+  };
 
   const activeRunnerCount = useMemo(
     () => officeRunners.filter((runner) => runner.status === "active").length,
@@ -126,6 +181,16 @@ export default function CliSettingsTab({
           const cliTool = cliStatus?.[provider];
           const providerModels = withCliModelFallback(provider, cliModels?.[provider] ?? []);
           const selectedModel = form.providerModelConfig?.[provider]?.model || "";
+          const selectedModelInfo = providerModels.find((model) => model.slug === selectedModel) ?? null;
+          const selectedReasoningLevel = form.providerModelConfig?.[provider]?.reasoningLevel || "";
+          const mainReasoningOptions = normalizeReasoningOptions(provider, selectedModelInfo);
+          const supportsSubAgentPolicy = provider === "claude" || provider === "codex";
+          const subModelOptions = supportsSubAgentPolicy ? providerModels : [];
+          const selectedSubModel = supportsSubAgentPolicy ? (form.providerModelConfig?.[provider]?.subModel ?? "") : "";
+          const selectedSubModelInfo = subModelOptions.find((model) => model.slug === selectedSubModel) ?? null;
+          const selectedSubReasoningLevel = form.providerModelConfig?.[provider]?.subModelReasoningLevel || "";
+          const subReasoningOptions =
+            supportsSubAgentPolicy && selectedSubModel ? normalizeReasoningOptions(provider, selectedSubModelInfo) : [];
 
           return (
             <article key={provider} className="space-y-3 rounded-lg border border-slate-700/60 bg-slate-800/40 p-3">
@@ -324,51 +389,181 @@ export default function CliSettingsTab({
                 </p>
               )}
 
-              <div className="grid gap-2 sm:grid-cols-[120px_1fr] sm:items-center">
-                <span className="text-xs text-slate-400">
-                  {t({ ko: "모델", en: "Model", ja: "モデル", zh: "模型" })}
-                </span>
-                {providerModels.length > 0 ? (
-                  <div className="space-y-1">
-                    <select
-                      value={selectedModel}
-                      onChange={(event) => {
-                        const nextConfig = {
-                          ...(form.providerModelConfig ?? {}),
-                          [provider]: {
-                            ...(form.providerModelConfig?.[provider] ?? {}),
-                            model: event.target.value,
-                          },
-                        };
-                        const nextForm = {
-                          ...form,
-                          providerModelConfig: nextConfig,
-                        };
-                        setForm(nextForm);
-                        persistSettings(nextForm);
-                      }}
-                      className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
-                    >
-                      <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
-                      {providerModels.map((model) => (
-                        <option key={model.slug} value={model.slug}>
-                          {model.displayName || model.slug}
-                        </option>
-                      ))}
-                    </select>
-                    {cliModelsLoading ? (
-                      <span className="text-[11px] text-slate-500">
-                        {t({ ko: "모델 목록 동기화 중...", en: "Syncing models...", ja: "Syncing models...", zh: "Syncing models..." })}
+              <div className="space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/20 p-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  {t({
+                    ko: "Provider 정책",
+                    en: "Provider policy",
+                    ja: "Provider policy",
+                    zh: "Provider policy",
+                  })}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-xs text-slate-400">
+                      {t({ ko: "메인 모델", en: "Main model", ja: "Main model", zh: "Main model" })}
+                    </span>
+                    {providerModels.length > 0 ? (
+                      <select
+                        value={selectedModel}
+                        onChange={(event) => {
+                          const nextModel = event.target.value;
+                          const nextModelInfo = providerModels.find((model) => model.slug === nextModel) ?? null;
+                          updateProviderPolicy(provider, (current) => ({
+                            ...current,
+                            model: nextModel || undefined,
+                            reasoningLevel: nextModel
+                              ? resolveReasoningValue(provider, nextModelInfo, current.reasoningLevel)
+                              : undefined,
+                          }));
+                        }}
+                        className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
+                      >
+                        <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
+                        {providerModels.map((model) => (
+                          <option key={model.slug} value={model.slug}>
+                            {model.displayName || model.slug}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="block rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-xs text-slate-500">
+                        {cliModelsLoading
+                          ? t({
+                              ko: "모델 로딩 중...",
+                              en: "Loading models...",
+                              ja: "モデル読込中...",
+                              zh: "模型加载中...",
+                            })
+                          : t({ ko: "모델 목록 없음", en: "No models", ja: "モデルなし", zh: "无模型" })}
                       </span>
-                    ) : null}
+                    )}
+                  </label>
+
+                  <label className="space-y-1">
+                    <span className="text-xs text-slate-400">
+                      {t({ ko: "메인 추론 레벨", en: "Main reasoning", ja: "Main reasoning", zh: "Main reasoning" })}
+                    </span>
+                    {mainReasoningOptions.length > 0 ? (
+                      <select
+                        value={selectedReasoningLevel}
+                        onChange={(event) =>
+                          updateProviderPolicy(provider, (current) => ({
+                            ...current,
+                            reasoningLevel: event.target.value || undefined,
+                          }))
+                        }
+                        className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
+                      >
+                        <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
+                        {mainReasoningOptions.map((option) => (
+                          <option key={option.effort} value={option.effort}>
+                            {option.effort}
+                            {option.description ? ` · ${option.description}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="block rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-xs text-slate-500">
+                        {t({
+                          ko: "이 모델은 추론 레벨 메타데이터가 없습니다.",
+                          en: "No reasoning metadata for this model.",
+                          ja: "No reasoning metadata for this model.",
+                          zh: "No reasoning metadata for this model.",
+                        })}
+                      </span>
+                    )}
+                  </label>
+                </div>
+
+                {supportsSubAgentPolicy ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="space-y-1">
+                      <span className="text-xs text-slate-400">
+                        {t({
+                          ko: "서브 에이전트 모델",
+                          en: "Sub-agent model",
+                          ja: "Sub-agent model",
+                          zh: "Sub-agent model",
+                        })}
+                      </span>
+                      <select
+                        value={selectedSubModel}
+                        onChange={(event) => {
+                          const nextModel = event.target.value;
+                          const nextModelInfo = subModelOptions.find((model) => model.slug === nextModel) ?? null;
+                          updateProviderPolicy(provider, (current) => ({
+                            ...current,
+                            subModel: nextModel || undefined,
+                            subModelReasoningLevel: nextModel
+                              ? resolveReasoningValue(provider, nextModelInfo, current.subModelReasoningLevel)
+                              : undefined,
+                          }));
+                        }}
+                        className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
+                      >
+                        <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
+                        {subModelOptions.map((model) => (
+                          <option key={model.slug} value={model.slug}>
+                            {model.displayName || model.slug}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="space-y-1">
+                      <span className="text-xs text-slate-400">
+                        {t({
+                          ko: "서브 에이전트 추론 레벨",
+                          en: "Sub-agent reasoning",
+                          ja: "Sub-agent reasoning",
+                          zh: "Sub-agent reasoning",
+                        })}
+                      </span>
+                      {subReasoningOptions.length > 0 ? (
+                        <select
+                          value={selectedSubReasoningLevel}
+                          onChange={(event) =>
+                            updateProviderPolicy(provider, (current) => ({
+                              ...current,
+                              subModelReasoningLevel: event.target.value || undefined,
+                            }))
+                          }
+                          className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
+                        >
+                          <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
+                          {subReasoningOptions.map((option) => (
+                            <option key={option.effort} value={option.effort}>
+                              {option.effort}
+                              {option.description ? ` · ${option.description}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="block rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-xs text-slate-500">
+                          {t({
+                            ko: "서브 에이전트 추론 레벨 메타데이터가 없습니다.",
+                            en: "No sub-agent reasoning metadata.",
+                            ja: "No sub-agent reasoning metadata.",
+                            zh: "No sub-agent reasoning metadata.",
+                          })}
+                        </span>
+                      )}
+                    </label>
                   </div>
-                ) : (
-                  <span className="text-xs text-slate-500">
-                    {cliModelsLoading
-                      ? t({ ko: "모델 로딩 중...", en: "Loading models...", ja: "モデル読込中...", zh: "模型加载中..." })
-                      : t({ ko: "모델 목록 없음", en: "No models", ja: "モデルなし", zh: "无模型" })}
+                ) : null}
+
+                {cliModelsLoading ? (
+                  <span className="text-[11px] text-slate-500">
+                    {t({
+                      ko: "모델 목록 동기화 중...",
+                      en: "Syncing models...",
+                      ja: "Syncing models...",
+                      zh: "Syncing models...",
+                    })}
                   </span>
-                )}
+                ) : null}
               </div>
             </article>
           );

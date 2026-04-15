@@ -106,7 +106,11 @@ export async function summarizeTerminalWithModel(
   onChunk?: (chunk: string) => void,
 ): Promise<string> {
   const response = await model.sendRequest(
-    [vscode.LanguageModelChatMessage.User(buildTerminalSummaryPrompt(taskTitle, terminalText, hints, responseLanguage))],
+    [
+      vscode.LanguageModelChatMessage.User(
+        buildTerminalSummaryPrompt(taskTitle, terminalText, hints, responseLanguage),
+      ),
+    ],
     {},
     token,
   );

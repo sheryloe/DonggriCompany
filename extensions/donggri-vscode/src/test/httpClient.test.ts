@@ -36,10 +36,7 @@ describe("DonggriHttpClient", () => {
     }));
 
     await expect(client.bootstrapSession()).resolves.toBe(true);
-    expect(calls).toEqual([
-      "http://127.0.0.1:8790/api/auth/session",
-      "http://127.0.0.1:7777/api/auth/session",
-    ]);
+    expect(calls).toEqual(["http://127.0.0.1:8790/api/auth/session", "http://127.0.0.1:7777/api/auth/session"]);
     expect(client.getEffectiveBaseUrl()).toBe("http://127.0.0.1:7777");
   });
 });

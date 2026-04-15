@@ -37,7 +37,11 @@ export default function AgentCard({
   const isDeleting = confirmDeleteId === agent.id;
   const dept = departments.find((d) => d.id === agent.department_id);
   const profile = normalizeAgentProfile(agent.agent_profile, agent.role);
-  const capabilitySummary = buildAgentCapabilityCompactSummary(profile, locale, ["execution", "architecture", "review"]);
+  const capabilitySummary = buildAgentCapabilityCompactSummary(profile, locale, [
+    "execution",
+    "architecture",
+    "review",
+  ]);
 
   return (
     <div
@@ -88,7 +92,10 @@ export default function AgentCard({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t pt-2.5" style={{ borderTop: "1px solid var(--th-card-border)" }}>
+      <div
+        className="mt-3 flex items-center justify-between border-t pt-2.5"
+        style={{ borderTop: "1px solid var(--th-card-border)" }}
+      >
         <div className="flex items-center gap-2">
           <span
             className="rounded px-1.5 py-0.5 text-[10px] font-mono"
@@ -97,10 +104,17 @@ export default function AgentCard({
             {agent.cli_provider}
           </span>
         </div>
-        <div className="max-w-[170px] truncate text-[10px]" style={{ color: "var(--th-text-muted)" }} title={capabilitySummary}>
+        <div
+          className="max-w-[170px] truncate text-[10px]"
+          style={{ color: "var(--th-text-muted)" }}
+          title={capabilitySummary}
+        >
           {capabilitySummary}
         </div>
-        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={(event) => event.stopPropagation()}
+        >
           {isDeleting ? (
             <>
               <button

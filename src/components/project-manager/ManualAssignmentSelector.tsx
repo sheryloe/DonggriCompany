@@ -138,7 +138,9 @@ export default function ManualAssignmentSelector({
                       junior: 2,
                       intern: 3,
                     };
-                    return (roleOrder[left.role] ?? 9) - (roleOrder[right.role] ?? 9) || left.name.localeCompare(right.name);
+                    return (
+                      (roleOrder[left.role] ?? 9) - (roleOrder[right.role] ?? 9) || left.name.localeCompare(right.name)
+                    );
                   })
                   .map((agent) => {
                     const checked = selectedAgentIds.has(agent.id);

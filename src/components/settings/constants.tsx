@@ -1,12 +1,5 @@
 import type { ApiProviderType, OAuthConnectProvider } from "../../api";
-import {
-  AntigravityLogo,
-  CliChatGPTLogo,
-  CliClaudeLogo,
-  CliGeminiLogo,
-  CliKimiLogo,
-  GitHubCopilotLogo,
-} from "./Logos";
+import { AntigravityLogo, CliChatGPTLogo, CliClaudeLogo, CliGeminiLogo, CliKimiLogo, GitHubCopilotLogo } from "./Logos";
 
 export const CLI_INFO: Record<string, { label: string; icon: React.ReactNode }> = {
   claude: { label: "Claude Code", icon: <CliClaudeLogo /> },

@@ -8,10 +8,22 @@
   "engines": {
     "vscode": "^1.100.0"
   },
-  "categories": ["AI", "Chat", "Other"],
-  "keywords": ["donggri", "chat", "tasks", "ai", "workflow"],
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "donggri",
+    "chat",
+    "tasks",
+    "ai",
+    "workflow"
+  ],
   "main": "./out/extension.js",
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -118,7 +130,10 @@
             "scope": {
               "type": "string",
               "description": "Which diff scope to read.",
-              "enum": ["activeFile", "workspace"],
+              "enum": [
+                "activeFile",
+                "workspace"
+              ],
               "default": "activeFile"
             }
           }
@@ -162,7 +177,10 @@
               "default": false
             }
           },
-          "required": ["title", "prompt"]
+          "required": [
+            "title",
+            "prompt"
+          ]
         }
       },
       {
@@ -183,10 +201,17 @@
             "action": {
               "type": "string",
               "description": "Control action to apply.",
-              "enum": ["run", "pause", "resume"]
+              "enum": [
+                "run",
+                "pause",
+                "resume"
+              ]
             }
           },
-          "required": ["taskId", "action"]
+          "required": [
+            "taskId",
+            "action"
+          ]
         }
       },
       {
@@ -210,7 +235,9 @@
               "default": 120
             }
           },
-          "required": ["taskId"]
+          "required": [
+            "taskId"
+          ]
         }
       }
     ],
@@ -218,6 +245,16 @@
       {
         "command": "donggri.bindProject",
         "title": "Bind Current Workspace",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.setApiToken",
+        "title": "Set API Token",
+        "category": "Donggri"
+      },
+      {
+        "command": "donggri.clearApiToken",
+        "title": "Clear API Token",
         "category": "Donggri"
       },
       {
@@ -277,7 +314,7 @@
         "donggri.apiToken": {
           "type": "string",
           "default": "",
-          "description": "Optional bearer token for DonggriCompany API access."
+          "markdownDescription": "Deprecated. Use the `Donggri: Set API Token` command to store the token in VS Code Secret Storage."
         },
         "donggri.autoConnect": {
           "type": "boolean",
@@ -287,7 +324,10 @@
         "donggri.defaultProjectBindingMode": {
           "type": "string",
           "default": "match-or-create",
-          "enum": ["match-only", "match-or-create"],
+          "enum": [
+            "match-only",
+            "match-or-create"
+          ],
           "description": "Workspace binding mode used by automatic Donggri project binding."
         }
       }

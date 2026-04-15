@@ -1,12 +1,13 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
-import { checkProjectPath, createProject, isApiRequestError, updateProject } from "../../api";
+import { checkProjectPath, isApiRequestError, updateProject } from "../../api";
 import type { AssignmentMode } from "../../types";
 import {
   createProjectWithGitHubAutomation,
   isGitHubProjectCreateError,
   type GitHubGateReason,
+  type GitHubProjectCreateError,
 } from "../project-creation/github-project-flow";
-import type { ManualAssignmentWarning, ProjectI18nTranslate } from "./types";
+import type { I18nTextMap, ManualAssignmentWarning, ProjectI18nTranslate } from "./types";
 import type { ProjectManagerPathTools } from "./useProjectManagerPathTools";
 
 interface UseProjectSaveHandlerParams {
@@ -38,6 +39,10 @@ interface UseProjectSaveHandlerParams {
   t: ProjectI18nTranslate;
 }
 
+function messages(ko: string, en: string, ja = en, zh = en): I18nTextMap {
+  return { ko, en, ja, zh };
+}
+
 export function useProjectSaveHandler({
   canSave,
   saving,
@@ -63,9 +68,56 @@ export function useProjectSaveHandler({
   setIsCreating,
   t,
 }: UseProjectSaveHandlerParams) {
+  const buildGitHubRollbackMessage = (err: GitHubProjectCreateError, savePath: string, detail: string): string => {
+    const remoteName = err.remoteRepoFullName || githubRepoName.trim() || "repository";
+    const effectivePath = err.localPath || savePath;
+    const detailSuffix = detail ? ` / Cause: ${detail}` : "";
+    const detailSuffixKo = detail ? ` / 원인: ${detail}` : "";
+    const rollback = err.rollback;
+
+    if (rollback?.manualCleanupRequired) {
+      return t(
+        messages(
+          `GitHub 저장소 '${remoteName}' 생성 후 프로젝트 등록 상태를 확정하지 못했습니다. 원격 저장소와 로컬 경로를 수동으로 확인하세요. 경로: ${effectivePath}${detailSuffixKo}`,
+          `GitHub repository '${remoteName}' was created, but project registration state is uncertain. Verify the remote repository and local path manually. Path: ${effectivePath}${detailSuffix}`,
+        ),
+      );
+    }
+
+    const rollbackPartsKo: string[] = [];
+    const rollbackPartsEn: string[] = [];
+
+    if (rollback?.remoteRepoDeleted) {
+      rollbackPartsKo.push("원격 저장소 삭제 완료");
+      rollbackPartsEn.push("remote repository deleted");
+    } else if (rollback?.remoteDeleteAttempted && rollback.remoteRepoDeleteError) {
+      rollbackPartsKo.push(`원격 저장소 정리 실패: ${rollback.remoteRepoDeleteError}`);
+      rollbackPartsEn.push(`remote cleanup failed: ${rollback.remoteRepoDeleteError}`);
+    }
+
+    if (rollback?.localPathDeleted) {
+      rollbackPartsKo.push("로컬 clone 경로 삭제 완료");
+      rollbackPartsEn.push("local clone removed");
+    } else if (rollback?.localCleanupAttempted && rollback.localPathDeleteError) {
+      rollbackPartsKo.push(`로컬 경로 정리 실패: ${rollback.localPathDeleteError}`);
+      rollbackPartsEn.push(`local cleanup failed: ${rollback.localPathDeleteError}`);
+    }
+
+    const rollbackSummaryKo = rollbackPartsKo.length > 0 ? ` / 롤백 결과: ${rollbackPartsKo.join(", ")}` : "";
+    const rollbackSummaryEn = rollbackPartsEn.length > 0 ? ` / Rollback: ${rollbackPartsEn.join(", ")}` : "";
+
+    return t(
+      messages(
+        `GitHub 저장소 '${remoteName}' 생성 후 로컬 설정에 실패했습니다. 경로: ${effectivePath}${detailSuffixKo}${rollbackSummaryKo}`,
+        `GitHub repository '${remoteName}' was created, but local setup failed. Path: ${effectivePath}${detailSuffix}${rollbackSummaryEn}`,
+      ),
+    );
+  };
+
   return useCallback(
     async (allowCreateMissingPath = false, bypassManualWarning = false) => {
       if (!canSave || saving) return;
+
       if (!bypassManualWarning && assignmentMode === "manual") {
         const warningReason = getManualAssignmentWarning();
         if (warningReason) {
@@ -73,6 +125,7 @@ export function useProjectSaveHandler({
           return;
         }
       }
+
       pathTools.setFormFeedback(null);
       let savePath = projectPath.trim();
       let createPathIfMissing = allowCreateMissingPath;
@@ -84,18 +137,20 @@ export function useProjectSaveHandler({
           if (savePath !== projectPath.trim()) {
             setProjectPath(savePath);
           }
+
           if (pathCheck.exists && !pathCheck.is_directory) {
             pathTools.setFormFeedback({
               tone: "error",
-              message: t({
-                ko: "해당 경로는 폴더가 아닙니다. 디렉터리 경로를 입력해주세요.",
-                en: "This path is not a directory. Please enter a directory path.",
-                ja: "このパスはフォルダではありません。ディレクトリパスを入力してください。",
-                zh: "该路径不是文件夹，请输入目录路径。",
-              }),
+              message: t(
+                messages(
+                  "해당 경로는 디렉터리가 아닙니다. 디렉터리 경로를 입력하세요.",
+                  "This path is not a directory. Please enter a directory path.",
+                ),
+              ),
             });
             return;
           }
+
           if (!pathCheck.exists) {
             pathTools.setMissingPathPrompt({
               normalizedPath: pathCheck.normalized_path || savePath,
@@ -104,6 +159,7 @@ export function useProjectSaveHandler({
             });
             return;
           }
+
           createPathIfMissing = false;
         } catch (err) {
           console.error("Failed to check project path:", err);
@@ -114,12 +170,10 @@ export function useProjectSaveHandler({
           } else {
             pathTools.setFormFeedback({
               tone: "error",
-              message: pathTools.resolvePathHelperErrorMessage(err, {
-                ko: "프로젝트 경로 확인에 실패했습니다.",
-                en: "Failed to verify project path.",
-                ja: "プロジェクトパスの確認に失敗しました。",
-                zh: "项目路径校验失败。",
-              }),
+              message: pathTools.resolvePathHelperErrorMessage(
+                err,
+                messages("프로젝트 경로 확인에 실패했습니다.", "Failed to verify project path."),
+              ),
             });
             return;
           }
@@ -154,6 +208,7 @@ export function useProjectSaveHandler({
           });
           setSelectedProjectId(created.project.id);
         }
+
         await loadProjects(1, search);
         setEditingProjectId(null);
         setIsCreating(false);
@@ -161,11 +216,13 @@ export function useProjectSaveHandler({
         pathTools.resetPathHelperState();
       } catch (err) {
         console.error("Failed to save project:", err);
+
         if (isGitHubProjectCreateError(err)) {
           if (err.code === "github_connection_required" && err.gateReason) {
             onRequireGitHubConnection(err.gateReason, { allowCreateMissingPath, bypassManualWarning });
             return;
           }
+
           if (err.code === "github_repo_created_but_local_setup_failed") {
             const detail =
               err.causeDetail instanceof Error
@@ -175,32 +232,30 @@ export function useProjectSaveHandler({
                   : "";
             pathTools.setFormFeedback({
               tone: "error",
-              message: t({
-                ko: `GitHub 레포 '${err.remoteRepoFullName || githubRepoName.trim() || "repository"}'는 생성됐지만 로컬 설정에 실패했습니다. 원격 레포는 유지됩니다. 경로: ${err.localPath || savePath}${detail ? ` / 원인: ${detail}` : ""}`,
-                en: `GitHub repository '${err.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${err.localPath || savePath}${detail ? ` / Cause: ${detail}` : ""}`,
-                ja: `GitHub repository '${err.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${err.localPath || savePath}${detail ? ` / Cause: ${detail}` : ""}`,
-                zh: `GitHub repository '${err.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${err.localPath || savePath}${detail ? ` / Cause: ${detail}` : ""}`,
-              }),
+              message: buildGitHubRollbackMessage(err, savePath, detail),
             });
             return;
           }
         }
+
         if (isApiRequestError(err) && err.code === "github_not_connected") {
           onRequireGitHubConnection("not_connected", { allowCreateMissingPath, bypassManualWarning });
           return;
         }
+
         if (isApiRequestError(err) && err.code === "repo_name_conflict") {
           pathTools.setFormFeedback({
             tone: "error",
-            message: t({
-              ko: "이미 존재하는 레포지토리명입니다. 다른 이름을 입력해 주세요.",
-              en: "This repository name already exists. Please choose another name.",
-              ja: "This repository name already exists. Please choose another name.",
-              zh: "This repository name already exists. Please choose another name.",
-            }),
+            message: t(
+              messages(
+                "이미 존재하는 저장소 이름입니다. 다른 이름을 입력하세요.",
+                "This repository name already exists. Please choose another name.",
+              ),
+            ),
           });
           return;
         }
+
         if (isApiRequestError(err) && err.code === "project_path_conflict") {
           const details =
             (err.details as {
@@ -211,25 +266,24 @@ export function useProjectSaveHandler({
             typeof details?.existing_project_name === "string" ? details.existing_project_name : "";
           const existingProjectPath =
             typeof details?.existing_project_path === "string" ? details.existing_project_path : "";
+
           pathTools.setFormFeedback({
             tone: "info",
-            message: t({
-              ko: existingProjectName
-                ? `동일 경로가 이미 '${existingProjectName}' 프로젝트에 등록되어 있습니다. (${existingProjectPath || "path"})`
-                : "동일 경로가 이미 다른 프로젝트에 등록되어 있습니다.",
-              en: existingProjectName
-                ? `This path is already registered by '${existingProjectName}'. (${existingProjectPath || "path"})`
-                : "This path is already registered by another project.",
-              ja: existingProjectName
-                ? `このパスは既に '${existingProjectName}' に登録されています。(${existingProjectPath || "path"})`
-                : "このパスは既に別のプロジェクトに登録されています。",
-              zh: existingProjectName
-                ? `该路径已被‘${existingProjectName}’注册。(${existingProjectPath || "path"})`
-                : "该路径已被其他项目注册。",
-            }),
+            message: t(
+              existingProjectName
+                ? messages(
+                    `동일 경로가 이미 '${existingProjectName}' 프로젝트에 등록되어 있습니다. (${existingProjectPath || "path"})`,
+                    `This path is already registered by '${existingProjectName}'. (${existingProjectPath || "path"})`,
+                  )
+                : messages(
+                    "동일 경로가 이미 다른 프로젝트에 등록되어 있습니다.",
+                    "This path is already registered by another project.",
+                  ),
+            ),
           });
           return;
         }
+
         if (isApiRequestError(err) && err.code === "project_path_not_found") {
           const details =
             (err.details as {
@@ -245,14 +299,16 @@ export function useProjectSaveHandler({
           });
           return;
         }
+
         pathTools.setFormFeedback({
           tone: "error",
-          message: pathTools.resolvePathHelperErrorMessage(err, {
-            ko: "프로젝트 저장에 실패했습니다. 입력값을 확인해주세요.",
-            en: "Failed to save project. Please check your inputs.",
-            ja: "プロジェクト保存に失敗しました。入力値を確認してください。",
-            zh: "项目保存失败，请检查输入值。",
-          }),
+          message: pathTools.resolvePathHelperErrorMessage(
+            err,
+            messages(
+              "프로젝트 저장에 실패했습니다. 입력값을 확인하세요.",
+              "Failed to save project. Please check your inputs.",
+            ),
+          ),
         });
       } finally {
         setSaving(false);
@@ -263,10 +319,10 @@ export function useProjectSaveHandler({
       canSave,
       coreGoal,
       editingProjectId,
+      getManualAssignmentWarning,
       githubAutoCreateEnabled,
       githubRepoName,
       githubRepoPrivate,
-      getManualAssignmentWarning,
       loadProjects,
       name,
       onRequireGitHubConnection,
@@ -282,6 +338,7 @@ export function useProjectSaveHandler({
       setSaving,
       setSelectedProjectId,
       t,
+      buildGitHubRollbackMessage,
     ],
   );
 }

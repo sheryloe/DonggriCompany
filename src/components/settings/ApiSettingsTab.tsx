@@ -234,7 +234,9 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
                     : "border-slate-600 bg-slate-700/50"
                 }`}
               />
-              {isOfficialPresetSelected && <p className="mt-1 text-[11px] text-slate-500">{copy.baseUrlManagedByPreset}</p>}
+              {isOfficialPresetSelected && (
+                <p className="mt-1 text-[11px] text-slate-500">{copy.baseUrlManagedByPreset}</p>
+              )}
             </div>
 
             <div>
@@ -252,11 +254,15 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
                   setApiForm((prev) => ({ ...prev, api_key: e.target.value }));
                 }}
                 placeholder={
-                  apiEditingId ? copy.changeApiKeyPlaceholder : (selectedOfficialPreset?.api_key_placeholder ?? "sk-...")
+                  apiEditingId
+                    ? copy.changeApiKeyPlaceholder
+                    : (selectedOfficialPreset?.api_key_placeholder ?? "sk-...")
                 }
                 className="w-full rounded-lg border border-slate-600 bg-slate-700/50 px-3 py-2 text-sm font-mono text-white focus:border-blue-500 focus:outline-none"
               />
-              {selectedOfficialPreset && <p className="mt-1 text-[11px] text-slate-500">{selectedOfficialPreset.api_key_hint}</p>}
+              {selectedOfficialPreset && (
+                <p className="mt-1 text-[11px] text-slate-500">{selectedOfficialPreset.api_key_hint}</p>
+              )}
             </div>
 
             {apiSaveError && (
@@ -294,9 +300,13 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
               const isExpanded = apiModelsExpanded[provider.id];
               const searchQuery = (modelSearchQueries[provider.id] || "").trim().toLowerCase();
               const filteredModels = isExpanded
-                ? provider.models_cache.filter((model) => (searchQuery ? model.toLowerCase().includes(searchQuery) : true))
+                ? provider.models_cache.filter((model) =>
+                    searchQuery ? model.toLowerCase().includes(searchQuery) : true,
+                  )
                 : [];
-              const presetLabel = provider.preset_key ? (apiOfficialPresets[provider.preset_key]?.label ?? provider.preset_key) : null;
+              const presetLabel = provider.preset_key
+                ? (apiOfficialPresets[provider.preset_key]?.label ?? provider.preset_key)
+                : null;
 
               return (
                 <div
@@ -398,7 +408,9 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
                             placeholder={`${common.searchModels}...`}
                             aria-label={common.searchModels}
                             value={modelSearchQueries[provider.id] || ""}
-                            onChange={(e) => setModelSearchQueries((prev) => ({ ...prev, [provider.id]: e.target.value }))}
+                            onChange={(e) =>
+                              setModelSearchQueries((prev) => ({ ...prev, [provider.id]: e.target.value }))
+                            }
                             className="w-full rounded border border-slate-600 bg-slate-800/70 px-2 py-1 text-[11px] text-white focus:border-blue-500 focus:outline-none"
                           />
                           <div className="max-h-48 overflow-y-auto rounded border border-slate-700/30 bg-slate-900/40 p-2">

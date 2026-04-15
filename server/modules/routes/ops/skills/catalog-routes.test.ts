@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 type RouteModule = typeof import("./catalog-routes.ts");
 
-function makeInitialSkillsHtml(items: Array<{ source: string; skillId: string; name?: string; installs?: number }>): string {
+function makeInitialSkillsHtml(
+  items: Array<{ source: string; skillId: string; name?: string; installs?: number }>,
+): string {
   return `<!doctype html><html><body>initialSkills:${JSON.stringify(items)}</body></html>`;
 }
 

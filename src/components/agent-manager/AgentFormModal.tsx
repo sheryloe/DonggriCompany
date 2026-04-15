@@ -105,6 +105,11 @@ export default function AgentFormModal({
     borderColor: "var(--th-input-border)",
     color: "var(--th-text-primary)",
   };
+  const cliProviderFieldId = "agent-form-cli-provider";
+  const cliAccountPoolFieldId = "agent-form-cli-account-pool";
+  const workflowRoleFieldId = "agent-form-workflow-role";
+  const reviewLensesFieldId = "agent-form-review-lenses";
+  const maxReviewRoundsFieldId = "agent-form-max-review-rounds";
 
   const canSave = Boolean(form.name.trim()) && (!requiresCliPool || Boolean(form.cli_account_pool_id));
 
@@ -153,25 +158,45 @@ export default function AgentFormModal({
             <label className="block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
               {tr("이름", "Name")} *
             </label>
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} style={inputStyle} />
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className={inputClass}
+              style={inputStyle}
+            />
 
             <label className="block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
               {tr("한글 이름", "Korean Name")}
             </label>
-            <input value={form.name_ko} onChange={(e) => setForm({ ...form, name_ko: e.target.value })} className={inputClass} style={inputStyle} />
+            <input
+              value={form.name_ko}
+              onChange={(e) => setForm({ ...form, name_ko: e.target.value })}
+              className={inputClass}
+              style={inputStyle}
+            />
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
                   {tr("일본어 이름", "Japanese Name")}
                 </label>
-                <input value={form.name_ja} onChange={(e) => setForm({ ...form, name_ja: e.target.value })} className={inputClass} style={inputStyle} />
+                <input
+                  value={form.name_ja}
+                  onChange={(e) => setForm({ ...form, name_ja: e.target.value })}
+                  className={inputClass}
+                  style={inputStyle}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
                   {tr("중국어 이름", "Chinese Name")}
                 </label>
-                <input value={form.name_zh} onChange={(e) => setForm({ ...form, name_zh: e.target.value })} className={inputClass} style={inputStyle} />
+                <input
+                  value={form.name_zh}
+                  onChange={(e) => setForm({ ...form, name_zh: e.target.value })}
+                  className={inputClass}
+                  style={inputStyle}
+                />
               </div>
             </div>
 
@@ -179,7 +204,12 @@ export default function AgentFormModal({
               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
                 {tr("부서", "Department")}
               </label>
-              <select value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })} className={inputClass} style={inputStyle}>
+              <select
+                value={form.department_id}
+                onChange={(e) => setForm({ ...form, department_id: e.target.value })}
+                className={inputClass}
+                style={inputStyle}
+              >
                 <option value="">{tr("부서 미지정", "Unassigned")}</option>
                 {departments.map((department) => (
                   <option key={department.id} value={department.id}>
@@ -209,10 +239,20 @@ export default function AgentFormModal({
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
+              <label
+                htmlFor={cliProviderFieldId}
+                className="block text-xs font-medium mb-1.5"
+                style={{ color: "var(--th-text-secondary)" }}
+              >
                 {tr("CLI Provider", "CLI Provider")}
               </label>
-              <select value={form.cli_provider} onChange={(e) => setForm({ ...form, cli_provider: e.target.value as FormData["cli_provider"] })} className={inputClass} style={inputStyle}>
+              <select
+                id={cliProviderFieldId}
+                value={form.cli_provider}
+                onChange={(e) => setForm({ ...form, cli_provider: e.target.value as FormData["cli_provider"] })}
+                className={inputClass}
+                style={inputStyle}
+              >
                 {CLI_PROVIDERS.map((provider) => (
                   <option key={provider} value={provider}>
                     {provider}
@@ -220,28 +260,42 @@ export default function AgentFormModal({
                 ))}
               </select>
               <p className="mt-1 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
-                {tr("모델 선택과 추론 레벨은 중앙 Provider 정책에서 결정됩니다.", "Model and reasoning selection are controlled by centralized provider policy.")}
+                {tr(
+                  "모델 선택과 추론 레벨은 중앙 Provider 정책에서 결정됩니다.",
+                  "Model and reasoning selection are controlled by centralized provider policy.",
+                )}
               </p>
             </div>
 
             {requiresCliPool && (
               <div className="space-y-2 rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
                 <div className="flex items-center justify-between gap-2">
-                  <label className="block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
+                  <label
+                    htmlFor={cliAccountPoolFieldId}
+                    className="block text-xs font-medium"
+                    style={{ color: "var(--th-text-secondary)" }}
+                  >
                     {tr("실행 계정 풀", "Execution Account Pool")}
                   </label>
-                  {cliAccountPoolsLoading && <span className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>{tr("불러오는 중...", "Loading...")}</span>}
+                  {cliAccountPoolsLoading && (
+                    <span className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                      {tr("불러오는 중...", "Loading...")}
+                    </span>
+                  )}
                 </div>
                 <select
+                  id={cliAccountPoolFieldId}
                   value={form.cli_account_pool_id}
                   onChange={(e) => setForm({ ...form, cli_account_pool_id: e.target.value })}
                   className={inputClass}
                   style={inputStyle}
                 >
-                  <option value="">{tr(`${providerDisplayName} 계정 풀 선택`, `Select ${providerDisplayName} account pool`)}</option>
+                  <option value="">
+                    {tr(`${providerDisplayName} 계정 풀 선택`, `Select ${providerDisplayName} account pool`)}
+                  </option>
                   {selectedProviderPools.map((pool) => (
                     <option key={pool.accountPoolId} value={pool.accountPoolId}>
-                      {pool.name}
+                      {pool.label?.trim() ? pool.label : pool.accountPoolId}
                     </option>
                   ))}
                 </select>
@@ -249,32 +303,71 @@ export default function AgentFormModal({
             )}
 
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
+              <label
+                htmlFor={workflowRoleFieldId}
+                className="block text-xs font-medium mb-1.5"
+                style={{ color: "var(--th-text-secondary)" }}
+              >
                 {tr("워크플로 역할", "Workflow Role")}
               </label>
-              <select value={form.workflow_role} onChange={(e) => setForm({ ...form, workflow_role: e.target.value as FormData["workflow_role"] })} className={inputClass} style={inputStyle}>
+              <select
+                id={workflowRoleFieldId}
+                value={form.workflow_role}
+                onChange={(e) => setForm({ ...form, workflow_role: e.target.value as FormData["workflow_role"] })}
+                className={inputClass}
+                style={inputStyle}
+              >
                 <option value="reviewer">{tr("리뷰어", "Reviewer")}</option>
                 <option value="primary_author">{tr("주 작성자", "Primary Author")}</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
+              <label
+                htmlFor={reviewLensesFieldId}
+                className="block text-xs font-medium mb-1.5"
+                style={{ color: "var(--th-text-secondary)" }}
+              >
                 {tr("리뷰 렌즈", "Review Lenses")}
               </label>
-              <input value={form.review_lenses_text} onChange={(e) => setForm({ ...form, review_lenses_text: e.target.value })} className={inputClass} style={inputStyle} />
+              <input
+                id={reviewLensesFieldId}
+                value={form.review_lenses_text}
+                onChange={(e) => setForm({ ...form, review_lenses_text: e.target.value })}
+                className={inputClass}
+                style={inputStyle}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <label className="flex items-center gap-2 text-xs" style={{ color: "var(--th-text-secondary)" }}>
-                <input type="checkbox" checked={form.two_pass_required} onChange={(e) => setForm({ ...form, two_pass_required: e.target.checked })} />
+                <input
+                  type="checkbox"
+                  checked={form.two_pass_required}
+                  onChange={(e) => setForm({ ...form, two_pass_required: e.target.checked })}
+                />
                 <span>{tr("2패스 리뷰 강제", "Require 2-pass review")}</span>
               </label>
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
+                <label
+                  htmlFor={maxReviewRoundsFieldId}
+                  className="block text-xs font-medium mb-1.5"
+                  style={{ color: "var(--th-text-secondary)" }}
+                >
                   {tr("최대 리뷰 라운드", "Max Review Rounds")}
                 </label>
-                <input type="number" min={1} max={2} value={form.max_review_rounds ?? ""} onChange={(e) => setForm({ ...form, max_review_rounds: e.target.value ? Number(e.target.value) : null })} className={inputClass} style={inputStyle} />
+                <input
+                  id={maxReviewRoundsFieldId}
+                  type="number"
+                  min={1}
+                  max={2}
+                  value={form.max_review_rounds ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, max_review_rounds: e.target.value ? Number(e.target.value) : null })
+                  }
+                  className={inputClass}
+                  style={inputStyle}
+                />
               </div>
             </div>
 
@@ -282,7 +375,11 @@ export default function AgentFormModal({
               <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
                 {tr("아바타", "Avatar")}
               </label>
-              <EmojiPicker value={form.avatar_emoji} onChange={(emoji) => setForm({ ...form, avatar_emoji: emoji })} />
+              <EmojiPicker
+                tr={tr}
+                value={form.avatar_emoji}
+                onChange={(emoji) => setForm({ ...form, avatar_emoji: emoji })}
+              />
             </div>
           </div>
 
@@ -297,7 +394,10 @@ export default function AgentFormModal({
           </div>
 
           {!previews && !processing && (
-            <label className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed cursor-pointer" style={{ borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" }}>
+            <label
+              className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed cursor-pointer"
+              style={{ borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" }}
+            >
               <span className="text-xs">{tr("2x2 스프라이트 시트 업로드", "Upload 2x2 sprite sheet")}</span>
               <input
                 type="file"
@@ -324,24 +424,47 @@ export default function AgentFormModal({
             </label>
           )}
 
-          {processing && <div className="text-sm" style={{ color: "var(--th-text-muted)" }}>{tr("처리 중...", "Processing...")}</div>}
+          {processing && (
+            <div className="text-sm" style={{ color: "var(--th-text-muted)" }}>
+              {tr("처리 중...", "Processing...")}
+            </div>
+          )}
 
           {previews && !processing && (
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-3">
                 {(["D", "L", "R"] as const).map((dir) => (
                   <div key={dir} className="text-center">
-                    <div className="text-[10px] mb-1" style={{ color: "var(--th-text-muted)" }}>{dir}</div>
-                    <div className="rounded-lg p-2 flex items-center justify-center h-24" style={{ background: "var(--th-input-bg)", border: "1px solid var(--th-input-border)" }}>
-                      <img src={previews[dir]} alt={dir} className="max-h-20 object-contain" style={{ imageRendering: "pixelated" }} />
+                    <div className="text-[10px] mb-1" style={{ color: "var(--th-text-muted)" }}>
+                      {dir}
+                    </div>
+                    <div
+                      className="rounded-lg p-2 flex items-center justify-center h-24"
+                      style={{ background: "var(--th-input-bg)", border: "1px solid var(--th-input-border)" }}
+                    >
+                      <img
+                        src={previews[dir]}
+                        alt={dir}
+                        className="max-h-20 object-contain"
+                        style={{ imageRendering: "pixelated" }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
 
               <div className="flex items-center gap-3">
-                <label className="text-xs" style={{ color: "var(--th-text-secondary)" }}>Sprite #</label>
-                <input type="number" min={1} value={spriteNum} onChange={(e) => setSpriteNum(Math.max(1, Number(e.target.value) || 1))} className="w-20 px-2 py-1 border rounded-lg text-sm" style={inputStyle} />
+                <label className="text-xs" style={{ color: "var(--th-text-secondary)" }}>
+                  Sprite #
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={spriteNum}
+                  onChange={(e) => setSpriteNum(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-20 px-2 py-1 border rounded-lg text-sm"
+                  style={inputStyle}
+                />
                 <button
                   type="button"
                   onClick={async () => {
@@ -360,7 +483,11 @@ export default function AgentFormModal({
                   disabled={registering || !spriteNum || registered}
                   className="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white disabled:opacity-50"
                 >
-                  {registering ? tr("등록 중...", "Registering...") : registered ? tr("등록 완료", "Registered") : tr("스프라이트 등록", "Register Sprite")}
+                  {registering
+                    ? tr("등록 중...", "Registering...")
+                    : registered
+                      ? tr("등록 완료", "Registered")
+                      : tr("스프라이트 등록", "Register Sprite")}
                 </button>
               </div>
             </div>
@@ -368,10 +495,24 @@ export default function AgentFormModal({
         </div>
 
         <div className="flex gap-2 mt-5 pt-4" style={{ borderTop: "1px solid var(--th-card-border)" }}>
-          <button type="button" onClick={onSave} disabled={saving || !canSave} className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white disabled:opacity-40">
-            {saving ? tr("저장 중...", "Saving...") : isEdit ? tr("변경 저장", "Save Changes") : tr("에이전트 생성", "Create Agent")}
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving || !canSave}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white disabled:opacity-40"
+          >
+            {saving
+              ? tr("저장 중...", "Saving...")
+              : isEdit
+                ? tr("변경 저장", "Save Changes")
+                : tr("에이전트 생성", "Create Agent")}
           </button>
-          <button type="button" onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-medium" style={{ border: "1px solid var(--th-input-border)", color: "var(--th-text-secondary)" }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-lg text-sm font-medium"
+            style={{ border: "1px solid var(--th-input-border)", color: "var(--th-text-secondary)" }}
+          >
             {tr("취소", "Cancel")}
           </button>
         </div>

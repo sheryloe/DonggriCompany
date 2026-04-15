@@ -117,4 +117,3 @@ describe("codex subagent catalog routes", () => {
     expect(payload.catalog.agents[0].class_stage_3).toBe("backend-developer");
   });
 });
-

@@ -312,11 +312,21 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     }
   }, []);
 
-  const headerTitle = t({ ko: "프로젝트 관리", en: "Project Management", ja: "Project Management", zh: "Project Management" });
+  const headerTitle = t({
+    ko: "프로젝트 관리",
+    en: "Project Management",
+    ja: "Project Management",
+    zh: "Project Management",
+  });
   const formTitle = editingProjectId
     ? t({ ko: "프로젝트 수정", en: "Edit Project", ja: "Edit Project", zh: "Edit Project" })
     : isCreating
-      ? t({ ko: "신규 프로젝트 등록", en: "Register New Project", ja: "Register New Project", zh: "Register New Project" })
+      ? t({
+          ko: "신규 프로젝트 등록",
+          en: "Register New Project",
+          ja: "Register New Project",
+          zh: "Register New Project",
+        })
       : t({ ko: "프로젝트 정보", en: "Project Info", ja: "Project Info", zh: "Project Info" });
 
   if (reportDetail) {
@@ -561,4 +571,3 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     </div>
   );
 }
-

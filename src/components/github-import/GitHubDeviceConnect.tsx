@@ -115,7 +115,12 @@ export default function GitHubDeviceConnect({ reason, onConnected, onCancel }: G
               ? t({ ko: "연결 해제 중...", en: "Disconnecting...", ja: "Disconnecting...", zh: "Disconnecting..." })
               : reason === "not_connected"
                 ? t({ ko: "GitHub 연결", en: "Connect GitHub", ja: "Connect GitHub", zh: "Connect GitHub" })
-                : t({ ko: "GitHub 다시 연결 (repo 권한)", en: "Reconnect GitHub (repo scope)", ja: "Reconnect GitHub (repo scope)", zh: "Reconnect GitHub (repo scope)" })}
+                : t({
+                    ko: "GitHub 다시 연결 (repo 권한)",
+                    en: "Reconnect GitHub (repo scope)",
+                    ja: "Reconnect GitHub (repo scope)",
+                    zh: "Reconnect GitHub (repo scope)",
+                  })}
           </button>
           <button
             type="button"
@@ -130,7 +135,12 @@ export default function GitHubDeviceConnect({ reason, onConnected, onCancel }: G
       {deviceStatus === "waiting" && deviceUserCode && (
         <div className="space-y-3 rounded-xl border border-blue-500/30 bg-blue-900/20 p-4">
           <p className="text-xs text-slate-300">
-            {t({ ko: "아래 코드를 GitHub 인증 페이지에 입력하세요.", en: "Enter this code on the GitHub verification page.", ja: "Enter this code on the GitHub verification page.", zh: "Enter this code on the GitHub verification page." })}
+            {t({
+              ko: "아래 코드를 GitHub 인증 페이지에 입력하세요.",
+              en: "Enter this code on the GitHub verification page.",
+              ja: "Enter this code on the GitHub verification page.",
+              zh: "Enter this code on the GitHub verification page.",
+            })}
           </p>
           <div className="flex items-center gap-3">
             <code className="rounded-lg bg-slate-800 px-4 py-2 text-lg font-bold tracking-widest text-white">
@@ -153,18 +163,33 @@ export default function GitHubDeviceConnect({ reason, onConnected, onCancel }: G
               rel="noopener noreferrer"
               className="inline-block text-xs text-blue-400 underline hover:text-blue-300"
             >
-              {t({ ko: "GitHub 인증 페이지 열기", en: "Open GitHub verification page", ja: "Open GitHub verification page", zh: "Open GitHub verification page" })}
+              {t({
+                ko: "GitHub 인증 페이지 열기",
+                en: "Open GitHub verification page",
+                ja: "Open GitHub verification page",
+                zh: "Open GitHub verification page",
+              })}
             </a>
           )}
           <p className="animate-pulse text-xs text-slate-400">
-            {t({ ko: "인증 대기 중...", en: "Waiting for authorization...", ja: "Waiting for authorization...", zh: "Waiting for authorization..." })}
+            {t({
+              ko: "인증 대기 중...",
+              en: "Waiting for authorization...",
+              ja: "Waiting for authorization...",
+              zh: "Waiting for authorization...",
+            })}
           </p>
         </div>
       )}
 
       {deviceStatus === "complete" && (
         <div className="rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2 text-xs text-green-400">
-          {t({ ko: "GitHub 연결 완료. 저장소 목록을 불러옵니다...", en: "GitHub connected. Loading repositories...", ja: "GitHub connected. Loading repositories...", zh: "GitHub connected. Loading repositories..." })}
+          {t({
+            ko: "GitHub 연결 완료. 저장소 목록을 불러옵니다...",
+            en: "GitHub connected. Loading repositories...",
+            ja: "GitHub connected. Loading repositories...",
+            zh: "GitHub connected. Loading repositories...",
+          })}
         </div>
       )}
 

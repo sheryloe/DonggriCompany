@@ -26,13 +26,11 @@ export interface CodexSubagentCatalogSnapshot {
 
 const DEFAULT_CATALOG_PATH = path.join(process.cwd(), "docs", "agents", "codex-subagents.by-department.json");
 
-let cachedSnapshot:
-  | {
-      filePath: string;
-      mtimeMs: number;
-      value: CodexSubagentCatalogSnapshot;
-    }
-  | null = null;
+let cachedSnapshot: {
+  filePath: string;
+  mtimeMs: number;
+  value: CodexSubagentCatalogSnapshot;
+} | null = null;
 
 function getCatalogPath(): string {
   const override = String(process.env.CODEX_SUBAGENTS_CATALOG_PATH ?? "").trim();

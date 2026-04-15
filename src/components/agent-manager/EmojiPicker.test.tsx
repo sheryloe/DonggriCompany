@@ -12,8 +12,8 @@ describe("EmojiPicker", () => {
 
     expect(screen.getByText("Work")).toBeInTheDocument();
     expect(screen.getByText("People")).toBeInTheDocument();
-    expect(screen.getByText("Objects")).toBeInTheDocument();
-    expect(screen.getByText("Nature")).toBeInTheDocument();
+    expect(screen.getByText("Tools")).toBeInTheDocument();
+    expect(screen.getByText("Misc")).toBeInTheDocument();
     expect(screen.queryByText("부서/업무")).not.toBeInTheDocument();
     expect(screen.queryByText("사람/표정")).not.toBeInTheDocument();
   });

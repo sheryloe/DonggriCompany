@@ -25,10 +25,16 @@ import type {
 } from "../../types";
 
 export type Locale = UiLanguage;
-export type TFunction = (messages: Record<Locale, string>) => string;
+export type LocalizedMessages = {
+  ko: string;
+  en: string;
+  ja?: string;
+  zh?: string;
+};
+export type TFunction = (messages: LocalizedMessages) => string;
 
 export type LocalSettings = Omit<CompanySettings, "language"> & { language: Locale };
-export type SettingsTab = "general" | "cli" | "oauth" | "api" | "gateway";
+export type SettingsTab = "general" | "cli" | "oauth" | "api" | "workflow-packs" | "gateway";
 
 export type SetLocalSettings = Dispatch<SetStateAction<LocalSettings>>;
 

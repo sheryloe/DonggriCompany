@@ -54,7 +54,11 @@ export default function GoogleOAuthAppConfig({ t }: { t: TFunction }) {
             zh: "Google OAuth App (Antigravity)",
           })}
         </h4>
-        {saved && <span className="text-[10px] text-green-400">{t({ ko: "저장됨", en: "Saved", ja: "Saved", zh: "Saved" })}</span>}
+        {saved && (
+          <span className="text-[10px] text-green-400">
+            {t({ ko: "저장됨", en: "Saved", ja: "Saved", zh: "Saved" })}
+          </span>
+        )}
       </div>
 
       <p className="text-[11px] leading-relaxed text-slate-500">

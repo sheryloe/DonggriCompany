@@ -62,7 +62,9 @@ export default function ChatEditorModal({
       <div className="relative w-full max-w-lg space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-semibold text-slate-100">
-            {editor.mode === "create" ? t({ ko: "채팅 추가", en: "Add Chat" }) : t({ ko: "채팅 수정", en: "Edit Chat" })}
+            {editor.mode === "create"
+              ? t({ ko: "채팅 추가", en: "Add Chat" })
+              : t({ ko: "채팅 수정", en: "Edit Chat" })}
           </h4>
           <button
             onClick={closeEditorModal}
@@ -136,7 +138,9 @@ export default function ChatEditorModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-slate-400">{t({ ko: "채널/대상 ID", en: "Channel/Target ID" })}</label>
+            <label className="mb-1 block text-xs text-slate-400">
+              {t({ ko: "채널/대상 ID", en: "Channel/Target ID" })}
+            </label>
             {editor.channel === "discord" && discordChannels.length > 0 && (
               <select
                 value={discordSelectedChannel ? discordSelectedChannel.id : ""}
@@ -153,7 +157,9 @@ export default function ChatEditorModal({
                 }}
                 className="mb-2 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
               >
-                <option value="">{t({ ko: "감지된 Discord 채널 선택 (선택 사항)", en: "Choose detected Discord channel (optional)" })}</option>
+                <option value="">
+                  {t({ ko: "감지된 Discord 채널 선택 (선택 사항)", en: "Choose detected Discord channel (optional)" })}
+                </option>
                 {discordChannels.map((entry) => (
                   <option key={entry.id} value={entry.id}>
                     {entry.guildName} / #{entry.name} ({entry.id})
@@ -182,7 +188,11 @@ export default function ChatEditorModal({
             />
             {editor.channel === "discord" && (
               <div className="mt-1 space-y-1">
-                {discordChannelsLoading && <div className="text-[11px] text-blue-300">{t({ ko: "Discord 채널 목록 조회 중...", en: "Loading Discord channels..." })}</div>}
+                {discordChannelsLoading && (
+                  <div className="text-[11px] text-blue-300">
+                    {t({ ko: "Discord 채널 목록 조회 중...", en: "Loading Discord channels..." })}
+                  </div>
+                )}
                 {!discordChannelsLoading && !discordChannelsError && editor.token.trim() && (
                   <div className="text-[11px] text-slate-500">
                     {discordChannels.length > 0
@@ -203,7 +213,9 @@ export default function ChatEditorModal({
         </div>
 
         <div>
-          <label className="mb-1 block text-xs text-slate-400">{t({ ko: "연결 에이전트", en: "Conversation Agent" })}</label>
+          <label className="mb-1 block text-xs text-slate-400">
+            {t({ ko: "연결 에이전트", en: "Conversation Agent" })}
+          </label>
           <AgentSelect
             agents={agents}
             value={editor.agentId}
@@ -232,7 +244,11 @@ export default function ChatEditorModal({
               </option>
             ))}
           </select>
-          {workflowPacksLoading && <div className="mt-1 text-[11px] text-slate-500">{t({ ko: "팩 목록 불러오는 중...", en: "Loading packs..." })}</div>}
+          {workflowPacksLoading && (
+            <div className="mt-1 text-[11px] text-slate-500">
+              {t({ ko: "팩 목록 불러오는 중...", en: "Loading packs..." })}
+            </div>
+          )}
         </div>
 
         {editor.channel === "telegram" && (
@@ -256,7 +272,10 @@ export default function ChatEditorModal({
           >
             {common.cancel}
           </button>
-          <button onClick={handleSaveEditor} className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500">
+          <button
+            onClick={handleSaveEditor}
+            className="rounded bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500"
+          >
             {common.confirm}
           </button>
         </div>

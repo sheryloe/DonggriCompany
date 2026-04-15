@@ -386,309 +386,318 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
     // Cross-department leader acknowledges AND creates a real task
     const crossAckDelay = 1500 + Math.random() * 1000;
     setTimeout(() => {
-      const crossSubAtRun = manualScoped
-        ? findBestSubordinate(crossDeptId, crossLeader.id, projectCandidateAgentIds)
-        : findBestSubordinate(crossDeptId, crossLeader.id);
-      const manualPoolFallbackAtRun =
-        manualScoped && projectCandidateAgentIds.length > 0
-          ? pickManualPoolAgent(projectCandidateAgentIds, crossDeptId, [teamLeader.id]) ||
-            pickManualPoolAgent(projectCandidateAgentIds, null, [teamLeader.id]) ||
-            pickManualPoolAgent(projectCandidateAgentIds, crossDeptId) ||
-            pickManualPoolAgent(projectCandidateAgentIds, null)
-          : null;
-      const execAgent =
-        crossSubAtRun ??
-        (crossLeaderAllowed ? crossLeader : manualPoolFallbackAtRun) ??
-        crossCoordinator ??
-        crossLeader;
-      const execName = lang === "ko" ? execAgent.name_ko || execAgent.name : execAgent.name;
+      try {
+        const crossSubAtRun = manualScoped
+          ? findBestSubordinate(crossDeptId, crossLeader.id, projectCandidateAgentIds)
+          : findBestSubordinate(crossDeptId, crossLeader.id);
+        const manualPoolFallbackAtRun =
+          manualScoped && projectCandidateAgentIds.length > 0
+            ? pickManualPoolAgent(projectCandidateAgentIds, crossDeptId, [teamLeader.id]) ||
+              pickManualPoolAgent(projectCandidateAgentIds, null, [teamLeader.id]) ||
+              pickManualPoolAgent(projectCandidateAgentIds, crossDeptId) ||
+              pickManualPoolAgent(projectCandidateAgentIds, null)
+            : null;
+        const execAgent =
+          crossSubAtRun ??
+          (crossLeaderAllowed ? crossLeader : manualPoolFallbackAtRun) ??
+          crossCoordinator ??
+          crossLeader;
+        const execName = lang === "ko" ? execAgent.name_ko || execAgent.name : execAgent.name;
 
-      const crossAckMsg =
-        execAgent.id !== crossCoordinator.id
-          ? pickL(
-              lang === "ko"
-                ? l(
-                    [
-                      `${leaderName}님, 확인했습니다. ${execName}이(가) ${crossDeptName} 측 협업을 바로 맡겠습니다.`,
-                      `${execName}에게 ${crossDeptName} 협업을 바로 배정하고 진행 상황을 공유드리겠습니다.`,
-                    ],
-                    [
-                      `Sure, ${leaderName}! I'll assign ${execName} to support right away.`,
-                      `Got it! ${execName} will handle the ${crossDeptName} side. I'll keep you posted.`,
-                    ],
-                    [`Sure, ${leaderName}! I'll assign ${execName} to support right away.`],
-                    [`Sure, ${leaderName}! I'll assign ${execName} to support right away.`],
-                  )
-                : l(
-                    [
-                      `${leaderName}님, 확인했습니다. ${execName}에게 바로 배정하겠습니다.`,
-                      `${execName}에게 ${crossDeptName} 협업을 바로 배정하고 진행 상황을 공유드리겠습니다.`,
-                    ],
-                    [
-                      `Sure, ${leaderName}! I'll assign ${execName} to support right away.`,
-                      `Got it! ${execName} will handle the ${crossDeptName} side. I'll keep you posted.`,
-                    ],
-                    [`${leaderName}さん、承知しました。${execName} をすぐに割り当てます。`],
-                    [`${leaderName}，收到。我会立即把任务分配给 ${execName}。`],
-                  ),
-              lang,
-            )
-          : pickL(
-              lang === "ko"
-                ? l(
-                    [`${leaderName}님, 확인했습니다. 제가 직접 진행하겠습니다.`],
-                    [`Sure, ${leaderName}! I'll handle it personally.`],
-                    [`Sure, ${leaderName}! I'll handle it personally.`],
-                    [`Sure, ${leaderName}! I'll handle it personally.`],
-                  )
-                : l(
-                    [`${leaderName}님, 확인했습니다. 제가 직접 진행하겠습니다.`],
-                    [`Sure, ${leaderName}! I'll handle it personally.`],
-                    [`承知しました、${leaderName}さん。私が直接進めます。`],
-                    [`收到，${leaderName}。我会直接处理。`],
-                  ),
-              lang,
-            );
-      sendAgentMessage(crossCoordinator, crossAckMsg, "chat", "agent", null, taskId);
+        const crossAckMsg =
+          execAgent.id !== crossCoordinator.id
+            ? pickL(
+                lang === "ko"
+                  ? l(
+                      [
+                        `${leaderName}님, 확인했습니다. ${execName}이(가) ${crossDeptName} 측 협업을 바로 맡겠습니다.`,
+                        `${execName}에게 ${crossDeptName} 협업을 바로 배정하고 진행 상황을 공유드리겠습니다.`,
+                      ],
+                      [
+                        `Sure, ${leaderName}! I'll assign ${execName} to support right away.`,
+                        `Got it! ${execName} will handle the ${crossDeptName} side. I'll keep you posted.`,
+                      ],
+                      [`Sure, ${leaderName}! I'll assign ${execName} to support right away.`],
+                      [`Sure, ${leaderName}! I'll assign ${execName} to support right away.`],
+                    )
+                  : l(
+                      [
+                        `${leaderName}님, 확인했습니다. ${execName}에게 바로 배정하겠습니다.`,
+                        `${execName}에게 ${crossDeptName} 협업을 바로 배정하고 진행 상황을 공유드리겠습니다.`,
+                      ],
+                      [
+                        `Sure, ${leaderName}! I'll assign ${execName} to support right away.`,
+                        `Got it! ${execName} will handle the ${crossDeptName} side. I'll keep you posted.`,
+                      ],
+                      [`${leaderName}さん、承知しました。${execName} をすぐに割り当てます。`],
+                      [`${leaderName}，收到。我会立即把任务分配给 ${execName}。`],
+                    ),
+                lang,
+              )
+            : pickL(
+                lang === "ko"
+                  ? l(
+                      [`${leaderName}님, 확인했습니다. 제가 직접 진행하겠습니다.`],
+                      [`Sure, ${leaderName}! I'll handle it personally.`],
+                      [`Sure, ${leaderName}! I'll handle it personally.`],
+                      [`Sure, ${leaderName}! I'll handle it personally.`],
+                    )
+                  : l(
+                      [`${leaderName}님, 확인했습니다. 제가 직접 진행하겠습니다.`],
+                      [`Sure, ${leaderName}! I'll handle it personally.`],
+                      [`承知しました、${leaderName}さん。私が直接進めます。`],
+                      [`收到，${leaderName}。我会直接处理。`],
+                    ),
+                lang,
+              );
+        sendAgentMessage(crossCoordinator, crossAckMsg, "chat", "agent", null, taskId);
 
-      // Create actual task in the cross-department
-      const crossTaskId = randomUUID();
-      const ct = nowMs();
-      const crossTaskTitle = pickL(
-        l([`[협업] ${taskTitle}`], [`[Collaboration] ${taskTitle}`], [`[協業] ${taskTitle}`], [`[协作] ${taskTitle}`]),
-        lang,
-      );
-      const parentTaskPath = db
-        .prepare("SELECT project_id, project_path, workflow_pack_key FROM tasks WHERE id = ?")
-        .get(taskId) as
-        | {
-            project_id: string | null;
-            project_path: string | null;
-            workflow_pack_key: string | null;
-          }
-        | undefined;
-      const crossDetectedPath = parentTaskPath?.project_path ?? detectProjectPath(ceoMessage);
-      const crossWorkflowPackKey = resolveWorkflowPackKeyForTask({
-        db: db as any,
-        sourceTaskPackKey: parentTaskPath?.workflow_pack_key,
-        sourceTaskId: taskId,
-        projectId: parentTaskPath?.project_id ?? null,
-      });
-      db.prepare(
-        `
-      INSERT INTO tasks (id, title, description, department_id, assigned_agent_id, project_id, status, priority, task_type, workflow_pack_key, project_path, source_task_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'planned', 1, 'general', ?, ?, ?, ?, ?)
-    `,
-      ).run(
-        crossTaskId,
-        crossTaskTitle,
-        `[Cross-dept from ${leaderDeptName}] ${ceoMessage}`,
-        crossDeptId,
-        crossCoordinator.id,
-        parentTaskPath?.project_id ?? null,
-        crossWorkflowPackKey,
-        crossDetectedPath,
-        taskId,
-        ct,
-        ct,
-      );
-      recordTaskCreationAudit({
-        taskId: crossTaskId,
-        taskTitle: crossTaskTitle,
-        taskStatus: "planned",
-        departmentId: crossDeptId,
-        assignedAgentId: crossCoordinator.id,
-        sourceTaskId: taskId,
-        taskType: "general",
-        projectPath: crossDetectedPath ?? null,
-        trigger: "workflow.cross_dept_cooperation",
-        triggerDetail: `from_dept=${leaderDeptId}; to_dept=${crossDeptId}`,
-        actorType: "agent",
-        actorId: crossCoordinator.id,
-        actorName: crossCoordinator.name,
-        body: {
-          parent_task_id: taskId,
-          ceo_message: ceoMessage,
-          from_department_id: leaderDeptId,
-          to_department_id: crossDeptId,
-        },
-      });
-      if (parentTaskPath?.project_id) {
-        db.prepare("UPDATE projects SET last_used_at = ?, updated_at = ? WHERE id = ?").run(
-          ct,
-          ct,
-          parentTaskPath.project_id,
+        // Create actual task in the cross-department
+        const crossTaskId = randomUUID();
+        const ct = nowMs();
+        const crossTaskTitle = pickL(
+          l(
+            [`[협업] ${taskTitle}`],
+            [`[Collaboration] ${taskTitle}`],
+            [`[協業] ${taskTitle}`],
+            [`[协作] ${taskTitle}`],
+          ),
+          lang,
         );
-      }
-      appendTaskLog(crossTaskId, "system", `Cross-dept request from ${leaderName} (${leaderDeptName})`);
-      broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(crossTaskId));
-      const linkedSubtaskId = linkCrossDeptTaskToParentSubtask(taskId, crossDeptId, crossTaskId);
-      if (linkedSubtaskId) {
-        delegatedTaskToSubtask.set(crossTaskId, linkedSubtaskId);
-      }
-
-      // Delegate to cross-dept subordinate and spawn CLI
-      const ct2 = nowMs();
-      db.prepare(
-        "UPDATE tasks SET assigned_agent_id = ?, status = 'in_progress', started_at = ?, updated_at = ? WHERE id = ?",
-      ).run(execAgent.id, ct2, ct2, crossTaskId);
-      db.prepare("UPDATE agents SET status = 'working', current_task_id = ? WHERE id = ?").run(
-        crossTaskId,
-        execAgent.id,
-      );
-      appendTaskLog(crossTaskId, "system", `${crossCoordinatorName} → ${execName}`);
-
-      broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(crossTaskId));
-      broadcast("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(execAgent.id));
-
-      // Register callback to start next department when this one finishes
-      if (index + 1 < deptIds.length) {
-        crossDeptNextCallbacks.set(crossTaskId, () => {
-          const nextDelay = 2000 + Math.random() * 1000;
-          setTimeout(() => {
-            startCrossDeptCooperation(deptIds, index + 1, nextCtx, onAllDone);
-          }, nextDelay);
-        });
-      } else if (onAllDone) {
-        // Last department in the queue: continue only after this cross task completes review.
-        crossDeptNextCallbacks.set(crossTaskId, () => {
-          const nextDelay = 1200 + Math.random() * 800;
-          setTimeout(() => onAllDone(), nextDelay);
-        });
-      }
-
-      // Actually spawn the CLI agent
-      const execProvider = execAgent.cli_provider || "claude";
-      const runtimeKind = resolveProviderRuntimeKind(execProvider);
-      if (runtimeKind) {
-        const crossTaskData = db.prepare("SELECT * FROM tasks WHERE id = ?").get(crossTaskId) as
+        const parentTaskPath = db
+          .prepare("SELECT project_id, project_path, workflow_pack_key FROM tasks WHERE id = ?")
+          .get(taskId) as
           | {
-              title: string;
-              description: string | null;
+              project_id: string | null;
               project_path: string | null;
               workflow_pack_key: string | null;
             }
           | undefined;
-        if (crossTaskData) {
-          const projPath = resolveProjectPath(crossTaskData);
-          const logFilePath = path.join(logsDir, `${crossTaskId}.log`);
-          const roleLabels: Record<string, string> = {
-            team_leader: "Team Leader",
-            senior: "Senior",
-            junior: "Junior",
-            intern: "Intern",
-          };
-          const roleLabel = roleLabels[execAgent.role] ?? execAgent.role;
-          const deptConstraint = getDeptRoleConstraint(crossDeptId, crossDeptName);
-          const deptPromptRaw = getDepartmentPromptForPack(db as any, crossTaskData.workflow_pack_key, crossDeptId);
-          const deptPrompt = typeof deptPromptRaw === "string" ? deptPromptRaw.trim() : "";
-          const deptPromptBlock = deptPrompt ? `[Department Shared Prompt]\n${deptPrompt}` : "";
-          const crossConversationCtx = getRecentConversationContext(execAgent.id);
-          const taskLang = resolveLang(crossTaskData.description ?? crossTaskData.title);
-          const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(execProvider);
-          const spawnPrompt = buildTaskExecutionPrompt(
-            [
-              availableSkillsPromptBlock,
-              `[Task] ${crossTaskData.title}`,
-              crossTaskData.description ? `\n${crossTaskData.description}` : "",
-              crossConversationCtx,
-              `\n---`,
-              `Agent: ${execAgent.name} (${roleLabel}, ${crossDeptName})`,
-              execAgent.personality ? `Personality: ${execAgent.personality}` : "",
-              deptConstraint,
-              deptPromptBlock,
+        const crossDetectedPath = parentTaskPath?.project_path ?? detectProjectPath(ceoMessage);
+        const crossWorkflowPackKey = resolveWorkflowPackKeyForTask({
+          db: db as any,
+          sourceTaskPackKey: parentTaskPath?.workflow_pack_key,
+          sourceTaskId: taskId,
+          projectId: parentTaskPath?.project_id ?? null,
+        });
+        db.prepare(
+          `
+      INSERT INTO tasks (id, title, description, department_id, assigned_agent_id, project_id, status, priority, task_type, workflow_pack_key, project_path, source_task_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'planned', 1, 'general', ?, ?, ?, ?, ?)
+    `,
+        ).run(
+          crossTaskId,
+          crossTaskTitle,
+          `[Cross-dept from ${leaderDeptName}] ${ceoMessage}`,
+          crossDeptId,
+          crossCoordinator.id,
+          parentTaskPath?.project_id ?? null,
+          crossWorkflowPackKey,
+          crossDetectedPath,
+          taskId,
+          ct,
+          ct,
+        );
+        recordTaskCreationAudit({
+          taskId: crossTaskId,
+          taskTitle: crossTaskTitle,
+          taskStatus: "planned",
+          departmentId: crossDeptId,
+          assignedAgentId: crossCoordinator.id,
+          sourceTaskId: taskId,
+          taskType: "general",
+          projectPath: crossDetectedPath ?? null,
+          trigger: "workflow.cross_dept_cooperation",
+          triggerDetail: `from_dept=${leaderDeptId}; to_dept=${crossDeptId}`,
+          actorType: "agent",
+          actorId: crossCoordinator.id,
+          actorName: crossCoordinator.name,
+          body: {
+            parent_task_id: taskId,
+            ceo_message: ceoMessage,
+            from_department_id: leaderDeptId,
+            to_department_id: crossDeptId,
+          },
+        });
+        if (parentTaskPath?.project_id) {
+          db.prepare("UPDATE projects SET last_used_at = ?, updated_at = ? WHERE id = ?").run(
+            ct,
+            ct,
+            parentTaskPath.project_id,
+          );
+        }
+        appendTaskLog(crossTaskId, "system", `Cross-dept request from ${leaderName} (${leaderDeptName})`);
+        broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(crossTaskId));
+        const linkedSubtaskId = linkCrossDeptTaskToParentSubtask(taskId, crossDeptId, crossTaskId);
+        if (linkedSubtaskId) {
+          delegatedTaskToSubtask.set(crossTaskId, linkedSubtaskId);
+        }
+
+        // Delegate to cross-dept subordinate and spawn CLI
+        const ct2 = nowMs();
+        db.prepare(
+          "UPDATE tasks SET assigned_agent_id = ?, status = 'in_progress', started_at = ?, updated_at = ? WHERE id = ?",
+        ).run(execAgent.id, ct2, ct2, crossTaskId);
+        db.prepare("UPDATE agents SET status = 'working', current_task_id = ? WHERE id = ?").run(
+          crossTaskId,
+          execAgent.id,
+        );
+        appendTaskLog(crossTaskId, "system", `${crossCoordinatorName} → ${execName}`);
+
+        broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(crossTaskId));
+        broadcast("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(execAgent.id));
+
+        // Register callback to start next department when this one finishes
+        if (index + 1 < deptIds.length) {
+          crossDeptNextCallbacks.set(crossTaskId, () => {
+            const nextDelay = 2000 + Math.random() * 1000;
+            setTimeout(() => {
+              startCrossDeptCooperation(deptIds, index + 1, nextCtx, onAllDone);
+            }, nextDelay);
+          });
+        } else if (onAllDone) {
+          // Last department in the queue: continue only after this cross task completes review.
+          crossDeptNextCallbacks.set(crossTaskId, () => {
+            const nextDelay = 1200 + Math.random() * 800;
+            setTimeout(() => onAllDone(), nextDelay);
+          });
+        }
+
+        // Actually spawn the CLI agent
+        const execProvider = execAgent.cli_provider || "claude";
+        const runtimeKind = resolveProviderRuntimeKind(execProvider);
+        if (runtimeKind) {
+          const crossTaskData = db.prepare("SELECT * FROM tasks WHERE id = ?").get(crossTaskId) as
+            | {
+                title: string;
+                description: string | null;
+                project_path: string | null;
+                workflow_pack_key: string | null;
+              }
+            | undefined;
+          if (crossTaskData) {
+            const projPath = resolveProjectPath(crossTaskData);
+            const logFilePath = path.join(logsDir, `${crossTaskId}.log`);
+            const roleLabels: Record<string, string> = {
+              team_leader: "Team Leader",
+              senior: "Senior",
+              junior: "Junior",
+              intern: "Intern",
+            };
+            const roleLabel = roleLabels[execAgent.role] ?? execAgent.role;
+            const deptConstraint = getDeptRoleConstraint(crossDeptId, crossDeptName);
+            const deptPromptRaw = getDepartmentPromptForPack(db as any, crossTaskData.workflow_pack_key, crossDeptId);
+            const deptPrompt = typeof deptPromptRaw === "string" ? deptPromptRaw.trim() : "";
+            const deptPromptBlock = deptPrompt ? `[Department Shared Prompt]\n${deptPrompt}` : "";
+            const crossConversationCtx = getRecentConversationContext(execAgent.id);
+            const taskLang = resolveLang(crossTaskData.description ?? crossTaskData.title);
+            const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(execProvider);
+            const spawnPrompt = buildTaskExecutionPrompt(
+              [
+                availableSkillsPromptBlock,
+                `[Task] ${crossTaskData.title}`,
+                crossTaskData.description ? `\n${crossTaskData.description}` : "",
+                crossConversationCtx,
+                `\n---`,
+                `Agent: ${execAgent.name} (${roleLabel}, ${crossDeptName})`,
+                execAgent.personality ? `Personality: ${execAgent.personality}` : "",
+                deptConstraint,
+                deptPromptBlock,
+                pickL(
+                  l(
+                    ["위 작업을 충분히 수행하세요. 필요하면 위 대화 맥락을 참고하세요."],
+                    ["Please complete the task above thoroughly. Use the conversation context above if relevant."],
+                    ["上記の作業を十分に遂行してください。必要に応じて会話コンテキストを参照してください。"],
+                    ["请充分完成上述任务，并在需要时参考上方对话上下文。"],
+                  ),
+                  taskLang,
+                ),
+              ],
+              {
+                allowWarningFix: hasExplicitWarningFixRequest(crossTaskData.title, crossTaskData.description),
+                agent: execAgent,
+                lang: taskLang,
+              },
+            );
+            const executionSession = ensureTaskExecutionSession(crossTaskId, execAgent.id, execProvider);
+            const sessionPrompt = [
+              `[Task Session] id=${executionSession.sessionId} owner=${executionSession.agentId} provider=${executionSession.provider}`,
+              "Task-scoped session: keep continuity only for this collaboration task.",
+              spawnPrompt,
+            ].join("\n");
+            const finalizeCrossDeptRun = (exitCode: number) => {
+              const linked = delegatedTaskToSubtask.get(crossTaskId);
+              if (linked) {
+                handleSubtaskDelegationComplete(crossTaskId, linked, exitCode);
+              } else {
+                handleTaskRunComplete(crossTaskId, exitCode);
+              }
+            };
+
+            appendTaskLog(crossTaskId, "system", `RUN start (agent=${execAgent.name}, provider=${execProvider})`);
+            if (runtimeKind === "api") {
+              const controller = new AbortController();
+              const fakePid = getNextHttpAgentPid();
+              launchApiProviderAgent(
+                crossTaskId,
+                execAgent.api_provider_id ?? null,
+                execAgent.api_model ?? null,
+                sessionPrompt,
+                projPath,
+                logFilePath,
+                controller,
+                fakePid,
+                finalizeCrossDeptRun,
+              );
+            } else if (runtimeKind === "http_stream") {
+              const controller = new AbortController();
+              const fakePid = getNextHttpAgentPid();
+              launchHttpAgent(
+                crossTaskId,
+                execProvider,
+                sessionPrompt,
+                projPath,
+                logFilePath,
+                controller,
+                fakePid,
+                execAgent.oauth_account_id ?? null,
+                finalizeCrossDeptRun,
+              );
+            } else {
+              const crossPolicy = resolveProviderExecutionPolicy({
+                provider: execProvider,
+                providerModelConfig: getProviderModelConfig(),
+              });
+              const child = spawnCliAgent(
+                crossTaskId,
+                execProvider,
+                sessionPrompt,
+                projPath,
+                logFilePath,
+                crossPolicy.model,
+                crossPolicy.reasoningLevel,
+                execAgent.cli_account_pool_id ?? null,
+              );
+              child.on("close", (code: number | null) => finalizeCrossDeptRun(code ?? 1));
+            }
+
+            notifyCeo(
               pickL(
                 l(
-                  ["위 작업을 충분히 수행하세요. 필요하면 위 대화 맥락을 참고하세요."],
-                  ["Please complete the task above thoroughly. Use the conversation context above if relevant."],
-                  ["上記の作業を十分に遂行してください。必要に応じて会話コンテキストを参照してください。"],
-                  ["请充分完成上述任务，并在需要时参考上方对话上下文。"],
+                  [`${crossDeptName} ${execName}이(가) '${taskTitle}' 협업 작업을 시작했습니다.`],
+                  [`${crossDeptName} ${execName} started collaboration work for '${taskTitle}'.`],
+                  [`${crossDeptName} ${execName} started collaboration work for "${taskTitle}".`],
+                  [`${crossDeptName} ${execName} started collaboration work for "${taskTitle}".`],
                 ),
-                taskLang,
+                lang,
               ),
-            ],
-            {
-              allowWarningFix: hasExplicitWarningFixRequest(crossTaskData.title, crossTaskData.description),
-              agent: execAgent,
-              lang: taskLang,
-            },
-          );
-          const executionSession = ensureTaskExecutionSession(crossTaskId, execAgent.id, execProvider);
-          const sessionPrompt = [
-            `[Task Session] id=${executionSession.sessionId} owner=${executionSession.agentId} provider=${executionSession.provider}`,
-            "Task-scoped session: keep continuity only for this collaboration task.",
-            spawnPrompt,
-          ].join("\n");
-          const finalizeCrossDeptRun = (exitCode: number) => {
-            const linked = delegatedTaskToSubtask.get(crossTaskId);
-            if (linked) {
-              handleSubtaskDelegationComplete(crossTaskId, linked, exitCode);
-            } else {
-              handleTaskRunComplete(crossTaskId, exitCode);
-            }
-          };
-
-          appendTaskLog(crossTaskId, "system", `RUN start (agent=${execAgent.name}, provider=${execProvider})`);
-          if (runtimeKind === "api") {
-            const controller = new AbortController();
-            const fakePid = getNextHttpAgentPid();
-            launchApiProviderAgent(
               crossTaskId,
-              execAgent.api_provider_id ?? null,
-              execAgent.api_model ?? null,
-              sessionPrompt,
-              projPath,
-              logFilePath,
-              controller,
-              fakePid,
-              finalizeCrossDeptRun,
             );
-          } else if (runtimeKind === "http_stream") {
-            const controller = new AbortController();
-            const fakePid = getNextHttpAgentPid();
-            launchHttpAgent(
-              crossTaskId,
-              execProvider,
-              sessionPrompt,
-              projPath,
-              logFilePath,
-              controller,
-              fakePid,
-              execAgent.oauth_account_id ?? null,
-              finalizeCrossDeptRun,
-            );
-          } else {
-            const crossPolicy = resolveProviderExecutionPolicy({
-              provider: execProvider,
-              providerModelConfig: getProviderModelConfig(),
-            });
-            const child = spawnCliAgent(
-              crossTaskId,
-              execProvider,
-              sessionPrompt,
-              projPath,
-              logFilePath,
-              crossPolicy.model,
-              crossPolicy.reasoningLevel,
-              execAgent.cli_account_pool_id ?? null,
-            );
-            child.on("close", (code: number | null) => finalizeCrossDeptRun(code ?? 1));
+            startProgressTimer(crossTaskId, crossTaskData.title, crossDeptId);
           }
-
-          notifyCeo(
-            pickL(
-              l(
-                [`${crossDeptName} ${execName}이(가) '${taskTitle}' 협업 작업을 시작했습니다.`],
-                [`${crossDeptName} ${execName} started collaboration work for '${taskTitle}'.`],
-                [`${crossDeptName} ${execName} started collaboration work for "${taskTitle}".`],
-                [`${crossDeptName} ${execName} started collaboration work for "${taskTitle}".`],
-              ),
-              lang,
-            ),
-            crossTaskId,
-          );
-          startProgressTimer(crossTaskId, crossTaskData.title, crossDeptId);
         }
+      } catch (err) {
+        console.error(`[Claw-Empire] Cross-dept cooperation crashed (taskId=${taskId}, dept=${crossDeptId}):`, err);
       }
     }, crossAckDelay);
   }

@@ -1,7 +1,7 @@
 export type ProviderModelConfig = Record<
   string,
   {
-    model: string;
+    model?: string;
     subModel?: string;
     reasoningLevel?: string;
     subModelReasoningLevel?: string;
@@ -15,16 +15,25 @@ type ResolveProviderExecutionPolicyInput = {
 
 export type ProviderExecutionPolicy = {
   model: string | undefined;
+  subModel: string | undefined;
   reasoningLevel: string | undefined;
+  subModelReasoningLevel: string | undefined;
 };
 
-export function resolveProviderExecutionPolicy(
-  input: ResolveProviderExecutionPolicyInput,
-): ProviderExecutionPolicy {
-  const provider = String(input.provider ?? "").trim().toLowerCase();
+function normalizeOptionalString(value: unknown): string | undefined {
+  const normalized = String(value ?? "").trim();
+  return normalized || undefined;
+}
+
+export function resolveProviderExecutionPolicy(input: ResolveProviderExecutionPolicyInput): ProviderExecutionPolicy {
+  const provider = String(input.provider ?? "")
+    .trim()
+    .toLowerCase();
   const providerConfig = input.providerModelConfig[provider] ?? null;
   return {
-    model: providerConfig?.model || undefined,
-    reasoningLevel: providerConfig?.reasoningLevel || undefined,
+    model: normalizeOptionalString(providerConfig?.model),
+    subModel: normalizeOptionalString(providerConfig?.subModel),
+    reasoningLevel: normalizeOptionalString(providerConfig?.reasoningLevel),
+    subModelReasoningLevel: normalizeOptionalString(providerConfig?.subModelReasoningLevel),
   };
 }

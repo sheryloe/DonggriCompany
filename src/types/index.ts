@@ -410,7 +410,7 @@ export type CliModelsResponse = Record<string, CliModelInfo[]>;
 
 // Settings
 export interface ProviderModelConfig {
-  model: string;
+  model?: string;
   subModel?: string; // 서브 에이전트(알바생) 모델 (claude, codex만 해당)
   reasoningLevel?: string; // Codex: "low"|"medium"|"high"|"xhigh"
   subModelReasoningLevel?: string; // 알바생 추론 레벨 (codex만 해당)

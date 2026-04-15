@@ -51,11 +51,16 @@ corepack pnpm test
 ```json
 {
   "donggri.serverUrl": "http://127.0.0.1:8790",
-  "donggri.apiToken": "",
   "donggri.autoConnect": true,
   "donggri.defaultProjectBindingMode": "match-or-create"
 }
 ```
+
+## API token storage
+
+- Run `Donggri: Set API Token` to save a bearer token in VS Code Secret Storage.
+- Run `Donggri: Clear API Token` to remove the stored token.
+- Legacy `donggri.apiToken` settings are migrated once and then cleared.
 
 ## Manual smoke path
 

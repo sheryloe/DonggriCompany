@@ -1,0 +1,3 @@
+# WORKLOG
+
+Chronological execution log.

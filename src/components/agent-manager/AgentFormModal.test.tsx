@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import * as api from "../../api";
 import { createPresetAgentProfile } from "../../agent-profile";
 import type { Department } from "../../types";
 import AgentFormModal from "./AgentFormModal";
@@ -71,29 +70,6 @@ function getPreviewTextarea(): HTMLTextAreaElement {
 }
 
 describe("AgentFormModal agent profile builder", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    vi.spyOn(api, "getCliModels").mockResolvedValue({
-      codex: [
-        {
-          slug: "gpt-5.4",
-          displayName: "GPT-5.4",
-          reasoningLevels: [
-            { effort: "low", description: "Fast" },
-            { effort: "high", description: "Thorough" },
-          ],
-          defaultReasoningLevel: "high",
-        },
-      ],
-      gemini: [
-        {
-          slug: "gemini-2.5-flash",
-          displayName: "Gemini 2.5 Flash",
-        },
-      ],
-    });
-  });
-
   it("applies role presets and regenerates the preview", async () => {
     const user = userEvent.setup();
     render(<ModalHarness />);
@@ -119,55 +95,51 @@ describe("AgentFormModal agent profile builder", () => {
     });
   });
 
-  it("separates reviewer settings from author settings in the workflow form", async () => {
+  it("updates workflow preview when the workflow role changes", async () => {
     const user = userEvent.setup();
     render(<ModalHarness />);
 
-    expect(screen.getByText("Review Settings")).toBeInTheDocument();
     expect(screen.getByLabelText("Review Lenses")).toBeInTheDocument();
-    expect(screen.getByLabelText("Force 2-pass review")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Max Review Rounds")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Require 2-pass review")).toBeInTheDocument();
+    expect(screen.getByLabelText("Max Review Rounds")).toBeInTheDocument();
+    expect(getPreviewTextarea().value).toContain("2x role: Reviewer");
+    expect(getPreviewTextarea().value).toContain("Review depth: Force 2-pass");
 
-    await user.click(screen.getByRole("button", { name: "Primary Author" }));
+    await user.selectOptions(screen.getByLabelText("Workflow Role"), "primary_author");
+    await user.clear(screen.getByLabelText("Max Review Rounds"));
+    await user.type(screen.getByLabelText("Max Review Rounds"), "2");
 
     await waitFor(() => {
-      expect(screen.getByText("Author Settings")).toBeInTheDocument();
-      expect(screen.getByLabelText("Max Review Rounds")).toBeInTheDocument();
-      expect(screen.queryByLabelText("Review Lenses")).not.toBeInTheDocument();
-      expect(screen.queryByLabelText("Force 2-pass review")).not.toBeInTheDocument();
       expect(getPreviewTextarea().value).toContain("2x role: Primary Author");
       expect(getPreviewTextarea().value).toContain("Max review rounds: 2");
+      expect(getPreviewTextarea().value).not.toContain("Review depth: Force 2-pass");
     });
   });
 
-  it("shows Codex plan mode only after a Codex model is explicitly selected", async () => {
+  it("keeps provider-specific model controls out of the modal for codex", async () => {
     const user = userEvent.setup();
     render(<ModalHarness />);
 
-    await user.click(screen.getByRole("button", { name: "codex" }));
+    await user.selectOptions(screen.getByLabelText("CLI Provider"), "codex");
 
-    expect(await screen.findByLabelText("Codex Model")).toBeInTheDocument();
+    expect(
+      screen.getByText("Model and reasoning selection are controlled by centralized provider policy."),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Codex Model")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Reasoning Level")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Codex Plan Mode")).not.toBeInTheDocument();
-
-    await user.selectOptions(screen.getByLabelText("Codex Model"), "gpt-5.4");
-
-    await waitFor(() => {
-      expect(screen.getByLabelText("Reasoning Level")).toBeInTheDocument();
-      expect(screen.getByLabelText("Codex Plan Mode")).toBeInTheDocument();
-    });
   });
 
-  it("shows Gemini model selector without Codex-only controls", async () => {
+  it("keeps provider-specific model controls out of the modal for gemini", async () => {
     const user = userEvent.setup();
     render(<ModalHarness />);
 
-    await user.click(screen.getByRole("button", { name: "gemini" }));
+    await user.selectOptions(screen.getByLabelText("CLI Provider"), "gemini");
 
-    const geminiModelSelect = await screen.findByLabelText("Gemini Model");
-    expect(geminiModelSelect).toBeInTheDocument();
-
-    await user.selectOptions(geminiModelSelect, "gemini-2.5-flash");
-
+    expect(
+      screen.getByText("Model and reasoning selection are controlled by centralized provider policy."),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Gemini Model")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Reasoning Level")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Codex Plan Mode")).not.toBeInTheDocument();
   });

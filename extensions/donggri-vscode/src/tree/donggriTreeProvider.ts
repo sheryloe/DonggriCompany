@@ -3,10 +3,7 @@ import type { DonggriDecisionItem, DonggriTaskRef } from "../types";
 import { DonggriStateStore } from "../state";
 import { formatTaskStatus } from "../util/task";
 
-type RootNode =
-  | { kind: "binding-root" }
-  | { kind: "tasks-root" }
-  | { kind: "decisions-root" };
+type RootNode = { kind: "binding-root" } | { kind: "tasks-root" } | { kind: "decisions-root" };
 
 type LeafNode =
   | { kind: "binding-leaf" }

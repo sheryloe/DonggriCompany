@@ -1,12 +1,32 @@
-﻿import { render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { OfficeExecutionProvider } from "../../api";
+import type { CliAccountVerifyResponse, OfficeExecutionProvider } from "../../api";
 import { DEFAULT_SETTINGS } from "../../types";
 import CliSettingsTab from "./CliSettingsTab";
 import type { LocalSettings } from "./types";
 
 const providers: OfficeExecutionProvider[] = ["codex", "gemini", "claude", "jules"];
+
+function createVerifyResponse(provider: OfficeExecutionProvider): CliAccountVerifyResponse {
+  return {
+    pool: {
+      id: "x",
+      provider,
+      accountPoolId: "x",
+      label: "x",
+      profileHome: "/tmp/x",
+      status: "connected",
+      lastVerifiedAt: Date.now(),
+      lastError: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    },
+    binaryInstalled: true,
+    authArtifactFound: true,
+  };
+}
 
 describe("CliSettingsTab multi-account", () => {
   it("renders pool manager and calls verify for selected pool", async () => {
@@ -105,22 +125,7 @@ describe("CliSettingsTab multi-account", () => {
         onCreatePool={vi.fn(async () => undefined)}
         onUpdatePool={vi.fn(async () => undefined)}
         onDeletePool={vi.fn(async () => undefined)}
-        onVerifyPool={vi.fn(async () => ({
-          pool: {
-            id: "x",
-            provider: "gemini",
-            accountPoolId: "x",
-            label: "x",
-            profileHome: "/tmp/x",
-            status: "connected" as const,
-            lastVerifiedAt: Date.now(),
-            lastError: null,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-          binaryInstalled: true,
-          authArtifactFound: true,
-        }))}
+        onVerifyPool={vi.fn(async () => createVerifyResponse("gemini"))}
         onCopyLoginCommand={vi.fn(async () => undefined)}
         onActivateRunner={vi.fn(async () => undefined)}
         onDeactivateRunner={vi.fn(async () => undefined)}
@@ -128,5 +133,90 @@ describe("CliSettingsTab multi-account", () => {
     );
 
     expect(screen.getByRole("option", { name: "Gemini 3 Pro Preview" })).toBeInTheDocument();
+  });
+
+  it("persists main and sub-agent provider policy selections", async () => {
+    const user = userEvent.setup();
+    const persistSettings = vi.fn();
+    const initialForm: LocalSettings = {
+      ...(DEFAULT_SETTINGS as LocalSettings),
+      language: "en",
+      providerModelConfig: {
+        codex: {
+          model: "gpt-5.3-codex",
+          reasoningLevel: "high",
+          subModel: "gpt-5.3-codex",
+          subModelReasoningLevel: "high",
+        },
+      },
+    };
+
+    function Harness() {
+      const [form, setForm] = useState<LocalSettings>(initialForm);
+      return (
+        <CliSettingsTab
+          t={(messages) => messages.en}
+          cliStatus={null}
+          cliModels={{
+            codex: [
+              {
+                slug: "gpt-5.4",
+                displayName: "GPT-5.4",
+                reasoningLevels: [
+                  { effort: "low", description: "Fast" },
+                  { effort: "high", description: "Deep" },
+                ],
+                defaultReasoningLevel: "high",
+              },
+              {
+                slug: "gpt-5.4-mini",
+                displayName: "GPT-5.4 Mini",
+                reasoningLevels: [
+                  { effort: "low", description: "Fast" },
+                  { effort: "medium", description: "Balanced" },
+                ],
+                defaultReasoningLevel: "medium",
+              },
+            ],
+          }}
+          cliModelsLoading={false}
+          officeExecutionProviders={["codex"]}
+          cliAccountPools={[]}
+          officeRunners={[]}
+          officeRunnerQueue={[]}
+          runnerMeta={{ maxActive: 5, idleTtlMs: 900000, dockerEnabled: false }}
+          cliAuthBusyKey={null}
+          selectedPoolByProvider={{ codex: "", gemini: "", claude: "", jules: "" }}
+          form={form}
+          setForm={setForm}
+          persistSettings={persistSettings}
+          onRefresh={vi.fn()}
+          onPoolSelect={vi.fn()}
+          onCreatePool={vi.fn(async () => undefined)}
+          onUpdatePool={vi.fn(async () => undefined)}
+          onDeletePool={vi.fn(async () => undefined)}
+          onVerifyPool={vi.fn(async () => createVerifyResponse("codex"))}
+          onCopyLoginCommand={vi.fn(async () => undefined)}
+          onActivateRunner={vi.fn(async () => undefined)}
+          onDeactivateRunner={vi.fn(async () => undefined)}
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    const selects = screen.getAllByRole("combobox");
+    await user.selectOptions(selects[1]!, "gpt-5.4");
+    await user.selectOptions(selects[2]!, "low");
+    await user.selectOptions(selects[3]!, "gpt-5.4-mini");
+    await user.selectOptions(selects[4]!, "medium");
+
+    const lastPersistCall = persistSettings.mock.calls.at(-1)?.[0];
+    expect(lastPersistCall?.providerModelConfig?.codex).toEqual({
+      model: "gpt-5.4",
+      reasoningLevel: "low",
+      subModel: "gpt-5.4-mini",
+      subModelReasoningLevel: "medium",
+    });
   });
 });

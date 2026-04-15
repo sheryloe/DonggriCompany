@@ -10,6 +10,7 @@ describe("SettingsTabNav", () => {
     expect(screen.getByRole("button", { name: "CLI 계정" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "OAuth 연동" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "API 연동" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "워크플로 팩" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "채널 메시지" })).toBeInTheDocument();
   });
 });

@@ -104,7 +104,11 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
   }
 
   app.get("/api/tasks", (req, res) => {
-    reconcileCrossDeptSubtasks();
+    try {
+      reconcileCrossDeptSubtasks();
+    } catch {
+      // best-effort reconciliation only
+    }
     const statusFilter = firstQueryValue(req.query.status);
     const deptFilter = firstQueryValue(req.query.department_id);
     const agentFilter = firstQueryValue(req.query.agent_id);
@@ -334,7 +338,11 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
 
   app.get("/api/tasks/:id", (req, res) => {
     const id = String(req.params.id);
-    reconcileCrossDeptSubtasks(id);
+    try {
+      reconcileCrossDeptSubtasks(id);
+    } catch {
+      // best-effort reconciliation only
+    }
     const subtaskTotalExpr = `(
     (SELECT COUNT(*) FROM subtasks s WHERE s.task_id = t.id)
     +

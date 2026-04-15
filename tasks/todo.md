@@ -81,3 +81,24 @@
   - `/api/skills` 총계: `4047`
   - `/api/subagents/catalog` 총계: `136`
   - Docker 재시작 없이 `127.0.0.1:8790` 로컬 서버 반영 확인
+
+## Repository P0 stabilization batch (2026-04-15)
+
+- [x] Align provider policy runtime contract (`model`, `reasoningLevel`, `subModel`, `subModelReasoningLevel`)
+- [x] Add CLI settings controls for main/sub model policy
+- [x] Connect workflow pack policy editor tab
+- [x] Add GitHub repo delete route and bootstrap rollback
+- [x] Move VS Code API token handling to SecretStorage
+- [x] Run targeted web/api/extension verification
+
+## Full build stabilization batch (2026-04-15)
+
+- [x] Recollect current `pnpm build` TypeScript errors
+- [x] Fix remaining type mismatches and JSX parser blockers
+- [x] Re-run `pnpm build` and targeted verification
+
+## Bundle chunk optimization batch (2026-04-15)
+
+- [x] Identify current Vite bundle warning source
+- [x] Split heavy app views into lazy-loaded chunks
+- [x] Re-run `pnpm build` and confirm warning removal

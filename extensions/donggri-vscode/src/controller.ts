@@ -5,7 +5,12 @@ import { WorkspaceBindingService } from "./binding/workspaceBindingService";
 import { readDonggriServerConfig } from "./config";
 import { collectEditorContext, type CollectedEditorContext } from "./local/contextCollector";
 import { buildTaskDescription } from "./local/promptBuilders";
-import { runFixWithModel, runReviewWithModel, selectDefaultModel, summarizeTerminalWithModel } from "./local/modelService";
+import {
+  runFixWithModel,
+  runReviewWithModel,
+  selectDefaultModel,
+  summarizeTerminalWithModel,
+} from "./local/modelService";
 import { PendingEditStore } from "./pendingEditStore";
 import { DonggriStateStore } from "./state";
 import type { DonggriTaskAction, DonggriTaskRef, LocalReviewRequest, WorkspaceBinding } from "./types";
@@ -36,7 +41,13 @@ export class DonggriExtensionController implements vscode.Disposable {
       showCollapseAll: false,
     });
 
-    this.context.subscriptions.push(this.stateStore, this.treeProvider, this.treeView, this.statusBarItem, this.wsClient);
+    this.context.subscriptions.push(
+      this.stateStore,
+      this.treeProvider,
+      this.treeView,
+      this.statusBarItem,
+      this.wsClient,
+    );
     this.statusBarItem.command = "workbench.view.extension.donggri";
   }
 
@@ -78,7 +89,10 @@ export class DonggriExtensionController implements vscode.Disposable {
         return;
       }
 
-      const [tasks, decisions] = await Promise.all([this.client.getTasks(binding.projectId), this.client.getDecisionInbox()]);
+      const [tasks, decisions] = await Promise.all([
+        this.client.getTasks(binding.projectId),
+        this.client.getDecisionInbox(),
+      ]);
       this.stateStore.setTasks(tasks);
       this.stateStore.setDecisions(decisions);
     } catch (error) {
@@ -127,7 +141,13 @@ export class DonggriExtensionController implements vscode.Disposable {
       prompt: input.prompt || (input.mode === "diff" ? "Review the current working diff." : "Review the current code."),
       responseLanguage: detectResponseLanguage(input.prompt || ""),
     };
-    const text = await runReviewWithModel(model, request, context, input.token ?? new vscode.CancellationTokenSource().token, input.onChunk);
+    const text = await runReviewWithModel(
+      model,
+      request,
+      context,
+      input.token ?? new vscode.CancellationTokenSource().token,
+      input.onChunk,
+    );
     return {
       text,
       streamed: Boolean(input.onChunk),
@@ -214,7 +234,10 @@ export class DonggriExtensionController implements vscode.Disposable {
       options?.title ??
       (await vscode.window.showInputBox({
         prompt: "Donggri task title",
-        value: buildTaskTitleFromPrompt(prompt, context.relativePath ? `Work on ${context.relativePath}` : "Work on current context"),
+        value: buildTaskTitleFromPrompt(
+          prompt,
+          context.relativePath ? `Work on ${context.relativePath}` : "Work on current context",
+        ),
         ignoreFocusOut: true,
       }));
 
@@ -324,16 +347,18 @@ export class DonggriExtensionController implements vscode.Disposable {
 
     const selectedDecision =
       (decisionId ? decisions.find((item) => item.id === decisionId) : undefined) ??
-      (await vscode.window.showQuickPick(
-        decisions.map((item) => ({
-          label: item.summary,
-          description: item.project_name ?? item.kind,
-          decision: item,
-        })),
-        {
-          title: "Donggri Decision Inbox",
-        },
-      ))?.decision;
+      (
+        await vscode.window.showQuickPick(
+          decisions.map((item) => ({
+            label: item.summary,
+            description: item.project_name ?? item.kind,
+            decision: item,
+          })),
+          {
+            title: "Donggri Decision Inbox",
+          },
+        )
+      )?.decision;
 
     if (!selectedDecision) {
       return;
@@ -414,7 +439,11 @@ export class DonggriExtensionController implements vscode.Disposable {
   private updateStatusBar(): void {
     const snapshot = this.stateStore.snapshot;
     const bindingLabel = snapshot.binding?.projectName ?? "unbound";
-    const icon = snapshot.connected ? (snapshot.lastCliAt && Date.now() - snapshot.lastCliAt < 8_000 ? "$(sync~spin)" : "$(plug)") : "$(debug-disconnect)";
+    const icon = snapshot.connected
+      ? snapshot.lastCliAt && Date.now() - snapshot.lastCliAt < 8_000
+        ? "$(sync~spin)"
+        : "$(plug)"
+      : "$(debug-disconnect)";
     this.statusBarItem.text = `${icon} Donggri ${bindingLabel} · ${snapshot.tasks.length} tasks`;
     this.statusBarItem.tooltip = snapshot.binding
       ? `${snapshot.binding.projectPath}\n${snapshot.binding.projectContext}`

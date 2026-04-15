@@ -1,0 +1,13 @@
+{
+  "agent_id": "98b47e06-133e-462b-b421-74fdb06c6e77",
+  "agent_name": "Clio",
+  "role": "senior",
+  "department_id": "planning",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:19:22.466Z"
+}

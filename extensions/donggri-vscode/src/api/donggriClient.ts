@@ -48,11 +48,7 @@ export class DonggriClient {
     return projects;
   }
 
-  async createProject(input: {
-    name: string;
-    project_path: string;
-    core_goal: string;
-  }): Promise<DonggriProject> {
+  async createProject(input: { name: string; project_path: string; core_goal: string }): Promise<DonggriProject> {
     const response = await this.http.request<{ ok: boolean; project: DonggriProject }>("/api/projects", {
       method: "POST",
       headers: {

@@ -1,12 +1,6 @@
-import { useCallback, useMemo, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useMemo, type ReactNode } from "react";
 import { createPresetAgentProfile } from "../agent-profile";
 import Sidebar from "../components/Sidebar";
-import OfficeView from "../components/OfficeView";
-import Dashboard from "../components/Dashboard";
-import TaskBoard from "../components/TaskBoard";
-import AgentManager from "../components/AgentManager";
-import SkillsLibrary from "../components/SkillsLibrary";
-import SettingsPanel from "../components/SettingsPanel";
 import { I18nProvider } from "../i18n";
 import type {
   Agent,
@@ -35,6 +29,13 @@ import {
 } from "./office-workflow-pack";
 import { resolvePackAgentViews, resolvePackDepartmentsForDisplay } from "./office-pack-display";
 import { applyOfficePackToTaskInput, filterTasksByOfficePack, type TaskCreateInput } from "./task-workflow-pack";
+
+const OfficeView = lazy(() => import("../components/OfficeView"));
+const Dashboard = lazy(() => import("../components/Dashboard"));
+const TaskBoard = lazy(() => import("../components/TaskBoard"));
+const AgentManager = lazy(() => import("../components/AgentManager"));
+const SkillsLibrary = lazy(() => import("../components/SkillsLibrary"));
+const SettingsPanel = lazy(() => import("../components/SettingsPanel"));
 
 interface AppMainLayoutLabels {
   uiLanguage: string;
@@ -214,6 +215,14 @@ export default function AppMainLayout({
     if (uiLanguage === "zh") return `${officePackBootstrappingLabel} 办公室包部署中...`;
     return `Deploying ${officePackBootstrappingLabel} office pack...`;
   }, [officePackBootstrappingLabel, uiLanguage]);
+  const viewLoadingLabel =
+    uiLanguage === "ko"
+      ? "화면을 불러오는 중입니다..."
+      : uiLanguage === "ja"
+        ? "画面を読み込み中です..."
+        : uiLanguage === "zh"
+          ? "正在加载界面..."
+          : "Loading view...";
   const generatedOfficePresentation = useMemo(
     () =>
       buildOfficePackPresentation({
@@ -475,92 +484,100 @@ export default function AppMainLayout({
           )}
 
           <div className="p-3 sm:p-4 lg:p-6">
-            {view === "office" && (
-              <OfficeView
-                departments={officePresentation.departments}
-                agents={officePresentation.agents}
-                tasks={tasks}
-                subAgents={subAgents}
-                meetingPresence={meetingPresence}
-                activeMeetingTaskId={activeMeetingTaskId}
-                unreadAgentIds={unreadAgentIds}
-                crossDeptDeliveries={crossDeptDeliveries}
-                onCrossDeptDeliveryProcessed={onCrossDeptDeliveryProcessed}
-                ceoOfficeCalls={ceoOfficeCalls}
-                onCeoOfficeCallProcessed={onCeoOfficeCallProcessed}
-                onOpenActiveMeetingMinutes={onOpenActiveMeetingMinutes}
-                customDeptThemes={officePresentation.roomThemes}
-                themeHighlightTargetId={activeRoomThemeTargetId}
-                onSelectAgent={onSelectAgent}
-                onSelectDepartment={onSelectDepartment}
-              />
-            )}
+            <Suspense
+              fallback={
+                <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-6 text-sm text-slate-300">
+                  {viewLoadingLabel}
+                </div>
+              }
+            >
+              {view === "office" && (
+                <OfficeView
+                  departments={officePresentation.departments}
+                  agents={officePresentation.agents}
+                  tasks={tasks}
+                  subAgents={subAgents}
+                  meetingPresence={meetingPresence}
+                  activeMeetingTaskId={activeMeetingTaskId}
+                  unreadAgentIds={unreadAgentIds}
+                  crossDeptDeliveries={crossDeptDeliveries}
+                  onCrossDeptDeliveryProcessed={onCrossDeptDeliveryProcessed}
+                  ceoOfficeCalls={ceoOfficeCalls}
+                  onCeoOfficeCallProcessed={onCeoOfficeCallProcessed}
+                  onOpenActiveMeetingMinutes={onOpenActiveMeetingMinutes}
+                  customDeptThemes={officePresentation.roomThemes}
+                  themeHighlightTargetId={activeRoomThemeTargetId}
+                  onSelectAgent={onSelectAgent}
+                  onSelectDepartment={onSelectDepartment}
+                />
+              )}
 
-            {view === "dashboard" && (
-              <Dashboard
-                stats={stats}
-                agents={agents}
-                tasks={tasks}
-                companyName={settings.companyName}
-                onPrimaryCtaClick={() => setView("tasks")}
-              />
-            )}
+              {view === "dashboard" && (
+                <Dashboard
+                  stats={stats}
+                  agents={agents}
+                  tasks={tasks}
+                  companyName={settings.companyName}
+                  onPrimaryCtaClick={() => setView("tasks")}
+                />
+              )}
 
-            {view === "tasks" && (
-              <TaskBoard
-                tasks={tasksForActivePack}
-                agents={displayAgents}
-                departments={displayDepartments}
-                subtasks={subtasks}
-                onCreateTask={handleCreateTaskForActivePack}
-                onUpdateTask={onUpdateTask}
-                onDeleteTask={onDeleteTask}
-                onAssignTask={onAssignTask}
-                onRunTask={onRunTask}
-                onStopTask={onStopTask}
-                onPauseTask={onPauseTask}
-                onResumeTask={onResumeTask}
-                onOpenTerminal={onOpenTerminal}
-                onOpenMeetingMinutes={onOpenMeetingMinutes}
-              />
-            )}
+              {view === "tasks" && (
+                <TaskBoard
+                  tasks={tasksForActivePack}
+                  agents={displayAgents}
+                  departments={displayDepartments}
+                  subtasks={subtasks}
+                  onCreateTask={handleCreateTaskForActivePack}
+                  onUpdateTask={onUpdateTask}
+                  onDeleteTask={onDeleteTask}
+                  onAssignTask={onAssignTask}
+                  onRunTask={onRunTask}
+                  onStopTask={onStopTask}
+                  onPauseTask={onPauseTask}
+                  onResumeTask={onResumeTask}
+                  onOpenTerminal={onOpenTerminal}
+                  onOpenMeetingMinutes={onOpenMeetingMinutes}
+                />
+              )}
 
-            {view === "agents" && (
-              <AgentManager
-                agents={managerAgents}
-                departments={managerDepartments}
-                onAgentsChange={onAgentsChange}
-                activeOfficeWorkflowPack={officePackKey}
-                dbBackedOfficePack={isHydratedOfficePack}
-                onSaveOfficePackProfile={async (packKey, profile) => {
-                  if (packKey === "development") return;
-                  await onSaveSettings({
-                    ...settings,
-                    officePackProfiles: {
-                      ...(settings.officePackProfiles ?? {}),
-                      [packKey]: profile,
-                    },
-                  });
-                }}
-              />
-            )}
+              {view === "agents" && (
+                <AgentManager
+                  agents={managerAgents}
+                  departments={managerDepartments}
+                  onAgentsChange={onAgentsChange}
+                  activeOfficeWorkflowPack={officePackKey}
+                  dbBackedOfficePack={isHydratedOfficePack}
+                  onSaveOfficePackProfile={async (packKey, profile) => {
+                    if (packKey === "development") return;
+                    await onSaveSettings({
+                      ...settings,
+                      officePackProfiles: {
+                        ...(settings.officePackProfiles ?? {}),
+                        [packKey]: profile,
+                      },
+                    });
+                  }}
+                />
+              )}
 
-            {view === "skills" && <SkillsLibrary agents={agents} />}
+              {view === "skills" && <SkillsLibrary agents={agents} />}
 
-            {view === "settings" && (
-              <SettingsPanel
-                settings={settings}
-                cliStatus={cliStatus}
-                onSave={(nextSettings) => {
-                  void onSaveSettings(nextSettings);
-                }}
-                onRefreshCli={() => {
-                  void onRefreshCli();
-                }}
-                oauthResult={oauthResult}
-                onOauthResultClear={onOauthResultClear}
-              />
-            )}
+              {view === "settings" && (
+                <SettingsPanel
+                  settings={settings}
+                  cliStatus={cliStatus}
+                  onSave={(nextSettings) => {
+                    void onSaveSettings(nextSettings);
+                  }}
+                  onRefreshCli={() => {
+                    void onRefreshCli();
+                  }}
+                  oauthResult={oauthResult}
+                  onOauthResultClear={onOauthResultClear}
+                />
+              )}
+            </Suspense>
           </div>
         </main>
 

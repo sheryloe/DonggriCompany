@@ -6,7 +6,13 @@ import {
   recommendGrowthTierFromXp,
 } from "../../agent-profile";
 import { getPromotionPolicyDisplayLabel } from "../../app/canonical-display";
-import type { AgentCapabilityKey, AgentClassPath, AgentLevelValue, AgentPromptStyleKey, AgentPromotionPolicy } from "../../types";
+import type {
+  AgentCapabilityKey,
+  AgentClassPath,
+  AgentLevelValue,
+  AgentPromptStyleKey,
+  AgentPromotionPolicy,
+} from "../../types";
 import type { FormData, Translator } from "./types";
 
 const CAPABILITY_KEYS: AgentCapabilityKey[] = [
@@ -120,7 +126,11 @@ export default function AgentProfileBuilder({
     value: AgentLevelValue,
     onChange: (next: number) => void,
   ) => (
-    <div key={key} className="space-y-1.5 rounded-lg border px-3 py-2" style={{ borderColor: "var(--th-input-border)" }}>
+    <div
+      key={key}
+      className="space-y-1.5 rounded-lg border px-3 py-2"
+      style={{ borderColor: "var(--th-input-border)" }}
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
           {label}
@@ -129,7 +139,15 @@ export default function AgentProfileBuilder({
           Lv.{value} {getLevelWord(value, locale)}
         </span>
       </div>
-      <input type="range" min={1} max={5} step={1} value={value} onChange={(event) => onChange(Number(event.target.value))} className="w-full accent-blue-500" />
+      <input
+        type="range"
+        min={1}
+        max={5}
+        step={1}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="w-full accent-blue-500"
+      />
     </div>
   );
 
@@ -141,10 +159,16 @@ export default function AgentProfileBuilder({
             {tr("성장/프로필 빌더", "Growth / Profile Builder")}
           </div>
           <div className="text-xs" style={{ color: "var(--th-text-muted)" }}>
-            {tr("이 값은 저장되며 런타임 프롬프트와 에이전트 번들에 함께 반영됩니다.", "These values are saved and reflected in runtime prompts and agent bundles.")}
+            {tr(
+              "이 값은 저장되며 런타임 프롬프트와 에이전트 번들에 함께 반영됩니다.",
+              "These values are saved and reflected in runtime prompts and agent bundles.",
+            )}
           </div>
         </div>
-        <div className="rounded-lg border px-3 py-2 text-right text-xs" style={{ borderColor: "var(--th-input-border)" }}>
+        <div
+          className="rounded-lg border px-3 py-2 text-right text-xs"
+          style={{ borderColor: "var(--th-input-border)" }}
+        >
           <div style={{ color: "var(--th-text-muted)" }}>{tr("XP 기준 추천 티어", "Recommended Tier by XP")}</div>
           <div className="font-semibold" style={{ color: "var(--th-text-heading)" }}>
             Tier {recommendedGrowthTier} · {currentXp} XP
@@ -171,7 +195,9 @@ export default function AgentProfileBuilder({
           className="w-full accent-blue-500"
         />
         <div className="mt-1 flex items-center justify-between text-[11px]" style={{ color: "var(--th-text-muted)" }}>
-          <span>{tr("추천", "Recommended")}: Tier {recommendedGrowthTier}</span>
+          <span>
+            {tr("추천", "Recommended")}: Tier {recommendedGrowthTier}
+          </span>
           <span>{getLevelWord(form.agent_profile.growth_tier, locale)}</span>
         </div>
       </div>
@@ -182,7 +208,9 @@ export default function AgentProfileBuilder({
             {tr("역량 매트릭스", "Capability Matrix")}
           </div>
           {CAPABILITY_KEYS.map((key) =>
-            renderSlider(key, getCapabilityLabel(key, locale), form.agent_profile.capabilities[key], (next) => updateCapability(key, next)),
+            renderSlider(key, getCapabilityLabel(key, locale), form.agent_profile.capabilities[key], (next) =>
+              updateCapability(key, next),
+            ),
           )}
         </div>
 
@@ -191,7 +219,9 @@ export default function AgentProfileBuilder({
             {tr("프롬프트 스타일", "Prompt Style")}
           </div>
           {PROMPT_STYLE_KEYS.map((key) =>
-            renderSlider(key, getPromptStyleLabel(key, locale), form.agent_profile.prompt_style[key], (next) => updatePromptStyle(key, next)),
+            renderSlider(key, getPromptStyleLabel(key, locale), form.agent_profile.prompt_style[key], (next) =>
+              updatePromptStyle(key, next),
+            ),
           )}
         </div>
       </div>
@@ -200,9 +230,24 @@ export default function AgentProfileBuilder({
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {[
-              { key: "class_stage_1", labelKo: "클래스 1단계", labelEn: "Class Stage 1", value: classPath.class_stage_1 ?? classPath.stage1 ?? "" },
-              { key: "class_stage_2", labelKo: "클래스 2단계", labelEn: "Class Stage 2", value: classPath.class_stage_2 ?? classPath.stage2 ?? "" },
-              { key: "class_stage_3", labelKo: "클래스 3단계", labelEn: "Class Stage 3", value: classPath.class_stage_3 ?? classPath.stage3 ?? "" },
+              {
+                key: "class_stage_1",
+                labelKo: "클래스 1단계",
+                labelEn: "Class Stage 1",
+                value: classPath.class_stage_1 ?? classPath.stage1 ?? "",
+              },
+              {
+                key: "class_stage_2",
+                labelKo: "클래스 2단계",
+                labelEn: "Class Stage 2",
+                value: classPath.class_stage_2 ?? classPath.stage2 ?? "",
+              },
+              {
+                key: "class_stage_3",
+                labelKo: "클래스 3단계",
+                labelEn: "Class Stage 3",
+                value: classPath.class_stage_3 ?? classPath.stage3 ?? "",
+              },
             ].map((item) => (
               <div key={item.key}>
                 <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
@@ -219,7 +264,11 @@ export default function AgentProfileBuilder({
                     })
                   }
                   className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                  style={{ background: "var(--th-input-bg)", borderColor: "var(--th-input-border)", color: "var(--th-text-primary)" }}
+                  style={{
+                    background: "var(--th-input-bg)",
+                    borderColor: "var(--th-input-border)",
+                    color: "var(--th-text-primary)",
+                  }}
                   placeholder={item.labelEn.toLowerCase()}
                 />
               </div>
@@ -249,8 +298,15 @@ export default function AgentProfileBuilder({
               }}
               rows={3}
               className="w-full resize-none rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              style={{ background: "var(--th-input-bg)", borderColor: "var(--th-input-border)", color: "var(--th-text-primary)" }}
-              placeholder={tr("예: backend, orchestration, prompt design", "e.g. backend, orchestration, prompt design")}
+              style={{
+                background: "var(--th-input-bg)",
+                borderColor: "var(--th-input-border)",
+                color: "var(--th-text-primary)",
+              }}
+              placeholder={tr(
+                "예: backend, orchestration, prompt design",
+                "e.g. backend, orchestration, prompt design",
+              )}
             />
           </div>
 
@@ -273,8 +329,15 @@ export default function AgentProfileBuilder({
               }}
               rows={5}
               className="w-full resize-none rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              style={{ background: "var(--th-input-bg)", borderColor: "var(--th-input-border)", color: "var(--th-text-primary)" }}
-              placeholder={tr("생성된 프로필보다 우선 적용할 최종 지침을 입력합니다.", "Add final instructions that must override the generated profile.")}
+              style={{
+                background: "var(--th-input-bg)",
+                borderColor: "var(--th-input-border)",
+                color: "var(--th-text-primary)",
+              }}
+              placeholder={tr(
+                "생성된 프로필보다 우선 적용할 최종 지침을 입력합니다.",
+                "Add final instructions that must override the generated profile.",
+              )}
             />
           </div>
         </div>
@@ -294,7 +357,11 @@ export default function AgentProfileBuilder({
                   updateAgentProfile({ promotion_policy: { ...promotionPolicy, from_role: event.target.value.trim() } })
                 }
                 className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                style={{ background: "var(--th-input-bg)", borderColor: "var(--th-input-border)", color: "var(--th-text-primary)" }}
+                style={{
+                  background: "var(--th-input-bg)",
+                  borderColor: "var(--th-input-border)",
+                  color: "var(--th-text-primary)",
+                }}
                 placeholder="from_role"
               />
               <input
@@ -303,7 +370,11 @@ export default function AgentProfileBuilder({
                   updateAgentProfile({ promotion_policy: { ...promotionPolicy, to_role: event.target.value.trim() } })
                 }
                 className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                style={{ background: "var(--th-input-bg)", borderColor: "var(--th-input-border)", color: "var(--th-text-primary)" }}
+                style={{
+                  background: "var(--th-input-bg)",
+                  borderColor: "var(--th-input-border)",
+                  color: "var(--th-text-primary)",
+                }}
                 placeholder="to_role"
               />
               <input
@@ -319,7 +390,11 @@ export default function AgentProfileBuilder({
                   })
                 }
                 className="rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                style={{ background: "var(--th-input-bg)", borderColor: "var(--th-input-border)", color: "var(--th-text-primary)" }}
+                style={{
+                  background: "var(--th-input-bg)",
+                  borderColor: "var(--th-input-border)",
+                  color: "var(--th-text-primary)",
+                }}
               />
             </div>
           </div>
@@ -333,7 +408,11 @@ export default function AgentProfileBuilder({
               readOnly
               rows={14}
               className="w-full resize-none rounded-lg border px-3 py-2 font-mono text-[12px] leading-5 focus:outline-none"
-              style={{ background: "var(--th-input-bg)", borderColor: "var(--th-input-border)", color: "var(--th-text-primary)" }}
+              style={{
+                background: "var(--th-input-bg)",
+                borderColor: "var(--th-input-border)",
+                color: "var(--th-text-primary)",
+              }}
             />
           </div>
         </div>

@@ -193,10 +193,19 @@ describe("GatewaySettingsTab characterization", () => {
   });
 
   it("shows shared dictionary copy for empty state", async () => {
-    render(<GatewaySettingsTab t={t} form={createFormWithMessengerChannels() as any} setForm={vi.fn()} persistSettings={vi.fn()} />);
+    render(
+      <GatewaySettingsTab
+        t={t}
+        form={createFormWithMessengerChannels() as any}
+        setForm={vi.fn()}
+        persistSettings={vi.fn()}
+      />,
+    );
 
     await waitFor(() => {
-      expect(screen.getByText("No chats yet. Use Add Chat to register messenger, token, and channel.")).toBeInTheDocument();
+      expect(
+        screen.getByText("No chats yet. Use Add Chat to register messenger, token, and channel."),
+      ).toBeInTheDocument();
       expect(screen.getByText("No saved session. Add a chat first.")).toBeInTheDocument();
     });
   });

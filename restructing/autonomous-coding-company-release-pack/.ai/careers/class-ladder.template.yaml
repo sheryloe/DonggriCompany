@@ -1,0 +1,9 @@
+role_family: backend
+stages:
+  - junior
+  - advancement-1
+  - senior
+  - advancement-2
+  - pro-senior
+  - advancement-3
+  - team-lead

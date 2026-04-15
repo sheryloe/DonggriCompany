@@ -1,0 +1,13 @@
+{
+  "agent_id": "07106c9c-4211-4cb2-84db-f5d4ea78899f",
+  "agent_name": "Atlas",
+  "role": "team_leader",
+  "department_id": "operations",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:20:14.142Z"
+}

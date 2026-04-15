@@ -45,7 +45,10 @@ function normalizeSkillId(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/^\/+|\/+$/g, "") : "";
 }
 
-function compareSkillNames(left: Pick<SkillEntry, "name" | "repo" | "skillId">, right: Pick<SkillEntry, "name" | "repo" | "skillId">): number {
+function compareSkillNames(
+  left: Pick<SkillEntry, "name" | "repo" | "skillId">,
+  right: Pick<SkillEntry, "name" | "repo" | "skillId">,
+): number {
   return (
     left.name.localeCompare(right.name) ||
     left.repo.localeCompare(right.repo) ||
@@ -54,11 +57,7 @@ function compareSkillNames(left: Pick<SkillEntry, "name" | "repo" | "skillId">, 
 }
 
 function compareRankedSkills(left: SkillEntry, right: SkillEntry): number {
-  return (
-    left.rank - right.rank ||
-    right.installs - left.installs ||
-    compareSkillNames(left, right)
-  );
+  return left.rank - right.rank || right.installs - left.installs || compareSkillNames(left, right);
 }
 
 function compareCatalogSkills(left: SkillEntry, right: SkillEntry): number {
@@ -212,10 +211,7 @@ function decodeHtmlEntities(input: string): string {
     .replace(/&nbsp;/g, " ");
 }
 
-export function mergeSkillCatalog(input: {
-  sitemapSkills: SkillEntry[];
-  rankedSkills: SkillEntry[];
-}): SkillEntry[] {
+export function mergeSkillCatalog(input: { sitemapSkills: SkillEntry[]; rankedSkills: SkillEntry[] }): SkillEntry[] {
   const merged = new Map<string, SkillEntry>();
 
   for (const skill of input.sitemapSkills) {
@@ -414,7 +410,7 @@ export function registerSkillCatalogRoutes(ctx: RuntimeContext): void {
     if (skills.length > 0) {
       cachedSkills = { data: skills, loadedAt: Date.now() };
     }
-    res.json({ skills: skills.length > 0 ? skills : cachedSkills?.data ?? [] });
+    res.json({ skills: skills.length > 0 ? skills : (cachedSkills?.data ?? []) });
   });
 
   app.get("/api/skills/detail", async (req, res) => {

@@ -28,7 +28,9 @@ export default function OAuthConnectedProvidersSection({
 }: OAuthCommonProps) {
   const common = getSettingsCommonCopy(t);
   const copy = getOauthSettingsCopy(t);
-  const detectedProviders = Object.entries(oauthStatus.providers).filter(([, info]) => Boolean(info.detected ?? info.connected));
+  const detectedProviders = Object.entries(oauthStatus.providers).filter(([, info]) =>
+    Boolean(info.detected ?? info.connected),
+  );
   if (detectedProviders.length === 0) return null;
 
   const logoMap: Record<string, ({ className }: { className?: string }) => React.ReactElement> = {
@@ -61,22 +63,32 @@ export default function OAuthConnectedProvidersSection({
                 <span className="text-sm font-medium text-white">{oauthInfo?.label ?? provider}</span>
                 {info.email && <span className="max-w-full break-all text-xs text-slate-400">{info.email}</span>}
                 {isFileDetected && (
-                  <span className="rounded bg-slate-600/50 px-1.5 py-0.5 text-[10px] text-slate-400">{copy.cliDetected}</span>
+                  <span className="rounded bg-slate-600/50 px-1.5 py-0.5 text-[10px] text-slate-400">
+                    {copy.cliDetected}
+                  </span>
                 )}
-                {isWebOAuth && <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-400">Web OAuth</span>}
+                {isWebOAuth && (
+                  <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-400">Web OAuth</span>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 {!isRunnable ? (
-                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">{copy.detectedNotRunnable}</span>
+                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">
+                    {copy.detectedNotRunnable}
+                  </span>
                 ) : !isExpired ? (
                   <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-400">
                     {info.lastRefreshed ? copy.autoRefreshed : copy.connected}
                   </span>
                 ) : info.refreshFailed ? (
-                  <span className="rounded-full bg-orange-500/20 px-2 py-0.5 text-xs text-orange-400">{copy.refreshFailed}</span>
+                  <span className="rounded-full bg-orange-500/20 px-2 py-0.5 text-xs text-orange-400">
+                    {copy.refreshFailed}
+                  </span>
                 ) : !info.hasRefreshToken ? (
-                  <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">{copy.expiredReauth}</span>
+                  <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
+                    {copy.expiredReauth}
+                  </span>
                 ) : (
                   <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">{copy.expired}</span>
                 )}
@@ -129,7 +141,9 @@ export default function OAuthConnectedProvidersSection({
                 {expiresAt && (
                   <div>
                     <span className="text-slate-500">{copy.expires}: </span>
-                    <span className={isExpired ? "text-red-400" : "text-slate-300"}>{expiresAt.toLocaleString(localeTag)}</span>
+                    <span className={isExpired ? "text-red-400" : "text-slate-300"}>
+                      {expiresAt.toLocaleString(localeTag)}
+                    </span>
                   </div>
                 )}
                 {info.created_at > 0 && (
@@ -172,7 +186,9 @@ export default function OAuthConnectedProvidersSection({
                 ) : (
                   <div className="flex flex-col gap-1">
                     <span className="text-xs text-slate-500">{copy.noModelsAvailable}</span>
-                    {provider === "github-copilot" && <span className="text-[11px] text-amber-400/80">{copy.copilotSubscriptionHint}</span>}
+                    {provider === "github-copilot" && (
+                      <span className="text-[11px] text-amber-400/80">{copy.copilotSubscriptionHint}</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -181,7 +197,9 @@ export default function OAuthConnectedProvidersSection({
             {accountList.length > 0 && (
               <div className="space-y-2 rounded-lg border border-slate-600/40 bg-slate-800/40 p-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-1.5">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{copy.executionAccountPool}</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    {copy.executionAccountPool}
+                  </div>
                   <div className="text-right text-[10px] text-slate-500">{copy.accountPoolHint}</div>
                 </div>
 
@@ -194,12 +212,19 @@ export default function OAuthConnectedProvidersSection({
                   const hasCustomOverride = Boolean(draft.modelOverride) && !modelList.includes(draft.modelOverride);
 
                   return (
-                    <div key={account.id} className="space-y-2 rounded border border-slate-700/70 bg-slate-900/30 p-2.5">
+                    <div
+                      key={account.id}
+                      className="space-y-2 rounded border border-slate-700/70 bg-slate-900/30 p-2.5"
+                    >
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] ${account.active ? "bg-green-500/20 text-green-300" : "bg-slate-700 text-slate-400"}`}>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] ${account.active ? "bg-green-500/20 text-green-300" : "bg-slate-700 text-slate-400"}`}
+                        >
                           {account.active ? copy.active : copy.standby}
                         </span>
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] ${account.executionReady ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] ${account.executionReady ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}
+                        >
                           {account.executionReady ? copy.runnable : copy.notRunnable}
                         </span>
                         {account.email && <span className="break-all text-[11px] text-slate-300">{account.email}</span>}
@@ -207,7 +232,9 @@ export default function OAuthConnectedProvidersSection({
 
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                         <label className="space-y-1">
-                          <span className="block text-[10px] uppercase tracking-wider text-slate-500">{copy.label}</span>
+                          <span className="block text-[10px] uppercase tracking-wider text-slate-500">
+                            {copy.label}
+                          </span>
                           <input
                             value={draft.label}
                             onChange={(event) => onUpdateAccountDraft(account.id, { label: event.target.value })}
@@ -217,10 +244,14 @@ export default function OAuthConnectedProvidersSection({
                         </label>
 
                         <label className="space-y-1">
-                          <span className="block text-[10px] uppercase tracking-wider text-slate-500">{copy.modelOverride}</span>
+                          <span className="block text-[10px] uppercase tracking-wider text-slate-500">
+                            {copy.modelOverride}
+                          </span>
                           <select
                             value={draft.modelOverride}
-                            onChange={(event) => onUpdateAccountDraft(account.id, { modelOverride: event.target.value })}
+                            onChange={(event) =>
+                              onUpdateAccountDraft(account.id, { modelOverride: event.target.value })
+                            }
                             className="w-full rounded border border-slate-600 bg-slate-800/70 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none"
                           >
                             <option value="">{copy.useProviderDefault}</option>
@@ -234,7 +265,9 @@ export default function OAuthConnectedProvidersSection({
                         </label>
 
                         <label className="space-y-1">
-                          <span className="block text-[10px] uppercase tracking-wider text-slate-500">{copy.priority}</span>
+                          <span className="block text-[10px] uppercase tracking-wider text-slate-500">
+                            {copy.priority}
+                          </span>
                           <input
                             type="number"
                             min={1}
@@ -249,7 +282,9 @@ export default function OAuthConnectedProvidersSection({
 
                       <div className="flex flex-wrap gap-1.5">
                         <button
-                          onClick={() => void onActivateAccount(provider as OAuthConnectProvider, account.id, account.active)}
+                          onClick={() =>
+                            void onActivateAccount(provider as OAuthConnectProvider, account.id, account.active)
+                          }
                           disabled={savingAccountId === account.id || account.status !== "active"}
                           className={`rounded px-2 py-1 text-[11px] disabled:opacity-50 ${
                             account.active
@@ -269,7 +304,9 @@ export default function OAuthConnectedProvidersSection({
                         </button>
 
                         <button
-                          onClick={() => void onToggleAccount(account.id, account.status === "active" ? "disabled" : "active")}
+                          onClick={() =>
+                            void onToggleAccount(account.id, account.status === "active" ? "disabled" : "active")
+                          }
                           disabled={savingAccountId === account.id}
                           className="rounded bg-amber-600/20 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-600/35 disabled:opacity-50"
                         >
@@ -285,7 +322,9 @@ export default function OAuthConnectedProvidersSection({
                         </button>
                       </div>
 
-                      {account.lastError && <div className="break-words text-[10px] text-red-300">{account.lastError}</div>}
+                      {account.lastError && (
+                        <div className="break-words text-[10px] text-red-300">{account.lastError}</div>
+                      )}
                     </div>
                   );
                 })}

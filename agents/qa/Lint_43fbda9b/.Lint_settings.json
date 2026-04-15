@@ -1,0 +1,13 @@
+{
+  "agent_id": "43fbda9b-e2a9-455e-8dc6-514bbdb1ed1e",
+  "agent_name": "Lint",
+  "role": "senior",
+  "department_id": "qa",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:20:14.205Z"
+}

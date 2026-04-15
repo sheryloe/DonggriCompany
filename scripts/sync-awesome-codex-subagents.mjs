@@ -145,7 +145,12 @@ function parseTomlHeader(fileText) {
 
 function categorizeDepartment({ categoryDirName, agentName }) {
   // Explicit overrides (deterministic)
-  if (agentName === "ui-designer" || agentName === "ui-fixer" || agentName === "ux-researcher" || agentName === "accessibility-tester") {
+  if (
+    agentName === "ui-designer" ||
+    agentName === "ui-fixer" ||
+    agentName === "ux-researcher" ||
+    agentName === "accessibility-tester"
+  ) {
     return "design";
   }
 

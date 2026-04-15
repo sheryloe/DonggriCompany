@@ -4,6 +4,8 @@ import type { Project } from "../../types";
 import type { GroupedProjectTaskCard, ProjectDetailView, ProjectI18nTranslate } from "./types";
 import { fmtTime } from "./utils";
 
+type BoardColumnKey = "pending" | "board" | "reports";
+
 function getTaskStatusLabel(status: string, t: ProjectI18nTranslate): string {
   const labels: Record<string, string> = {
     inbox: t({ ko: "대기", en: "Inbox", ja: "Inbox", zh: "Inbox" }),
@@ -40,7 +42,7 @@ interface ProjectInsightsPanelProps {
   handleOpenTaskDetail: (taskId: string) => Promise<void>;
 }
 
-function statusColumnKey(status: string): ProjectDetailView | "pending" {
+function statusColumnKey(status: string): BoardColumnKey {
   if (status === "in_progress") return "board";
   if (status === "review" || status === "done") return "reports";
   return "pending";
@@ -60,7 +62,7 @@ export default function ProjectInsightsPanel({
   const [activeView, setActiveView] = useState<ProjectDetailView>("overview");
 
   const boardColumns = useMemo(() => {
-    const columns = {
+    const columns: Record<BoardColumnKey, GroupedProjectTaskCard[]> = {
       pending: [] as GroupedProjectTaskCard[],
       board: [] as GroupedProjectTaskCard[],
       reports: [] as GroupedProjectTaskCard[],
@@ -76,7 +78,7 @@ export default function ProjectInsightsPanel({
       .map((group) => ({
         id: group.root.id,
         title: group.root.title,
-        startAt: group.root.started_at ?? group.root.created_at,
+        startAt: group.root.created_at,
         endAt: group.root.completed_at ?? group.root.updated_at ?? group.root.created_at,
         status: group.root.status,
       }))
@@ -87,7 +89,20 @@ export default function ProjectInsightsPanel({
     { key: "overview", label: t({ ko: "개요", en: "Overview", ja: "Overview", zh: "Overview" }) },
     { key: "board", label: t({ ko: "이슈 보드", en: "Issue Board", ja: "Issue Board", zh: "Issue Board" }) },
     { key: "gantt", label: t({ ko: "간트", en: "Gantt", ja: "Gantt", zh: "Gantt" }) },
-    { key: "reports", label: t({ ko: "보고/의사결정", en: "Reports / Decisions", ja: "Reports / Decisions", zh: "Reports / Decisions" }) },
+    {
+      key: "reports",
+      label: t({
+        ko: "보고/의사결정",
+        en: "Reports / Decisions",
+        ja: "Reports / Decisions",
+        zh: "Reports / Decisions",
+      }),
+    },
+  ];
+  const boardViewColumns: Array<{ key: BoardColumnKey; title: string }> = [
+    { key: "pending", title: t({ ko: "대기", en: "Pending", ja: "Pending", zh: "Pending" }) },
+    { key: "board", title: t({ ko: "진행 중", en: "In Progress", ja: "In Progress", zh: "In Progress" }) },
+    { key: "reports", title: t({ ko: "리뷰/완료", en: "Review / Done", ja: "Review / Done", zh: "Review / Done" }) },
   ];
 
   return (
@@ -95,8 +110,17 @@ export default function ProjectInsightsPanel({
       <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h4 className="text-sm font-semibold text-white">{t({ ko: "프로젝트 상세", en: "Project Detail", ja: "Project Detail", zh: "Project Detail" })}</h4>
-            <p className="mt-1 text-xs text-slate-400">{t({ ko: "저장값은 canonical 영어 기준으로 유지되고 화면만 현지화됩니다.", en: "Stored values remain canonical English while the UI is localized.", ja: "Stored values remain canonical English while the UI is localized.", zh: "Stored values remain canonical English while the UI is localized." })}</p>
+            <h4 className="text-sm font-semibold text-white">
+              {t({ ko: "프로젝트 상세", en: "Project Detail", ja: "Project Detail", zh: "Project Detail" })}
+            </h4>
+            <p className="mt-1 text-xs text-slate-400">
+              {t({
+                ko: "저장값은 canonical 영어 기준으로 유지되고 화면만 현지화됩니다.",
+                en: "Stored values remain canonical English while the UI is localized.",
+                ja: "Stored values remain canonical English while the UI is localized.",
+                zh: "Stored values remain canonical English while the UI is localized.",
+              })}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             {tabs.map((tab) => (
@@ -116,34 +140,74 @@ export default function ProjectInsightsPanel({
       {activeView === "overview" && (
         <div className="space-y-4">
           <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-            <h4 className="text-sm font-semibold text-white">{t({ ko: "프로젝트 정보", en: "Project Info", ja: "Project Info", zh: "Project Info" })}</h4>
+            <h4 className="text-sm font-semibold text-white">
+              {t({ ko: "프로젝트 정보", en: "Project Info", ja: "Project Info", zh: "Project Info" })}
+            </h4>
             {loadingDetail ? (
-              <p className="mt-2 text-xs text-slate-400">{t({ ko: "불러오는 중...", en: "Loading...", ja: "Loading...", zh: "Loading..." })}</p>
+              <p className="mt-2 text-xs text-slate-400">
+                {t({ ko: "불러오는 중...", en: "Loading...", ja: "Loading...", zh: "Loading..." })}
+              </p>
             ) : isCreating ? (
-              <p className="mt-2 text-xs text-slate-500">{t({ ko: "새 프로젝트를 입력 중입니다", en: "Creating a new project", ja: "Creating a new project", zh: "Creating a new project" })}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                {t({
+                  ko: "새 프로젝트를 입력 중입니다",
+                  en: "Creating a new project",
+                  ja: "Creating a new project",
+                  zh: "Creating a new project",
+                })}
+              </p>
             ) : !selectedProject ? (
-              <p className="mt-2 text-xs text-slate-500">{t({ ko: "프로젝트를 선택하세요", en: "Select a project", ja: "Select a project", zh: "Select a project" })}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                {t({
+                  ko: "프로젝트를 선택하세요",
+                  en: "Select a project",
+                  ja: "Select a project",
+                  zh: "Select a project",
+                })}
+              </p>
             ) : (
               <div className="mt-2 space-y-2 text-xs text-slate-200">
-                <p><span className="text-slate-500">ID:</span> {selectedProject.id}</p>
-                <p className="break-all"><span className="text-slate-500">Path:</span> {selectedProject.project_path}</p>
-                <p className="break-all"><span className="text-slate-500">Goal:</span> {selectedProject.core_goal}</p>
+                <p>
+                  <span className="text-slate-500">ID:</span> {selectedProject.id}
+                </p>
+                <p className="break-all">
+                  <span className="text-slate-500">Path:</span> {selectedProject.project_path}
+                </p>
+                <p className="break-all">
+                  <span className="text-slate-500">Goal:</span> {selectedProject.core_goal}
+                </p>
               </div>
             )}
           </div>
 
           <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-            <h4 className="text-sm font-semibold text-white">{t({ ko: "최근 작업", en: "Recent Tasks", ja: "Recent Tasks", zh: "Recent Tasks" })}</h4>
+            <h4 className="text-sm font-semibold text-white">
+              {t({ ko: "최근 작업", en: "Recent Tasks", ja: "Recent Tasks", zh: "Recent Tasks" })}
+            </h4>
             {!selectedProject ? (
               <p className="mt-2 text-xs text-slate-500">-</p>
             ) : groupedTaskCards.length === 0 ? (
-              <p className="mt-2 text-xs text-slate-500">{t({ ko: "연결된 작업이 없습니다", en: "No mapped tasks", ja: "No mapped tasks", zh: "No mapped tasks" })}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                {t({
+                  ko: "연결된 작업이 없습니다",
+                  en: "No mapped tasks",
+                  ja: "No mapped tasks",
+                  zh: "No mapped tasks",
+                })}
+              </p>
             ) : (
               <div className="mt-2 max-h-72 overflow-y-auto space-y-2 pr-1">
                 {groupedTaskCards.slice(0, 8).map((group) => (
-                  <button key={group.root.id} type="button" onClick={() => void handleOpenTaskDetail(group.root.id)} className="w-full rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-left hover:border-blue-500/70">
+                  <button
+                    key={group.root.id}
+                    type="button"
+                    onClick={() => void handleOpenTaskDetail(group.root.id)}
+                    className="w-full rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-left hover:border-blue-500/70"
+                  >
                     <p className="text-xs font-semibold text-slate-100 break-all">{group.root.title}</p>
-                    <p className="mt-1 text-[11px] text-slate-400">{getTaskStatusLabel(group.root.status, t)} · {fmtTime(group.root.created_at)}</p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      {getTaskStatusLabel(group.root.status, t)} · {fmtTime(group.root.created_at)}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -154,21 +218,25 @@ export default function ProjectInsightsPanel({
 
       {activeView === "board" && (
         <div className="grid gap-4 lg:grid-cols-3">
-          {[
-            { key: "pending", title: t({ ko: "대기", en: "Pending", ja: "Pending", zh: "Pending" }) },
-            { key: "board", title: t({ ko: "진행 중", en: "In Progress", ja: "In Progress", zh: "In Progress" }) },
-            { key: "reports", title: t({ ko: "리뷰/완료", en: "Review / Done", ja: "Review / Done", zh: "Review / Done" }) },
-          ].map((column) => (
+          {boardViewColumns.map((column) => (
             <div key={column.key} className="rounded-xl border border-slate-700 bg-slate-800/40 p-3">
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="text-sm font-semibold text-white">{column.title}</h4>
-                <span className="text-xs text-slate-400">{boardColumns[column.key as keyof typeof boardColumns].length}</span>
+                <span className="text-xs text-slate-400">{boardColumns[column.key].length}</span>
               </div>
               <div className="space-y-2">
-                {boardColumns[column.key as keyof typeof boardColumns].map((group) => (
-                  <button key={group.root.id} type="button" onClick={() => void handleOpenTaskDetail(group.root.id)} className="w-full rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-left hover:border-blue-500/70">
+                {boardColumns[column.key].map((group) => (
+                  <button
+                    key={group.root.id}
+                    type="button"
+                    onClick={() => void handleOpenTaskDetail(group.root.id)}
+                    className="w-full rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-left hover:border-blue-500/70"
+                  >
                     <p className="text-xs font-semibold text-slate-100 break-all">{group.root.title}</p>
-                    <p className="mt-1 text-[11px] text-slate-400">{getTaskTypeLabel(group.root.task_type, t)} · {fmtTime(group.root.updated_at || group.root.created_at)}</p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      {getTaskTypeLabel(group.root.task_type, t)} ·{" "}
+                      {fmtTime(group.root.updated_at || group.root.created_at)}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -179,10 +247,19 @@ export default function ProjectInsightsPanel({
 
       {activeView === "gantt" && (
         <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-          <h4 className="text-sm font-semibold text-white">{t({ ko: "간트 타임라인", en: "Gantt Timeline", ja: "Gantt Timeline", zh: "Gantt Timeline" })}</h4>
+          <h4 className="text-sm font-semibold text-white">
+            {t({ ko: "간트 타임라인", en: "Gantt Timeline", ja: "Gantt Timeline", zh: "Gantt Timeline" })}
+          </h4>
           <div className="mt-3 space-y-3">
             {ganttItems.length === 0 ? (
-              <p className="text-xs text-slate-500">{t({ ko: "표시할 일정이 없습니다", en: "No schedule data", ja: "No schedule data", zh: "No schedule data" })}</p>
+              <p className="text-xs text-slate-500">
+                {t({
+                  ko: "표시할 일정이 없습니다",
+                  en: "No schedule data",
+                  ja: "No schedule data",
+                  zh: "No schedule data",
+                })}
+              </p>
             ) : (
               ganttItems.map((item) => (
                 <div key={item.id} className="rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2">
@@ -190,7 +267,9 @@ export default function ProjectInsightsPanel({
                     <p className="text-xs font-semibold text-slate-100 break-all">{item.title}</p>
                     <span className="text-[11px] text-slate-400">{getTaskStatusLabel(item.status, t)}</span>
                   </div>
-                  <div className="mt-1 text-[11px] text-slate-400">{fmtTime(item.startAt)} → {fmtTime(item.endAt)}</div>
+                  <div className="mt-1 text-[11px] text-slate-400">
+                    {fmtTime(item.startAt)} → {fmtTime(item.endAt)}
+                  </div>
                 </div>
               ))
             )}
@@ -201,13 +280,27 @@ export default function ProjectInsightsPanel({
       {activeView === "reports" && (
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-            <h4 className="text-sm font-semibold text-white">{t({ ko: "보고 이력", en: "Report History", ja: "Report History", zh: "Report History" })}</h4>
+            <h4 className="text-sm font-semibold text-white">
+              {t({ ko: "보고 이력", en: "Report History", ja: "Report History", zh: "Report History" })}
+            </h4>
             <div className="mt-2 max-h-72 overflow-y-auto space-y-2 pr-1">
               {sortedReports.length === 0 ? (
-                <p className="text-xs text-slate-500">{t({ ko: "연결된 보고가 없습니다", en: "No mapped reports", ja: "No mapped reports", zh: "No mapped reports" })}</p>
+                <p className="text-xs text-slate-500">
+                  {t({
+                    ko: "연결된 보고가 없습니다",
+                    en: "No mapped reports",
+                    ja: "No mapped reports",
+                    zh: "No mapped reports",
+                  })}
+                </p>
               ) : (
                 sortedReports.map((row) => (
-                  <button key={row.id} type="button" onClick={() => void handleOpenTaskDetail(row.id)} className="w-full rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-left hover:border-emerald-500/70">
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => void handleOpenTaskDetail(row.id)}
+                    className="w-full rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-left hover:border-emerald-500/70"
+                  >
                     <p className="text-xs font-medium text-slate-100 break-all">{row.title}</p>
                     <p className="text-[11px] text-slate-400">{fmtTime(row.completed_at || row.created_at)}</p>
                   </button>
@@ -217,19 +310,35 @@ export default function ProjectInsightsPanel({
           </div>
 
           <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-            <h4 className="text-sm font-semibold text-white">{t({ ko: "의사결정 이력", en: "Decision History", ja: "Decision History", zh: "Decision History" })}</h4>
+            <h4 className="text-sm font-semibold text-white">
+              {t({ ko: "의사결정 이력", en: "Decision History", ja: "Decision History", zh: "Decision History" })}
+            </h4>
             <div className="mt-2 max-h-72 overflow-y-auto space-y-2 pr-1">
               {sortedDecisionEvents.length === 0 ? (
-                <p className="text-xs text-slate-500">{t({ ko: "기록된 의사결정이 없습니다", en: "No decision records", ja: "No decision records", zh: "No decision records" })}</p>
+                <p className="text-xs text-slate-500">
+                  {t({
+                    ko: "기록된 의사결정이 없습니다",
+                    en: "No decision records",
+                    ja: "No decision records",
+                    zh: "No decision records",
+                  })}
+                </p>
               ) : (
                 sortedDecisionEvents.map((event) => (
-                  <div key={`${event.id}-${event.created_at}`} className="rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2">
+                  <div
+                    key={`${event.id}-${event.created_at}`}
+                    className="rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2"
+                  >
                     <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-xs font-semibold text-slate-100">{getDecisionEventLabel(event.event_type)}</p>
+                      <p className="min-w-0 truncate text-xs font-semibold text-slate-100">
+                        {getDecisionEventLabel(event.event_type)}
+                      </p>
                       <p className="text-[11px] text-slate-400">{fmtTime(event.created_at)}</p>
                     </div>
                     <p className="mt-1 whitespace-pre-wrap break-all text-[11px] text-slate-300">{event.summary}</p>
-                    {event.note ? <p className="mt-1 whitespace-pre-wrap break-all text-[11px] text-emerald-300">{event.note}</p> : null}
+                    {event.note ? (
+                      <p className="mt-1 whitespace-pre-wrap break-all text-[11px] text-emerald-300">{event.note}</p>
+                    ) : null}
                   </div>
                 ))
               )}

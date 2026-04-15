@@ -1,0 +1,13 @@
+{
+  "agent_id": "b813e479-8b83-4bb8-a790-e95219cfdd98",
+  "agent_name": "Pixel",
+  "role": "team_leader",
+  "department_id": "design",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:30:57.204Z"
+}

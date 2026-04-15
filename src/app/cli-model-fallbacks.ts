@@ -40,10 +40,12 @@ function providerFallbackModels(provider: string): CliModelInfo[] {
   return [];
 }
 
-export function withCliModelFallback(provider: string, models: readonly CliModelInfo[] | null | undefined): CliModelInfo[] {
+export function withCliModelFallback(
+  provider: string,
+  models: readonly CliModelInfo[] | null | undefined,
+): CliModelInfo[] {
   const base = Array.isArray(models) ? models : [];
   const fallback = providerFallbackModels(provider);
   if (base.length > 0) return dedupeModels(base);
   return dedupeModels(fallback);
 }
-

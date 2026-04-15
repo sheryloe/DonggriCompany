@@ -1,0 +1,13 @@
+{
+  "agent_id": "60291128-31a9-44ff-98de-9cbe5aeac114",
+  "agent_name": "Pipe",
+  "role": "senior",
+  "department_id": "devsecops",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:02:50.280Z"
+}

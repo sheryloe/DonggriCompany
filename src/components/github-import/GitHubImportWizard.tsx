@@ -124,12 +124,22 @@ export default function GitHubImportWizard({
           <div className="space-y-3">
             <div className="space-y-2 rounded-xl border border-slate-600/50 bg-slate-800/40 p-3">
               <p className="text-xs font-medium text-slate-300">
-                {t({ ko: "직접 입력 (private 저장소 포함)", en: "Direct Input (incl. private repos)", ja: "Direct Input (incl. private repos)", zh: "Direct Input (incl. private repos)" })}
+                {t({
+                  ko: "직접 입력 (private 저장소 포함)",
+                  en: "Direct Input (incl. private repos)",
+                  ja: "Direct Input (incl. private repos)",
+                  zh: "Direct Input (incl. private repos)",
+                })}
               </p>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder={t({ ko: "owner/repo 또는 GitHub URL", en: "owner/repo or GitHub URL", ja: "owner/repo or GitHub URL", zh: "owner/repo or GitHub URL" })}
+                  placeholder={t({
+                    ko: "owner/repo 또는 GitHub URL",
+                    en: "owner/repo or GitHub URL",
+                    ja: "owner/repo or GitHub URL",
+                    zh: "owner/repo or GitHub URL",
+                  })}
                   value={directInput}
                   onChange={(event) => onDirectInputChange(event.target.value)}
                   onKeyDown={(event) => {
@@ -152,22 +162,36 @@ export default function GitHubImportWizard({
             <div className="flex items-center gap-3">
               <div className="flex-1 border-t border-slate-700" />
               <span className="text-[11px] text-slate-500">
-                {t({ ko: "또는 목록에서 선택", en: "or select from list", ja: "or select from list", zh: "or select from list" })}
+                {t({
+                  ko: "또는 목록에서 선택",
+                  en: "or select from list",
+                  ja: "or select from list",
+                  zh: "or select from list",
+                })}
               </span>
               <div className="flex-1 border-t border-slate-700" />
             </div>
 
             <input
               type="text"
-              placeholder={t({ ko: "저장소 검색...", en: "Search repositories...", ja: "Search repositories...", zh: "Search repositories..." })}
+              placeholder={t({
+                ko: "저장소 검색...",
+                en: "Search repositories...",
+                ja: "Search repositories...",
+                zh: "Search repositories...",
+              })}
               value={repoSearch}
               onChange={(event) => onRepoSearchChange(event.target.value)}
               className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
             />
             {reposLoading ? (
-              <p className="text-xs text-slate-400">{t({ ko: "불러오는 중...", en: "Loading...", ja: "Loading...", zh: "Loading..." })}</p>
+              <p className="text-xs text-slate-400">
+                {t({ ko: "불러오는 중...", en: "Loading...", ja: "Loading...", zh: "Loading..." })}
+              </p>
             ) : repos.length === 0 ? (
-              <p className="text-xs text-slate-500">{t({ ko: "검색 결과 없음", en: "No results", ja: "No results", zh: "No results" })}</p>
+              <p className="text-xs text-slate-500">
+                {t({ ko: "검색 결과 없음", en: "No results", ja: "No results", zh: "No results" })}
+              </p>
             ) : (
               <div className="space-y-1">
                 {repos.map((repo) => (
@@ -213,7 +237,12 @@ export default function GitHubImportWizard({
                 </div>
                 <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-900/10 p-3">
                   <p className="text-xs font-medium text-amber-300">
-                    {t({ ko: "Personal Access Token (PAT)로 인증", en: "Authenticate with Personal Access Token (PAT)", ja: "Authenticate with Personal Access Token (PAT)", zh: "Authenticate with Personal Access Token (PAT)" })}
+                    {t({
+                      ko: "Personal Access Token (PAT)로 인증",
+                      en: "Authenticate with Personal Access Token (PAT)",
+                      ja: "Authenticate with Personal Access Token (PAT)",
+                      zh: "Authenticate with Personal Access Token (PAT)",
+                    })}
                   </p>
                   <p className="text-[11px] text-slate-400">
                     {t({
@@ -249,9 +278,13 @@ export default function GitHubImportWizard({
               </div>
             )}
             {branchesLoading ? (
-              <p className="text-xs text-slate-400">{t({ ko: "불러오는 중...", en: "Loading...", ja: "Loading...", zh: "Loading..." })}</p>
+              <p className="text-xs text-slate-400">
+                {t({ ko: "불러오는 중...", en: "Loading...", ja: "Loading...", zh: "Loading..." })}
+              </p>
             ) : branches.length === 0 && !branchError ? (
-              <p className="text-xs text-slate-500">{t({ ko: "브랜치 없음", en: "No branches", ja: "No branches", zh: "No branches" })}</p>
+              <p className="text-xs text-slate-500">
+                {t({ ko: "브랜치 없음", en: "No branches", ja: "No branches", zh: "No branches" })}
+              </p>
             ) : (
               <div className="space-y-1">
                 {branches.map((branch) => (
@@ -312,7 +345,12 @@ export default function GitHubImportWizard({
             </label>
 
             <label className="block text-xs text-slate-400">
-              {t({ ko: "핵심 목표 (선택)", en: "Core Goal (optional)", ja: "Core Goal (optional)", zh: "Core Goal (optional)" })}
+              {t({
+                ko: "핵심 목표 (선택)",
+                en: "Core Goal (optional)",
+                ja: "Core Goal (optional)",
+                zh: "Core Goal (optional)",
+              })}
               <textarea
                 rows={3}
                 value={coreGoal}
@@ -333,7 +371,10 @@ export default function GitHubImportWizard({
                   <span className="text-slate-400">{cloneProgress}%</span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-slate-700">
-                  <div className="h-full rounded-full bg-blue-500 transition-all duration-300" style={{ width: `${cloneProgress}%` }} />
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${cloneProgress}%` }}
+                  />
                 </div>
               </div>
             )}
@@ -353,7 +394,12 @@ export default function GitHubImportWizard({
               >
                 {creating
                   ? t({ ko: "가져오는 중...", en: "Importing...", ja: "Importing...", zh: "Importing..." })
-                  : t({ ko: "GitHub에서 가져오기", en: "Import from GitHub", ja: "Import from GitHub", zh: "Import from GitHub" })}
+                  : t({
+                      ko: "GitHub에서 가져오기",
+                      en: "Import from GitHub",
+                      ja: "Import from GitHub",
+                      zh: "Import from GitHub",
+                    })}
               </button>
               <button
                 type="button"

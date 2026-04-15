@@ -1,0 +1,13 @@
+{
+  "agent_id": "a4930a70-d0e8-4f8d-9618-6edbb6459dc7",
+  "agent_name": "Luna",
+  "role": "junior",
+  "department_id": "design",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:33:46.476Z"
+}

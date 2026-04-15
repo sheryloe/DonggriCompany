@@ -34,7 +34,7 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
       : "development";
 
   const roleBadge = (agent: Agent) => {
-    const text = getRoleDisplayLabel(t, agent.role);
+    const text = getRoleDisplayLabel(agent.role, localeTag);
     const color =
       agent.role === "team_leader"
         ? "bg-amber-500/15 text-amber-400"
@@ -59,23 +59,20 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
       const depts = apiAssignDepts.filter((dept) => dept.workflow_pack_key === packKey);
       const deptIds = new Set(depts.map((dept) => dept.id));
       const departments = depts
-        .map((dept) => ({
-          dept,
-          agents: apiAssignAgents.filter(
+        .map((dept) => {
+          const agents = apiAssignAgents.filter(
             (agent) => agent.department_id === dept.id && normalizeWorkflowPackKey(agent.workflow_pack_key) === packKey,
-          ),
-          allAssigned: apiAssignAgents
-            .filter(
-              (agent) =>
-                agent.department_id === dept.id && normalizeWorkflowPackKey(agent.workflow_pack_key) === packKey,
-            )
-            .every(
+          );
+          const allAssigned =
+            agents.length > 0 &&
+            agents.every(
               (agent) =>
                 agent.cli_provider === "api" &&
                 agent.api_provider_id === apiAssignTarget.providerId &&
                 agent.api_model === apiAssignTarget.model,
-            ),
-        }))
+            );
+          return { dept, agents, allAssigned };
+        })
         .filter((group) => group.agents.length > 0);
       const unassigned = apiAssignAgents.filter(
         (agent) =>
@@ -111,16 +108,19 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
             {agent.cli_provider === "api" && agent.api_model ? `API: ${agent.api_model}` : agent.cli_provider}
           </div>
         </div>
-        {isAssigned && <span className="flex-shrink-0 text-green-400">✓</span>}
+        {isAssigned ? <span className="flex-shrink-0 text-green-400">{common.applied}</span> : null}
       </button>
     );
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setApiAssignTarget(null)}>
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={() => setApiAssignTarget(null)}
+    >
       <div
         className="max-h-[75vh] w-96 overflow-hidden rounded-xl border border-slate-600 bg-slate-800 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="border-b border-slate-700 px-4 py-3">
           <h4 className="text-sm font-semibold text-white">{t({ ko: "모델 할당", en: "Assign Model" })}</h4>
@@ -129,7 +129,9 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
 
         <div className="max-h-[55vh] space-y-3 overflow-y-auto p-2">
           {apiAssignAgents.length === 0 ? (
-            <p className="py-4 text-center text-xs text-slate-500">{t({ ko: "에이전트 불러오는 중...", en: "Loading agents..." })}</p>
+            <p className="py-4 text-center text-xs text-slate-500">
+              {t({ ko: "에이전트 불러오는 중...", en: "Loading agents..." })}
+            </p>
           ) : (
             <>
               {packSections.map(({ packKey, departments, unassigned }) => (
@@ -166,15 +168,17 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
                     </div>
                   ))}
 
-                  {unassigned.length > 0 && (
+                  {unassigned.length > 0 ? (
                     <div>
                       <div className="flex items-center gap-1.5 border-b border-slate-700/40 px-2 py-1.5">
-                        <span className="text-sm">•</span>
-                        <span className="text-[11px] font-semibold tracking-wide text-slate-500">{common.unassigned}</span>
+                        <span className="text-sm text-slate-600">•</span>
+                        <span className="text-[11px] font-semibold tracking-wide text-slate-500">
+                          {common.unassigned}
+                        </span>
                       </div>
                       {unassigned.map(renderAgentRow)}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </>

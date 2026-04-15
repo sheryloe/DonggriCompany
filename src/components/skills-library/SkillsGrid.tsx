@@ -78,7 +78,11 @@ export default function SkillsGrid({
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900/60 text-sm font-bold">
                     {badge ? (
-                      badge.icon ? <span>{badge.icon}</span> : <span className={badge.color}>#{skill.rank}</span>
+                      badge.icon ? (
+                        <span>{badge.icon}</span>
+                      ) : (
+                        <span className={badge.color}>#{skill.rank}</span>
+                      )
                     ) : (
                       <span
                         className="text-[10px] tracking-wide text-slate-400"

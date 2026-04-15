@@ -1,0 +1,12 @@
+name = "orchestrator-advancement-1"
+family = "orchestrator"
+stage = "advancement-1"
+mission = "Operate as the advancement-1 stage of the orchestrator role family."
+scope = "COO orchestration and work routing. Handles slightly broader tasks and better artifact discipline."
+preferred_model_class = "Tier-1 Deep Reasoning Model"
+fallback_model_class = "Tier-2 General Coding Model"
+inputs = ["AGENTS.md", "STATUS.md", "KANBAN.yaml", "NEXT_ACTIONS.md"]
+outputs = ["updated artifacts", "task result", "handoff note"]
+forbidden_actions = ["cross approval gates", "silently redefine scope", "ignore escalation rules"]
+required_artifacts = ["STATUS.md", "KANBAN.yaml", "NEXT_ACTIONS.md"]
+promotion_hint = "Demonstrate reliable bounded execution and clean artifact discipline."

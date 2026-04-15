@@ -70,17 +70,23 @@ export default function AgentDetail({
   }, [subtasks]);
 
   const statusCfg = STATUS_CONFIG[agent.status] ?? STATUS_CONFIG.idle;
-  const oauthProviderKey = selectedCli === "copilot" ? "github-copilot" : selectedCli === "antigravity" ? "antigravity" : null;
+  const oauthProviderKey =
+    selectedCli === "copilot" ? "github-copilot" : selectedCli === "antigravity" ? "antigravity" : null;
   const requiresOAuthAccount = selectedCli === "copilot" || selectedCli === "antigravity";
   const requiresApiProvider = selectedCli === "api";
   const requiresCliPool = CLI_POOL_PROVIDERS.includes(selectedCli);
 
   const activeOAuthAccounts = useMemo(() => {
     if (!oauthProviderKey || !oauthStatus) return [];
-    return (oauthStatus.providers[oauthProviderKey]?.accounts ?? []).filter((account) => account.active && account.status === "active");
+    return (oauthStatus.providers[oauthProviderKey]?.accounts ?? []).filter(
+      (account) => account.active && account.status === "active",
+    );
   }, [oauthProviderKey, oauthStatus]);
 
-  const selectedCliAccountPools = useMemo(() => cliAccountPools.filter((pool) => pool.provider === selectedCli), [cliAccountPools, selectedCli]);
+  const selectedCliAccountPools = useMemo(
+    () => cliAccountPools.filter((pool) => pool.provider === selectedCli),
+    [cliAccountPools, selectedCli],
+  );
   const canSaveCli =
     (!requiresOAuthAccount || Boolean(selectedOAuthAccountId)) &&
     (!requiresCliPool || Boolean(selectedCliAccountPoolId)) &&
@@ -109,7 +115,11 @@ export default function AgentDetail({
   useEffect(() => {
     if (!editingCli || !requiresOAuthAccount) return;
     setOauthLoading(true);
-    api.getOAuthStatus().then(setOauthStatus).catch((err) => console.error("Failed to load OAuth status:", err)).finally(() => setOauthLoading(false));
+    api
+      .getOAuthStatus()
+      .then(setOauthStatus)
+      .catch((err) => console.error("Failed to load OAuth status:", err))
+      .finally(() => setOauthLoading(false));
   }, [editingCli, requiresOAuthAccount]);
 
   useEffect(() => {
@@ -117,12 +127,18 @@ export default function AgentDetail({
     if (editingCli && !requiresCliPool) return;
     let cancelled = false;
     setCliAccountPoolsLoading(true);
-    api.getCliAccountPools().then((pools) => {
-      if (!cancelled) setCliAccountPools(pools);
-    }).catch((err) => console.error("Failed to load CLI account pools:", err)).finally(() => {
-      if (!cancelled) setCliAccountPoolsLoading(false);
-    });
-    return () => { cancelled = true; };
+    api
+      .getCliAccountPools()
+      .then((pools) => {
+        if (!cancelled) setCliAccountPools(pools);
+      })
+      .catch((err) => console.error("Failed to load CLI account pools:", err))
+      .finally(() => {
+        if (!cancelled) setCliAccountPoolsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [editingCli, selectedCli, agent.cli_provider, requiresCliPool]);
 
   useEffect(() => {
@@ -157,7 +173,9 @@ export default function AgentDetail({
         cli_model: null,
         cli_reasoning_level: null,
         run_mode: "standard",
-        cli_account_pool_id: requiresCliPool ? selectedCliAccountPoolId || selectedCliAccountPools[0]?.accountPoolId || null : null,
+        cli_account_pool_id: requiresCliPool
+          ? selectedCliAccountPoolId || selectedCliAccountPools[0]?.accountPoolId || null
+          : null,
       });
       onAgentUpdated?.();
       setEditingCli(false);
@@ -166,7 +184,19 @@ export default function AgentDetail({
     } finally {
       setSavingCli(false);
     }
-  }, [agent.id, onAgentUpdated, requiresApiProvider, requiresCliPool, requiresOAuthAccount, selectedApiModel, selectedApiProviderId, selectedCli, selectedCliAccountPoolId, selectedCliAccountPools, selectedOAuthAccountId]);
+  }, [
+    agent.id,
+    onAgentUpdated,
+    requiresApiProvider,
+    requiresCliPool,
+    requiresOAuthAccount,
+    selectedApiModel,
+    selectedApiProviderId,
+    selectedCli,
+    selectedCliAccountPoolId,
+    selectedCliAccountPools,
+    selectedOAuthAccountId,
+  ]);
 
   const handleCancelCliEdit = useCallback(() => {
     setEditingCli(false);
@@ -177,75 +207,226 @@ export default function AgentDetail({
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
   }, [agent.api_model, agent.api_provider_id, agent.cli_account_pool_id, agent.cli_provider, agent.oauth_account_id]);
 
-  const handlePlanningLeadToggle = useCallback(async (nextChecked: boolean) => {
-    if (agent.role !== "team_leader" || savingPlanningLead) return;
-    const previous = actsAsPlanningLead;
-    setActsAsPlanningLead(nextChecked);
-    setSavingPlanningLead(true);
-    try {
-      await api.updateAgent(agent.id, { acts_as_planning_leader: nextChecked ? 1 : 0, workflow_pack_key: activeOfficeWorkflowPack });
-      onAgentUpdated?.();
-    } catch (error) {
-      console.error("Failed to update planning lead:", error);
-      setActsAsPlanningLead(previous);
-    } finally {
-      setSavingPlanningLead(false);
-    }
-  }, [activeOfficeWorkflowPack, actsAsPlanningLead, agent.id, agent.role, onAgentUpdated, savingPlanningLead]);
+  const handlePlanningLeadToggle = useCallback(
+    async (nextChecked: boolean) => {
+      if (agent.role !== "team_leader" || savingPlanningLead) return;
+      const previous = actsAsPlanningLead;
+      setActsAsPlanningLead(nextChecked);
+      setSavingPlanningLead(true);
+      try {
+        await api.updateAgent(agent.id, {
+          acts_as_planning_leader: nextChecked ? 1 : 0,
+          workflow_pack_key: activeOfficeWorkflowPack,
+        });
+        onAgentUpdated?.();
+      } catch (error) {
+        console.error("Failed to update planning lead:", error);
+        setActsAsPlanningLead(previous);
+      } finally {
+        setSavingPlanningLead(false);
+      }
+    },
+    [activeOfficeWorkflowPack, actsAsPlanningLead, agent.id, agent.role, onAgentUpdated, savingPlanningLead],
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={(event) => event.target === event.currentTarget && onClose()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={(event) => event.target === event.currentTarget && onClose()}
+    >
       <div className="w-[min(960px,94vw)] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
-        <div className="relative border-b border-slate-700 px-6 py-5" style={{ background: department ? `linear-gradient(135deg, ${department.color}22, transparent)` : undefined }}>
-          <button onClick={onClose} className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-700/50 text-slate-400 transition-colors hover:bg-slate-600 hover:text-white">×</button>
+        <div
+          className="relative border-b border-slate-700 px-6 py-5"
+          style={{ background: department ? `linear-gradient(135deg, ${department.color}22, transparent)` : undefined }}
+        >
+          <button
+            onClick={onClose}
+            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-700/50 text-slate-400 transition-colors hover:bg-slate-600 hover:text-white"
+          >
+            ×
+          </button>
           <div className="flex items-center gap-4">
             <div className="relative">
-              <AgentAvatar agent={agent} agents={agents} size={64} rounded="2xl" className={agent.status === "working" ? "animate-agent-work" : ""} />
-              <div className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-slate-800 ${agent.status === "working" ? "bg-blue-500" : agent.status === "idle" ? "bg-green-500" : agent.status === "break" ? "bg-yellow-500" : "bg-slate-500"}`} />
+              <AgentAvatar
+                agent={agent}
+                agents={agents}
+                size={64}
+                rounded="2xl"
+                className={agent.status === "working" ? "animate-agent-work" : ""}
+              />
+              <div
+                className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-slate-800 ${agent.status === "working" ? "bg-blue-500" : agent.status === "idle" ? "bg-green-500" : agent.status === "break" ? "bg-yellow-500" : "bg-slate-500"}`}
+              />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h2 className="truncate text-lg font-bold text-white">{localeName(language, agent)}</h2>
-                <span className={`rounded px-1.5 py-0.5 text-xs ${statusCfg.bg} ${statusCfg.color}`}>{statusLabel(statusCfg.label, t)}</span>
+                <span className={`rounded px-1.5 py-0.5 text-xs ${statusCfg.bg} ${statusCfg.color}`}>
+                  {statusLabel(statusCfg.label, t)}
+                </span>
               </div>
-              <div className="mt-0.5 text-sm text-slate-400">{department ? localeName(language, department) : t({ ko: "미지정 부서", en: "Unassigned", ja: "Unassigned", zh: "Unassigned" })} · {getRoleDisplayLabel(agent.role, language)}</div>
+              <div className="mt-0.5 text-sm text-slate-400">
+                {department
+                  ? localeName(language, department)
+                  : t({ ko: "미지정 부서", en: "Unassigned", ja: "Unassigned", zh: "Unassigned" })}{" "}
+                · {getRoleDisplayLabel(agent.role, language)}
+              </div>
               {agent.role === "team_leader" && (
                 <label className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-300">
-                  <input type="checkbox" checked={actsAsPlanningLead} disabled={savingPlanningLead} onChange={(event) => { void handlePlanningLeadToggle(event.target.checked); }} className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/50 disabled:opacity-60" />
-                  <span>{t({ ko: "기획 리드로 사용", en: "Use as planning lead", ja: "Use as planning lead", zh: "Use as planning lead" })}</span>
+                  <input
+                    type="checkbox"
+                    checked={actsAsPlanningLead}
+                    disabled={savingPlanningLead}
+                    onChange={(event) => {
+                      void handlePlanningLeadToggle(event.target.checked);
+                    }}
+                    className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/50 disabled:opacity-60"
+                  />
+                  <span>
+                    {t({
+                      ko: "기획 리드로 사용",
+                      en: "Use as planning lead",
+                      ja: "Use as planning lead",
+                      zh: "Use as planning lead",
+                    })}
+                  </span>
                 </label>
               )}
               <div className="mt-1 text-xs text-slate-500">
                 {editingCli ? (
                   <div className="space-y-2 rounded-lg border border-slate-700/70 bg-slate-800/60 p-3">
-                    <div className="text-[11px] text-slate-400">{t({ ko: "모델 선택은 Provider 정책에서 결정됩니다. 여기서는 실행 Provider와 실행 계정만 바꿉니다.", en: "Model selection is controlled by provider policy. Only provider and execution account are editable here.", ja: "Model selection is controlled by provider policy. Only provider and execution account are editable here.", zh: "Model selection is controlled by provider policy. Only provider and execution account are editable here." })}</div>
+                    <div className="text-[11px] text-slate-400">
+                      {t({
+                        ko: "모델 선택은 Provider 정책에서 결정됩니다. 여기서는 실행 Provider와 실행 계정만 바꿉니다.",
+                        en: "Model selection is controlled by provider policy. Only provider and execution account are editable here.",
+                        ja: "Model selection is controlled by provider policy. Only provider and execution account are editable here.",
+                        zh: "Model selection is controlled by provider policy. Only provider and execution account are editable here.",
+                      })}
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <select value={selectedCli} onChange={(event) => { const nextCli = event.target.value as Agent["cli_provider"]; setSelectedCli(nextCli); setSelectedCliAccountPoolId(""); setSelectedOAuthAccountId(""); }} className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none">
-                        {Object.entries(CLI_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                      <select
+                        value={selectedCli}
+                        onChange={(event) => {
+                          const nextCli = event.target.value as Agent["cli_provider"];
+                          setSelectedCli(nextCli);
+                          setSelectedCliAccountPoolId("");
+                          setSelectedOAuthAccountId("");
+                        }}
+                        className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+                      >
+                        {Object.entries(CLI_LABELS).map(([key, label]) => (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        ))}
                       </select>
-                      {requiresOAuthAccount && (oauthLoading ? <span className="text-[10px] text-slate-400">{t({ ko: "계정 불러오는 중...", en: "Loading accounts...", ja: "Loading accounts...", zh: "Loading accounts..." })}</span> : activeOAuthAccounts.length > 0 ? (
-                        <select value={selectedOAuthAccountId} onChange={(event) => setSelectedOAuthAccountId(event.target.value)} className="max-w-[220px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none">
-                          {activeOAuthAccounts.map((account) => <option key={account.id} value={account.id}>{oauthAccountLabel(account)}</option>)}
-                        </select>
-                      ) : <span className="text-[10px] text-amber-300">{t({ ko: "활성 OAuth 계정 없음", en: "No active OAuth account", ja: "No active OAuth account", zh: "No active OAuth account" })}</span>)}
-                      {requiresCliPool && (cliAccountPoolsLoading ? <span className="text-[10px] text-slate-400">{t({ ko: "계정 풀 불러오는 중...", en: "Loading pools...", ja: "Loading pools...", zh: "Loading pools..." })}</span> : (
-                        <select value={selectedCliAccountPoolId} onChange={(event) => setSelectedCliAccountPoolId(event.target.value)} className="max-w-[220px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none">
-                          <option value="">{t({ ko: "실행 계정 풀 선택", en: "Select execution pool", ja: "Select execution pool", zh: "Select execution pool" })}</option>
-                          {selectedCliAccountPools.map((pool) => <option key={pool.accountPoolId} value={pool.accountPoolId}>{pool.label}</option>)}
-                        </select>
-                      ))}
+                      {requiresOAuthAccount &&
+                        (oauthLoading ? (
+                          <span className="text-[10px] text-slate-400">
+                            {t({
+                              ko: "계정 불러오는 중...",
+                              en: "Loading accounts...",
+                              ja: "Loading accounts...",
+                              zh: "Loading accounts...",
+                            })}
+                          </span>
+                        ) : activeOAuthAccounts.length > 0 ? (
+                          <select
+                            value={selectedOAuthAccountId}
+                            onChange={(event) => setSelectedOAuthAccountId(event.target.value)}
+                            className="max-w-[220px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+                          >
+                            {activeOAuthAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {oauthAccountLabel(account)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-[10px] text-amber-300">
+                            {t({
+                              ko: "활성 OAuth 계정 없음",
+                              en: "No active OAuth account",
+                              ja: "No active OAuth account",
+                              zh: "No active OAuth account",
+                            })}
+                          </span>
+                        ))}
+                      {requiresCliPool &&
+                        (cliAccountPoolsLoading ? (
+                          <span className="text-[10px] text-slate-400">
+                            {t({
+                              ko: "계정 풀 불러오는 중...",
+                              en: "Loading pools...",
+                              ja: "Loading pools...",
+                              zh: "Loading pools...",
+                            })}
+                          </span>
+                        ) : (
+                          <select
+                            value={selectedCliAccountPoolId}
+                            onChange={(event) => setSelectedCliAccountPoolId(event.target.value)}
+                            className="max-w-[220px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="">
+                              {t({
+                                ko: "실행 계정 풀 선택",
+                                en: "Select execution pool",
+                                ja: "Select execution pool",
+                                zh: "Select execution pool",
+                              })}
+                            </option>
+                            {selectedCliAccountPools.map((pool) => (
+                              <option key={pool.accountPoolId} value={pool.accountPoolId}>
+                                {pool.label}
+                              </option>
+                            ))}
+                          </select>
+                        ))}
                       {requiresApiProvider && (
                         <div className="flex items-center gap-2">
-                          <input value={selectedApiProviderId} onChange={(event) => setSelectedApiProviderId(event.target.value)} placeholder="api_provider_id" className="w-[150px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none" />
-                          <input value={selectedApiModel} onChange={(event) => setSelectedApiModel(event.target.value)} placeholder="api_model" className="w-[150px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none" />
+                          <input
+                            value={selectedApiProviderId}
+                            onChange={(event) => setSelectedApiProviderId(event.target.value)}
+                            placeholder="api_provider_id"
+                            className="w-[150px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+                          />
+                          <input
+                            value={selectedApiModel}
+                            onChange={(event) => setSelectedApiModel(event.target.value)}
+                            placeholder="api_model"
+                            className="w-[150px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+                          />
                         </div>
                       )}
-                      <button disabled={savingCli || !canSaveCli} onClick={() => { void handleSaveCli(); }} className="rounded bg-blue-600 px-2 py-1 text-[10px] text-white transition-colors hover:bg-blue-500 disabled:opacity-50">{savingCli ? "..." : t({ ko: "저장", en: "Save", ja: "Save", zh: "Save" })}</button>
-                      <button onClick={handleCancelCliEdit} className="rounded bg-slate-600 px-2 py-1 text-[10px] text-slate-300 transition-colors hover:bg-slate-500">{t({ ko: "취소", en: "Cancel", ja: "Cancel", zh: "Cancel" })}</button>
+                      <button
+                        disabled={savingCli || !canSaveCli}
+                        onClick={() => {
+                          void handleSaveCli();
+                        }}
+                        className="rounded bg-blue-600 px-2 py-1 text-[10px] text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        {savingCli ? "..." : t({ ko: "저장", en: "Save", ja: "Save", zh: "Save" })}
+                      </button>
+                      <button
+                        onClick={handleCancelCliEdit}
+                        className="rounded bg-slate-600 px-2 py-1 text-[10px] text-slate-300 transition-colors hover:bg-slate-500"
+                      >
+                        {t({ ko: "취소", en: "Cancel", ja: "Cancel", zh: "Cancel" })}
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setEditingCli(true)} className="transition-colors hover:text-slate-300" title={t({ ko: "CLI 실행 설정 변경", en: "Change CLI execution settings", ja: "Change CLI execution settings", zh: "Change CLI execution settings" })}>
+                  <button
+                    onClick={() => setEditingCli(true)}
+                    className="transition-colors hover:text-slate-300"
+                    title={t({
+                      ko: "CLI 실행 설정 변경",
+                      en: "Change CLI execution settings",
+                      ja: "Change CLI execution settings",
+                      zh: "Change CLI execution settings",
+                    })}
+                  >
                     {cliSummaryText}
                   </button>
                 )}
@@ -254,7 +435,12 @@ export default function AgentDetail({
           </div>
           <div className="mt-3 flex items-center gap-2">
             <span className="text-xs font-bold text-yellow-400">Lv.{Math.floor(agent.stats_xp / 100) + 1}</span>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-700"><div className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-amber-400" style={{ width: `${agent.stats_xp % 100}%` }} /></div>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-700">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-amber-400"
+                style={{ width: `${agent.stats_xp % 100}%` }}
+              />
+            </div>
             <span className="text-[10px] text-slate-500">{agent.stats_xp} XP</span>
           </div>
         </div>
@@ -262,10 +448,20 @@ export default function AgentDetail({
         <div className="flex border-b border-slate-700">
           {[
             { key: "info", label: t({ ko: "정보", en: "Info", ja: "Info", zh: "Info" }) },
-            { key: "tasks", label: `${t({ ko: "작업", en: "Tasks", ja: "Tasks", zh: "Tasks" })} (${agentTasks.length})` },
-            { key: "alba", label: `${t({ ko: "서브에이전트", en: "Sub-agents", ja: "Sub-agents", zh: "Sub-agents" })} (${agentSubAgents.length})` },
+            {
+              key: "tasks",
+              label: `${t({ ko: "작업", en: "Tasks", ja: "Tasks", zh: "Tasks" })} (${agentTasks.length})`,
+            },
+            {
+              key: "alba",
+              label: `${t({ ko: "서브에이전트", en: "Sub-agents", ja: "Sub-agents", zh: "Sub-agents" })} (${agentSubAgents.length})`,
+            },
           ].map((tabItem) => (
-            <button key={tabItem.key} onClick={() => setTab(tabItem.key as typeof tab)} className={`flex-1 py-2.5 text-sm font-medium transition-colors ${tab === tabItem.key ? "border-b-2 border-blue-400 text-blue-400" : "text-slate-400 hover:text-slate-200"}`}>
+            <button
+              key={tabItem.key}
+              onClick={() => setTab(tabItem.key as typeof tab)}
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${tab === tabItem.key ? "border-b-2 border-blue-400 text-blue-400" : "text-slate-400 hover:text-slate-200"}`}
+            >
               {tabItem.label}
             </button>
           ))}

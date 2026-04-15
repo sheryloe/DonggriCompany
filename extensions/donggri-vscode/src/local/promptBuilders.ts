@@ -41,7 +41,11 @@ export function buildReviewPrompt(request: LocalReviewRequest, context: PromptCo
     .join("\n\n");
 }
 
-export function buildFixPrompt(request: LocalReviewRequest, context: PromptContextSnapshot, applyable: boolean): string {
+export function buildFixPrompt(
+  request: LocalReviewRequest,
+  context: PromptContextSnapshot,
+  applyable: boolean,
+): string {
   if (!applyable) {
     return [
       `Respond in ${responseLanguageLabel(request.responseLanguage)}.`,

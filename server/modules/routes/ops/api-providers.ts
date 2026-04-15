@@ -301,9 +301,7 @@ function validateOfficialPresetApiKey(preset: OfficialApiProviderPreset | null, 
   return null;
 }
 
-type ModelFetchResult =
-  | { ok: true; models: string[] }
-  | { ok: false; status: number; error: string };
+type ModelFetchResult = { ok: true; models: string[] } | { ok: false; status: number; error: string };
 
 async function fetchModelsFromUrl(params: {
   url: string;
@@ -542,7 +540,8 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
       fallbackModels,
     });
 
-    const shouldTryOllamaTagFallback = row.type === "ollama" && (!primary.ok || (primary.ok && primary.models.length === 0));
+    const shouldTryOllamaTagFallback =
+      row.type === "ollama" && (!primary.ok || (primary.ok && primary.models.length === 0));
     let resolved = primary;
     if (shouldTryOllamaTagFallback) {
       const tagFallback = await fetchModelsFromUrl({
@@ -591,7 +590,8 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
       fallbackModels,
     });
 
-    const shouldTryOllamaTagFallback = row.type === "ollama" && (!primary.ok || (primary.ok && primary.models.length === 0));
+    const shouldTryOllamaTagFallback =
+      row.type === "ollama" && (!primary.ok || (primary.ok && primary.models.length === 0));
     let resolved = primary;
     if (shouldTryOllamaTagFallback) {
       const tagFallback = await fetchModelsFromUrl({

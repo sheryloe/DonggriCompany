@@ -388,6 +388,12 @@ export async function createGitHubRepo(input: GitHubCreateRepoInput): Promise<Gi
   return response;
 }
 
+export async function deleteGitHubRepo(owner: string, repo: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function getGitHubRepos(params?: {
   q?: string;
   page?: number;
@@ -426,6 +432,16 @@ export async function cloneGitHubRepo(input: {
     method: "POST",
     body: JSON.stringify(body),
     headers: { "Content-Type": "application/json", ...(pat ? { "X-GitHub-PAT": pat } : {}) },
+  });
+}
+
+export async function deleteGitHubLocalPath(
+  targetPath: string,
+): Promise<{ ok: boolean; removed: boolean; target_path: string }> {
+  return request<{ ok: boolean; removed: boolean; target_path: string }>("/api/github/local-path", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target_path: targetPath }),
   });
 }
 

@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Socket } from "node:net";
 
-const apiTarget = process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:7777";
+const apiTarget = process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:8790";
 const wsTarget = process.env.VITE_WS_PROXY_TARGET ?? apiTarget.replace(/^http/i, "ws");
 
 type ProxyErrorResponse = ServerResponse<IncomingMessage> | Socket;

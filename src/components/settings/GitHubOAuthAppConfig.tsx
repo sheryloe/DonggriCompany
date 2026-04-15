@@ -39,7 +39,11 @@ export default function GitHubOAuthAppConfig({ t }: { t: TFunction }) {
             zh: "GitHub OAuth App (Private repo access)",
           })}
         </h4>
-        {saved && <span className="text-[10px] text-green-400">{t({ ko: "저장됨", en: "Saved", ja: "Saved", zh: "Saved" })}</span>}
+        {saved && (
+          <span className="text-[10px] text-green-400">
+            {t({ ko: "저장됨", en: "Saved", ja: "Saved", zh: "Saved" })}
+          </span>
+        )}
       </div>
 
       <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -53,15 +57,41 @@ export default function GitHubOAuthAppConfig({ t }: { t: TFunction }) {
 
       <details className="text-[11px] text-slate-500">
         <summary className="cursor-pointer text-blue-400 hover:text-blue-300">
-          {t({ ko: "OAuth App 생성 가이드", en: "How to create an OAuth App", ja: "How to create an OAuth App", zh: "How to create an OAuth App" })}
+          {t({
+            ko: "OAuth App 생성 가이드",
+            en: "How to create an OAuth App",
+            ja: "How to create an OAuth App",
+            zh: "How to create an OAuth App",
+          })}
         </summary>
         <ol className="mt-2 ml-4 list-decimal space-y-1 text-slate-400">
-          <li>`GitHub > Settings > Developer settings > OAuth Apps > New OAuth App`</li>
-          <li>{t({ ko: "Application name: 원하는 이름", en: "Application name: any name", ja: "Application name: any name", zh: "Application name: any name" })}</li>
-          <li>`Homepage URL: http://localhost:8800`</li>
-          <li>`Callback URL: http://localhost:8800/oauth/callback`</li>
-          <li>{t({ ko: "`Enable Device Flow`를 켭니다.", en: "Enable `Enable Device Flow`.", ja: "Enable `Enable Device Flow`.", zh: "Enable `Enable Device Flow`." })}</li>
-          <li>{t({ ko: "생성 후 Client ID를 아래 입력창에 붙여넣습니다.", en: "After creating it, paste the Client ID below.", ja: "After creating it, paste the Client ID below.", zh: "After creating it, paste the Client ID below." })}</li>
+          <li>{"GitHub > Settings > Developer settings > OAuth Apps > New OAuth App"}</li>
+          <li>
+            {t({
+              ko: "Application name: 원하는 이름",
+              en: "Application name: any name",
+              ja: "Application name: any name",
+              zh: "Application name: any name",
+            })}
+          </li>
+          <li>{"Homepage URL: http://localhost:8800"}</li>
+          <li>{"Callback URL: http://localhost:8800/oauth/callback"}</li>
+          <li>
+            {t({
+              ko: "`Enable Device Flow`를 켭니다.",
+              en: "Enable `Enable Device Flow`.",
+              ja: "Enable `Enable Device Flow`.",
+              zh: "Enable `Enable Device Flow`.",
+            })}
+          </li>
+          <li>
+            {t({
+              ko: "생성 후 Client ID를 아래 입력창에 붙여넣습니다.",
+              en: "After creating it, paste the Client ID below.",
+              ja: "After creating it, paste the Client ID below.",
+              zh: "After creating it, paste the Client ID below.",
+            })}
+          </li>
         </ol>
       </details>
 

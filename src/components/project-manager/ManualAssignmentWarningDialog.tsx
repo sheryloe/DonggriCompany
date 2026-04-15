@@ -40,16 +40,25 @@ export default function ManualAssignmentWarningDialog({
       >
         <div className="border-b border-amber-500/30 px-4 py-3">
           <h3 className="text-sm font-semibold text-amber-200">
-            {t({ ko: "수동 배정 확인", en: "Manual Assignment Check", ja: "Manual Assignment Check", zh: "Manual Assignment Check" })}
+            {t({
+              ko: "수동 배정 확인",
+              en: "Manual Assignment Check",
+              ja: "Manual Assignment Check",
+              zh: "Manual Assignment Check",
+            })}
           </h3>
         </div>
         <div className="space-y-2 px-4 py-4">
           <p className="text-sm text-slate-100">{description}</p>
           <div className="rounded-md border border-slate-700 bg-slate-800/60 px-3 py-2 text-[11px] text-slate-300">
-            <p>{t({ ko: "선택 요약", en: "Selection Summary", ja: "Selection Summary", zh: "Selection Summary" })}: {stats.total}</p>
+            <p>
+              {t({ ko: "선택 요약", en: "Selection Summary", ja: "Selection Summary", zh: "Selection Summary" })}:{" "}
+              {stats.total}
+            </p>
             <p>
               {t({ ko: "팀장", en: "Leaders", ja: "Leaders", zh: "Leaders" })}: {stats.leaders} ·{" "}
-              {t({ ko: "실무 에이전트", en: "Subordinates", ja: "Subordinates", zh: "Subordinates" })}: {stats.subordinates}
+              {t({ ko: "실무 에이전트", en: "Subordinates", ja: "Subordinates", zh: "Subordinates" })}:{" "}
+              {stats.subordinates}
             </p>
           </div>
         </div>

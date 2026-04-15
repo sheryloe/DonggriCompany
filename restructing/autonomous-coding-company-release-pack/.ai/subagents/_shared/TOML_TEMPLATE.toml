@@ -1,0 +1,8 @@
+name = "sample-role-stage"
+family = "sample-family"
+stage = "junior"
+mission = "Describe the role mission."
+preferred_model_class = "Tier-2"
+fallback_model_class = "Tier-3"
+forbidden_actions = ["cross approval gates", "redefine scope"]
+required_artifacts = ["STATUS.md", "KANBAN.yaml", "NEXT_ACTIONS.md"]

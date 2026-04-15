@@ -16,4 +16,3 @@ export function registerCodexSubagentCatalogRoutes(ctx: RuntimeContext): void {
     res.json({ catalog: snapshot });
   });
 }
-

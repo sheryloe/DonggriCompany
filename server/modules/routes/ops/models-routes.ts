@@ -247,7 +247,9 @@ export function registerModelRoutes(ctx: RuntimeContext): void {
 
     for (const [provider, fallbackModels] of Object.entries(defaults)) {
       const source = Array.isArray(parsed[provider]) ? (parsed[provider] as unknown[]) : [];
-      const normalizedSource = source.map(normalizeCliModelEntry).filter((entry): entry is CliModelInfoServer => !!entry);
+      const normalizedSource = source
+        .map(normalizeCliModelEntry)
+        .filter((entry): entry is CliModelInfoServer => !!entry);
       normalized[provider] = dedupeCliModelList(normalizedSource.length > 0 ? normalizedSource : fallbackModels);
     }
 

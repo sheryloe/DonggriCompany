@@ -1,0 +1,13 @@
+{
+  "agent_id": "0a74593d-5350-4847-8332-7e1ab3847ee3",
+  "agent_name": "Turbo",
+  "role": "senior",
+  "department_id": "operations",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:09:36.866Z"
+}

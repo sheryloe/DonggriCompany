@@ -1,10 +1,14 @@
 import {
+  checkProjectPath,
   browseProjectPath,
   cloneGitHubRepo,
   createGitHubRepo,
+  deleteGitHubLocalPath,
+  deleteGitHubRepo,
   createProject,
   getCloneStatus,
   getGitHubStatus,
+  isApiRequestError,
 } from "../../api";
 import type { GitHubCreateRepoResponse, GitHubStatus } from "../../api";
 import type { AssignmentMode, Project } from "../../types";
@@ -14,14 +18,27 @@ const CLONE_POLL_INTERVAL_MS = 1_000;
 const CLONE_TIMEOUT_MS = 120_000;
 
 export type GitHubGateReason = "not_connected" | "missing_repo_scope";
+type GitHubProjectFailureStage = "status" | "create_repo" | "clone" | "create_project" | null;
+
+export interface GitHubRollbackStatus {
+  attempted: boolean;
+  remoteDeleteAttempted: boolean;
+  remoteRepoDeleted: boolean;
+  remoteRepoDeleteError: string | null;
+  localCleanupAttempted: boolean;
+  localPathDeleted: boolean;
+  localPathDeleteError: string | null;
+  manualCleanupRequired: boolean;
+}
 
 export class GitHubProjectCreateError extends Error {
   readonly code: string;
   readonly gateReason: GitHubGateReason | null;
   readonly remoteRepoFullName: string | null;
   readonly localPath: string | null;
-  readonly stage: "status" | "create_repo" | "clone" | "create_project" | null;
+  readonly stage: GitHubProjectFailureStage;
   readonly causeDetail: unknown;
+  readonly rollback: GitHubRollbackStatus | null;
 
   constructor(
     message: string,
@@ -30,8 +47,9 @@ export class GitHubProjectCreateError extends Error {
       gateReason?: GitHubGateReason | null;
       remoteRepoFullName?: string | null;
       localPath?: string | null;
-      stage?: "status" | "create_repo" | "clone" | "create_project" | null;
+      stage?: GitHubProjectFailureStage;
       causeDetail?: unknown;
+      rollback?: GitHubRollbackStatus | null;
     },
   ) {
     super(message);
@@ -42,6 +60,7 @@ export class GitHubProjectCreateError extends Error {
     this.localPath = options.localPath ?? null;
     this.stage = options.stage ?? null;
     this.causeDetail = options.causeDetail;
+    this.rollback = options.rollback ?? null;
   }
 }
 
@@ -92,6 +111,73 @@ function splitRepoFullName(fullName: string): { owner: string; repo: string } | 
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function createRollbackStatus(overrides?: Partial<GitHubRollbackStatus>): GitHubRollbackStatus {
+  return {
+    attempted: false,
+    remoteDeleteAttempted: false,
+    remoteRepoDeleted: false,
+    remoteRepoDeleteError: null,
+    localCleanupAttempted: false,
+    localPathDeleted: false,
+    localPathDeleteError: null,
+    manualCleanupRequired: false,
+    ...(overrides ?? {}),
+  };
+}
+
+async function didPathExist(pathValue: string): Promise<boolean> {
+  try {
+    const result = await checkProjectPath(pathValue);
+    return result.exists;
+  } catch {
+    return false;
+  }
+}
+
+async function rollbackGitHubBootstrap(options: {
+  owner: string;
+  repo: string;
+  localPath: string | null;
+  localPathCreatedByFlow: boolean;
+  stage: "clone" | "create_project";
+  cause: unknown;
+}): Promise<GitHubRollbackStatus> {
+  const canAutoRollback = options.stage === "clone" || isApiRequestError(options.cause);
+  const rollback = createRollbackStatus({
+    attempted: canAutoRollback,
+    manualCleanupRequired: options.stage === "create_project" && !canAutoRollback,
+  });
+
+  if (!canAutoRollback) {
+    return rollback;
+  }
+
+  rollback.remoteDeleteAttempted = true;
+  try {
+    await deleteGitHubRepo(options.owner, options.repo);
+    rollback.remoteRepoDeleted = true;
+  } catch (error) {
+    rollback.remoteRepoDeleteError = formatErrorMessage(error);
+  }
+
+  if (options.localPathCreatedByFlow && options.localPath) {
+    rollback.localCleanupAttempted = true;
+    try {
+      const cleanup = await deleteGitHubLocalPath(options.localPath);
+      rollback.localPathDeleted = cleanup.removed === true;
+    } catch (error) {
+      rollback.localPathDeleteError = formatErrorMessage(error);
+    }
+  }
+
+  return rollback;
 }
 
 async function waitForCloneCompletion(cloneId: string): Promise<void> {
@@ -156,6 +242,8 @@ export async function createProjectWithGitHubAutomation(
     });
   }
 
+  const projectPathExistedAtStart = await didPathExist(input.projectPath);
+
   const remoteRepo = (
     await createGitHubRepo({
       name: input.github.repoName,
@@ -175,6 +263,7 @@ export async function createProjectWithGitHubAutomation(
 
   let resolvedProjectPath = input.projectPath;
   let stage: "clone" | "create_project" = "clone";
+  let localPathCreatedByFlow = false;
   try {
     const cloneResult = await cloneGitHubRepo({
       owner: repoOwner.owner,
@@ -184,6 +273,7 @@ export async function createProjectWithGitHubAutomation(
     });
 
     resolvedProjectPath = cloneResult.target_path || input.projectPath;
+    localPathCreatedByFlow = !projectPathExistedAtStart && cloneResult.already_exists !== true;
     if (cloneResult.clone_id) {
       await waitForCloneCompletion(cloneResult.clone_id);
     }
@@ -205,12 +295,21 @@ export async function createProjectWithGitHubAutomation(
       projectPath: resolvedProjectPath,
     };
   } catch (error) {
+    const rollback = await rollbackGitHubBootstrap({
+      owner: repoOwner.owner,
+      repo: repoOwner.repo,
+      localPath: resolvedProjectPath,
+      localPathCreatedByFlow,
+      stage,
+      cause: error,
+    });
     throw new GitHubProjectCreateError("GitHub repository was created but local setup failed", {
       code: "github_repo_created_but_local_setup_failed",
       remoteRepoFullName: remoteRepo.full_name,
       localPath: resolvedProjectPath,
       stage,
       causeDetail: error,
+      rollback,
     });
   }
 }

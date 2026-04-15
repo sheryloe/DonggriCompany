@@ -139,7 +139,10 @@ export default function SubagentsTab({
 
   if (!catalog) {
     return (
-      <div className="rounded-xl px-4 py-4" style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)" }}>
+      <div
+        className="rounded-xl px-4 py-4"
+        style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)" }}
+      >
         <div className="text-sm font-medium" style={{ color: "var(--th-text-heading)" }}>
           {tr("서브에이전트 카탈로그를 불러오지 못했습니다.", "Unable to load the sub-agent catalog.")}
         </div>
@@ -147,7 +150,10 @@ export default function SubagentsTab({
           {error ?? "unknown_error"}
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <code className="rounded px-2 py-1 text-xs" style={{ background: "var(--th-bg-surface-hover)", color: "var(--th-text-primary)" }}>
+          <code
+            className="rounded px-2 py-1 text-xs"
+            style={{ background: "var(--th-bg-surface-hover)", color: "var(--th-text-primary)" }}
+          >
             pnpm subagents:sync
           </code>
           <button
@@ -235,7 +241,11 @@ export default function SubagentsTab({
       {filteredAgents.length === 0 ? (
         <div
           className="rounded-xl px-4 py-6 text-sm"
-          style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)", color: "var(--th-text-muted)" }}
+          style={{
+            background: "var(--th-card-bg)",
+            border: "1px solid var(--th-card-border)",
+            color: "var(--th-text-muted)",
+          }}
         >
           {tr("조건에 맞는 서브에이전트가 없습니다.", "No sub-agents match the current filters.")}
         </div>
@@ -270,7 +280,10 @@ export default function SubagentsTab({
                         {agent.description || "-"}
                       </div>
                     </div>
-                    <code className="rounded px-2 py-1 text-[11px]" style={{ background: "var(--th-bg-surface-hover)", color: "var(--th-text-primary)" }}>
+                    <code
+                      className="rounded px-2 py-1 text-[11px]"
+                      style={{ background: "var(--th-bg-surface-hover)", color: "var(--th-text-primary)" }}
+                    >
                       {agent.upstreamCategory}
                     </code>
                   </div>

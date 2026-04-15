@@ -33,7 +33,9 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
   const [sendStatus, setSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const [runtimeLoading, setRuntimeLoading] = useState(false);
-  const [runtimeSessions, setRuntimeSessions] = useState<Awaited<ReturnType<typeof api.getMessengerRuntimeSessions>>>([]);
+  const [runtimeSessions, setRuntimeSessions] = useState<Awaited<ReturnType<typeof api.getMessengerRuntimeSessions>>>(
+    [],
+  );
   const [receiverLoading, setReceiverLoading] = useState(false);
   const [telegramReceiverStatus, setTelegramReceiverStatus] = useState<Awaited<
     ReturnType<typeof api.getTelegramReceiverStatus>
@@ -117,21 +119,18 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
     return map;
   }, [workflowPackOptions]);
 
-  const resolveDiscordLookupErrorMessage = useCallback(
-    (error: unknown): string => {
-      if (api.isApiRequestError(error)) {
-        const code = error.code ?? "";
-        if (code === "discord_token_required") return "Please enter a Discord token.";
-        if (code === "discord_auth_failed") return "Discord authentication failed. Check your bot token and permissions.";
-        if (code === "discord_rate_limited") return "Discord API is rate-limited. Please try again shortly.";
-        if (code === "discord_channel_lookup_failed") {
-          return "Failed to load Discord channels. Check network connectivity and permissions.";
-        }
+  const resolveDiscordLookupErrorMessage = useCallback((error: unknown): string => {
+    if (api.isApiRequestError(error)) {
+      const code = error.code ?? "";
+      if (code === "discord_token_required") return "Please enter a Discord token.";
+      if (code === "discord_auth_failed") return "Discord authentication failed. Check your bot token and permissions.";
+      if (code === "discord_rate_limited") return "Discord API is rate-limited. Please try again shortly.";
+      if (code === "discord_channel_lookup_failed") {
+        return "Failed to load Discord channels. Check network connectivity and permissions.";
       }
-      return "An error occurred while loading Discord channels.";
-    },
-    [],
-  );
+    }
+    return "An error occurred while loading Discord channels.";
+  }, []);
 
   const persistChannelsForm = (nextChannels: ReturnType<typeof resolveChannelsConfig>, successMsg?: string) => {
     const normalized = normalizeChannelsConfig(nextChannels);
@@ -406,8 +405,12 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
             {chatRows.map((row) => {
               const meta = CHANNEL_META[row.channel];
               const assignedAgent = row.session.agentId ? agentById.get(row.session.agentId) : undefined;
-              const assignedAgentName = assignedAgent ? assignedAgent.name_ko || assignedAgent.name : row.session.agentId || "";
-              const workflowPackKey = isWorkflowPackKey(row.session.workflowPackKey) ? row.session.workflowPackKey : "development";
+              const assignedAgentName = assignedAgent
+                ? assignedAgent.name_ko || assignedAgent.name
+                : row.session.agentId || "";
+              const workflowPackKey = isWorkflowPackKey(row.session.workflowPackKey)
+                ? row.session.workflowPackKey
+                : "development";
               const workflowPackLabel =
                 workflowPackNameByKey.get(workflowPackKey) ?? defaultWorkflowPackLabel(t, workflowPackKey);
               const tokenReady = row.token.trim().length > 0;
@@ -423,7 +426,9 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
                         </span>
                         <span
                           className={`rounded px-1.5 py-0.5 text-[10px] ${
-                            meta.transportReady ? "bg-emerald-600/20 text-emerald-300" : "bg-amber-600/20 text-amber-300"
+                            meta.transportReady
+                              ? "bg-emerald-600/20 text-emerald-300"
+                              : "bg-amber-600/20 text-amber-300"
                           }`}
                         >
                           {meta.transportReady ? copy.native : copy.compat}
@@ -432,7 +437,9 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
                           {workflowPackLabel}
                         </span>
                         {!tokenReady && (
-                          <span className="rounded bg-red-600/20 px-1.5 py-0.5 text-[10px] text-red-300">{copy.noToken}</span>
+                          <span className="rounded bg-red-600/20 px-1.5 py-0.5 text-[10px] text-red-300">
+                            {copy.noToken}
+                          </span>
                         )}
                       </div>
                       <div className="mt-1 break-all font-mono text-[11px] text-slate-400">{row.session.targetId}</div>
@@ -440,7 +447,9 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
                         {assignedAgentName ? (
                           <>
                             <span>{copy.assignedAgent}:</span>
-                            {assignedAgent && <AgentAvatar agent={assignedAgent} spriteMap={spriteMap} size={14} rounded="xl" />}
+                            {assignedAgent && (
+                              <AgentAvatar agent={assignedAgent} spriteMap={spriteMap} size={14} rounded="xl" />
+                            )}
                             <span className="truncate">{assignedAgentName}</span>
                           </>
                         ) : (

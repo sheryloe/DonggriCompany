@@ -230,7 +230,10 @@ describe("installSecurityMiddleware", () => {
     const cookieHeader = sessionRes.headers["set-cookie"]?.[0];
     expect(cookieHeader).toContain(`${SESSION_COOKIE_NAME}=`);
 
-    await request(app).get("/api/agents").set("Cookie", String(cookieHeader)).expect(200, { ok: true, scope: "agents" });
+    await request(app)
+      .get("/api/agents")
+      .set("Cookie", String(cookieHeader))
+      .expect(200, { ok: true, scope: "agents" });
     await request(app)
       .get("/api/subagents/catalog")
       .set("Cookie", String(cookieHeader))

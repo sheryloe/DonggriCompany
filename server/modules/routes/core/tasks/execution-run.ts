@@ -429,9 +429,9 @@ Whenever you complete a subtask, report it in this format:
     const modelConfig = getProviderModelConfig();
     const providerPolicy = resolveProviderExecutionPolicy({ provider, providerModelConfig: modelConfig });
     const mainModel = providerPolicy.model;
-    const subModel = modelConfig[provider]?.subModel || undefined;
+    const subModel = providerPolicy.subModel;
     const mainReasoningLevel = providerPolicy.reasoningLevel;
-    const subReasoningLevel = modelConfig[provider]?.subModelReasoningLevel || undefined;
+    const subReasoningLevel = providerPolicy.subModelReasoningLevel;
     const subModelHint =
       subModel && (provider === "claude" || provider === "codex")
         ? `\n[Sub-agent model preference] When spawning sub-agents (Task tool), prefer using model: ${subModel}${subReasoningLevel ? ` with reasoning effort: ${subReasoningLevel}` : ""}`

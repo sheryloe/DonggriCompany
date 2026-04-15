@@ -24,7 +24,9 @@ type ReadTerminalInput = {
 class ReadActiveEditorTool implements vscode.LanguageModelTool<{ includeFileText?: boolean }> {
   constructor(private readonly controller: DonggriExtensionController) {}
 
-  async invoke(options: vscode.LanguageModelToolInvocationOptions<{ includeFileText?: boolean }>): Promise<vscode.LanguageModelToolResult> {
+  async invoke(
+    options: vscode.LanguageModelToolInvocationOptions<{ includeFileText?: boolean }>,
+  ): Promise<vscode.LanguageModelToolResult> {
     const context = await this.controller.collectContext({
       includeFileText: options.input.includeFileText !== false,
       includeDiff: false,
@@ -52,21 +54,27 @@ class ReadSelectionTool implements vscode.LanguageModelTool<Record<string, never
       includeDiff: false,
     });
 
-    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(context.selectionText || "No active selection.")]);
+    return new vscode.LanguageModelToolResult([
+      new vscode.LanguageModelTextPart(context.selectionText || "No active selection."),
+    ]);
   }
 }
 
 class ReadWorkingDiffTool implements vscode.LanguageModelTool<ReadDiffInput> {
   constructor(private readonly controller: DonggriExtensionController) {}
 
-  async invoke(options: vscode.LanguageModelToolInvocationOptions<ReadDiffInput>): Promise<vscode.LanguageModelToolResult> {
+  async invoke(
+    options: vscode.LanguageModelToolInvocationOptions<ReadDiffInput>,
+  ): Promise<vscode.LanguageModelToolResult> {
     const context = await this.controller.collectContext({
       includeFileText: false,
       includeDiff: true,
       diffScope: options.input.scope ?? "activeFile",
     });
 
-    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(context.workingDiff || "No working diff found.")]);
+    return new vscode.LanguageModelToolResult([
+      new vscode.LanguageModelTextPart(context.workingDiff || "No working diff found."),
+    ]);
   }
 }
 
@@ -85,9 +93,13 @@ class ReadProjectBindingTool implements vscode.LanguageModelTool<Record<string, 
 class CreateTaskTool implements vscode.LanguageModelTool<CreateTaskInput> {
   constructor(private readonly controller: DonggriExtensionController) {}
 
-  async invoke(options: vscode.LanguageModelToolInvocationOptions<CreateTaskInput>): Promise<vscode.LanguageModelToolResult> {
+  async invoke(
+    options: vscode.LanguageModelToolInvocationOptions<CreateTaskInput>,
+  ): Promise<vscode.LanguageModelToolResult> {
     if (!options.input.title || !options.input.prompt) {
-      return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart("Task title and prompt are required.")]);
+      return new vscode.LanguageModelToolResult([
+        new vscode.LanguageModelTextPart("Task title and prompt are required."),
+      ]);
     }
 
     const task = await this.controller.createTaskFromCurrentContext(options.input.prompt, undefined, undefined, {
@@ -95,7 +107,9 @@ class CreateTaskTool implements vscode.LanguageModelTool<CreateTaskInput> {
       runAfterCreate: options.input.runAfterCreate === true,
     });
 
-    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(`Created task ${task.id}: ${task.title}`)]);
+    return new vscode.LanguageModelToolResult([
+      new vscode.LanguageModelTextPart(`Created task ${task.id}: ${task.title}`),
+    ]);
   }
 
   async prepareInvocation(
@@ -105,7 +119,9 @@ class CreateTaskTool implements vscode.LanguageModelTool<CreateTaskInput> {
       invocationMessage: "Creating Donggri task",
       confirmationMessages: {
         title: "Create Donggri task",
-        message: new vscode.MarkdownString(`Create a Donggri task for **${options.input.title ?? "current context"}**?`),
+        message: new vscode.MarkdownString(
+          `Create a Donggri task for **${options.input.title ?? "current context"}**?`,
+        ),
       },
     };
   }
@@ -114,7 +130,9 @@ class CreateTaskTool implements vscode.LanguageModelTool<CreateTaskInput> {
 class ControlTaskTool implements vscode.LanguageModelTool<ControlTaskInput> {
   constructor(private readonly controller: DonggriExtensionController) {}
 
-  async invoke(options: vscode.LanguageModelToolInvocationOptions<ControlTaskInput>): Promise<vscode.LanguageModelToolResult> {
+  async invoke(
+    options: vscode.LanguageModelToolInvocationOptions<ControlTaskInput>,
+  ): Promise<vscode.LanguageModelToolResult> {
     if (!options.input.taskId || !options.input.action) {
       return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart("taskId and action are required.")]);
     }
@@ -143,7 +161,9 @@ class ControlTaskTool implements vscode.LanguageModelTool<ControlTaskInput> {
 class ReadTaskTerminalTool implements vscode.LanguageModelTool<ReadTerminalInput> {
   constructor(private readonly controller: DonggriExtensionController) {}
 
-  async invoke(options: vscode.LanguageModelToolInvocationOptions<ReadTerminalInput>): Promise<vscode.LanguageModelToolResult> {
+  async invoke(
+    options: vscode.LanguageModelToolInvocationOptions<ReadTerminalInput>,
+  ): Promise<vscode.LanguageModelToolResult> {
     if (!options.input.taskId) {
       return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart("taskId is required.")]);
     }

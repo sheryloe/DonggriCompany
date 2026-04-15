@@ -25,19 +25,30 @@ export default function MissingPathPromptDialog({
       >
         <div className="border-b border-slate-700 px-4 py-3">
           <h3 className="text-sm font-semibold text-white">
-            {t({ ko: "프로젝트 경로 확인", en: "Confirm Project Path", ja: "Confirm Project Path", zh: "Confirm Project Path" })}
+            {t({
+              ko: "프로젝트 경로 확인",
+              en: "Confirm Project Path",
+              ja: "Confirm Project Path",
+              zh: "Confirm Project Path",
+            })}
           </h3>
         </div>
         <div className="space-y-2 px-4 py-4">
           <p className="text-sm text-slate-200">
-            {t({ ko: "이 경로가 아직 없습니다. 지금 생성할까요?", en: "This path does not exist yet. Create it now?", ja: "This path does not exist yet. Create it now?", zh: "This path does not exist yet. Create it now?" })}
+            {t({
+              ko: "이 경로가 아직 없습니다. 지금 생성할까요?",
+              en: "This path does not exist yet. Create it now?",
+              ja: "This path does not exist yet. Create it now?",
+              zh: "This path does not exist yet. Create it now?",
+            })}
           </p>
           <p className="break-all rounded-md border border-slate-700 bg-slate-800/70 px-2.5 py-2 text-xs text-slate-200">
             {prompt.normalizedPath}
           </p>
           {prompt.nearestExistingParent && (
             <p className="text-xs text-slate-400">
-              {t({ ko: "기준 폴더", en: "Base folder", ja: "Base folder", zh: "Base folder" })}: {prompt.nearestExistingParent}
+              {t({ ko: "기준 폴더", en: "Base folder", ja: "Base folder", zh: "Base folder" })}:{" "}
+              {prompt.nearestExistingParent}
             </p>
           )}
           {!prompt.canCreate && (

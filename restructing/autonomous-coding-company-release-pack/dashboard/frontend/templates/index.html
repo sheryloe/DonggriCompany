@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+  <h2>Projects</h2>
+  <div class="card-grid">
+    {% for p in projects %}
+    <div class="card">
+      <h3>{{ p.key }}</h3>
+      <p>Project summary placeholder.</p>
+    </div>
+    {% else %}
+    <p>No active projects found.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

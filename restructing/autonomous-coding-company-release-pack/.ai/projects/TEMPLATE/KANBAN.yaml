@@ -1,0 +1,12 @@
+project:
+  key: PROJECT_KEY
+board:
+  lanes:
+    backlog: []
+    ready: []
+    in_progress: []
+    review: []
+    qa: []
+    blocked: []
+    done: []
+cards: []

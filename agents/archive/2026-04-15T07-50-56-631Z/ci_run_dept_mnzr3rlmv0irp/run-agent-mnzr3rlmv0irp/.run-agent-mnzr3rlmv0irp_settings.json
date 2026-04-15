@@ -1,0 +1,13 @@
+{
+  "agent_id": "c672966d-9206-45b4-af53-b79e87a2043d",
+  "agent_name": "run-agent-mnzr3rlmv0irp",
+  "role": "team_leader",
+  "department_id": "ci_run_dept_mnzr3rlmv0irp",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:50:47.811Z"
+}

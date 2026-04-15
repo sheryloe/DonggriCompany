@@ -72,7 +72,10 @@ interface BatchDeps {
     provider: string;
   };
   ensureClaudeMd: (projectPath: string, worktreePath: string) => void;
-  getProviderModelConfig: () => Record<string, { model?: string; reasoningLevel?: string }>;
+  getProviderModelConfig: () => Record<
+    string,
+    { model?: string; subModel?: string; reasoningLevel?: string; subModelReasoningLevel?: string }
+  >;
   spawnCliAgent: (
     taskId: string,
     provider: string,

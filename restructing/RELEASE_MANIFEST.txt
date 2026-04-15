@@ -1,0 +1,5 @@
+{
+  "root": "/home/user/autonomous-coding-company-release-pack",
+  "file_count": 380,
+  "dir_count": 109
+}

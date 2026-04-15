@@ -1,0 +1,13 @@
+{
+  "agent_id": "69442b60-bedb-4bf9-a064-db5d3babb6dc",
+  "agent_name": "ci-cov-member-mnzq8wkhti1ti",
+  "role": "junior",
+  "department_id": "ci_cov_dept_a_mnzq8wkhti1ti",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:26:45.606Z"
+}

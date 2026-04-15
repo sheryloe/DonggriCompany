@@ -216,6 +216,27 @@ describe("github routes", () => {
     }
   });
 
+  it("deletes a GitHub repository", async () => {
+    const { app, db } = await createHarness();
+    try {
+      insertActiveGitHubAccount(db);
+      vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+      const response = await request(app).delete("/api/github/repos/octocat/demo-repo");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ ok: true });
+      expect(fetch).toHaveBeenCalledWith(
+        "https://api.github.com/repos/octocat/demo-repo",
+        expect.objectContaining({
+          method: "DELETE",
+        }),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it("creates missing parent directories before cloning", async () => {
     const { app, db } = await createHarness();
     try {
@@ -251,6 +272,31 @@ describe("github routes", () => {
         ]),
         expect.any(Object),
       );
+    } finally {
+      db.close();
+    }
+  });
+
+  it("removes a cloned local path only when it is a git directory", async () => {
+    const { app, db } = await createHarness();
+    try {
+      insertActiveGitHubAccount(db);
+      const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "github-local-cleanup-"));
+      tempDirs.push(rootDir);
+      const cloneDir = path.join(rootDir, "demo-repo");
+      fs.mkdirSync(path.join(cloneDir, ".git"), { recursive: true });
+
+      const response = await request(app).delete("/api/github/local-path").send({
+        target_path: cloneDir,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        ok: true,
+        removed: true,
+        target_path: cloneDir,
+      });
+      expect(fs.existsSync(cloneDir)).toBe(false);
     } finally {
       db.close();
     }

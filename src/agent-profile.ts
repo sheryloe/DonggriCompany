@@ -118,7 +118,11 @@ const PROFILE_PRESETS: Record<AgentRole, AgentProfile> = {
 };
 
 function normalizeLocale(locale?: string): "ko" | "en" {
-  return String(locale ?? "").toLowerCase().startsWith("ko") ? "ko" : "en";
+  return String(locale ?? "")
+    .toLowerCase()
+    .startsWith("ko")
+    ? "ko"
+    : "en";
 }
 
 function normalizeLevel(value: unknown, fallback: AgentLevelValue): AgentLevelValue {
@@ -321,17 +325,26 @@ export function buildAgentPromptPreview(params: {
   const normalized = normalizeAgentProfile(params.profile, params.profile?.role_template ?? "junior");
   const overrideText = resolveAgentProfileOverrideText(normalized, legacyPersonality);
   const capabilitySummary = CAPABILITY_KEYS.map(
-    (key) => `${CAPABILITY_LABELS[lang][key]} ${LEVEL_WORDS[lang][normalized.capabilities[key]]}(${normalized.capabilities[key]})`,
+    (key) =>
+      `${CAPABILITY_LABELS[lang][key]} ${LEVEL_WORDS[lang][normalized.capabilities[key]]}(${normalized.capabilities[key]})`,
   ).join(", ");
   const styleSummary = PROMPT_STYLE_KEYS.map(
-    (key) => `${STYLE_LABELS[lang][key]} ${LEVEL_WORDS[lang][normalized.prompt_style[key]]}(${normalized.prompt_style[key]})`,
+    (key) =>
+      `${STYLE_LABELS[lang][key]} ${LEVEL_WORDS[lang][normalized.prompt_style[key]]}(${normalized.prompt_style[key]})`,
   ).join(", ");
   const reviewLenses = workflowProfile?.review_lenses?.join(", ") || "";
   const specialties = normalized.specialties.join(", ");
   const classPath = formatClassPath(normalized.class_path);
   const promotionPolicy = formatPromotionPolicy(normalized.promotion_policy);
   const workflowRoleLabel = workflowProfile ? getWorkflowRoleDisplayLabel(workflowProfile.role, locale) : "";
-  const reviewDepthLabel = workflowProfile?.two_pass_required === false ? (lang === "ko" ? "단일 패스" : "Single pass") : lang === "ko" ? "2패스 강제" : "Force 2-pass";
+  const reviewDepthLabel =
+    workflowProfile?.two_pass_required === false
+      ? lang === "ko"
+        ? "단일 패스"
+        : "Single pass"
+      : lang === "ko"
+        ? "2패스 강제"
+        : "Force 2-pass";
 
   if (lang === "ko") {
     return [
@@ -345,7 +358,9 @@ export function buildAgentPromptPreview(params: {
       specialties ? `전문 분야: ${specialties}` : "",
       reviewLenses ? `리뷰 렌즈: ${reviewLenses}` : "",
       workflowProfile?.role === "reviewer" ? `리뷰 깊이: ${reviewDepthLabel}` : "",
-      workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds ? `최대 리뷰 라운드: ${workflowProfile.max_review_rounds}` : "",
+      workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds
+        ? `최대 리뷰 라운드: ${workflowProfile.max_review_rounds}`
+        : "",
       overrideText ? `최종 수동 보정: ${overrideText}` : "",
     ]
       .filter(Boolean)
@@ -363,7 +378,9 @@ export function buildAgentPromptPreview(params: {
     specialties ? `Specialties: ${specialties}` : "",
     reviewLenses ? `Review lenses: ${reviewLenses}` : "",
     workflowProfile?.role === "reviewer" ? `Review depth: ${reviewDepthLabel}` : "",
-    workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds ? `Max review rounds: ${workflowProfile.max_review_rounds}` : "",
+    workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds
+      ? `Max review rounds: ${workflowProfile.max_review_rounds}`
+      : "",
     overrideText ? `Final override: ${overrideText}` : "",
   ]
     .filter(Boolean)

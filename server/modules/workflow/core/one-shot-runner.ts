@@ -10,7 +10,15 @@ type CreateOneShotRunnerDeps = {
   db: any;
   logsDir: string;
   broadcast: (event: string, payload: unknown) => void;
-  getProviderModelConfig: () => Record<string, { model?: string; reasoningLevel?: string }>;
+  getProviderModelConfig: () => Record<
+    string,
+    {
+      model?: string;
+      subModel?: string;
+      reasoningLevel?: string;
+      subModelReasoningLevel?: string;
+    }
+  >;
   executeApiProviderAgent: (...args: any[]) => Promise<void>;
   executeCopilotAgent: (...args: any[]) => Promise<void>;
   executeAntigravityAgent: (...args: any[]) => Promise<void>;

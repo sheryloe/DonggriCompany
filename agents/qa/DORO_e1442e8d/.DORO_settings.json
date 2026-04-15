@@ -1,0 +1,13 @@
+{
+  "agent_id": "e1442e8d-fa00-4892-b9e5-d9bbe7dc62e1",
+  "agent_name": "DORO",
+  "role": "junior",
+  "department_id": "qa",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-15T07:33:46.797Z"
+}

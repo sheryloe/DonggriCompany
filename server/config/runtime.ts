@@ -56,7 +56,7 @@ export const PKG_VERSION: string = (() => {
   }
 })();
 
-export const PORT = Number(process.env.PORT ?? 7777);
+export const PORT = Number(process.env.PORT ?? 8790);
 export const HOST = process.env.HOST ?? "127.0.0.1";
 export const OAUTH_BASE_HOST = HOST === "0.0.0.0" || HOST === "::" ? "127.0.0.1" : HOST;
 export const SESSION_COOKIE_NAME = "claw_session";

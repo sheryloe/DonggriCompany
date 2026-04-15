@@ -25,12 +25,7 @@ export default function GitHubConnectionDialog({
       >
         <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
           <h3 className="text-sm font-semibold text-white">
-            {t({
-              ko: "GitHub 연결 필요",
-              en: "GitHub Connection Required",
-              ja: "GitHub Connection Required",
-              zh: "GitHub Connection Required",
-            })}
+            {t({ ko: "GitHub 연결 필요", en: "GitHub Connection Required", ja: "GitHub Connection Required", zh: "GitHub Connection Required" })}
           </h3>
           <button
             type="button"

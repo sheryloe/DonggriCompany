@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import { isApiRequestError, pickProjectPathNative, type ProjectDetailResponse } from "../../api";
+import { getAssignmentModeDisplayLabel } from "../../app/canonical-display";
 import type { Agent, AssignmentMode, Department, Project } from "../../types";
 import type {
   FormFeedback,
@@ -136,8 +137,7 @@ export default function ProjectEditorPanel({
   onDelete,
 }: ProjectEditorPanelProps) {
   const githubAutoPathLocked = githubAutoCreateAvailable && githubAutoCreateEnabled && !projectPathCustomized;
-  const showPathTools =
-    pathToolsVisible && (!githubAutoCreateAvailable || !githubAutoCreateEnabled || projectPathCustomized);
+  const showPathTools = pathToolsVisible && (!githubAutoCreateAvailable || !githubAutoCreateEnabled || projectPathCustomized);
 
   return (
     <div className="min-w-0 space-y-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4">
@@ -146,8 +146,8 @@ export default function ProjectEditorPanel({
         <input
           type="text"
           value={name}
-          onChange={(e) => {
-            setName(e.target.value);
+          onChange={(event) => {
+            setName(event.target.value);
             setFormFeedback(null);
           }}
           disabled={!isCreating && !editingProjectId}
@@ -160,19 +160,14 @@ export default function ProjectEditorPanel({
           <label className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-slate-200">
-                {t({
-                  ko: "GitHub 레포 자동 생성",
-                  en: "Auto-create GitHub repository",
-                  ja: "Auto-create GitHub repository",
-                  zh: "Auto-create GitHub repository",
-                })}
+                {t({ ko: "GitHub 저장소 자동 생성", en: "Auto-create GitHub repository", ja: "Auto-create GitHub repository", zh: "Auto-create GitHub repository" })}
               </p>
               <p className="mt-1 text-[11px] text-slate-400">
                 {t({
-                  ko: "프로젝트 생성 시 원격 레포를 만들고 로컬로 바로 클론합니다.",
-                  en: "Create a remote repository and clone it locally during project creation.",
-                  ja: "Create a remote repository and clone it locally during project creation.",
-                  zh: "Create a remote repository and clone it locally during project creation.",
+                  ko: "프로젝트 생성과 함께 원격 저장소를 만들고 로컬 경로까지 준비합니다.",
+                  en: "Create a remote repository and prepare the local working path during project creation.",
+                  ja: "Create a remote repository and prepare the local working path during project creation.",
+                  zh: "Create a remote repository and prepare the local working path during project creation.",
                 })}
               </p>
             </div>
@@ -199,12 +194,12 @@ export default function ProjectEditorPanel({
           {githubAutoCreateEnabled && (
             <div className="space-y-3">
               <label className="block text-xs text-slate-400">
-                {t({ ko: "레포지토리 이름", en: "Repository Name", ja: "Repository Name", zh: "Repository Name" })}
+                {t({ ko: "저장소 이름", en: "Repository Name", ja: "Repository Name", zh: "Repository Name" })}
                 <input
                   type="text"
                   value={githubRepoName}
-                  onChange={(e) => {
-                    setGitHubRepoName(e.target.value);
+                  onChange={(event) => {
+                    setGitHubRepoName(event.target.value);
                     setFormFeedback(null);
                   }}
                   className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
@@ -249,21 +244,11 @@ export default function ProjectEditorPanel({
 
               <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
                 <p className="text-[11px] text-slate-400">
-                  {t({
-                    ko: "기본 프로젝트 루트",
-                    en: "Default project root",
-                    ja: "Default project root",
-                    zh: "Default project root",
-                  })}
+                  {t({ ko: "기본 프로젝트 루트", en: "Default project root", ja: "Default project root", zh: "Default project root" })}
                 </p>
                 <p className="mt-1 break-all text-xs text-slate-200">
                   {defaultProjectRootLoading
-                    ? t({
-                        ko: "기본 루트를 확인하는 중...",
-                        en: "Resolving default root...",
-                        ja: "Resolving default root...",
-                        zh: "Resolving default root...",
-                      })
+                    ? t({ ko: "기본 루트를 확인하는 중...", en: "Resolving default root...", ja: "Resolving default root...", zh: "Resolving default root..." })
                     : defaultProjectRoot || "~/Projects"}
                 </p>
               </div>
@@ -274,21 +259,16 @@ export default function ProjectEditorPanel({
 
       <label className="block text-xs text-slate-400">
         {githubAutoPathLocked
-          ? t({
-              ko: "프로젝트 경로 (자동)",
-              en: "Project Path (Auto)",
-              ja: "Project Path (Auto)",
-              zh: "Project Path (Auto)",
-            })
+          ? t({ ko: "프로젝트 경로 (자동)", en: "Project Path (Auto)", ja: "Project Path (Auto)", zh: "Project Path (Auto)" })
           : t({ ko: "프로젝트 경로", en: "Project Path", ja: "Project Path", zh: "Project Path" })}
         <input
           type="text"
           value={projectPath}
-          onChange={(e) => {
+          onChange={(event) => {
             if (githubAutoCreateAvailable && githubAutoCreateEnabled) {
               setProjectPathCustomized(true);
             }
-            setProjectPath(e.target.value);
+            setProjectPath(event.target.value);
             setMissingPathPrompt(null);
             setFormFeedback(null);
           }}
@@ -313,7 +293,7 @@ export default function ProjectEditorPanel({
               }}
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800"
             >
-              {t({ ko: "자동 경로로 되돌리기", en: "Use Auto Path", ja: "Use Auto Path", zh: "Use Auto Path" })}
+              {t({ ko: "자동 경로로 복원", en: "Use Auto Path", ja: "Use Auto Path", zh: "Use Auto Path" })}
             </button>
           ) : (
             <button
@@ -333,10 +313,10 @@ export default function ProjectEditorPanel({
       {githubAutoPathLocked && (
         <p className="text-[11px] text-slate-400">
           {t({
-            ko: "첫 번째 허용 루트와 레포지토리 이름으로 자동 채워집니다. 고급 사용자는 경로를 직접 수정할 수 있습니다.",
-            en: "This path is generated from the first allowed root and the repository name. Advanced users can unlock it to customize.",
-            ja: "This path is generated from the first allowed root and the repository name. Advanced users can unlock it to customize.",
-            zh: "This path is generated from the first allowed root and the repository name. Advanced users can unlock it to customize.",
+            ko: "기본 루트와 저장소 이름으로 자동 생성된 경로입니다. 필요하면 직접 수정할 수 있습니다.",
+            en: "This path is generated from the default root and repository name. You can unlock it to customize.",
+            ja: "This path is generated from the default root and repository name. You can unlock it to customize.",
+            zh: "This path is generated from the default root and repository name. You can unlock it to customize.",
           })}
         </p>
       )}
@@ -354,29 +334,19 @@ export default function ProjectEditorPanel({
               }}
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {t({
-                ko: "앱 내 폴더 탐색",
-                en: "In-App Folder Browser",
-                ja: "In-App Folder Browser",
-                zh: "In-App Folder Browser",
-              })}
+              {t({ ko: "인앱 폴더 탐색", en: "In-App Folder Browser", ja: "In-App Folder Browser", zh: "In-App Folder Browser" })}
             </button>
             <button
               type="button"
               disabled={pathApiUnsupported}
               onClick={() => {
                 setFormFeedback(null);
-                setPathSuggestionsOpen((prev) => !prev);
+                setPathSuggestionsOpen((previous) => !previous);
               }}
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {pathSuggestionsOpen
-                ? t({
-                    ko: "자동 경로 찾기 닫기",
-                    en: "Close Auto Finder",
-                    ja: "Close Auto Finder",
-                    zh: "Close Auto Finder",
-                  })
+                ? t({ ko: "자동 경로 찾기 닫기", en: "Close Auto Finder", ja: "Close Auto Finder", zh: "Close Auto Finder" })
                 : t({ ko: "자동 경로 찾기", en: "Auto Path Finder", ja: "Auto Path Finder", zh: "Auto Path Finder" })}
             </button>
             <button
@@ -424,25 +394,10 @@ export default function ProjectEditorPanel({
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {nativePathPicking
-                ? t({
-                    ko: "수동 선택기 여는 중...",
-                    en: "Opening Manual Picker...",
-                    ja: "Opening Manual Picker...",
-                    zh: "Opening Manual Picker...",
-                  })
+                ? t({ ko: "폴더 선택기 여는 중...", en: "Opening Manual Picker...", ja: "Opening Manual Picker...", zh: "Opening Manual Picker..." })
                 : nativePickerUnsupported
-                  ? t({
-                      ko: "수동 경로 선택기 (사용 불가)",
-                      en: "Manual Path Finder (Unavailable)",
-                      ja: "Manual Path Finder (Unavailable)",
-                      zh: "Manual Path Finder (Unavailable)",
-                    })
-                  : t({
-                      ko: "수동 경로 선택기",
-                      en: "Manual Path Finder",
-                      ja: "Manual Path Finder",
-                      zh: "Manual Path Finder",
-                    })}
+                  ? t({ ko: "수동 경로 선택기 (사용 불가)", en: "Manual Path Finder (Unavailable)", ja: "Manual Path Finder (Unavailable)", zh: "Manual Path Finder (Unavailable)" })
+                  : t({ ko: "수동 경로 선택기", en: "Manual Path Finder", ja: "Manual Path Finder", zh: "Manual Path Finder" })}
             </button>
           </div>
 
@@ -450,21 +405,11 @@ export default function ProjectEditorPanel({
             <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-800/70">
               {pathSuggestionsLoading ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({
-                    ko: "경로 후보를 불러오는 중...",
-                    en: "Loading path suggestions...",
-                    ja: "Loading path suggestions...",
-                    zh: "Loading path suggestions...",
-                  })}
+                  {t({ ko: "경로 후보를 불러오는 중...", en: "Loading path suggestions...", ja: "Loading path suggestions...", zh: "Loading path suggestions..." })}
                 </p>
               ) : pathSuggestions.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-slate-400">
-                  {t({
-                    ko: "추천 경로가 없습니다. 직접 입력해 주세요.",
-                    en: "No suggested path. Enter one manually.",
-                    ja: "No suggested path. Enter one manually.",
-                    zh: "No suggested path. Enter one manually.",
-                  })}
+                  {t({ ko: "추천 경로가 없습니다. 직접 입력하세요.", en: "No suggested path. Enter one manually.", ja: "No suggested path. Enter one manually.", zh: "No suggested path. Enter one manually." })}
                 </p>
               ) : (
                 pathSuggestions.map((candidate) => (
@@ -489,12 +434,7 @@ export default function ProjectEditorPanel({
 
           {missingPathPrompt && (
             <p className="text-xs text-amber-300">
-              {t({
-                ko: "이 경로는 아직 존재하지 않습니다. 저장 시 생성 여부를 확인합니다.",
-                en: "This path does not exist yet. Save will ask whether to create it.",
-                ja: "This path does not exist yet. Save will ask whether to create it.",
-                zh: "This path does not exist yet. Save will ask whether to create it.",
-              })}
+              {t({ ko: "이 경로는 아직 없습니다. 저장 시 생성 여부를 다시 확인합니다.", en: "This path does not exist yet. Saving will ask whether to create it.", ja: "This path does not exist yet. Saving will ask whether to create it.", zh: "This path does not exist yet. Saving will ask whether to create it." })}
             </p>
           )}
         </div>
@@ -517,8 +457,8 @@ export default function ProjectEditorPanel({
         <textarea
           rows={5}
           value={coreGoal}
-          onChange={(e) => {
-            setCoreGoal(e.target.value);
+          onChange={(event) => {
+            setCoreGoal(event.target.value);
             setFormFeedback(null);
           }}
           disabled={!isCreating && !editingProjectId}
@@ -526,25 +466,46 @@ export default function ProjectEditorPanel({
         />
       </label>
 
-      <ManualAssignmentSelector
-        t={t}
-        language={language}
-        isCreating={isCreating}
-        editingProjectId={editingProjectId}
-        assignmentMode={assignmentMode}
-        setAssignmentMode={setAssignmentMode}
-        setManualAssignmentWarning={setManualAssignmentWarning}
-        manualSelectionStats={manualSelectionStats}
-        selectedAgentIds={selectedAgentIds}
-        setSelectedAgentIds={setSelectedAgentIds}
-        agentFilterDept={agentFilterDept}
-        setAgentFilterDept={setAgentFilterDept}
-        departments={departments}
-        agents={agents}
-        spriteMap={spriteMap}
-        detail={detail}
-        selectedProject={selectedProject}
-      />
+      <div className="rounded-xl border border-slate-700/80 bg-slate-900/60 p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold text-slate-200">
+              {t({ ko: "배정 정책", en: "Assignment Policy", ja: "Assignment Policy", zh: "Assignment Policy" })}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              {t({
+                ko: "저장은 canonical 영어 키로 유지되고, 화면에는 선택된 언어 기준으로만 표시됩니다.",
+                en: "Stored values remain canonical English keys. Only the UI label is localized.",
+                ja: "Stored values remain canonical English keys. Only the UI label is localized.",
+                zh: "Stored values remain canonical English keys. Only the UI label is localized.",
+              })}
+            </p>
+          </div>
+          <span className="rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-slate-300">
+            {getAssignmentModeDisplayLabel(assignmentMode, language)}
+          </span>
+        </div>
+
+        <ManualAssignmentSelector
+          t={t}
+          language={language}
+          isCreating={isCreating}
+          editingProjectId={editingProjectId}
+          assignmentMode={assignmentMode}
+          setAssignmentMode={setAssignmentMode}
+          setManualAssignmentWarning={setManualAssignmentWarning}
+          manualSelectionStats={manualSelectionStats}
+          selectedAgentIds={selectedAgentIds}
+          setSelectedAgentIds={setSelectedAgentIds}
+          agentFilterDept={agentFilterDept}
+          setAgentFilterDept={setAgentFilterDept}
+          departments={departments}
+          agents={agents}
+          spriteMap={spriteMap}
+          detail={detail}
+          selectedProject={selectedProject}
+        />
+      </div>
 
       <div className="flex flex-wrap gap-2 pt-1">
         {(isCreating || !!editingProjectId) && (
@@ -556,7 +517,7 @@ export default function ProjectEditorPanel({
           >
             {editingProjectId
               ? t({ ko: "저장", en: "Save", ja: "Save", zh: "Save" })
-              : t({ ko: "프로젝트 등록", en: "Create", ja: "Create", zh: "Create" })}
+              : t({ ko: "프로젝트 생성", en: "Create", ja: "Create", zh: "Create" })}
           </button>
         )}
         {(isCreating || !!editingProjectId) && (

@@ -1,6 +1,8 @@
 import { getOfficePackMeta } from "../../app/office-workflow-pack";
+import { getRoleDisplayLabel } from "../../app/canonical-display";
 import AgentAvatar, { buildSpriteMap } from "../AgentAvatar";
 import type { Agent, WorkflowPackKey } from "../../types";
+import { getSettingsCommonCopy } from "./settings-copy";
 import type { ApiStateBundle, TFunction } from "./types";
 
 interface ApiAssignModalProps {
@@ -10,6 +12,7 @@ interface ApiAssignModalProps {
 }
 
 export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModalProps) {
+  const common = getSettingsCommonCopy(t);
   const {
     apiAssignTarget,
     apiAssigning,
@@ -26,28 +29,21 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
   const localName = (nameEn: string, nameKo: string) => (localeTag === "ko" ? nameKo || nameEn : nameEn || nameKo);
   const normalizeWorkflowPackKey = (value: unknown): WorkflowPackKey =>
     typeof value === "string" &&
-    ["development", "novel", "report", "video_preprod", "web_research_report", "roleplay"].includes(value)
+    ["development", "novel", "report", "video_preprod", "web_research_report", "roleplay", "donggri"].includes(value)
       ? (value as WorkflowPackKey)
       : "development";
-  const ROLE_LABELS: Record<string, Record<string, string>> = {
-    team_leader: { ko: "팀장", en: "Team Leader", ja: "チームリーダー", zh: "组长" },
-    senior: { ko: "시니어", en: "Senior", ja: "シニア", zh: "高级" },
-    junior: { ko: "주니어", en: "Junior", ja: "ジュニア", zh: "初级" },
-    intern: { ko: "인턴", en: "Intern", ja: "インターン", zh: "实习生" },
-  };
 
-  const roleBadge = (role: string) => {
-    const label = ROLE_LABELS[role];
-    const text = label ? t(label as Record<"ko" | "en" | "ja" | "zh", string>) : role;
+  const roleBadge = (agent: Agent) => {
+    const text = getRoleDisplayLabel(t, agent.role);
     const color =
-      role === "team_leader"
-        ? "text-amber-400 bg-amber-500/15"
-        : role === "senior"
-          ? "text-blue-400 bg-blue-500/15"
-          : role === "junior"
-            ? "text-emerald-400 bg-emerald-500/15"
-            : "text-slate-400 bg-slate-500/15";
-    return <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${color}`}>{text}</span>;
+      agent.role === "team_leader"
+        ? "bg-amber-500/15 text-amber-400"
+        : agent.role === "senior"
+          ? "bg-blue-500/15 text-blue-400"
+          : agent.role === "junior"
+            ? "bg-emerald-500/15 text-emerald-400"
+            : "bg-slate-500/15 text-slate-400";
+    return <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${color}`}>{text}</span>;
   };
 
   const packKeys = [
@@ -86,11 +82,7 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
           normalizeWorkflowPackKey(agent.workflow_pack_key) === packKey &&
           (!agent.department_id || !deptIds.has(agent.department_id)),
       );
-      return {
-        packKey,
-        departments,
-        unassigned,
-      };
+      return { packKey, departments, unassigned };
     })
     .filter((section) => section.departments.length > 0 || section.unassigned.length > 0);
 
@@ -105,56 +97,39 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
         key={agent.id}
         disabled={apiAssigning || isAssigned}
         onClick={() => void handleApiAssignToAgent(agent.id)}
-        className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2.5 ${
-          isAssigned ? "bg-green-500/10 text-green-400 cursor-default" : "hover:bg-slate-700/60 text-slate-300"
+        className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-xs transition-colors ${
+          isAssigned ? "cursor-default bg-green-500/10 text-green-400" : "text-slate-300 hover:bg-slate-700/60"
         } disabled:opacity-60`}
       >
         <AgentAvatar agent={agent} spriteMap={spriteMap} size={28} rounded="xl" />
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium truncate">{localName(agent.name, agent.name_ko)}</span>
-            {roleBadge(agent.role)}
+            <span className="truncate text-xs font-medium">{localName(agent.name, agent.name_ko)}</span>
+            {roleBadge(agent)}
           </div>
-          <div className="text-[10px] text-slate-500 truncate mt-0.5">
+          <div className="mt-0.5 truncate text-[10px] text-slate-500">
             {agent.cli_provider === "api" && agent.api_model ? `API: ${agent.api_model}` : agent.cli_provider}
           </div>
         </div>
-        {isAssigned && <span className="text-green-400 flex-shrink-0">✓</span>}
+        {isAssigned && <span className="flex-shrink-0 text-green-400">✓</span>}
       </button>
     );
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={() => setApiAssignTarget(null)}
-    >
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setApiAssignTarget(null)}>
       <div
-        className="w-96 max-h-[75vh] rounded-xl border border-slate-600 bg-slate-800 shadow-2xl overflow-hidden"
+        className="max-h-[75vh] w-96 overflow-hidden rounded-xl border border-slate-600 bg-slate-800 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-4 py-3 border-b border-slate-700">
-          <h4 className="text-sm font-semibold text-white">
-            {t({
-              ko: "모델 할당",
-              en: "Assign Model",
-              ja: "モデル割り当て",
-              zh: "分配模型",
-            })}
-          </h4>
-          <p className="text-[11px] text-slate-400 mt-0.5 font-mono truncate">{apiAssignTarget.model}</p>
+        <div className="border-b border-slate-700 px-4 py-3">
+          <h4 className="text-sm font-semibold text-white">{t({ ko: "모델 할당", en: "Assign Model" })}</h4>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-400">{apiAssignTarget.model}</p>
         </div>
 
-        <div className="max-h-[55vh] overflow-y-auto p-2 space-y-3">
+        <div className="max-h-[55vh] space-y-3 overflow-y-auto p-2">
           {apiAssignAgents.length === 0 ? (
-            <p className="text-xs text-slate-500 text-center py-4">
-              {t({
-                ko: "에이전트를 불러오는 중...",
-                en: "Loading agents...",
-                ja: "エージェント読み込み中...",
-                zh: "正在加载代理...",
-              })}
-            </p>
+            <p className="py-4 text-center text-xs text-slate-500">{t({ ko: "에이전트 불러오는 중...", en: "Loading agents..." })}</p>
           ) : (
             <>
               {packSections.map(({ packKey, departments, unassigned }) => (
@@ -164,12 +139,13 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
                       {t(getOfficePackMeta(packKey).label)}
                     </span>
                   </div>
+
                   {departments.map(({ dept, agents, allAssigned }) => (
                     <div key={`${packKey}:${dept.id}`}>
-                      <div className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-slate-700/40">
-                        <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-700/40 px-2 py-1.5">
+                        <div className="flex min-w-0 items-center gap-1.5">
                           <span className="text-sm">{dept.icon}</span>
-                          <span className="text-[11px] font-semibold text-slate-300 tracking-wide">
+                          <span className="text-[11px] font-semibold tracking-wide text-slate-300">
                             {localName(dept.name, dept.name_ko)}
                           </span>
                           <span className="text-[10px] text-slate-600">({agents.length})</span>
@@ -179,30 +155,22 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
                           onClick={() => void handleApiAssignToDepartment(dept.id, packKey)}
                           className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
                             allAssigned
-                              ? "bg-green-500/10 text-green-400 cursor-default"
+                              ? "cursor-default bg-green-500/10 text-green-400"
                               : "bg-blue-600/20 text-blue-300 hover:bg-blue-600/30"
                           } disabled:opacity-60`}
                         >
-                          {allAssigned
-                            ? t({ ko: "적용됨", en: "Applied", ja: "適用済み", zh: "已应用" })
-                            : t({
-                                ko: "부서 전체 적용",
-                                en: "Apply to team",
-                                ja: "部門全体に適用",
-                                zh: "应用到整个部门",
-                              })}
+                          {allAssigned ? common.applied : t({ ko: "팀 전체 적용", en: "Apply to team" })}
                         </button>
                       </div>
                       {agents.map(renderAgentRow)}
                     </div>
                   ))}
+
                   {unassigned.length > 0 && (
                     <div>
-                      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-slate-700/40">
-                        <span className="text-sm">📁</span>
-                        <span className="text-[11px] font-semibold text-slate-500 tracking-wide">
-                          {t({ ko: "미배정", en: "Unassigned", ja: "未配属", zh: "未分配" })}
-                        </span>
+                      <div className="flex items-center gap-1.5 border-b border-slate-700/40 px-2 py-1.5">
+                        <span className="text-sm">•</span>
+                        <span className="text-[11px] font-semibold tracking-wide text-slate-500">{common.unassigned}</span>
                       </div>
                       {unassigned.map(renderAgentRow)}
                     </div>
@@ -213,12 +181,12 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
           )}
         </div>
 
-        <div className="px-4 py-2.5 border-t border-slate-700 flex justify-end">
+        <div className="flex justify-end border-t border-slate-700 px-4 py-2.5">
           <button
             onClick={() => setApiAssignTarget(null)}
-            className="text-xs px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-300 rounded-lg transition-colors"
+            className="rounded-lg bg-slate-600 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-500"
           >
-            {t({ ko: "닫기", en: "Close", ja: "閉じる", zh: "关闭" })}
+            {common.close}
           </button>
         </div>
       </div>

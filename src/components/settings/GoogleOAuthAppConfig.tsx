@@ -54,19 +54,15 @@ export default function GoogleOAuthAppConfig({ t }: { t: TFunction }) {
             zh: "Google OAuth App (Antigravity)",
           })}
         </h4>
-        {saved && (
-          <span className="text-[10px] text-green-400">
-            {t({ ko: "저장됨", en: "Saved", ja: "保存済み", zh: "已保存" })}
-          </span>
-        )}
+        {saved && <span className="text-[10px] text-green-400">{t({ ko: "저장됨", en: "Saved", ja: "Saved", zh: "Saved" })}</span>}
       </div>
 
       <p className="text-[11px] leading-relaxed text-slate-500">
         {t({
-          ko: "Antigravity에 사용할 Google OAuth Client ID / Client Secret을 설정합니다. 저장 후 다시 연결하면 새 값으로 OAuth가 시작됩니다.",
-          en: "Set the Google OAuth Client ID and Client Secret used by Antigravity. After saving, click Connect again to start OAuth with the new values.",
-          ja: "Antigravity で使用する Google OAuth Client ID / Client Secret を保存します。保存後に再接続すると新しい値で OAuth が開始されます。",
-          zh: "设置 Antigravity 使用的 Google OAuth Client ID / Client Secret。保存后重新点击连接即可用新值发起 OAuth。",
+          ko: "Antigravity에서 사용할 Google OAuth Client ID와 Client Secret을 설정합니다. 저장 후 다시 연결하면 새 값으로 OAuth가 시작됩니다.",
+          en: "Configure the Google OAuth Client ID and Client Secret used by Antigravity. Reconnect after saving to start OAuth with the new values.",
+          ja: "Configure the Google OAuth Client ID and Client Secret used by Antigravity. Reconnect after saving to start OAuth with the new values.",
+          zh: "Configure the Google OAuth Client ID and Client Secret used by Antigravity. Reconnect after saving to start OAuth with the new values.",
         })}
       </p>
 
@@ -76,21 +72,21 @@ export default function GoogleOAuthAppConfig({ t }: { t: TFunction }) {
             type="text"
             placeholder="client-id.apps.googleusercontent.com"
             value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
+            onChange={(event) => setClientId(event.target.value)}
             className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-blue-500"
           />
           <input
             type="password"
             placeholder="Client Secret"
             value={clientSecret}
-            onChange={(e) => setClientSecret(e.target.value)}
+            onChange={(event) => setClientSecret(event.target.value)}
             className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-blue-500"
           />
           <button
             onClick={saveGoogleOAuth}
             className="rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-blue-500"
           >
-            {t({ ko: "저장", en: "Save", ja: "保存", zh: "保存" })}
+            {t({ ko: "저장", en: "Save", ja: "Save", zh: "Save" })}
           </button>
         </div>
       )}

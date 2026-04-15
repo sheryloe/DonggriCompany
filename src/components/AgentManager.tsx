@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+﻿import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import {
   createPresetAgentProfile,
   normalizeAgentProfile,
@@ -23,7 +23,6 @@ import type { AgentManagerProps, FormData } from "./agent-manager/types";
 import { pickRandomSpritePair } from "./agent-manager/utils";
 
 const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "gemini", "jules"];
-const CLI_MODEL_OVERRIDE_PROVIDERS: Agent["cli_provider"][] = ["claude", "codex", "gemini", "opencode", "kimi"];
 
 export default function AgentManager({
   agents,
@@ -182,9 +181,6 @@ export default function AgentManager({
       ...BLANK,
       department_id: deptTab !== "all" ? deptTab : departments[0]?.id || "",
       role: nextRole,
-      cli_model: "",
-      cli_reasoning_level: "",
-      run_mode: "standard",
       personality: "",
       specialties_text: stringifySpecialties(nextProfile.specialties),
       agent_profile: nextProfile,
@@ -207,9 +203,6 @@ export default function AgentManager({
         department_id: agent.department_id || "",
         role: agent.role,
         cli_provider: agent.cli_provider,
-        cli_model: CLI_MODEL_OVERRIDE_PROVIDERS.includes(agent.cli_provider) ? (agent.cli_model ?? "") : "",
-        cli_reasoning_level: agent.cli_provider === "codex" ? (agent.cli_reasoning_level ?? "") : "",
-        run_mode: agent.cli_provider === "codex" ? (agent.run_mode ?? "standard") : "standard",
         cli_account_pool_id: agent.cli_account_pool_id ?? "",
         workflow_role: workflowProfile?.role ?? workflowDefaults.workflow_role,
         review_lenses_text: (workflowProfile?.review_lenses ?? []).join(", ") || workflowDefaults.review_lenses_text,
@@ -252,21 +245,6 @@ export default function AgentManager({
         },
         form.personality,
       );
-      const shouldWriteCliExecutionConfig =
-        CLI_MODEL_OVERRIDE_PROVIDERS.includes(form.cli_provider) ||
-        (modalAgent ? CLI_MODEL_OVERRIDE_PROVIDERS.includes(modalAgent.cli_provider) : false);
-      const cliExecutionConfig: Partial<Pick<Agent, "cli_model" | "cli_reasoning_level" | "run_mode">> =
-        shouldWriteCliExecutionConfig
-          ? {
-              cli_model: CLI_MODEL_OVERRIDE_PROVIDERS.includes(form.cli_provider) ? form.cli_model.trim() || null : null,
-              cli_reasoning_level:
-                form.cli_provider === "codex" && form.cli_model.trim() ? form.cli_reasoning_level.trim() || null : null,
-              run_mode:
-                form.cli_provider === "codex" && form.cli_model.trim() && form.run_mode === "plan"
-                  ? "plan"
-                  : "standard",
-            }
-          : {};
       const basePayload = {
         name: form.name.trim(),
         name_ko: form.name_ko.trim(),
@@ -275,7 +253,6 @@ export default function AgentManager({
         role: form.role,
         cli_provider: form.cli_provider,
         cli_account_pool_id: normalizedCliAccountPoolId,
-        ...cliExecutionConfig,
         workflow_profile: {
           role: form.workflow_role,
           review_lenses: parseReviewLenses(form.review_lenses_text),
@@ -283,7 +260,7 @@ export default function AgentManager({
           max_review_rounds:
             form.workflow_role === "primary_author" ? Math.max(1, Math.min(form.max_review_rounds ?? 2, 2)) : null,
         },
-        avatar_emoji: form.avatar_emoji || "🤖",
+        avatar_emoji: form.avatar_emoji || "🧠",
         sprite_number: form.sprite_number,
         personality: resolvedAgentProfile.custom_prompt_override || null,
         agent_profile: resolvedAgentProfile,
@@ -653,11 +630,11 @@ export default function AgentManager({
         {[
           {
             key: "agents" as const,
-            label: tr("직원관리", "Agents"),
+            label: tr("직원 관리", "Agents"),
             icon: <StackedSpriteIcon sprites={randomIconSprites.tab} />,
           },
-          { key: "departments" as const, label: tr("부서관리", "Departments"), icon: "🏢" },
-          { key: "subagents" as const, label: tr("서브에이전트", "Sub-agents"), icon: "🧩" },
+          { key: "departments" as const, label: tr("부서 관리", "Departments"), icon: "?룫" },
+          { key: "subagents" as const, label: tr("서브에이전트", "Sub-agents"), icon: "?㎥" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -768,3 +745,4 @@ export default function AgentManager({
     </div>
   );
 }
+

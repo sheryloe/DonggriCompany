@@ -1,18 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CliAccountPoolView, OAuthStatus } from "../api";
 import * as api from "../api";
-import { withCliModelFallback } from "../app/cli-model-fallbacks";
+import { getRoleDisplayLabel } from "../app/canonical-display";
 import { localeName, useI18n } from "../i18n";
-import type { Agent, AgentRunMode, CliModelInfo, Department, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
-import {
-  getCodexReasoningOptions,
-  isCodexPlanModeEligible,
-  normalizeCodexRunMode,
-  resolveCodexReasoningLevel,
-} from "../utils/codex-execution";
+import type { Agent, Department, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
 import AgentAvatar from "./AgentAvatar";
 import AgentDetailTabContent from "./agent-detail/AgentDetailTabContent";
-import { CLI_LABELS, oauthAccountLabel, roleLabel, STATUS_CONFIG, statusLabel } from "./agent-detail/constants";
+import { CLI_LABELS, oauthAccountLabel, STATUS_CONFIG, statusLabel } from "./agent-detail/constants";
 
 interface AgentDetailProps {
   agent: Agent;
@@ -30,7 +24,6 @@ interface AgentDetailProps {
   onAgentUpdated?: () => void;
 }
 
-const CLI_MODEL_OVERRIDE_PROVIDERS: Agent["cli_provider"][] = ["claude", "codex", "gemini", "opencode", "kimi"];
 const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "gemini", "jules"];
 
 export default function AgentDetail({
@@ -55,23 +48,18 @@ export default function AgentDetail({
   const [selectedOAuthAccountId, setSelectedOAuthAccountId] = useState(agent.oauth_account_id ?? "");
   const [selectedApiProviderId, setSelectedApiProviderId] = useState(agent.api_provider_id ?? "");
   const [selectedApiModel, setSelectedApiModel] = useState(agent.api_model ?? "");
-  const [selectedCliModel, setSelectedCliModel] = useState(agent.cli_model ?? "");
-  const [selectedCliReasoningLevel, setSelectedCliReasoningLevel] = useState(agent.cli_reasoning_level ?? "");
-  const [selectedRunMode, setSelectedRunMode] = useState<AgentRunMode>(agent.run_mode === "plan" ? "plan" : "standard");
   const [selectedCliAccountPoolId, setSelectedCliAccountPoolId] = useState(agent.cli_account_pool_id ?? "");
   const [cliAccountPools, setCliAccountPools] = useState<CliAccountPoolView[]>([]);
   const [cliAccountPoolsLoading, setCliAccountPoolsLoading] = useState(false);
   const [savingCli, setSavingCli] = useState(false);
   const [oauthStatus, setOauthStatus] = useState<OAuthStatus | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
-  const [cliModels, setCliModels] = useState<Record<string, CliModelInfo[]>>({});
-  const [cliModelsLoading, setCliModelsLoading] = useState(false);
-  const [cliModelsLoaded, setCliModelsLoaded] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [savingPlanningLead, setSavingPlanningLead] = useState(false);
   const [actsAsPlanningLead, setActsAsPlanningLead] = useState(Number(agent.acts_as_planning_leader ?? 0) === 1);
 
   const agentTasks = tasks.filter((task) => task.assigned_agent_id === agent.id);
+  const agentSubAgents = subAgents.filter((subAgent) => subAgent.parentAgentId === agent.id);
   const subtasksByTask = useMemo(() => {
     const grouped: Record<string, SubTask[]> = {};
     for (const subtask of subtasks) {
@@ -80,181 +68,61 @@ export default function AgentDetail({
     }
     return grouped;
   }, [subtasks]);
-  const agentSubAgents = subAgents.filter((subAgent) => subAgent.parentAgentId === agent.id);
+
   const statusCfg = STATUS_CONFIG[agent.status] ?? STATUS_CONFIG.idle;
-  const oauthProviderKey =
-    selectedCli === "copilot" ? "github-copilot" : selectedCli === "antigravity" ? "antigravity" : null;
-  const activeOAuthAccounts = useMemo(() => {
-    if (!oauthProviderKey || !oauthStatus) return [];
-    return (oauthStatus.providers[oauthProviderKey]?.accounts ?? []).filter(
-      (account) => account.active && account.status === "active",
-    );
-  }, [oauthProviderKey, oauthStatus]);
+  const oauthProviderKey = selectedCli === "copilot" ? "github-copilot" : selectedCli === "antigravity" ? "antigravity" : null;
   const requiresOAuthAccount = selectedCli === "copilot" || selectedCli === "antigravity";
   const requiresApiProvider = selectedCli === "api";
   const requiresCliPool = CLI_POOL_PROVIDERS.includes(selectedCli);
-  const supportsCliModelOverride = CLI_MODEL_OVERRIDE_PROVIDERS.includes(selectedCli);
-  const selectedCliModelOptions = useMemo(
-    () => withCliModelFallback(selectedCli, cliModels[selectedCli]),
-    [cliModels, selectedCli],
-  );
-  const selectedCliModelInfo = useMemo(
-    () => selectedCliModelOptions.find((model) => model.slug === selectedCliModel) ?? null,
-    [selectedCliModel, selectedCliModelOptions],
-  );
-  const selectedCliReasoningOptions = useMemo(
-    () => (selectedCli === "codex" ? getCodexReasoningOptions(selectedCliModelInfo) : []),
-    [selectedCli, selectedCliModelInfo],
-  );
-  const selectedCliAccountPools = useMemo(
-    () => cliAccountPools.filter((pool) => pool.provider === selectedCli),
-    [cliAccountPools, selectedCli],
-  );
-  const poolLabelCountsByProvider = useMemo(() => {
-    const map = new Map<string, Map<string, number>>();
-    for (const pool of cliAccountPools) {
-      const base = String(pool.label || pool.accountPoolId).trim() || pool.accountPoolId;
-      const provider = String(pool.provider || "").trim();
-      if (!provider) continue;
-      const providerCounts = map.get(provider) ?? new Map<string, number>();
-      providerCounts.set(base, (providerCounts.get(base) ?? 0) + 1);
-      map.set(provider, providerCounts);
-    }
-    return map;
-  }, [cliAccountPools]);
-  const formatPoolLabel = useCallback(
-    (pool: CliAccountPoolView) => {
-      const base = String(pool.label || pool.accountPoolId).trim() || pool.accountPoolId;
-      const providerCounts = poolLabelCountsByProvider.get(String(pool.provider || "").trim());
-      return (providerCounts?.get(base) ?? 0) > 1 ? `${base} (${pool.accountPoolId})` : base;
-    },
-    [poolLabelCountsByProvider],
-  );
-  const poolSummaryLabel = useMemo(() => {
-    const fallback = t({
-      ko: "Pool 미지정",
-      en: "Pool not set",
-      ja: "Pool not set",
-      zh: "Pool not set",
-    });
-    if (!CLI_POOL_PROVIDERS.includes(agent.cli_provider)) return fallback;
-    const poolId = String(agent.cli_account_pool_id ?? "").trim();
-    if (!poolId) return fallback;
-    const matched = cliAccountPools.find(
-      (pool) => pool.provider === agent.cli_provider && pool.accountPoolId === poolId,
-    );
-    return matched ? formatPoolLabel(matched) : poolId;
-  }, [agent.cli_account_pool_id, agent.cli_provider, cliAccountPools, formatPoolLabel, t]);
-  const legacyCliSummaryText = useMemo(() => {
-    if (agent.cli_provider === "api" && agent.api_model) {
-      return `API: ${agent.api_model}`;
-    }
-    if (CLI_POOL_PROVIDERS.includes(agent.cli_provider)) {
-      const providerLabel = CLI_LABELS[agent.cli_provider] ?? agent.cli_provider;
-      return `${providerLabel} · ${poolSummaryLabel}`;
-    }
+
+  const activeOAuthAccounts = useMemo(() => {
+    if (!oauthProviderKey || !oauthStatus) return [];
+    return (oauthStatus.providers[oauthProviderKey]?.accounts ?? []).filter((account) => account.active && account.status === "active");
+  }, [oauthProviderKey, oauthStatus]);
+
+  const selectedCliAccountPools = useMemo(() => cliAccountPools.filter((pool) => pool.provider === selectedCli), [cliAccountPools, selectedCli]);
+  const canSaveCli =
+    (!requiresOAuthAccount || Boolean(selectedOAuthAccountId)) &&
+    (!requiresCliPool || Boolean(selectedCliAccountPoolId)) &&
+    (!requiresApiProvider || (Boolean(selectedApiProviderId) && Boolean(selectedApiModel)));
+
+  const cliSummaryText = useMemo(() => {
     const providerLabel = CLI_LABELS[agent.cli_provider] ?? agent.cli_provider;
-    if (agent.cli_model && CLI_MODEL_OVERRIDE_PROVIDERS.includes(agent.cli_provider) && agent.cli_provider !== "api") {
-      return `${providerLabel} · ${agent.cli_model}`;
+    if (CLI_POOL_PROVIDERS.includes(agent.cli_provider) && agent.cli_account_pool_id) {
+      return `${providerLabel} · ${agent.cli_account_pool_id}`;
+    }
+    if (agent.cli_provider === "api" && agent.api_model) {
+      return `${providerLabel} · ${agent.api_model}`;
     }
     return providerLabel;
-  }, [agent.api_model, agent.cli_model, agent.cli_provider, poolSummaryLabel]);
-  const cliSummaryText = useMemo(() => {
-    if (agent.cli_provider !== "codex") return legacyCliSummaryText;
-    const providerLabel = CLI_LABELS[agent.cli_provider] ?? agent.cli_provider;
-    const parts = [providerLabel];
-    if (agent.cli_model) parts.push(agent.cli_model);
-    if (agent.run_mode === "plan") parts.push("Plan");
-    if (agent.cli_account_pool_id) parts.push(poolSummaryLabel);
-    return parts.join(" · ");
-  }, [
-    agent.cli_account_pool_id,
-    agent.cli_model,
-    agent.cli_provider,
-    agent.run_mode,
-    legacyCliSummaryText,
-    poolSummaryLabel,
-  ]);
-  const canSaveCli =
-    (requiresApiProvider ? false : !requiresOAuthAccount || Boolean(selectedOAuthAccountId)) &&
-    (!requiresCliPool || Boolean(selectedCliAccountPoolId));
-
-  const xpLevel = Math.floor(agent.stats_xp / 100) + 1;
-  const xpProgress = agent.stats_xp % 100;
+  }, [agent.api_model, agent.cli_account_pool_id, agent.cli_provider]);
 
   useEffect(() => {
     setSelectedCli(agent.cli_provider);
     setSelectedOAuthAccountId(agent.oauth_account_id ?? "");
     setSelectedApiProviderId(agent.api_provider_id ?? "");
     setSelectedApiModel(agent.api_model ?? "");
-    setSelectedCliModel(agent.cli_model ?? "");
-    setSelectedCliReasoningLevel(agent.cli_reasoning_level ?? "");
-    setSelectedRunMode(agent.run_mode === "plan" ? "plan" : "standard");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
     setActsAsPlanningLead(Number(agent.acts_as_planning_leader ?? 0) === 1);
-  }, [
-    agent.id,
-    agent.cli_provider,
-    agent.oauth_account_id,
-    agent.api_provider_id,
-    agent.api_model,
-    agent.cli_model,
-    agent.cli_reasoning_level,
-    agent.run_mode,
-    agent.cli_account_pool_id,
-    agent.acts_as_planning_leader,
-  ]);
+  }, [agent]);
 
   useEffect(() => {
     if (!editingCli || !requiresOAuthAccount) return;
     setOauthLoading(true);
-    api
-      .getOAuthStatus()
-      .then(setOauthStatus)
-      .catch((err) => console.error("Failed to load OAuth status:", err))
-      .finally(() => setOauthLoading(false));
+    api.getOAuthStatus().then(setOauthStatus).catch((err) => console.error("Failed to load OAuth status:", err)).finally(() => setOauthLoading(false));
   }, [editingCli, requiresOAuthAccount]);
-
-  useEffect(() => {
-    if (!editingCli || !supportsCliModelOverride || cliModelsLoaded) return;
-    let cancelled = false;
-    setCliModelsLoading(true);
-    api
-      .getCliModels()
-      .then((models) => {
-        if (cancelled) return;
-        setCliModels(models);
-      })
-      .catch((err) => console.error("Failed to load CLI models:", err))
-      .finally(() => {
-        if (!cancelled) {
-          setCliModelsLoading(false);
-          setCliModelsLoaded(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [editingCli, supportsCliModelOverride, cliModelsLoaded]);
 
   useEffect(() => {
     if (!editingCli && !CLI_POOL_PROVIDERS.includes(agent.cli_provider)) return;
     if (editingCli && !requiresCliPool) return;
     let cancelled = false;
     setCliAccountPoolsLoading(true);
-    api
-      .getCliAccountPools()
-      .then((pools) => {
-        if (cancelled) return;
-        setCliAccountPools(pools);
-      })
-      .catch((err) => console.error("Failed to load CLI account pools:", err))
-      .finally(() => {
-        if (!cancelled) setCliAccountPoolsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    api.getCliAccountPools().then((pools) => {
+      if (!cancelled) setCliAccountPools(pools);
+    }).catch((err) => console.error("Failed to load CLI account pools:", err)).finally(() => {
+      if (!cancelled) setCliAccountPoolsLoading(false);
+    });
+    return () => { cancelled = true; };
   }, [editingCli, selectedCli, agent.cli_provider, requiresCliPool]);
 
   useEffect(() => {
@@ -269,45 +137,13 @@ export default function AgentDetail({
   }, [requiresOAuthAccount, activeOAuthAccounts, selectedOAuthAccountId]);
 
   useEffect(() => {
-    if (!supportsCliModelOverride && selectedCliModel) {
-      setSelectedCliModel("");
-    }
-  }, [supportsCliModelOverride, selectedCliModel]);
-
-  useEffect(() => {
-    if (selectedCli === "codex") return;
-    if (selectedCliReasoningLevel) setSelectedCliReasoningLevel("");
-    if (selectedRunMode !== "standard") setSelectedRunMode("standard");
-  }, [selectedCli, selectedCliReasoningLevel, selectedRunMode]);
-
-  useEffect(() => {
-    if (selectedCli !== "codex") return;
-    const trimmedModel = selectedCliModel.trim();
-    if (!trimmedModel) {
-      if (selectedCliReasoningLevel) setSelectedCliReasoningLevel("");
-      if (selectedRunMode !== "standard") setSelectedRunMode("standard");
-      return;
-    }
-
-    const nextReasoningLevel = resolveCodexReasoningLevel(selectedCliModelInfo, selectedCliReasoningLevel);
-    if (nextReasoningLevel !== selectedCliReasoningLevel) {
-      setSelectedCliReasoningLevel(nextReasoningLevel);
-    }
-    const nextRunMode = normalizeCodexRunMode(selectedCli, trimmedModel, selectedRunMode);
-    if (nextRunMode !== selectedRunMode) {
-      setSelectedRunMode(nextRunMode);
-    }
-  }, [selectedCli, selectedCliModel, selectedCliModelInfo, selectedCliReasoningLevel, selectedRunMode]);
-
-  useEffect(() => {
     if (!requiresCliPool) {
       if (selectedCliAccountPoolId) setSelectedCliAccountPoolId("");
       return;
     }
     if (selectedCliAccountPools.length === 0) return;
     const exists = selectedCliAccountPools.some((pool) => pool.accountPoolId === selectedCliAccountPoolId);
-    if (exists) return;
-    setSelectedCliAccountPoolId(selectedCliAccountPools[0].accountPoolId);
+    if (!exists) setSelectedCliAccountPoolId(selectedCliAccountPools[0].accountPoolId);
   }, [requiresCliPool, selectedCliAccountPoolId, selectedCliAccountPools]);
 
   const handleSaveCli = useCallback(async () => {
@@ -318,20 +154,10 @@ export default function AgentDetail({
         oauth_account_id: requiresOAuthAccount ? selectedOAuthAccountId || null : null,
         api_provider_id: requiresApiProvider ? selectedApiProviderId || null : null,
         api_model: requiresApiProvider ? selectedApiModel || null : null,
-        cli_model:
-          selectedCli === "codex"
-            ? selectedCliModel.trim() || null
-            : supportsCliModelOverride
-              ? selectedCliModel || null
-              : null,
-        cli_reasoning_level:
-          selectedCli === "codex" && selectedCliModel.trim()
-            ? selectedCliReasoningLevel || resolveCodexReasoningLevel(selectedCliModelInfo, null) || null
-            : null,
-        run_mode: normalizeCodexRunMode(selectedCli, selectedCliModel, selectedRunMode),
-        cli_account_pool_id: requiresCliPool
-          ? selectedCliAccountPoolId || selectedCliAccountPools[0]?.accountPoolId || null
-          : null,
+        cli_model: null,
+        cli_reasoning_level: null,
+        run_mode: "standard",
+        cli_account_pool_id: requiresCliPool ? selectedCliAccountPoolId || selectedCliAccountPools[0]?.accountPoolId || null : null,
       });
       onAgentUpdated?.();
       setEditingCli(false);
@@ -340,24 +166,7 @@ export default function AgentDetail({
     } finally {
       setSavingCli(false);
     }
-  }, [
-    agent.id,
-    selectedCli,
-    requiresOAuthAccount,
-    selectedOAuthAccountId,
-    requiresApiProvider,
-    selectedApiProviderId,
-    selectedApiModel,
-    supportsCliModelOverride,
-    selectedCliModel,
-    selectedCliReasoningLevel,
-    selectedCliModelInfo,
-    requiresCliPool,
-    selectedCliAccountPoolId,
-    selectedCliAccountPools,
-    selectedRunMode,
-    onAgentUpdated,
-  ]);
+  }, [agent.id, onAgentUpdated, requiresApiProvider, requiresCliPool, requiresOAuthAccount, selectedApiModel, selectedApiProviderId, selectedCli, selectedCliAccountPoolId, selectedCliAccountPools, selectedOAuthAccountId]);
 
   const handleCancelCliEdit = useCallback(() => {
     setEditingCli(false);
@@ -365,565 +174,104 @@ export default function AgentDetail({
     setSelectedOAuthAccountId(agent.oauth_account_id ?? "");
     setSelectedApiProviderId(agent.api_provider_id ?? "");
     setSelectedApiModel(agent.api_model ?? "");
-    setSelectedCliModel(agent.cli_model ?? "");
-    setSelectedCliReasoningLevel(agent.cli_reasoning_level ?? "");
-    setSelectedRunMode(agent.run_mode === "plan" ? "plan" : "standard");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
-  }, [
-    agent.cli_provider,
-    agent.oauth_account_id,
-    agent.api_provider_id,
-    agent.api_model,
-    agent.cli_model,
-    agent.cli_reasoning_level,
-    agent.run_mode,
-    agent.cli_account_pool_id,
-  ]);
+  }, [agent.api_model, agent.api_provider_id, agent.cli_account_pool_id, agent.cli_provider, agent.oauth_account_id]);
 
-  const resolvePackLabel = useCallback(
-    (packKey: WorkflowPackKey) => {
-      switch (packKey) {
-        case "development":
-          return t({ ko: "개발", en: "Development", ja: "開発", zh: "开发" });
-        case "novel":
-          return t({ ko: "소설", en: "Novel", ja: "小説", zh: "小说" });
-        case "report":
-          return t({ ko: "리포트", en: "Report", ja: "レポート", zh: "报告" });
-        case "video_preprod":
-          return t({ ko: "영상 프리프로덕션", en: "Video Pre-production", ja: "動画プリプロ", zh: "视频前期" });
-        case "web_research_report":
-          return t({ ko: "웹 리서치 리포트", en: "Web Research Report", ja: "Webリサーチ", zh: "网页调研报告" });
-        case "roleplay":
-          return t({ ko: "역할놀이", en: "Roleplay", ja: "ロールプレイ", zh: "角色扮演" });
-        default:
-          return packKey;
-      }
-    },
-    [t],
-  );
-
-  const handlePlanningLeadToggle = useCallback(
-    async (nextChecked: boolean) => {
-      if (agent.role !== "team_leader" || savingPlanningLead) return;
-      const previous = actsAsPlanningLead;
-      setActsAsPlanningLead(nextChecked);
-      setSavingPlanningLead(true);
-
-      try {
-        await api.updateAgent(agent.id, {
-          acts_as_planning_leader: nextChecked ? 1 : 0,
-          workflow_pack_key: activeOfficeWorkflowPack,
-        });
-        onAgentUpdated?.();
-      } catch (error) {
-        if (
-          nextChecked &&
-          api.isApiRequestError(error) &&
-          error.status === 409 &&
-          error.code === "planning_leader_exists"
-        ) {
-          const details = (error.details ?? {}) as {
-            existing_leader?: { name?: string | null; name_ko?: string | null };
-            pack_key?: WorkflowPackKey | null;
-          };
-          const existingLeaderName = String(
-            details.existing_leader?.name_ko ||
-              details.existing_leader?.name ||
-              t({ ko: "기존 리더", en: "current leader" }),
-          ).trim();
-          const packKey = details.pack_key ?? activeOfficeWorkflowPack;
-          const packLabel = resolvePackLabel(packKey);
-          const confirmed = window.confirm(
-            t({
-              ko: `이미 ${existingLeaderName}가 ${packLabel} 오피스팩의 리더입니다. 변경하시겠습니까?`,
-              en: `${existingLeaderName} is already the leader for the ${packLabel} office pack. Change leader?`,
-              ja: `${existingLeaderName}さんが既に${packLabel}オフィスパックのリーダーです。変更しますか？`,
-              zh: `${existingLeaderName} 已是 ${packLabel} 办公包负责人。要变更吗？`,
-            }),
-          );
-          if (confirmed) {
-            try {
-              await api.updateAgent(agent.id, {
-                acts_as_planning_leader: 1,
-                workflow_pack_key: activeOfficeWorkflowPack,
-                force_planning_leader_override: true,
-              });
-              onAgentUpdated?.();
-              return;
-            } catch (overrideError) {
-              console.error("Failed to override planning lead:", overrideError);
-            }
-          }
-        } else {
-          console.error("Failed to update planning lead:", error);
-        }
-        setActsAsPlanningLead(previous);
-      } finally {
-        setSavingPlanningLead(false);
-      }
-    },
-    [
-      activeOfficeWorkflowPack,
-      agent.id,
-      agent.role,
-      actsAsPlanningLead,
-      onAgentUpdated,
-      resolvePackLabel,
-      savingPlanningLead,
-      t,
-    ],
-  );
+  const handlePlanningLeadToggle = useCallback(async (nextChecked: boolean) => {
+    if (agent.role !== "team_leader" || savingPlanningLead) return;
+    const previous = actsAsPlanningLead;
+    setActsAsPlanningLead(nextChecked);
+    setSavingPlanningLead(true);
+    try {
+      await api.updateAgent(agent.id, { acts_as_planning_leader: nextChecked ? 1 : 0, workflow_pack_key: activeOfficeWorkflowPack });
+      onAgentUpdated?.();
+    } catch (error) {
+      console.error("Failed to update planning lead:", error);
+      setActsAsPlanningLead(previous);
+    } finally {
+      setSavingPlanningLead(false);
+    }
+  }, [activeOfficeWorkflowPack, actsAsPlanningLead, agent.id, agent.role, onAgentUpdated, savingPlanningLead]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-[calc(100vw-1.5rem)] max-w-[480px] max-h-[85vh] overflow-hidden rounded-2xl border border-slate-700 bg-slate-800 shadow-2xl">
-        <div
-          className="relative px-6 py-5 border-b border-slate-700"
-          style={{
-            background: department ? `linear-gradient(135deg, ${department.color}22, transparent)` : undefined,
-          }}
-        >
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-700/50 hover:bg-slate-600 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
-          >
-            ✕
-          </button>
-
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="w-[min(960px,94vw)] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+        <div className="relative border-b border-slate-700 px-6 py-5" style={{ background: department ? `linear-gradient(135deg, ${department.color}22, transparent)` : undefined }}>
+          <button onClick={onClose} className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-700/50 text-slate-400 transition-colors hover:bg-slate-600 hover:text-white">×</button>
           <div className="flex items-center gap-4">
             <div className="relative">
-              <AgentAvatar
-                agent={agent}
-                agents={agents}
-                size={64}
-                rounded="2xl"
-                className={agent.status === "working" ? "animate-agent-work" : ""}
-              />
-              <div
-                className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-800 ${
-                  agent.status === "working"
-                    ? "bg-blue-500"
-                    : agent.status === "idle"
-                      ? "bg-green-500"
-                      : agent.status === "break"
-                        ? "bg-yellow-500"
-                        : "bg-slate-500"
-                }`}
-              />
+              <AgentAvatar agent={agent} agents={agents} size={64} rounded="2xl" className={agent.status === "working" ? "animate-agent-work" : ""} />
+              <div className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-slate-800 ${agent.status === "working" ? "bg-blue-500" : agent.status === "idle" ? "bg-green-500" : agent.status === "break" ? "bg-yellow-500" : "bg-slate-500"}`} />
             </div>
-
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-white">{localeName(language, agent)}</h2>
-                <span className={`text-xs px-1.5 py-0.5 rounded ${statusCfg.bg} ${statusCfg.color}`}>
-                  {statusLabel(statusCfg.label, t)}
-                </span>
+                <h2 className="truncate text-lg font-bold text-white">{localeName(language, agent)}</h2>
+                <span className={`rounded px-1.5 py-0.5 text-xs ${statusCfg.bg} ${statusCfg.color}`}>{statusLabel(statusCfg.label, t)}</span>
               </div>
-              <div className="text-sm text-slate-400 mt-0.5">
-                {department?.icon} {department ? localeName(language, department) : ""} · {roleLabel(agent.role, t)}
-              </div>
+              <div className="mt-0.5 text-sm text-slate-400">{department ? localeName(language, department) : t({ ko: "미지정 부서", en: "Unassigned", ja: "Unassigned", zh: "Unassigned" })} · {getRoleDisplayLabel(agent.role, language)}</div>
               {agent.role === "team_leader" && (
                 <label className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={actsAsPlanningLead}
-                    disabled={savingPlanningLead}
-                    onChange={(event) => {
-                      void handlePlanningLeadToggle(event.target.checked);
-                    }}
-                    className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/50 disabled:opacity-60"
-                  />
-                  <span>
-                    {t({
-                      ko: "Lead (기획 리더)",
-                      en: "Lead (Planning lead)",
-                      ja: "Lead（企画リード）",
-                      zh: "Lead（企划负责人）",
-                    })}
-                  </span>
-                  {savingPlanningLead && (
-                    <span className="text-[10px] text-slate-400">
-                      {t({ ko: "저장중...", en: "Saving...", ja: "保存中...", zh: "保存中..." })}
-                    </span>
-                  )}
+                  <input type="checkbox" checked={actsAsPlanningLead} disabled={savingPlanningLead} onChange={(event) => { void handlePlanningLeadToggle(event.target.checked); }} className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/50 disabled:opacity-60" />
+                  <span>{t({ ko: "기획 리드로 사용", en: "Use as planning lead", ja: "Use as planning lead", zh: "Use as planning lead" })}</span>
                 </label>
               )}
-              <div className="text-xs text-slate-500 mt-0.5">
+              <div className="mt-1 text-xs text-slate-500">
                 {editingCli ? (
-                  requiresCliPool ? (
-                    <div className="space-y-1">
-                      <div className="flex w-full min-w-0 items-center gap-1 pb-0.5">
-                        <span className="shrink-0">🔧</span>
-                        <select
-                          value={selectedCli}
-                          onChange={(event) => {
-                            const nextCli = event.target.value as Agent["cli_provider"];
-                            setSelectedCli(nextCli);
-                            setSelectedCliModel("");
-                            setSelectedCliReasoningLevel("");
-                            setSelectedRunMode("standard");
-                            setSelectedCliAccountPoolId("");
-                          }}
-                          className="w-[94px] shrink-0 bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
-                        >
-                          {Object.entries(CLI_LABELS).map(([key, label]) => (
-                            <option key={key} value={key}>
-                              {label}
-                            </option>
-                          ))}
+                  <div className="space-y-2 rounded-lg border border-slate-700/70 bg-slate-800/60 p-3">
+                    <div className="text-[11px] text-slate-400">{t({ ko: "모델 선택은 Provider 정책에서 결정됩니다. 여기서는 실행 Provider와 실행 계정만 바꿉니다.", en: "Model selection is controlled by provider policy. Only provider and execution account are editable here.", ja: "Model selection is controlled by provider policy. Only provider and execution account are editable here.", zh: "Model selection is controlled by provider policy. Only provider and execution account are editable here." })}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select value={selectedCli} onChange={(event) => { const nextCli = event.target.value as Agent["cli_provider"]; setSelectedCli(nextCli); setSelectedCliAccountPoolId(""); setSelectedOAuthAccountId(""); }} className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none">
+                        {Object.entries(CLI_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                      </select>
+                      {requiresOAuthAccount && (oauthLoading ? <span className="text-[10px] text-slate-400">{t({ ko: "계정 불러오는 중...", en: "Loading accounts...", ja: "Loading accounts...", zh: "Loading accounts..." })}</span> : activeOAuthAccounts.length > 0 ? (
+                        <select value={selectedOAuthAccountId} onChange={(event) => setSelectedOAuthAccountId(event.target.value)} className="max-w-[220px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none">
+                          {activeOAuthAccounts.map((account) => <option key={account.id} value={account.id}>{oauthAccountLabel(account)}</option>)}
                         </select>
-                        {cliAccountPoolsLoading ? (
-                          <span className="text-[10px] text-slate-400">
-                            {t({
-                              ko: "계정풀 로딩...",
-                              en: "Loading pools...",
-                              ja: "Loading pools...",
-                              zh: "Loading pools...",
-                            })}
-                          </span>
-                        ) : (
-                          <select
-                            value={selectedCliAccountPoolId}
-                            onChange={(event) => setSelectedCliAccountPoolId(event.target.value)}
-                            className="w-0 min-w-0 flex-1 bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
-                            disabled={selectedCliAccountPools.length === 0}
-                          >
-                            {selectedCliAccountPools.length === 0 ? (
-                              <option value="">
-                                {t({
-                                  ko: "연결된 계정풀 없음",
-                                  en: "No connected account pool",
-                                  ja: "No connected account pool",
-                                  zh: "No connected account pool",
-                                })}
-                              </option>
-                            ) : (
-                              selectedCliAccountPools.map((pool) => (
-                                <option key={pool.id} value={pool.accountPoolId}>
-                                  {formatPoolLabel(pool)}
-                                </option>
-                              ))
-                            )}
-                          </select>
-                        )}
-                      </div>
-                      {supportsCliModelOverride && (
-                        <div className="flex flex-wrap items-center gap-1 pb-0.5">
-                          {selectedCliModelOptions.length > 0 ? (
-                            <>
-                              <select
-                                aria-label={selectedCli === "codex" ? "Codex model" : "CLI model"}
-                                value={selectedCliModel}
-                                onChange={(event) => {
-                                  const nextModel = event.target.value;
-                                  const nextModelInfo =
-                                    selectedCliModelOptions.find((model) => model.slug === nextModel) ?? null;
-                                  setSelectedCliModel(nextModel);
-                                  if (selectedCli === "codex") {
-                                    setSelectedCliReasoningLevel(
-                                      nextModel
-                                        ? resolveCodexReasoningLevel(nextModelInfo, selectedCliReasoningLevel)
-                                        : "",
-                                    );
-                                    setSelectedRunMode(
-                                      nextModel
-                                        ? normalizeCodexRunMode("codex", nextModel, selectedRunMode)
-                                        : "standard",
-                                    );
-                                  } else {
-                                    setSelectedCliReasoningLevel("");
-                                    setSelectedRunMode("standard");
-                                  }
-                                }}
-                                className="w-[180px] max-w-full bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
-                              >
-                                <option value="">
-                                  {t({
-                                    ko: selectedCli === "codex" ? "Codex \uBAA8\uB378 \uC120\uD0DD" : "\uBAA8\uB378 \uC120\uD0DD",
-                                    en: selectedCli === "codex" ? "Select Codex model" : "Select model",
-                                    ja: selectedCli === "codex" ? "Select Codex model" : "Select model",
-                                    zh: selectedCli === "codex" ? "Select Codex model" : "Select model",
-                                  })}
-                                </option>
-                                {selectedCliModelOptions.map((model) => (
-                                  <option key={model.slug} value={model.slug}>
-                                    {model.displayName || model.slug}
-                                  </option>
-                                ))}
-                              </select>
-                              {cliModelsLoading && (
-                                <span className="text-[10px] text-slate-400">
-                                  {t({
-                                    ko: "\uBAA8\uB378 \uBAA9\uB85D \uB3D9\uAE30\uD654 \uC911...",
-                                    en: "Syncing models...",
-                                    ja: "Syncing models...",
-                                    zh: "Syncing models...",
-                                  })}
-                                </span>
-                              )}
-                              {selectedCli === "codex" && selectedCliModel.trim() ? (
-                                <>
-                                  <select
-                                    aria-label="Codex reasoning level"
-                                    value={selectedCliReasoningLevel}
-                                    onChange={(event) => setSelectedCliReasoningLevel(event.target.value)}
-                                    className="w-[150px] max-w-full bg-slate-700 text-slate-200 text-xs rounded px-1 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
-                                  >
-                                    {selectedCliReasoningOptions.map((option) => (
-                                      <option key={option.effort} value={option.effort}>
-                                        {option.effort}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <label className="inline-flex items-center gap-1 text-[10px] text-slate-300">
-                                    <input
-                                      type="checkbox"
-                                      aria-label="Codex plan mode"
-                                      checked={selectedRunMode === "plan"}
-                                      onChange={(event) =>
-                                        setSelectedRunMode(
-                                          event.target.checked && isCodexPlanModeEligible(selectedCli, selectedCliModel)
-                                            ? "plan"
-                                            : "standard",
-                                        )
-                                      }
-                                      className="h-3 w-3 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/50"
-                                    />
-                                    <span>Codex Plan</span>
-                                  </label>
-                                </>
-                              ) : selectedCli === "codex" ? (
-                                <span className="text-[10px] text-slate-400">
-                                  {t({
-                                    ko: "\uBAA8\uB378\uC744 \uC9C0\uC815\uD558\uBA74 \uCD94\uB860/\uD50C\uB79C \uC635\uC158\uC774 \uD65C\uC131\uD654\uB429\uB2C8\uB2E4.",
-                                    en: "Reasoning and plan options appear after selecting a model.",
-                                    ja: "Reasoning and plan options appear after selecting a model.",
-                                    zh: "Reasoning and plan options appear after selecting a model.",
-                                  })}
-                                </span>
-                              ) : null}
-                            </>
-                          ) : (
-                            <span className="text-[10px] text-slate-400">
-                              {t({
-                                ko: cliModelsLoading
-                                  ? "\uBAA8\uB378 \uB85C\uB529 \uC911..."
-                                  : "\uBAA8\uB378 \uBAA9\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
-                                en: cliModelsLoading ? "Loading models..." : "No model list available",
-                                ja: cliModelsLoading ? "Loading models..." : "No model list available",
-                                zh: cliModelsLoading ? "Loading models..." : "No model list available",
-                              })}
-                            </span>
-                          )}
+                      ) : <span className="text-[10px] text-amber-300">{t({ ko: "활성 OAuth 계정 없음", en: "No active OAuth account", ja: "No active OAuth account", zh: "No active OAuth account" })}</span>)}
+                      {requiresCliPool && (cliAccountPoolsLoading ? <span className="text-[10px] text-slate-400">{t({ ko: "계정 풀 불러오는 중...", en: "Loading pools...", ja: "Loading pools...", zh: "Loading pools..." })}</span> : (
+                        <select value={selectedCliAccountPoolId} onChange={(event) => setSelectedCliAccountPoolId(event.target.value)} className="max-w-[220px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none">
+                          <option value="">{t({ ko: "실행 계정 풀 선택", en: "Select execution pool", ja: "Select execution pool", zh: "Select execution pool" })}</option>
+                          {selectedCliAccountPools.map((pool) => <option key={pool.accountPoolId} value={pool.accountPoolId}>{pool.label}</option>)}
+                        </select>
+                      ))}
+                      {requiresApiProvider && (
+                        <div className="flex items-center gap-2">
+                          <input value={selectedApiProviderId} onChange={(event) => setSelectedApiProviderId(event.target.value)} placeholder="api_provider_id" className="w-[150px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none" />
+                          <input value={selectedApiModel} onChange={(event) => setSelectedApiModel(event.target.value)} placeholder="api_model" className="w-[150px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none" />
                         </div>
                       )}
-                      <div className="flex flex-wrap items-center gap-1">
-                        <button
-                          disabled={savingCli || !canSaveCli}
-                          onClick={() => {
-                            void handleSaveCli();
-                          }}
-                          className="text-[10px] px-1.5 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors disabled:opacity-50"
-                        >
-                          {savingCli ? "..." : t({ ko: "저장", en: "Save", ja: "保存", zh: "保存" })}
-                        </button>
-                        <button
-                          onClick={handleCancelCliEdit}
-                          className="text-[10px] px-1.5 py-0.5 bg-slate-600 hover:bg-slate-500 text-slate-300 rounded transition-colors"
-                        >
-                          {t({ ko: "취소", en: "Cancel", ja: "キャンセル", zh: "取消" })}
-                        </button>
-                      </div>
+                      <button disabled={savingCli || !canSaveCli} onClick={() => { void handleSaveCli(); }} className="rounded bg-blue-600 px-2 py-1 text-[10px] text-white transition-colors hover:bg-blue-500 disabled:opacity-50">{savingCli ? "..." : t({ ko: "저장", en: "Save", ja: "Save", zh: "Save" })}</button>
+                      <button onClick={handleCancelCliEdit} className="rounded bg-slate-600 px-2 py-1 text-[10px] text-slate-300 transition-colors hover:bg-slate-500">{t({ ko: "취소", en: "Cancel", ja: "Cancel", zh: "Cancel" })}</button>
                     </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-1">
-                      <span>🔧</span>
-                      <select
-                        value={selectedCli}
-                        onChange={(event) => {
-                          const nextCli = event.target.value as Agent["cli_provider"];
-                          setSelectedCli(nextCli);
-                          setSelectedCliModel("");
-                          setSelectedCliReasoningLevel("");
-                          setSelectedRunMode("standard");
-                          setSelectedCliAccountPoolId("");
-                        }}
-                        className="bg-slate-700 text-slate-200 text-xs rounded px-1.5 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500"
-                      >
-                        {Object.entries(CLI_LABELS).map(([key, label]) => (
-                          <option key={key} value={key}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      {requiresOAuthAccount &&
-                        (oauthLoading ? (
-                          <span className="text-[10px] text-slate-400">
-                            {t({
-                              ko: "계정 로딩...",
-                              en: "Loading accounts...",
-                              ja: "アカウント読み込み中...",
-                              zh: "正在加载账号...",
-                            })}
-                          </span>
-                        ) : activeOAuthAccounts.length > 0 ? (
-                          <select
-                            value={selectedOAuthAccountId}
-                            onChange={(event) => setSelectedOAuthAccountId(event.target.value)}
-                            className="bg-slate-700 text-slate-200 text-xs rounded px-1.5 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500 max-w-[170px]"
-                          >
-                            {activeOAuthAccounts.map((account) => (
-                              <option key={account.id} value={account.id}>
-                                {oauthAccountLabel(account)}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-[10px] text-amber-300">
-                            {t({
-                              ko: "활성 OAuth 계정 없음",
-                              en: "No active OAuth account",
-                              ja: "有効な OAuth アカウントなし",
-                              zh: "没有可用的 OAuth 账号",
-                            })}
-                          </span>
-                        ))}
-                      {requiresApiProvider && (
-                        <span className="text-[10px] text-amber-300">
-                          {t({
-                            ko: "⚙️ 설정 > API 탭에서 모델을 배정하세요",
-                            en: "⚙️ Assign models in Settings > API tab",
-                            ja: "⚙️ 設定 > API タブでモデルを割り当ててください",
-                            zh: "⚙️ 请在设置 > API 标签页中分配模型",
-                          })}
-                        </span>
-                      )}
-                      {supportsCliModelOverride &&
-                        (selectedCliModelOptions.length > 0 ? (
-                          <>
-                            <select
-                              value={selectedCliModel}
-                              onChange={(event) => {
-                                const nextModel = event.target.value;
-                                setSelectedCliModel(nextModel);
-                              }}
-                              className="bg-slate-700 text-slate-200 text-xs rounded px-1.5 py-0.5 border border-slate-600 focus:outline-none focus:border-blue-500 max-w-[210px]"
-                            >
-                              <option value="">
-                                {t({
-                                  ko: "\uAE30\uBCF8\uAC12(\uC124\uC815 \uBAA8\uB378)",
-                                  en: "Default (Settings model)",
-                                  ja: "Default (Settings model)",
-                                  zh: "Default (Settings model)",
-                                })}
-                              </option>
-                              {selectedCliModelOptions.map((model) => (
-                                <option key={model.slug} value={model.slug}>
-                                  {model.displayName || model.slug}
-                                </option>
-                              ))}
-                            </select>
-                            <span className="text-[10px] text-slate-400">
-                              {cliModelsLoading
-                                ? t({
-                                    ko: "\uBAA8\uB378 \uBAA9\uB85D \uB3D9\uAE30\uD654 \uC911...",
-                                    en: "Syncing models...",
-                                    ja: "Syncing models...",
-                                    zh: "Syncing models...",
-                                  })
-                                : t({
-                                    ko: "\uC11C\uBE0C\uC5D0\uC774\uC804\uD2B8 \uBAA8\uB378\uC740 \uC124\uC815 \uAC12\uC744 \uB530\uB985\uB2C8\uB2E4.",
-                                    en: "Sub-agent model follows Settings",
-                                    ja: "Sub-agent model follows Settings",
-                                    zh: "Sub-agent model follows Settings",
-                                  })}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-[10px] text-slate-400">
-                            {t({
-                              ko: cliModelsLoading
-                                ? "\uBAA8\uB378 \uB85C\uB529 \uC911..."
-                                : "\uBAA8\uB378 \uBAA9\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
-                              en: cliModelsLoading ? "Loading models..." : "No model list available",
-                              ja: cliModelsLoading ? "Loading models..." : "No model list available",
-                              zh: cliModelsLoading ? "Loading models..." : "No model list available",
-                            })}
-                          </span>
-                        ))}
-                      <button
-                        disabled={savingCli || !canSaveCli}
-                        onClick={() => {
-                          void handleSaveCli();
-                        }}
-                        className="text-[10px] px-1.5 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors disabled:opacity-50"
-                      >
-                        {savingCli ? "..." : t({ ko: "저장", en: "Save", ja: "保存", zh: "保存" })}
-                      </button>
-                      <button
-                        onClick={handleCancelCliEdit}
-                        className="text-[10px] px-1.5 py-0.5 bg-slate-600 hover:bg-slate-500 text-slate-300 rounded transition-colors"
-                      >
-                        {t({ ko: "취소", en: "Cancel", ja: "キャンセル", zh: "取消" })}
-                      </button>
-                    </div>
-                  )
+                  </div>
                 ) : (
-                  <button
-                    onClick={() => setEditingCli(true)}
-                    className="flex items-center gap-1 hover:text-slate-300 transition-colors"
-                    title={t({
-                      ko: "클릭하여 CLI 변경",
-                      en: "Click to change CLI",
-                      ja: "クリックして CLI を変更",
-                      zh: "点击更改 CLI",
-                    })}
-                  >
-                    🔧 {cliSummaryText}
-                    <span className="text-[9px] text-slate-600 ml-0.5">✏️</span>
+                  <button onClick={() => setEditingCli(true)} className="transition-colors hover:text-slate-300" title={t({ ko: "CLI 실행 설정 변경", en: "Change CLI execution settings", ja: "Change CLI execution settings", zh: "Change CLI execution settings" })}>
+                    {cliSummaryText}
                   </button>
                 )}
               </div>
             </div>
           </div>
-
           <div className="mt-3 flex items-center gap-2">
-            <span className="text-xs text-yellow-400 font-bold">Lv.{xpLevel}</span>
-            <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-yellow-500 to-amber-400 rounded-full transition-all"
-                style={{ width: `${xpProgress}%` }}
-              />
-            </div>
+            <span className="text-xs font-bold text-yellow-400">Lv.{Math.floor(agent.stats_xp / 100) + 1}</span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-700"><div className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-amber-400" style={{ width: `${agent.stats_xp % 100}%` }} /></div>
             <span className="text-[10px] text-slate-500">{agent.stats_xp} XP</span>
           </div>
         </div>
 
         <div className="flex border-b border-slate-700">
           {[
-            { key: "info", label: t({ ko: "정보", en: "Info", ja: "情報", zh: "信息" }) },
-            {
-              key: "tasks",
-              label: `${t({ ko: "업무", en: "Tasks", ja: "タスク", zh: "任务" })} (${agentTasks.length})`,
-            },
-            {
-              key: "alba",
-              label: `${t({ ko: "알바생", en: "Sub-agents", ja: "サブエージェント", zh: "子代理" })} (${agentSubAgents.length})`,
-            },
+            { key: "info", label: t({ ko: "정보", en: "Info", ja: "Info", zh: "Info" }) },
+            { key: "tasks", label: `${t({ ko: "작업", en: "Tasks", ja: "Tasks", zh: "Tasks" })} (${agentTasks.length})` },
+            { key: "alba", label: `${t({ ko: "서브에이전트", en: "Sub-agents", ja: "Sub-agents", zh: "Sub-agents" })} (${agentSubAgents.length})` },
           ].map((tabItem) => (
-            <button
-              key={tabItem.key}
-              onClick={() => setTab(tabItem.key as typeof tab)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                tab === tabItem.key ? "text-blue-400 border-b-2 border-blue-400" : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
+            <button key={tabItem.key} onClick={() => setTab(tabItem.key as typeof tab)} className={`flex-1 py-2.5 text-sm font-medium transition-colors ${tab === tabItem.key ? "border-b-2 border-blue-400 text-blue-400" : "text-slate-400 hover:text-slate-200"}`}>
               {tabItem.label}
             </button>
           ))}
         </div>
 
-        <div className="p-4 overflow-y-auto max-h-[40vh]">
+        <div className="max-h-[40vh] overflow-y-auto p-4">
           <AgentDetailTabContent
             tab={tab}
             t={t}

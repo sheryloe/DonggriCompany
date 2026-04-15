@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Agent, AssignmentMode, Department, Project } from "../types";
 import {
   deleteProject,
@@ -284,10 +284,10 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     if (!selectedProject) return;
     const confirmed = window.confirm(
       t({
-        ko: `프로젝트 '${selectedProject.name}' 을(를) 삭제할까요?`,
+        ko: `프로젝트 '${selectedProject.name}'를 삭제할까요?`,
         en: `Delete project '${selectedProject.name}'?`,
-        ja: `プロジェクト '${selectedProject.name}' を削除しますか？`,
-        zh: `要删除项目 '${selectedProject.name}' 吗？`,
+        ja: `Delete project '${selectedProject.name}'?`,
+        zh: `Delete project '${selectedProject.name}'?`,
       }),
     );
     if (!confirmed) return;
@@ -312,12 +312,12 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     }
   }, []);
 
-  const headerTitle = t({ ko: "프로젝트 관리", en: "Project Management", ja: "プロジェクト管理", zh: "项目管理" });
+  const headerTitle = t({ ko: "프로젝트 관리", en: "Project Management", ja: "Project Management", zh: "Project Management" });
   const formTitle = editingProjectId
-    ? t({ ko: "프로젝트 수정", en: "Edit Project", ja: "プロジェクト編集", zh: "编辑项目" })
+    ? t({ ko: "프로젝트 수정", en: "Edit Project", ja: "Edit Project", zh: "Edit Project" })
     : isCreating
-      ? t({ ko: "신규 프로젝트 등록", en: "Register New Project", ja: "新規プロジェクト登録", zh: "新建项目" })
-      : t({ ko: "프로젝트 정보", en: "Project Info", ja: "プロジェクト情報", zh: "项目信息" });
+      ? t({ ko: "신규 프로젝트 등록", en: "Register New Project", ja: "Register New Project", zh: "Register New Project" })
+      : t({ ko: "프로젝트 정보", en: "Project Info", ja: "Project Info", zh: "Project Info" });
 
   if (reportDetail) {
     return (
@@ -380,7 +380,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
               }}
               className="rounded-md px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
             >
-              ← {t({ ko: "목록", en: "List", ja: "一覧", zh: "列表" })}
+              ← {t({ ko: "목록", en: "List", ja: "List", zh: "List" })}
             </button>
           </div>
 
@@ -561,3 +561,4 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     </div>
   );
 }
+

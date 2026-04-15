@@ -19,9 +19,6 @@ export interface FormData {
   department_id: string;
   role: import("../../types").AgentRole;
   cli_provider: import("../../types").CliProvider;
-  cli_model: string;
-  cli_reasoning_level: string;
-  run_mode: import("../../types").AgentRunMode;
   cli_account_pool_id: string;
   workflow_role: import("../../types").AgentWorkflowRole;
   review_lenses_text: string;

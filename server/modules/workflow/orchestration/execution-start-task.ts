@@ -5,6 +5,7 @@ import { ensureVideoPreprodRemotionBestPracticesSkill } from "../core/video-skil
 import { buildWorkflowPackExecutionGuidance } from "../packs/execution-guidance.ts";
 import { resolveVideoArtifactSpecForTask } from "../packs/video-artifact.ts";
 import { buildAgentPromptProfileBlock } from "../agents/agent-profile.ts";
+import { resolveProviderExecutionPolicy } from "../agents/provider-policy-resolver.ts";
 import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
 import { resolveConstrainedAgentScopeForTask } from "../../routes/core/tasks/execution-run-auto-assign.ts";
 import { isPrimaryAuthorProfile, resolveAgentWorkflowProfile } from "../agents/workflow-profile.ts";
@@ -487,20 +488,18 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         execAgent.oauth_account_id ?? null,
       );
     } else {
-      const modelConfig = getProviderModelConfig();
-      const modelForProvider = execAgent.cli_model || modelConfig[provider]?.model || undefined;
-      const reasoningLevel =
-        provider === "codex"
-          ? execAgent.cli_reasoning_level || modelConfig[provider]?.reasoningLevel || undefined
-          : modelConfig[provider]?.reasoningLevel || undefined;
+      const executionPolicy = resolveProviderExecutionPolicy({
+        provider,
+        providerModelConfig: getProviderModelConfig(),
+      });
       const child = spawnCliAgent(
         taskId,
         provider,
         spawnPrompt,
         agentCwd,
         logFilePath,
-        modelForProvider,
-        reasoningLevel,
+        executionPolicy.model,
+        executionPolicy.reasoningLevel,
         execAgent.cli_account_pool_id ?? null,
       );
       child.on("close", (code: number | null) => {

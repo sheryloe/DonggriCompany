@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import type { AgentRow, OneShotRunOptions, OneShotRunResult } from "./conversation-types.ts";
 import { resolveCliAccountPoolEnv } from "../agents/cli-account-pool-env.ts";
 import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
+import { resolveProviderExecutionPolicy } from "../agents/provider-policy-resolver.ts";
 
 type CreateOneShotRunnerDeps = {
   db: any;
@@ -220,12 +221,12 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
           }
           throw new Error(`cli account pool error: ${poolEnv.reason}`);
         }
-        const modelConfig = getProviderModelConfig();
-        const model = agent.cli_model || modelConfig[provider]?.model || undefined;
-        const reasoningLevel =
-          provider === "codex"
-            ? agent.cli_reasoning_level || modelConfig[provider]?.reasoningLevel || undefined
-            : modelConfig[provider]?.reasoningLevel || undefined;
+        const executionPolicy = resolveProviderExecutionPolicy({
+          provider,
+          providerModelConfig: getProviderModelConfig(),
+        });
+        const model = executionPolicy.model;
+        const reasoningLevel = executionPolicy.reasoningLevel;
         const args = buildAgentArgs(provider, model, reasoningLevel, { noTools });
 
         await new Promise<void>((resolve, reject) => {

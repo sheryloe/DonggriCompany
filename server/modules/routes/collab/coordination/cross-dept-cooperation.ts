@@ -4,6 +4,7 @@ import type { Lang } from "../../../../types/lang.ts";
 import { getDepartmentPromptForPack } from "../../../workflow/packs/department-scope.ts";
 import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack-resolver.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
+import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
 import { resolveConstrainedAgentScopeForTask } from "../../core/tasks/execution-run-auto-assign.ts";
 import type { AgentRow } from "./types.ts";
 
@@ -657,20 +658,18 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
               finalizeCrossDeptRun,
             );
           } else {
-            const crossModelConfig = getProviderModelConfig();
-            const crossModel = execAgent.cli_model || crossModelConfig[execProvider]?.model || undefined;
-            const crossReasoningLevel =
-              execProvider === "codex"
-                ? execAgent.cli_reasoning_level || crossModelConfig[execProvider]?.reasoningLevel || undefined
-                : crossModelConfig[execProvider]?.reasoningLevel || undefined;
+            const crossPolicy = resolveProviderExecutionPolicy({
+              provider: execProvider,
+              providerModelConfig: getProviderModelConfig(),
+            });
             const child = spawnCliAgent(
               crossTaskId,
               execProvider,
               sessionPrompt,
               projPath,
               logFilePath,
-              crossModel,
-              crossReasoningLevel,
+              crossPolicy.model,
+              crossPolicy.reasoningLevel,
               execAgent.cli_account_pool_id ?? null,
             );
             child.on("close", (code: number | null) => finalizeCrossDeptRun(code ?? 1));

@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AgentCapabilityKey,
   AgentCapabilityMatrix,
   AgentClassPath,
@@ -10,6 +10,7 @@ import type {
   AgentRole,
   AgentWorkflowProfile,
 } from "./types";
+import { getRoleDisplayLabel, getWorkflowRoleDisplayLabel } from "./app/canonical-display";
 
 const CAPABILITY_KEYS: AgentCapabilityKey[] = [
   "execution",
@@ -25,7 +26,7 @@ const PROMPT_STYLE_KEYS: AgentPromptStyleKey[] = ["tone", "autonomy", "strictnes
 const CAPABILITY_LABELS = {
   ko: {
     execution: "실행",
-    architecture: "설계",
+    architecture: "아키텍처",
     review: "리뷰",
     research: "리서치",
     communication: "커뮤니케이션",
@@ -45,8 +46,8 @@ const STYLE_LABELS = {
   ko: {
     tone: "톤",
     autonomy: "자율성",
-    strictness: "엄격도",
-    collaboration: "협업성",
+    strictness: "엄격함",
+    collaboration: "협업",
   },
   en: {
     tone: "Tone",
@@ -73,39 +74,12 @@ const LEVEL_WORDS = {
   },
 } as const;
 
-const ROLE_LABELS = {
-  ko: {
-    team_leader: "팀장",
-    senior: "시니어",
-    junior: "주니어",
-    intern: "인턴",
-  },
-  en: {
-    team_leader: "Team Leader",
-    senior: "Senior",
-    junior: "Junior",
-    intern: "Intern",
-  },
-} as const;
-
 const PROFILE_PRESETS: Record<AgentRole, AgentProfile> = {
   team_leader: {
     role_template: "team_leader",
     growth_tier: 4,
-    capabilities: {
-      execution: 4,
-      architecture: 4,
-      review: 4,
-      research: 3,
-      communication: 4,
-      leadership: 5,
-    },
-    prompt_style: {
-      tone: 4,
-      autonomy: 5,
-      strictness: 4,
-      collaboration: 5,
-    },
+    capabilities: { execution: 4, architecture: 4, review: 4, research: 3, communication: 4, leadership: 5 },
+    prompt_style: { tone: 4, autonomy: 5, strictness: 4, collaboration: 5 },
     specialties: [],
     custom_prompt_override: null,
     class_path: null,
@@ -114,20 +88,8 @@ const PROFILE_PRESETS: Record<AgentRole, AgentProfile> = {
   senior: {
     role_template: "senior",
     growth_tier: 3,
-    capabilities: {
-      execution: 4,
-      architecture: 4,
-      review: 4,
-      research: 3,
-      communication: 3,
-      leadership: 3,
-    },
-    prompt_style: {
-      tone: 3,
-      autonomy: 4,
-      strictness: 4,
-      collaboration: 3,
-    },
+    capabilities: { execution: 4, architecture: 4, review: 4, research: 3, communication: 3, leadership: 3 },
+    prompt_style: { tone: 3, autonomy: 4, strictness: 4, collaboration: 3 },
     specialties: [],
     custom_prompt_override: null,
     class_path: null,
@@ -136,20 +98,8 @@ const PROFILE_PRESETS: Record<AgentRole, AgentProfile> = {
   junior: {
     role_template: "junior",
     growth_tier: 2,
-    capabilities: {
-      execution: 3,
-      architecture: 2,
-      review: 2,
-      research: 3,
-      communication: 3,
-      leadership: 2,
-    },
-    prompt_style: {
-      tone: 3,
-      autonomy: 2,
-      strictness: 3,
-      collaboration: 4,
-    },
+    capabilities: { execution: 3, architecture: 2, review: 2, research: 3, communication: 3, leadership: 2 },
+    prompt_style: { tone: 3, autonomy: 2, strictness: 3, collaboration: 4 },
     specialties: [],
     custom_prompt_override: null,
     class_path: null,
@@ -158,20 +108,8 @@ const PROFILE_PRESETS: Record<AgentRole, AgentProfile> = {
   intern: {
     role_template: "junior",
     growth_tier: 2,
-    capabilities: {
-      execution: 3,
-      architecture: 2,
-      review: 2,
-      research: 3,
-      communication: 3,
-      leadership: 2,
-    },
-    prompt_style: {
-      tone: 3,
-      autonomy: 2,
-      strictness: 3,
-      collaboration: 4,
-    },
+    capabilities: { execution: 3, architecture: 2, review: 2, research: 3, communication: 3, leadership: 2 },
+    prompt_style: { tone: 3, autonomy: 2, strictness: 3, collaboration: 4 },
     specialties: [],
     custom_prompt_override: null,
     class_path: null,
@@ -180,30 +118,19 @@ const PROFILE_PRESETS: Record<AgentRole, AgentProfile> = {
 };
 
 function normalizeLocale(locale?: string): "ko" | "en" {
-  return String(locale || "")
-    .toLowerCase()
-    .startsWith("ko")
-    ? "ko"
-    : "en";
+  return String(locale ?? "").toLowerCase().startsWith("ko") ? "ko" : "en";
 }
 
 function normalizeLevel(value: unknown, fallback: AgentLevelValue): AgentLevelValue {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-
+  if (!Number.isFinite(parsed)) return fallback;
   return Math.max(1, Math.min(5, Math.trunc(parsed))) as AgentLevelValue;
 }
 
 function normalizeRole(value: unknown, fallback: AgentRole): AgentRole {
-  const raw = String(value || "").trim();
-  if (raw === "team_leader" || raw === "senior" || raw === "junior") {
-    return raw;
-  }
-  if (raw === "intern") {
-    return "junior";
-  }
+  const raw = String(value ?? "").trim();
+  if (raw === "team_leader" || raw === "senior" || raw === "junior") return raw;
+  if (raw === "intern") return "junior";
   return fallback;
 }
 
@@ -212,68 +139,38 @@ function normalizeString(value: unknown): string {
 }
 
 function normalizeClassPath(value: unknown): AgentProfile["class_path"] {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-  if (typeof value === "string") {
-    return value.trim() || null;
-  }
+  if (!value) return null;
+  if (typeof value === "string") return value.trim() || null;
   if (Array.isArray(value)) {
     const list = value.map((entry) => normalizeString(entry)).filter(Boolean);
     return list.length > 0 ? list : null;
   }
-  if (typeof value !== "object") {
-    return null;
-  }
+  if (typeof value !== "object") return null;
 
   const source = value as Record<string, unknown>;
   const output: AgentClassPath = {};
   for (const key of ["stage1", "stage2", "stage3", "class_stage_1", "class_stage_2", "class_stage_3"] as const) {
     const text = normalizeString(source[key]);
-    if (text) {
-      output[key] = text;
-    }
+    if (text) output[key] = text;
   }
-
   return Object.keys(output).length > 0 ? output : null;
 }
 
 function normalizePromotionPolicy(value: unknown): AgentProfile["promotion_policy"] {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-  if (typeof value === "string") {
-    return value.trim() || null;
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
+  if (!value) return null;
+  if (typeof value === "string") return value.trim() || null;
+  if (typeof value !== "object" || Array.isArray(value)) return null;
 
   const source = value as Record<string, unknown>;
   const output: AgentPromotionPolicy = {};
-  if (Number.isFinite(Number(source.auto_promote_at_xp))) {
-    output.auto_promote_at_xp = Number(source.auto_promote_at_xp);
-  }
-
+  if (Number.isFinite(Number(source.auto_promote_at_xp))) output.auto_promote_at_xp = Number(source.auto_promote_at_xp);
   const fromRole = normalizeString(source.from_role);
-  if (fromRole) {
-    output.from_role = fromRole;
-  }
-
   const toRole = normalizeString(source.to_role);
-  if (toRole) {
-    output.to_role = toRole;
-  }
-
-  if (typeof source.team_leader_manual === "boolean") {
-    output.team_leader_manual = source.team_leader_manual;
-  }
-
   const notes = normalizeString(source.notes);
-  if (notes) {
-    output.notes = notes;
-  }
-
+  if (fromRole) output.from_role = fromRole;
+  if (toRole) output.to_role = toRole;
+  if (typeof source.team_leader_manual === "boolean") output.team_leader_manual = source.team_leader_manual;
+  if (notes) output.notes = notes;
   return Object.keys(output).length > 0 ? output : null;
 }
 
@@ -285,9 +182,7 @@ export function parseSpecialtiesText(raw: string): string[] {
     .filter(Boolean)
     .filter((entry) => {
       const key = entry.toLowerCase();
-      if (seen.has(key)) {
-        return false;
-      }
+      if (seen.has(key)) return false;
       seen.add(key);
       return true;
     })
@@ -299,8 +194,7 @@ export function stringifySpecialties(specialties: string[] | null | undefined): 
 }
 
 export function createPresetAgentProfile(role: AgentRole): AgentProfile {
-  const normalizedRole = normalizeRole(role, "junior");
-  return JSON.parse(JSON.stringify(PROFILE_PRESETS[normalizedRole])) as AgentProfile;
+  return JSON.parse(JSON.stringify(PROFILE_PRESETS[normalizeRole(role, "junior")])) as AgentProfile;
 }
 
 function normalizeCapabilities(value: unknown, fallback: AgentCapabilityMatrix): AgentCapabilityMatrix {
@@ -362,23 +256,19 @@ export function recommendGrowthTierFromXp(xp: number | null | undefined): AgentL
 }
 
 export function getLevelWord(level: AgentLevelValue, locale?: string): string {
-  const lang = normalizeLocale(locale);
-  return LEVEL_WORDS[lang][level];
+  return LEVEL_WORDS[normalizeLocale(locale)][level];
 }
 
 export function getAgentRoleLabel(role: AgentRole, locale?: string): string {
-  const lang = normalizeLocale(locale);
-  return ROLE_LABELS[lang][role];
+  return getRoleDisplayLabel(role, locale);
 }
 
 export function getCapabilityLabel(key: AgentCapabilityKey, locale?: string): string {
-  const lang = normalizeLocale(locale);
-  return CAPABILITY_LABELS[lang][key];
+  return CAPABILITY_LABELS[normalizeLocale(locale)][key];
 }
 
 export function getPromptStyleLabel(key: AgentPromptStyleKey, locale?: string): string {
-  const lang = normalizeLocale(locale);
-  return STYLE_LABELS[lang][key];
+  return STYLE_LABELS[normalizeLocale(locale)][key];
 }
 
 export function buildAgentCapabilityCompactSummary(
@@ -395,23 +285,13 @@ export function resolveAgentProfileOverrideText(
   legacyPersonality?: string | null,
 ): string {
   const custom = normalizeString(profile?.custom_prompt_override);
-  if (custom) {
-    return custom;
-  }
-  return normalizeString(legacyPersonality);
+  return custom || normalizeString(legacyPersonality);
 }
 
 function formatClassPath(value: AgentProfile["class_path"]): string {
-  if (!value) {
-    return "";
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.join(" > ");
-  }
-
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join(" > ");
   const stage1 = normalizeString(value.stage1 ?? value.class_stage_1);
   const stage2 = normalizeString(value.stage2 ?? value.class_stage_2);
   const stage3 = normalizeString(value.stage3 ?? value.class_stage_3);
@@ -419,21 +299,15 @@ function formatClassPath(value: AgentProfile["class_path"]): string {
 }
 
 function formatPromotionPolicy(value: AgentProfile["promotion_policy"]): string {
-  if (!value) {
-    return "";
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-
+  if (!value) return "";
+  if (typeof value === "string") return value;
   const fromRole = normalizeString(value.from_role);
   const toRole = normalizeString(value.to_role);
   const xp = Number.isFinite(Number(value.auto_promote_at_xp)) ? Number(value.auto_promote_at_xp) : null;
   const manual = value.team_leader_manual ? "team_leader_manual" : "";
   const notes = normalizeString(value.notes);
   const base = [fromRole, toRole].filter(Boolean).length > 0 ? `${fromRole || "?"} -> ${toRole || "?"}` : "";
-  const xpText = xp !== null ? `@xp>=${xp}` : "";
-  return [base, xpText, manual, notes].filter(Boolean).join(" ");
+  return [base, xp !== null ? `@xp>=${xp}` : "", manual, notes].filter(Boolean).join(" ");
 }
 
 export function buildAgentPromptPreview(params: {
@@ -456,58 +330,40 @@ export function buildAgentPromptPreview(params: {
   const specialties = normalized.specialties.join(", ");
   const classPath = formatClassPath(normalized.class_path);
   const promotionPolicy = formatPromotionPolicy(normalized.promotion_policy);
-  const workflowRoleLabel =
-    workflowProfile?.role === "primary_author"
-      ? lang === "ko"
-        ? "작성자"
-        : "Primary Author"
-      : lang === "ko"
-        ? "리뷰어"
-        : "Reviewer";
-  const reviewDepthLabel =
-    workflowProfile?.two_pass_required === false
-      ? lang === "ko"
-        ? "단일 패스"
-        : "Single pass"
-      : lang === "ko"
-        ? "2패스 강제"
-        : "Force 2-pass";
+  const workflowRoleLabel = workflowProfile ? getWorkflowRoleDisplayLabel(workflowProfile.role, locale) : "";
+  const reviewDepthLabel = workflowProfile?.two_pass_required === false ? (lang === "ko" ? "단일 패스" : "Single pass") : lang === "ko" ? "2패스 강제" : "Force 2-pass";
 
   if (lang === "ko") {
     return [
-      `역할 템플릿: ${ROLE_LABELS.ko[normalized.role_template]}`,
+      `역할 템플릿: ${getRoleDisplayLabel(normalized.role_template, locale)}`,
       `적용 성장 티어: ${normalized.growth_tier}/5`,
-      `2x 역할: ${workflowRoleLabel}`,
-      classPath ? `전직 경로: ${classPath}` : "",
+      workflowRoleLabel ? `2x 역할: ${workflowRoleLabel}` : "",
+      classPath ? `클래스 경로: ${classPath}` : "",
       promotionPolicy ? `승급 정책: ${promotionPolicy}` : "",
-      `능력치: ${capabilitySummary}`,
-      `작업 성향: ${styleSummary}`,
+      `역량 매트릭스: ${capabilitySummary}`,
+      `프롬프트 스타일: ${styleSummary}`,
       specialties ? `전문 분야: ${specialties}` : "",
       reviewLenses ? `리뷰 렌즈: ${reviewLenses}` : "",
       workflowProfile?.role === "reviewer" ? `리뷰 깊이: ${reviewDepthLabel}` : "",
-      workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds
-        ? `최대 리뷰 라운드: ${workflowProfile.max_review_rounds}`
-        : "",
-      overrideText ? `최종 오버라이드: ${overrideText}` : "",
+      workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds ? `최대 리뷰 라운드: ${workflowProfile.max_review_rounds}` : "",
+      overrideText ? `최종 수동 보정: ${overrideText}` : "",
     ]
       .filter(Boolean)
       .join("\n");
   }
 
   return [
-    `Role template: ${ROLE_LABELS.en[normalized.role_template]}`,
+    `Role template: ${getRoleDisplayLabel(normalized.role_template, locale)}`,
     `Applied growth tier: ${normalized.growth_tier}/5`,
-    `2x role: ${workflowRoleLabel}`,
+    workflowRoleLabel ? `2x role: ${workflowRoleLabel}` : "",
     classPath ? `Class path: ${classPath}` : "",
     promotionPolicy ? `Promotion policy: ${promotionPolicy}` : "",
     `Capabilities: ${capabilitySummary}`,
-    `Working style: ${styleSummary}`,
+    `Prompt style: ${styleSummary}`,
     specialties ? `Specialties: ${specialties}` : "",
     reviewLenses ? `Review lenses: ${reviewLenses}` : "",
     workflowProfile?.role === "reviewer" ? `Review depth: ${reviewDepthLabel}` : "",
-    workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds
-      ? `Max review rounds: ${workflowProfile.max_review_rounds}`
-      : "",
+    workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds ? `Max review rounds: ${workflowProfile.max_review_rounds}` : "",
     overrideText ? `Final override: ${overrideText}` : "",
   ]
     .filter(Boolean)

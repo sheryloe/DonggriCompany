@@ -25,14 +25,12 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
 
   const [ghStatus, setGhStatus] = useState<GitHubStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
-
   const [step, setStep] = useState<WizardStep>("repo");
 
   const [repoSearch, setRepoSearch] = useState("");
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [directInput, setDirectInput] = useState("");
   const [directInputError, setDirectInputError] = useState<string | null>(null);
   const [branchError, setBranchError] = useState<string | null>(null);
@@ -50,6 +48,8 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
   const [cloneStatus, setCloneStatus] = useState<string>("idle");
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshGitHubStatus = useCallback(() => {
@@ -85,7 +85,7 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [repoSearch, ghStatus, loadRepos]);
+  }, [ghStatus, loadRepos, repoSearch]);
 
   useEffect(() => {
     if (ghStatus?.connected) {
@@ -109,19 +109,19 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
         if (message.includes("404") || message.includes("not_found") || message.includes("repo_not_found")) {
           setBranchError(
             t({
-              ko: `리포지토리 ${repo.full_name}에 접근할 수 없습니다. 설정 → OAuth 탭에서 자체 GitHub OAuth App을 등록하면 Private 리포에 접근할 수 있습니다. 또는 아래에 PAT를 직접 입력하세요.`,
-              en: `Cannot access repository ${repo.full_name}. Register your own GitHub OAuth App in Settings → OAuth tab for private repo access, or enter a PAT below.`,
-              ja: `リポジトリ ${repo.full_name} にアクセスできません。設定 → OAuth タブで自前の GitHub OAuth App を登録するとプライベートリポにアクセスできます。または下に PAT を入力してください。`,
-              zh: `无法访问仓库 ${repo.full_name}。在设置 → OAuth 标签中注册自己的 GitHub OAuth App 即可访问私有仓库，或在下方输入 PAT。`,
+              ko: `저장소 ${repo.full_name}에 접근할 수 없습니다. Settings > OAuth에서 자체 GitHub OAuth App을 등록하면 private 저장소도 접근할 수 있습니다. 또는 아래 PAT를 직접 입력하세요.`,
+              en: `Cannot access repository ${repo.full_name}. Register your own GitHub OAuth App in Settings > OAuth for private repo access, or enter a PAT below.`,
+              ja: `Cannot access repository ${repo.full_name}. Register your own GitHub OAuth App in Settings > OAuth for private repo access, or enter a PAT below.`,
+              zh: `Cannot access repository ${repo.full_name}. Register your own GitHub OAuth App in Settings > OAuth for private repo access, or enter a PAT below.`,
             }),
           );
         } else if (message.includes("token_invalid")) {
           setBranchError(
             t({
-              ko: "PAT가 유효하지 않거나 만료되었습니다. 다시 확인해주세요.",
+              ko: "PAT가 유효하지 않거나 만료되었습니다. 다시 확인하세요.",
               en: "PAT is invalid or expired. Please check and try again.",
-              ja: "PAT が無効か期限切れです。確認して再試行してください。",
-              zh: "PAT 无效或已过期，请检查后重试。",
+              ja: "PAT is invalid or expired. Please check and try again.",
+              zh: "PAT is invalid or expired. Please check and try again.",
             }),
           );
         } else {
@@ -143,8 +143,8 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
         t({
           ko: "형식: owner/repo 또는 GitHub URL",
           en: "Format: owner/repo or GitHub URL",
-          ja: "形式: owner/repo または GitHub URL",
-          zh: "格式：owner/repo 或 GitHub URL",
+          ja: "Format: owner/repo or GitHub URL",
+          zh: "Format: owner/repo or GitHub URL",
         }),
       );
       return;
@@ -168,7 +168,7 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
     } catch (error: unknown) {
       setDirectInputError(error instanceof Error ? error.message : String(error));
     }
-  }, [directInput, t, handleRepoSelect]);
+  }, [directInput, handleRepoSelect, t]);
 
   const handlePatRetry = useCallback(async () => {
     if (!selectedRepo || !patToken.trim()) return;
@@ -176,7 +176,7 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
     setBranchError(null);
     await handleRepoSelect(selectedRepo, patToken.trim());
     setPatLoading(false);
-  }, [selectedRepo, patToken, handleRepoSelect]);
+  }, [handleRepoSelect, patToken, selectedRepo]);
 
   const handleBranchSelect = useCallback(
     (branchName: string) => {
@@ -227,7 +227,7 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
               setCreating(false);
             }
           } catch {
-            // continue polling
+            // keep polling
           }
         }, 1000);
         return;
@@ -245,7 +245,7 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
       setCloneError(error instanceof Error ? error.message : String(error));
       setCreating(false);
     }
-  }, [selectedRepo, selectedBranch, targetPath, projectName, coreGoal, patToken, onComplete]);
+  }, [coreGoal, onComplete, patToken, projectName, selectedBranch, selectedRepo, targetPath]);
 
   useEffect(() => {
     if (cloneStatus !== "done" || !creating || !selectedRepo || !selectedBranch) return;
@@ -264,7 +264,7 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
         setCloneStatus("error");
       })
       .finally(() => setCreating(false));
-  }, [cloneStatus, creating, selectedRepo, selectedBranch, targetPath, projectName, coreGoal, onComplete]);
+  }, [cloneStatus, coreGoal, creating, onComplete, projectName, selectedBranch, selectedRepo, targetPath]);
 
   useEffect(() => {
     return () => {
@@ -276,7 +276,7 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
     return (
       <div className="flex items-center justify-center p-8">
         <p className="text-sm text-slate-400">
-          {t({ ko: "확인 중...", en: "Checking...", ja: "確認中...", zh: "检查中..." })}
+          {t({ ko: "확인 중...", en: "Checking...", ja: "Checking...", zh: "Checking..." })}
         </p>
       </div>
     );

@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -44,7 +44,7 @@ describe("agent guide files", () => {
     const agentDir = path.join(root, "planning", "Alpha");
     expect(savedPath).toBe(path.join(agentDir, "Alpha_AGENTS.md"));
     expect(fs.existsSync(path.join(agentDir, "Alpha_skills.md"))).toBe(true);
-    expect(fs.existsSync(path.join(agentDir, ".Alpha_설정"))).toBe(true);
+    expect(fs.existsSync(path.join(agentDir, ".Alpha_settings.json"))).toBe(true);
 
     const content = fs.readFileSync(path.join(agentDir, "Alpha_AGENTS.md"), "utf8");
     expect(content).toContain("Bundle Path: agents/planning/Alpha");
@@ -96,3 +96,4 @@ describe("agent guide files", () => {
     expect(fs.existsSync(path.join(root, "qa", "Gamma"))).toBe(false);
   });
 });
+

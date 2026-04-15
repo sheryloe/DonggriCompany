@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 
 type AgentGuideInput = {
@@ -222,7 +222,7 @@ function cleanupLegacyBundleFiles(bundleRoot: string, keepNames: Set<string>): v
     }
 
     const isManagedFile =
-      entry.name.endsWith("_AGENTS.md") || entry.name.endsWith("_skills.md") || /^\..+_설정$/u.test(entry.name);
+      entry.name.endsWith("_AGENTS.md") || entry.name.endsWith("_skills.md") || /^\..+_(settings(\\.json)?|설정)$/u.test(entry.name);
     if (!isManagedFile || keepNames.has(entry.name)) {
       continue;
     }
@@ -324,7 +324,7 @@ function ensureAgentBundleFiles(root: string, input: AgentGuideInput): string {
 
   const agentsFileName = `${fileToken}_AGENTS.md`;
   const skillsFileName = `${fileToken}_skills.md`;
-  const settingsFileName = `.${fileToken}_설정`;
+  const settingsFileName = `.${fileToken}_settings.json`;
   cleanupLegacyBundleFiles(root, new Set([agentsFileName, skillsFileName, settingsFileName]));
 
   const guideRoot = resolveGuideRoot();
@@ -372,3 +372,4 @@ export function archiveAgentGuideFile(agentId: string): string | null {
   fs.renameSync(bundleRoot, destination);
   return destination;
 }
+

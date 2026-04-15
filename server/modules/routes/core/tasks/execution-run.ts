@@ -4,6 +4,7 @@ import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { AgentRow } from "../../shared/types.ts";
 import { resolveConstrainedAgentScopeForTask, selectAutoAssignableAgentForTask } from "./execution-run-auto-assign.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
+import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
 import { buildAgentPromptProfileBlock } from "../../../workflow/agents/agent-profile.ts";
 import { buildWorkflowPackExecutionGuidance } from "../../../workflow/packs/execution-guidance.ts";
 import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-artifact.ts";
@@ -426,12 +427,10 @@ Whenever you complete a subtask, report it in this format:
       : "";
 
     const modelConfig = getProviderModelConfig();
-    const mainModel = agent.cli_model || modelConfig[provider]?.model || undefined;
+    const providerPolicy = resolveProviderExecutionPolicy({ provider, providerModelConfig: modelConfig });
+    const mainModel = providerPolicy.model;
     const subModel = modelConfig[provider]?.subModel || undefined;
-    const mainReasoningLevel =
-      provider === "codex"
-        ? agent.cli_reasoning_level || modelConfig[provider]?.reasoningLevel || undefined
-        : modelConfig[provider]?.reasoningLevel || undefined;
+    const mainReasoningLevel = providerPolicy.reasoningLevel;
     const subReasoningLevel = modelConfig[provider]?.subModelReasoningLevel || undefined;
     const subModelHint =
       subModel && (provider === "claude" || provider === "codex")

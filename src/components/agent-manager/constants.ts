@@ -2,7 +2,6 @@ import { createPresetAgentProfile } from "../../agent-profile";
 import type { AgentRole, CliProvider } from "../../types";
 import type { DeptForm, FormData } from "./types";
 
-// Keep `intern` only as a legacy read alias. New and edited agents use the three active presets below.
 export const ROLES: AgentRole[] = ["team_leader", "senior", "junior"];
 
 export const CLI_PROVIDERS: CliProvider[] = [
@@ -18,7 +17,7 @@ export const CLI_PROVIDERS: CliProvider[] = [
 ];
 
 export const ROLE_LABEL: Record<string, { ko: string; en: string }> = {
-  team_leader: { ko: "리더", en: "Leader" },
+  team_leader: { ko: "팀장", en: "Team Leader" },
   senior: { ko: "시니어", en: "Senior" },
   junior: { ko: "주니어", en: "Junior" },
   intern: { ko: "인턴", en: "Intern" },
@@ -41,26 +40,10 @@ export const STATUS_DOT: Record<string, string> = {
 export const ICON_SPRITE_POOL = Array.from({ length: 44 }, (_, index) => index + 1);
 
 export const EMOJI_GROUPS: { label: string; labelEn: string; emojis: string[] }[] = [
-  {
-    label: "업무",
-    labelEn: "Work",
-    emojis: ["💼", "🧠", "🛠️", "📊", "📈", "💻", "🧪", "📝", "📌", "⚙️", "🔧", "🗂️", "📎", "🔍", "📡", "🧭"],
-  },
-  {
-    label: "사람",
-    labelEn: "People",
-    emojis: ["🙂", "😎", "🤝", "🧑‍💻", "👩‍💻", "🧑‍🔬", "👩‍🔬", "🧑‍🎨", "👩‍🎨", "🧑‍💼", "👩‍💼", "🧑‍🏫", "👩‍🏫", "🧑‍🚀", "🧑‍🔧", "🧑‍⚖️"],
-  },
-  {
-    label: "오브젝트",
-    labelEn: "Objects",
-    emojis: ["📦", "🗃️", "🗄️", "💡", "🧲", "🔒", "🧱", "🛰️", "⌨️", "🖥️", "🧰", "📱", "🎛️", "🔌", "📍", "🪪"],
-  },
-  {
-    label: "자연",
-    labelEn: "Nature",
-    emojis: ["🌿", "🌱", "🌊", "🔥", "☁️", "🌙", "⭐", "🌞", "🪐", "🌧️", "⛰️", "🌸", "🍀", "🌲", "🌈", "❄️"],
-  },
+  { label: "업무", labelEn: "Work", emojis: ["💼", "🛠️", "📌", "📎", "📁", "📚", "📈", "🧠"] },
+  { label: "사람", labelEn: "People", emojis: ["🧑", "👩", "👨", "🧑‍💻", "👩‍💼", "👨‍💼", "🧑‍🔬", "👨‍🔧"] },
+  { label: "도구", labelEn: "Tools", emojis: ["🔧", "⚙️", "🗂️", "📝", "💻", "🖥️", "📡", "🧪"] },
+  { label: "기타", labelEn: "Misc", emojis: ["⭐", "🔹", "🔸", "🛰️", "🧭", "🧱", "🔍", "📦"] },
 ];
 
 export const BLANK: FormData = {
@@ -71,32 +54,19 @@ export const BLANK: FormData = {
   department_id: "",
   role: "junior",
   cli_provider: "claude",
-  cli_model: "",
-  cli_reasoning_level: "",
-  run_mode: "standard",
   cli_account_pool_id: "",
   workflow_role: "reviewer",
   review_lenses_text: "general",
   two_pass_required: true,
   max_review_rounds: null,
-  avatar_emoji: "🤖",
+  avatar_emoji: "🧠",
   sprite_number: null,
   personality: "",
   specialties_text: "",
   agent_profile: createPresetAgentProfile("junior"),
 };
 
-export const DEPT_COLORS = [
-  "#3b82f6",
-  "#ef4444",
-  "#f59e0b",
-  "#10b981",
-  "#8b5cf6",
-  "#f97316",
-  "#ec4899",
-  "#06b6d4",
-  "#6b7280",
-];
+export const DEPT_COLORS = ["#3b82f6", "#ef4444", "#f59e0b", "#10b981", "#8b5cf6", "#f97316", "#ec4899", "#06b6d4", "#6b7280"];
 
 export const DEPT_BLANK: DeptForm = {
   id: "",
@@ -104,7 +74,7 @@ export const DEPT_BLANK: DeptForm = {
   name_ko: "",
   name_ja: "",
   name_zh: "",
-  icon: "🧩",
+  icon: "🏢",
   color: "#3b82f6",
   description: "",
   prompt: "",

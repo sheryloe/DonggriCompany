@@ -54,6 +54,8 @@ export interface GroupedProjectTaskCard {
   latestAt: number;
 }
 
+export type ProjectDetailView = "overview" | "board" | "gantt" | "reports";
+
 export interface ProjectRenderState {
   projects: Project[];
   page: number;

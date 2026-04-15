@@ -6,6 +6,7 @@ import { buildWorkflowPackExecutionGuidance } from "../../../workflow/packs/exec
 import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-artifact.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/core/video-skill-bootstrap.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
+import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
 
 export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
   const {
@@ -241,12 +242,12 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
 
     appendTaskLog(taskId, "system", `RUN start (agent=${agent.name}, provider=${provider})`);
 
-    const spawnModelConfig = getProviderModelConfig();
-    const spawnModel = agent.cli_model || spawnModelConfig[provider]?.model || undefined;
-    const spawnReasoningLevel =
-      provider === "codex"
-        ? agent.cli_reasoning_level || spawnModelConfig[provider]?.reasoningLevel || undefined
-        : spawnModelConfig[provider]?.reasoningLevel || undefined;
+    const spawnPolicy = resolveProviderExecutionPolicy({
+      provider,
+      providerModelConfig: getProviderModelConfig(),
+    });
+    const spawnModel = spawnPolicy.model;
+    const spawnReasoningLevel = spawnPolicy.reasoningLevel;
 
     if (runtimeKind === "api") {
       const controller = new AbortController();

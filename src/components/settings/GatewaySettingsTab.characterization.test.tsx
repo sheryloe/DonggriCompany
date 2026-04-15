@@ -21,6 +21,7 @@ vi.mock("../../api", () => ({
   getDiscordReceiverStatus: apiMocks.getDiscordReceiverStatus,
   sendMessengerRuntimeMessage: apiMocks.sendMessengerRuntimeMessage,
   listDiscordChannelsByToken: apiMocks.listDiscordChannelsByToken,
+  isApiRequestError: () => false,
 }));
 
 vi.mock("../AgentAvatar", () => ({
@@ -111,7 +112,7 @@ describe("GatewaySettingsTab characterization", () => {
       expect(screen.getByText("Valid Chat")).toBeInTheDocument();
     });
 
-    const validOption = screen.getByRole("option", { name: /Telegram · Valid Chat/i });
+    const validOption = screen.getByRole("option", { name: /Telegram .* Valid Chat/i });
     expect(validOption).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /Empty Chat/i })).not.toBeInTheDocument();
   });
@@ -188,6 +189,15 @@ describe("GatewaySettingsTab characterization", () => {
     await waitFor(() => {
       expect(screen.getByText("Loaded 1 channels automatically.")).toBeInTheDocument();
       expect(screen.getByRole("option", { name: /Design Guild \/ #ops-alert \(1234567890\)/i })).toBeInTheDocument();
+    });
+  });
+
+  it("shows shared dictionary copy for empty state", async () => {
+    render(<GatewaySettingsTab t={t} form={createFormWithMessengerChannels() as any} setForm={vi.fn()} persistSettings={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("No chats yet. Use Add Chat to register messenger, token, and channel.")).toBeInTheDocument();
+      expect(screen.getByText("No saved session. Add a chat first.")).toBeInTheDocument();
     });
   });
 });

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { resolveProviderRuntimeKind } from "../../workflow/agents/provider-runtime-kind.ts";
+import { resolveProviderExecutionPolicy } from "../../workflow/agents/provider-policy-resolver.ts";
 
 import type { Lang } from "../../../types/lang.ts";
 import { resolveWorkflowPackKeyForTask } from "../../workflow/packs/task-pack-resolver.ts";
@@ -628,12 +629,10 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
               return;
             }
           } else {
-            const delegateModelConfig = getProviderModelConfig();
-            const delegateModel = execAgent.cli_model || delegateModelConfig[execProvider]?.model || undefined;
-            const delegateReasoningLevel =
-              execProvider === "codex"
-                ? execAgent.cli_reasoning_level || delegateModelConfig[execProvider]?.reasoningLevel || undefined
-                : delegateModelConfig[execProvider]?.reasoningLevel || undefined;
+            const delegatePolicy = resolveProviderExecutionPolicy({
+              provider: execProvider,
+              providerModelConfig: getProviderModelConfig(),
+            });
             let child: {
               on: (event: "close", listener: (code: number | null) => void) => void;
             } | null = null;
@@ -644,8 +643,8 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
                 sessionPrompt,
                 agentCwd,
                 logFilePath,
-                delegateModel,
-                delegateReasoningLevel,
+                delegatePolicy.model,
+                delegatePolicy.reasoningLevel,
                 execAgent.cli_account_pool_id ?? null,
               );
             } catch (error) {

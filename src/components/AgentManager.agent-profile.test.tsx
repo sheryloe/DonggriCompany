@@ -111,6 +111,9 @@ describe("AgentManager legacy agent profile fallback", () => {
       expect(getPreviewTextarea().value).toContain("Role template: Junior");
       expect(getPreviewTextarea().value).toContain("Applied growth tier: 2/5");
       expect(getPreviewTextarea().value).toContain("Final override: Legacy override");
+      expect(screen.getByText("Resolved Canonical Identity")).toBeInTheDocument();
+      expect(screen.getByText("backend")).toBeInTheDocument();
+      expect(screen.getAllByText("junior").length).toBeGreaterThan(0);
     });
   });
 });

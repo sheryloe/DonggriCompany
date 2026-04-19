@@ -12,6 +12,7 @@ interface ProjectFlowDialogProps {
   pendingContent: string;
   projectQuery: string;
   projectsLoading: boolean;
+  recentProjects: Project[];
   filteredProjects: Project[];
   selectedProject: Project | null;
   createNewProjectMode: boolean;
@@ -53,6 +54,35 @@ interface ProjectFlowDialogProps {
   onToggleSkipPlannedMeeting: () => void;
 }
 
+function renderProjectCard(project: Project, selectedProject: Project | null, tr: Tr, onSelectProject: (project: Project) => void) {
+  const isSelected = selectedProject?.id === project.id;
+  return (
+    <button
+      key={project.id}
+      type="button"
+      onClick={() => onSelectProject(project)}
+      className={`w-full rounded-xl border p-3 text-left transition ${
+        isSelected
+          ? "border-blue-500 bg-blue-950/30"
+          : "border-slate-700 bg-slate-950/60 hover:border-slate-500 hover:bg-slate-900"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-slate-100">{project.name}</p>
+          <p className="mt-1 truncate text-[11px] text-slate-400">{project.project_path}</p>
+        </div>
+        {isSelected && (
+          <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-200">
+            {tr("선택됨", "Selected")}
+          </span>
+        )}
+      </div>
+      <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-slate-300">{project.core_goal}</p>
+    </button>
+  );
+}
+
 function renderProjectSummary(project: Project, tr: Tr, pendingContent: string): JSX.Element {
   return (
     <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 p-3">
@@ -60,9 +90,7 @@ function renderProjectSummary(project: Project, tr: Tr, pendingContent: string):
       <p className="mt-1 break-all text-[11px] text-slate-400">{project.project_path}</p>
       <p className="mt-2 text-xs text-slate-200">{project.core_goal}</p>
       <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900/70 p-2 text-[11px] text-slate-300">
-        <p className="font-semibold text-blue-200">
-          {tr("현재 전송 예정", "Pending Send", "Pending Send", "Pending Send")}
-        </p>
+        <p className="font-semibold text-blue-200">{tr("전송 예정", "Pending Send")}</p>
         <p className="mt-1 whitespace-pre-wrap break-words">{pendingContent}</p>
       </div>
     </div>
@@ -77,6 +105,7 @@ export default function ProjectFlowDialog({
   pendingContent,
   projectQuery,
   projectsLoading,
+  recentProjects,
   filteredProjects,
   selectedProject,
   createNewProjectMode,
@@ -120,24 +149,19 @@ export default function ProjectFlowDialog({
   if (!open) return null;
 
   const confirmLabel =
-    pendingMode === "send"
-      ? tr("선택 후 전송", "Select & Send", "Select & Send", "Select & Send")
-      : tr("프로젝트 적용", "Apply Project", "Apply Project", "Apply Project");
+    pendingMode === "send" ? tr("선택 후 전송", "Select & Send") : tr("프로젝트 적용", "Apply Project");
+  const hasRecentProjects = !createNewProjectMode && recentProjects.length > 0;
 
   return (
     <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/80 p-4">
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+      <div className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">
-              {tr("프로젝트 선택", "Project Picker", "Project Picker", "Project Picker")}
-            </h3>
+            <h3 className="text-sm font-semibold text-white">{tr("프로젝트 선택", "Project Picker")}</h3>
             <p className="mt-1 text-xs text-slate-400">
               {tr(
                 "최근 프로젝트, 검색, 신규 생성, 선택 요약을 한 화면에서 처리합니다.",
-                "Recent projects, search, creation, and selection summary in one view.",
-                "Recent projects, search, creation, and selection summary in one view.",
-                "Recent projects, search, creation, and selection summary in one view.",
+                "Use recent projects, search, creation, and selection summary in one view.",
               )}
             </p>
           </div>
@@ -146,11 +170,11 @@ export default function ProjectFlowDialog({
             onClick={onClose}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
           >
-            {tr("닫기", "Close", "Close", "Close")}
+            {tr("닫기", "Close")}
           </button>
         </div>
 
-        <div className="grid flex-1 gap-0 overflow-hidden lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="grid flex-1 gap-0 overflow-hidden lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-4 overflow-y-auto border-b border-slate-800 p-5 lg:border-b-0 lg:border-r">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -164,8 +188,8 @@ export default function ProjectFlowDialog({
                   }
                   placeholder={
                     createNewProjectMode
-                      ? tr("신규 프로젝트 이름", "New project name", "New project name", "New project name")
-                      : tr("프로젝트 검색", "Search projects", "Search projects", "Search projects")
+                      ? tr("신규 프로젝트 이름", "New project name")
+                      : tr("프로젝트 검색", "Search projects")
                   }
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-500"
                 />
@@ -178,234 +202,178 @@ export default function ProjectFlowDialog({
                       : "bg-emerald-600 text-white hover:bg-emerald-500"
                   }`}
                 >
-                  {createNewProjectMode
-                    ? tr("기존 찾기", "Use Existing", "Use Existing", "Use Existing")
-                    : tr("새 프로젝트", "New Project", "New Project", "New Project")}
+                  {createNewProjectMode ? tr("기존 찾기", "Use Existing") : tr("새 프로젝트", "New Project")}
                 </button>
               </div>
               {!createNewProjectMode && (
                 <p className="text-[11px] text-slate-500">
                   {tr(
-                    "검색어가 없으면 최근 프로젝트를 보여줍니다.",
-                    "Shows recent projects when the search box is empty.",
-                    "Shows recent projects when the search box is empty.",
-                    "Shows recent projects when the search box is empty.",
+                    "검색어가 없으면 최근 사용 프로젝트를 먼저 보여줍니다.",
+                    "When the search box is empty, recent projects are shown first.",
                   )}
                 </p>
               )}
             </div>
 
+            {hasRecentProjects && (
+              <div className="rounded-xl border border-blue-500/20 bg-blue-950/10 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">
+                    {tr("최근 프로젝트", "Recent Projects")}
+                  </p>
+                  <span className="text-[11px] text-slate-500">{tr("빠른 선택", "Quick select")}</span>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {recentProjects.map((project) => {
+                    const isSelected = selectedProject?.id === project.id;
+                    return (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => onSelectProject(project)}
+                        className={`min-w-[180px] rounded-xl border px-3 py-2 text-left transition ${
+                          isSelected
+                            ? "border-blue-400 bg-blue-500/20"
+                            : "border-slate-700 bg-slate-950/60 hover:border-blue-500/60 hover:bg-slate-900"
+                        }`}
+                      >
+                        <p className="truncate text-xs font-semibold text-slate-100">{project.name}</p>
+                        <p className="mt-1 truncate text-[10px] text-slate-500">{project.project_path}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {!createNewProjectMode && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    {projectQuery.trim()
-                      ? tr("검색 결과", "Search Results", "Search Results", "Search Results")
-                      : tr("최근 프로젝트", "Recent Projects", "Recent Projects", "Recent Projects")}
+                    {projectQuery.trim() ? tr("검색 결과", "Search Results") : tr("프로젝트 목록", "Projects")}
                   </p>
-                  {projectsLoading && (
-                    <span className="text-[11px] text-slate-500">
-                      {tr("불러오는 중", "Loading", "Loading", "Loading")}
-                    </span>
-                  )}
+                  {projectsLoading && <span className="text-[11px] text-slate-500">{tr("불러오는 중", "Loading")}</span>}
                 </div>
                 <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
                   {filteredProjects.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/60 px-4 py-6 text-center text-sm text-slate-400">
                       {tr(
-                        "검색된 프로젝트가 없습니다. 바로 새 프로젝트를 만들어도 됩니다.",
-                        "No matching project found. Create a new project instead.",
-                        "No matching project found. Create a new project instead.",
+                        "일치하는 프로젝트가 없습니다. 새 프로젝트로 생성할 수 있습니다.",
                         "No matching project found. Create a new project instead.",
                       )}
                     </div>
                   ) : (
-                    filteredProjects.map((project) => {
-                      const isSelected = selectedProject?.id === project.id;
-                      return (
-                        <button
-                          key={project.id}
-                          type="button"
-                          onClick={() => onSelectProject(project)}
-                          className={`w-full rounded-xl border p-3 text-left transition ${
-                            isSelected
-                              ? "border-blue-500 bg-blue-950/30"
-                              : "border-slate-700 bg-slate-950/60 hover:border-slate-500 hover:bg-slate-900"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-slate-100">{project.name}</p>
-                              <p className="mt-1 truncate text-[11px] text-slate-400">{project.project_path}</p>
-                            </div>
-                            {isSelected && (
-                              <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-200">
-                                {tr("선택됨", "Selected", "Selected", "Selected")}
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-slate-300">
-                            {project.core_goal}
-                          </p>
-                        </button>
-                      );
-                    })
+                    filteredProjects.map((project) => renderProjectCard(project, selectedProject, tr, onSelectProject))
                   )}
                 </div>
               </div>
             )}
 
             {createNewProjectMode && (
-              <div className="space-y-3">
-                <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    {tr("새 프로젝트 생성", "Create New Project", "Create New Project", "Create New Project")}
-                  </p>
-                  <div className="mt-3 space-y-3">
-                    <label className="block text-xs text-slate-400">
-                      {tr("프로젝트 경로", "Project Path", "Project Path", "Project Path")}
-                      <input
-                        type="text"
-                        value={newProjectPath}
-                        onChange={(event) => onNewProjectPathChange(event.target.value)}
-                        placeholder={tr(
-                          "절대 경로 입력",
-                          "Enter absolute path",
-                          "Enter absolute path",
-                          "Enter absolute path",
-                        )}
-                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500"
-                      />
-                    </label>
+              <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  {tr("새 프로젝트 생성", "Create New Project")}
+                </p>
+                <div className="mt-3 space-y-3">
+                  <label className="block text-xs text-slate-400">
+                    {tr("프로젝트 경로", "Project Path")}
+                    <input
+                      type="text"
+                      value={newProjectPath}
+                      onChange={(event) => onNewProjectPathChange(event.target.value)}
+                      placeholder={tr("절대 경로 입력", "Enter absolute path")}
+                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500"
+                    />
+                  </label>
 
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={onTogglePathSuggestions}
-                        className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                      >
-                        {tr("경로 추천", "Suggestions", "Suggestions", "Suggestions")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={onOpenManualPathBrowser}
-                        className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                      >
-                        {tr("폴더 탐색", "Browse", "Browse", "Browse")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={onPickNativePath}
-                        disabled={nativePathPicking}
-                        className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                      >
-                        {nativePathPicking
-                          ? tr("OS 선택 중", "Picking...", "Picking...", "Picking...")
-                          : tr("OS 폴더 선택", "OS Folder", "OS Folder", "OS Folder")}
-                      </button>
-                    </div>
-
-                    {pathSuggestionsOpen && (
-                      <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-2">
-                        <p className="mb-2 text-[11px] text-slate-500">
-                          {pathSuggestionsLoading
-                            ? tr(
-                                "추천 경로를 불러오는 중입니다.",
-                                "Loading suggestions...",
-                                "Loading suggestions...",
-                                "Loading suggestions...",
-                              )
-                            : tr("추천 경로", "Suggested paths", "Suggested paths", "Suggested paths")}
-                        </p>
-                        <div className="max-h-40 space-y-1 overflow-y-auto">
-                          {pathSuggestions.length === 0 ? (
-                            <p className="px-2 py-1 text-[11px] text-slate-500">
-                              {tr(
-                                "표시할 추천 경로가 없습니다.",
-                                "No suggested paths.",
-                                "No suggested paths.",
-                                "No suggested paths.",
-                              )}
-                            </p>
-                          ) : (
-                            pathSuggestions.map((candidate) => (
-                              <button
-                                key={candidate}
-                                type="button"
-                                onClick={() => onSelectPathSuggestion(candidate)}
-                                className="w-full rounded-md px-2 py-1.5 text-left text-[11px] text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                              >
-                                {candidate}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {missingPathPrompt && (
-                      <div className="rounded-lg border border-amber-500/40 bg-amber-950/20 p-3 text-[11px] text-amber-100">
-                        <p className="font-semibold">
-                          {tr(
-                            "경로 확인 필요",
-                            "Path confirmation needed",
-                            "Path confirmation needed",
-                            "Path confirmation needed",
-                          )}
-                        </p>
-                        <p className="mt-1 break-all">{missingPathPrompt.normalizedPath}</p>
-                        {missingPathPrompt.nearestExistingParent && (
-                          <p className="mt-1 break-all text-amber-200/80">
-                            {tr(
-                              "가장 가까운 기존 폴더",
-                              "Nearest existing parent",
-                              "Nearest existing parent",
-                              "Nearest existing parent",
-                            )}
-                            : {missingPathPrompt.nearestExistingParent}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    <label className="block text-xs text-slate-400">
-                      {tr("핵심 목표", "Core Goal", "Core Goal", "Core Goal")}
-                      <textarea
-                        rows={4}
-                        value={newProjectGoal}
-                        onChange={(event) => onNewProjectGoalChange(event.target.value)}
-                        readOnly={isDirectivePending}
-                        className="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500"
-                      />
-                    </label>
-
-                    {(isDirectivePending || isPrnPending) && (
-                      <p className="text-[11px] text-slate-500">
-                        {isDirectivePending
-                          ? tr(
-                              "$ 지시문 내용이 기본 핵심 목표로 들어갑니다.",
-                              "The directive text is used as the default core goal.",
-                              "The directive text is used as the default core goal.",
-                              "The directive text is used as the default core goal.",
-                            )
-                          : tr(
-                              "PRN 프롬프트를 기반으로 핵심 목표를 미리 채웠습니다.",
-                              "The PRN prompt prefilled the core goal.",
-                              "The PRN prompt prefilled the core goal.",
-                              "The PRN prompt prefilled the core goal.",
-                            )}
-                      </p>
-                    )}
-
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={onCreateProject}
-                      disabled={!canCreateProject}
-                      className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-40"
+                      onClick={onTogglePathSuggestions}
+                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
                     >
-                      {tr("프로젝트 생성 후 선택", "Create & Select", "Create & Select", "Create & Select")}
+                      {tr("경로 추천", "Suggestions")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onOpenManualPathBrowser}
+                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    >
+                      {tr("폴더 탐색", "Browse")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onPickNativePath}
+                      disabled={nativePathPicking}
+                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                    >
+                      {nativePathPicking ? tr("OS 선택 중", "Picking...") : tr("OS 폴더 선택", "OS Folder")}
                     </button>
                   </div>
+
+                  {pathSuggestionsOpen && (
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-2">
+                      <p className="mb-2 text-[11px] text-slate-500">
+                        {pathSuggestionsLoading ? tr("추천 경로를 불러오는 중입니다.", "Loading suggestions...") : tr("추천 경로", "Suggested paths")}
+                      </p>
+                      <div className="max-h-40 space-y-1 overflow-y-auto">
+                        {pathSuggestions.length === 0 ? (
+                          <p className="px-2 py-1 text-[11px] text-slate-500">{tr("추천 경로가 없습니다.", "No suggested paths.")}</p>
+                        ) : (
+                          pathSuggestions.map((candidate) => (
+                            <button
+                              key={candidate}
+                              type="button"
+                              onClick={() => onSelectPathSuggestion(candidate)}
+                              className="w-full rounded-md px-2 py-1.5 text-left text-[11px] text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                            >
+                              {candidate}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {missingPathPrompt && (
+                    <div className="rounded-lg border border-amber-500/40 bg-amber-950/20 p-3 text-[11px] text-amber-100">
+                      <p className="font-semibold">{tr("경로 확인 필요", "Path confirmation needed")}</p>
+                      <p className="mt-1 break-all">{missingPathPrompt.normalizedPath}</p>
+                      {missingPathPrompt.nearestExistingParent && (
+                        <p className="mt-1 break-all text-amber-200/80">
+                          {tr("가장 가까운 기존 폴더", "Nearest existing parent")}: {missingPathPrompt.nearestExistingParent}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <label className="block text-xs text-slate-400">
+                    {tr("핵심 목표", "Core Goal")}
+                    <textarea
+                      rows={4}
+                      value={newProjectGoal}
+                      onChange={(event) => onNewProjectGoalChange(event.target.value)}
+                      readOnly={isDirectivePending}
+                      className="mt-1 w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500"
+                    />
+                  </label>
+
+                  {(isDirectivePending || isPrnPending) && (
+                    <p className="text-[11px] text-slate-500">
+                      {isDirectivePending
+                        ? tr("$ 지시문 내용이 기본 핵심 목표로 들어갑니다.", "The directive text is used as the default core goal.")
+                        : tr("PRN 프롬프트를 기반으로 핵심 목표를 미리 채웠습니다.", "The PRN prompt prefilled the core goal.")}
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={onCreateProject}
+                    disabled={!canCreateProject}
+                    className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-40"
+                  >
+                    {tr("프로젝트 생성 후 선택", "Create & Select")}
+                  </button>
                 </div>
               </div>
             )}
@@ -427,7 +395,7 @@ export default function ProjectFlowDialog({
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      {tr("폴더 브라우저", "Folder Browser", "Folder Browser", "Folder Browser")}
+                      {tr("폴더 브라우저", "Folder Browser")}
                     </p>
                     <p className="mt-1 break-all text-[11px] text-slate-500">{manualPathCurrent}</p>
                   </div>
@@ -436,7 +404,7 @@ export default function ProjectFlowDialog({
                     onClick={onCloseManualPathBrowser}
                     className="rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 transition hover:bg-slate-800"
                   >
-                    {tr("닫기", "Close", "Close", "Close")}
+                    {tr("닫기", "Close")}
                   </button>
                 </div>
 
@@ -447,7 +415,7 @@ export default function ProjectFlowDialog({
                     disabled={!manualPathParent || manualPathLoading}
                     className="rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 transition hover:bg-slate-800 disabled:opacity-40"
                   >
-                    {tr("상위 폴더", "Parent", "Parent", "Parent")}
+                    {tr("상위 폴더", "Parent")}
                   </button>
                 </div>
 
@@ -456,14 +424,7 @@ export default function ProjectFlowDialog({
                     {manualPathError}
                   </div>
                 ) : manualPathLoading ? (
-                  <div className="px-3 py-6 text-center text-sm text-slate-400">
-                    {tr(
-                      "폴더 목록을 불러오는 중입니다.",
-                      "Loading folders...",
-                      "Loading folders...",
-                      "Loading folders...",
-                    )}
-                  </div>
+                  <div className="px-3 py-6 text-center text-sm text-slate-400">{tr("폴더 목록을 불러오는 중입니다.", "Loading folders...")}</div>
                 ) : (
                   <div className="max-h-52 space-y-1 overflow-y-auto">
                     {manualPathEntries.map((entry) => (
@@ -478,20 +439,13 @@ export default function ProjectFlowDialog({
                       </button>
                     ))}
                     {manualPathEntries.length === 0 && (
-                      <p className="px-2 py-1 text-[11px] text-slate-500">
-                        {tr("표시할 폴더가 없습니다.", "No folders found.", "No folders found.", "No folders found.")}
-                      </p>
+                      <p className="px-2 py-1 text-[11px] text-slate-500">{tr("표시할 폴더가 없습니다.", "No folders found.")}</p>
                     )}
                   </div>
                 )}
                 {manualPathTruncated && (
                   <p className="mt-2 text-[11px] text-amber-300">
-                    {tr(
-                      "항목이 많아 일부만 표시했습니다.",
-                      "Only part of the folder list is shown.",
-                      "Only part of the folder list is shown.",
-                      "Only part of the folder list is shown.",
-                    )}
+                    {tr("목록이 많아 일부만 표시했습니다.", "Only part of the folder list is shown.")}
                   </p>
                 )}
               </div>
@@ -501,19 +455,14 @@ export default function ProjectFlowDialog({
           <div className="flex flex-col gap-4 overflow-y-auto p-5">
             <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                {tr("선택 요약", "Selection Summary", "Selection Summary", "Selection Summary")}
+                {tr("선택 요약", "Selection Summary")}
               </p>
               <div className="mt-3 space-y-3">
                 {selectedProject ? (
                   renderProjectSummary(selectedProject, tr, pendingContent)
                 ) : (
                   <div className="rounded-xl border border-dashed border-slate-700 px-4 py-8 text-center text-sm text-slate-500">
-                    {tr(
-                      "아직 선택된 프로젝트가 없습니다.",
-                      "No project selected yet.",
-                      "No project selected yet.",
-                      "No project selected yet.",
-                    )}
+                    {tr("아직 선택된 프로젝트가 없습니다.", "No project selected yet.")}
                   </div>
                 )}
 
@@ -521,23 +470,11 @@ export default function ProjectFlowDialog({
                   <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold text-slate-200">
-                          {tr("회의 모드", "Meeting Mode", "Meeting Mode", "Meeting Mode")}
-                        </p>
+                        <p className="text-xs font-semibold text-slate-200">{tr("회의 모드", "Meeting Mode")}</p>
                         <p className="mt-1 text-[11px] text-slate-500">
                           {skipPlannedMeeting
-                            ? tr(
-                                "회의 없이 바로 실행합니다.",
-                                "Executes without planned meeting.",
-                                "Executes without planned meeting.",
-                                "Executes without planned meeting.",
-                              )
-                            : tr(
-                                "기본 정책대로 회의 여부를 판단합니다.",
-                                "Keeps the default meeting policy.",
-                                "Keeps the default meeting policy.",
-                                "Keeps the default meeting policy.",
-                              )}
+                            ? tr("회의 없이 바로 실행합니다.", "Executes without planned meeting.")
+                            : tr("기본 정책대로 회의 여부를 판단합니다.", "Keeps the default meeting policy.")}
                         </p>
                       </div>
                       <button
@@ -549,9 +486,7 @@ export default function ProjectFlowDialog({
                             : "border border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
                         }`}
                       >
-                        {skipPlannedMeeting
-                          ? tr("회의 생략", "No Meeting", "No Meeting", "No Meeting")
-                          : tr("기본 회의", "Default Policy", "Default Policy", "Default Policy")}
+                        {skipPlannedMeeting ? tr("회의 생략", "No Meeting") : tr("기본 회의", "Default Policy")}
                       </button>
                     </div>
                   </div>
@@ -565,7 +500,7 @@ export default function ProjectFlowDialog({
                 onClick={onClose}
                 className="rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800"
               >
-                {tr("취소", "Cancel", "Cancel", "Cancel")}
+                {tr("취소", "Cancel")}
               </button>
               <button
                 type="button"

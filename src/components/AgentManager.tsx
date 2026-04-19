@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+﻿import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import {
   createPresetAgentProfile,
   normalizeAgentProfile,
@@ -10,10 +10,10 @@ import type { CliAccountPoolView } from "../api";
 import type { Agent, Department } from "../types";
 import { useI18n } from "../i18n";
 import * as api from "../api";
-import { normalizeOfficeWorkflowPack } from "../app/office-workflow-pack";
 import { buildSpriteMap } from "./AgentAvatar";
 import AgentFormModal from "./agent-manager/AgentFormModal";
 import AgentsTab from "./agent-manager/AgentsTab";
+import { hydrateCanonicalIdentityFields, resolveCanonicalIdentityFromForm } from "./agent-manager/canonical-identity";
 import { BLANK, ICON_SPRITE_POOL } from "./agent-manager/constants";
 import DepartmentFormModal from "./agent-manager/DepartmentFormModal";
 import DepartmentsTab from "./agent-manager/DepartmentsTab";
@@ -28,16 +28,12 @@ export default function AgentManager({
   agents,
   departments,
   onAgentsChange,
-  activeOfficeWorkflowPack,
-  dbBackedOfficePack = false,
-  onSaveOfficePackProfile,
+  activeOfficeWorkflowPack: _activeOfficeWorkflowPack,
+  dbBackedOfficePack: _dbBackedOfficePack = false,
+  onSaveOfficePackProfile: _onSaveOfficePackProfile,
 }: AgentManagerProps) {
   const { t, locale } = useI18n();
-  const isKo = locale.startsWith("ko");
-  const tr = (ko: string, en: string) => t({ ko, en, ja: en, zh: en });
-  const officePackKey = normalizeOfficeWorkflowPack(activeOfficeWorkflowPack);
-  const isIsolatedPack = officePackKey !== "development";
-  const useDbBackedPack = isIsolatedPack && dbBackedOfficePack;
+  const tr = (ko: string, en: string, ja = en, zh = en) => t({ ko, en, ja, zh });
 
   const [subTab, setSubTab] = useState<"agents" | "departments" | "subagents">("agents");
   const [search, setSearch] = useState("");
@@ -58,18 +54,6 @@ export default function AgentManager({
   const [draggingDeptId, setDraggingDeptId] = useState<string | null>(null);
   const [dragOverDeptId, setDragOverDeptId] = useState<string | null>(null);
   const [dragOverPosition, setDragOverPosition] = useState<"before" | "after" | null>(null);
-
-  const persistIsolatedProfile = useCallback(
-    async (nextDepartments: Department[], nextAgents: Agent[]) => {
-      if (!isIsolatedPack) return;
-      await onSaveOfficePackProfile(officePackKey, {
-        departments: nextDepartments,
-        agents: nextAgents,
-        updated_at: Date.now(),
-      });
-    },
-    [isIsolatedPack, officePackKey, onSaveOfficePackProfile],
-  );
 
   useEffect(() => {
     setDeptOrder([...departments].sort((a, b) => a.sort_order - b.sort_order));
@@ -134,30 +118,47 @@ export default function AgentManager({
     );
   }, [filteredAgents]);
 
-  const deriveWorkflowDefaults = useCallback((agent?: Agent | null) => {
-    const isJules =
-      String(agent?.cli_provider ?? "").toLowerCase() === "jules" || /jules/i.test(String(agent?.name ?? ""));
-    return {
-      workflow_role: (isJules ? "primary_author" : "reviewer") as FormData["workflow_role"],
-      review_lenses_text: isJules ? "" : "general",
+  const deriveWorkflowDefaults = useCallback(
+    () => ({
+      workflow_role: "reviewer" as FormData["workflow_role"],
+      review_lenses_text: "general",
       two_pass_required: true,
-      max_review_rounds: isJules ? 2 : null,
-    };
-  }, []);
+      max_review_rounds: null,
+    }),
+    [],
+  );
 
-  const parseReviewLenses = useCallback((raw: string): string[] => {
-    const seen = new Set<string>();
-    return raw
-      .split(/[\n,]/)
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .filter((entry) => {
-        const key = entry.toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-  }, []);
+  const deriveCompatibilityWorkflowProfile = useCallback(
+    (
+      existingWorkflowProfile: Agent["workflow_profile"] | null | undefined,
+      executionCapabilityProfile: string | null | undefined,
+    ): NonNullable<Agent["workflow_profile"]> => {
+      const normalizedCapability = String(executionCapabilityProfile ?? "")
+        .trim()
+        .toLowerCase();
+      const roleFromCapability: FormData["workflow_role"] | null = normalizedCapability.includes("author")
+        ? "primary_author"
+        : normalizedCapability.includes("review")
+          ? "reviewer"
+          : null;
+      const role: FormData["workflow_role"] = roleFromCapability ?? existingWorkflowProfile?.role ?? "reviewer";
+      const reviewLenses = existingWorkflowProfile?.review_lenses?.length
+        ? existingWorkflowProfile.review_lenses
+        : ["general"];
+      const twoPassRequired = existingWorkflowProfile?.two_pass_required ?? true;
+      const maxReviewRounds =
+        role === "primary_author"
+          ? Math.max(1, Math.min(existingWorkflowProfile?.max_review_rounds ?? 2, 2))
+          : null;
+      return {
+        role,
+        review_lenses: reviewLenses,
+        two_pass_required: twoPassRequired,
+        max_review_rounds: maxReviewRounds,
+      };
+    },
+    [],
+  );
 
   const buildResolvedAgentProfile = useCallback(
     (role: Agent["role"], inputProfile?: Agent["agent_profile"] | null, overrideText?: string) =>
@@ -179,6 +180,7 @@ export default function AgentManager({
     const nextProfile = createPresetAgentProfile(nextRole);
     setForm({
       ...BLANK,
+      ...hydrateCanonicalIdentityFields(null),
       department_id: deptTab !== "all" ? deptTab : departments[0]?.id || "",
       role: nextRole,
       personality: "",
@@ -192,7 +194,7 @@ export default function AgentManager({
     (agent: Agent) => {
       setModalAgent(agent);
       const computed = agent.sprite_number ?? buildSpriteMap(agents).get(agent.id) ?? null;
-      const workflowDefaults = deriveWorkflowDefaults(agent);
+      const workflowDefaults = deriveWorkflowDefaults();
       const workflowProfile = agent.workflow_profile ?? null;
       const agentProfile = buildResolvedAgentProfile(agent.role, agent.agent_profile, agent.personality || "");
       setForm({
@@ -213,6 +215,7 @@ export default function AgentManager({
         personality: resolveAgentProfileOverrideText(agentProfile, agent.personality),
         specialties_text: stringifySpecialties(agentProfile.specialties),
         agent_profile: agentProfile,
+        ...hydrateCanonicalIdentityFields(agent),
       });
       setShowModal(true);
     },
@@ -245,6 +248,11 @@ export default function AgentManager({
         },
         form.personality,
       );
+      const resolvedCanonicalIdentity = resolveCanonicalIdentityFromForm(form);
+      const compatibilityWorkflowProfile = deriveCompatibilityWorkflowProfile(
+        modalAgent?.workflow_profile ?? null,
+        resolvedCanonicalIdentity.execution_capability_profile,
+      );
       const basePayload = {
         name: form.name.trim(),
         name_ko: form.name_ko.trim(),
@@ -253,88 +261,30 @@ export default function AgentManager({
         role: form.role,
         cli_provider: form.cli_provider,
         cli_account_pool_id: normalizedCliAccountPoolId,
-        workflow_profile: {
-          role: form.workflow_role,
-          review_lenses: parseReviewLenses(form.review_lenses_text),
-          two_pass_required: form.two_pass_required,
-          max_review_rounds:
-            form.workflow_role === "primary_author" ? Math.max(1, Math.min(form.max_review_rounds ?? 2, 2)) : null,
-        },
-        avatar_emoji: form.avatar_emoji || "🧠",
+        workflow_profile: compatibilityWorkflowProfile,
+        avatar_emoji: form.avatar_emoji || "BOT",
         sprite_number: form.sprite_number,
         personality: resolvedAgentProfile.custom_prompt_override || null,
         agent_profile: resolvedAgentProfile,
+        family: resolvedCanonicalIdentity.family,
+        career_stage: resolvedCanonicalIdentity.career_stage,
+        specialization_key: resolvedCanonicalIdentity.specialization_key || null,
+        authority_level: resolvedCanonicalIdentity.authority_level,
+        execution_capability_profile: resolvedCanonicalIdentity.execution_capability_profile || null,
+        canonical_identity_source: resolvedCanonicalIdentity.canonical_identity_source,
       };
-      if (isIsolatedPack) {
-        if (useDbBackedPack) {
-          if (modalAgent) {
-            await api.updateAgent(modalAgent.id, {
-              ...basePayload,
-              department_id: departmentId || null,
-              workflow_pack_key: officePackKey,
-            });
-            const nextAgents = agents.map((agent) =>
-              agent.id === modalAgent.id
-                ? {
-                    ...agent,
-                    ...basePayload,
-                    department_id: departmentId || null,
-                  }
-                : agent,
-            );
-            await persistIsolatedProfile(departments, nextAgents);
-          } else {
-            const createdAgent = await api.createAgent({
-              ...basePayload,
-              department_id: departmentId || null,
-              workflow_pack_key: officePackKey,
-            });
-            await persistIsolatedProfile(departments, [...agents, createdAgent]);
-          }
-          onAgentsChange();
-        } else {
-          const nextAgents = modalAgent
-            ? agents.map((agent) =>
-                agent.id === modalAgent.id
-                  ? {
-                      ...agent,
-                      ...basePayload,
-                      department_id: departmentId || null,
-                    }
-                  : agent,
-              )
-            : [
-                ...agents,
-                {
-                  id:
-                    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-                      ? crypto.randomUUID()
-                      : `agent-${Date.now()}`,
-                  ...basePayload,
-                  department_id: departmentId || null,
-                  status: "idle" as const,
-                  current_task_id: null,
-                  stats_tasks_done: 0,
-                  stats_xp: 0,
-                  created_at: Date.now(),
-                },
-              ];
-          await persistIsolatedProfile(departments, nextAgents);
-        }
+      if (modalAgent) {
+        await api.updateAgent(modalAgent.id, {
+          ...basePayload,
+          department_id: departmentId || null,
+        });
       } else {
-        if (modalAgent) {
-          await api.updateAgent(modalAgent.id, {
-            ...basePayload,
-            department_id: departmentId || null,
-          });
-        } else {
-          await api.createAgent({
-            ...basePayload,
-            department_id: departmentId || null,
-          });
-        }
-        onAgentsChange();
+        await api.createAgent({
+          ...basePayload,
+          department_id: departmentId || null,
+        });
       }
+      onAgentsChange();
       closeModal();
     } catch (err) {
       console.error("Save failed:", err);
@@ -342,39 +292,21 @@ export default function AgentManager({
       setSaving(false);
     }
   }, [
-    agents,
     buildResolvedAgentProfile,
     closeModal,
     cliAccountPools,
-    departments,
+    deriveCompatibilityWorkflowProfile,
     form,
-    isIsolatedPack,
     modalAgent,
-    officePackKey,
-    onAgentsChange,
-    parseReviewLenses,
-    persistIsolatedProfile,
-    useDbBackedPack,
+    onAgentsChange
   ]);
 
   const handleDelete = useCallback(
     async (id: string) => {
       setSaving(true);
       try {
-        if (isIsolatedPack) {
-          if (useDbBackedPack) {
-            await api.deleteAgent(id);
-            const nextAgents = agents.filter((agent) => agent.id !== id);
-            await persistIsolatedProfile(departments, nextAgents);
-            onAgentsChange();
-          } else {
-            const nextAgents = agents.filter((agent) => agent.id !== id);
-            await persistIsolatedProfile(departments, nextAgents);
-          }
-        } else {
-          await api.deleteAgent(id);
-          onAgentsChange();
-        }
+        await api.deleteAgent(id);
+        onAgentsChange();
         setConfirmDeleteId(null);
         if (modalAgent?.id === id) closeModal();
       } catch (err) {
@@ -384,14 +316,9 @@ export default function AgentManager({
       }
     },
     [
-      agents,
       closeModal,
-      departments,
-      isIsolatedPack,
       modalAgent,
       onAgentsChange,
-      persistIsolatedProfile,
-      useDbBackedPack,
     ],
   );
 
@@ -462,30 +389,16 @@ export default function AgentManager({
         ...department,
         sort_order: index + 1,
       }));
-      if (isIsolatedPack) {
-        if (useDbBackedPack) {
-          const orders = nextDepartments.map((department) => ({
-            id: department.id,
-            sort_order: department.sort_order,
-          }));
-          await api.reorderDepartments(orders, { workflowPackKey: officePackKey });
-          await persistIsolatedProfile(nextDepartments, agents);
-          onAgentsChange();
-        } else {
-          await persistIsolatedProfile(nextDepartments, agents);
-        }
-      } else {
-        const orders = nextDepartments.map((department) => ({ id: department.id, sort_order: department.sort_order }));
-        await api.reorderDepartments(orders);
-        onAgentsChange();
-      }
+      const orders = nextDepartments.map((department) => ({ id: department.id, sort_order: department.sort_order }));
+      await api.reorderDepartments(orders);
+      onAgentsChange();
       setDeptOrderDirty(false);
     } catch (err) {
       console.error("Reorder failed:", err);
     } finally {
       setReorderSaving(false);
     }
-  }, [agents, deptOrder, isIsolatedPack, officePackKey, onAgentsChange, persistIsolatedProfile, useDbBackedPack]);
+  }, [deptOrder, onAgentsChange]);
 
   const resetDeptOrder = useCallback(() => {
     setDeptOrder([...departments].sort((a, b) => a.sort_order - b.sort_order));
@@ -526,87 +439,8 @@ export default function AgentManager({
     [clearDeptDragState, draggingDeptId, getDropPosition, moveDeptByDrag],
   );
 
-  const handleIsolatedDepartmentSave = useCallback(
-    async (input: {
-      mode: "create" | "update";
-      id: string;
-      payload: {
-        name: string;
-        name_ko: string;
-        name_ja: string | null;
-        name_zh: string | null;
-        icon: string;
-        color: string;
-        description: string | null;
-        prompt: string | null;
-        sort_order: number;
-      };
-    }) => {
-      if (!isIsolatedPack) return;
-      const nextDepartments =
-        input.mode === "create"
-          ? [
-              ...departments,
-              {
-                id: input.id,
-                name: input.payload.name,
-                name_ko: input.payload.name_ko,
-                name_ja: input.payload.name_ja,
-                name_zh: input.payload.name_zh,
-                icon: input.payload.icon,
-                color: input.payload.color,
-                description: input.payload.description,
-                prompt: input.payload.prompt,
-                sort_order: input.payload.sort_order,
-                created_at: Date.now(),
-              },
-            ]
-          : departments.map((department) =>
-              department.id === input.id
-                ? {
-                    ...department,
-                    name: input.payload.name,
-                    name_ko: input.payload.name_ko,
-                    name_ja: input.payload.name_ja,
-                    name_zh: input.payload.name_zh,
-                    icon: input.payload.icon,
-                    color: input.payload.color,
-                    description: input.payload.description,
-                    prompt: input.payload.prompt,
-                    sort_order: input.payload.sort_order,
-                  }
-                : department,
-            );
-      await persistIsolatedProfile(nextDepartments, agents);
-    },
-    [agents, departments, isIsolatedPack, persistIsolatedProfile],
-  );
-
-  const handleIsolatedDepartmentDelete = useCallback(
-    async (departmentId: string) => {
-      if (!isIsolatedPack) return;
-      const filteredDepartments = departments
-        .filter((department) => department.id !== departmentId)
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map((department, index) => ({
-          ...department,
-          sort_order: index + 1,
-        }));
-      const nextAgents = agents.map((agent) =>
-        agent.department_id === departmentId
-          ? {
-              ...agent,
-              department_id: null,
-            }
-          : agent,
-      );
-      await persistIsolatedProfile(filteredDepartments, nextAgents);
-    },
-    [agents, departments, isIsolatedPack, persistIsolatedProfile],
-  );
-
   return (
-    <div className="mx-auto max-w-4xl space-y-4 sm:space-y-5">
+    <div className="mx-auto w-full max-w-[1680px] space-y-4 px-2 sm:space-y-5 sm:px-3">
       <div className="flex items-center justify-end gap-2">
         <button
           onClick={openCreateDept}
@@ -654,7 +488,6 @@ export default function AgentManager({
         <AgentsTab
           tr={tr}
           locale={locale}
-          isKo={isKo}
           agents={agents}
           departments={departments}
           deptTab={deptTab}
@@ -700,7 +533,6 @@ export default function AgentManager({
         <SubagentsTab
           tr={tr}
           locale={locale}
-          isKo={isKo}
           departments={departments}
           deptTab={deptTab}
           setDeptTab={setDeptTab}
@@ -711,7 +543,6 @@ export default function AgentManager({
 
       {showModal && (
         <AgentFormModal
-          isKo={isKo}
           locale={locale}
           tr={tr}
           form={form}
@@ -733,15 +564,14 @@ export default function AgentManager({
           tr={tr}
           department={editDept}
           departments={departments}
-          workflowPackKey={isIsolatedPack ? officePackKey : undefined}
-          onSave={() => {
-            if (!isIsolatedPack || useDbBackedPack) onAgentsChange();
-          }}
-          onSaveDepartment={isIsolatedPack && !useDbBackedPack ? handleIsolatedDepartmentSave : undefined}
-          onDeleteDepartment={isIsolatedPack && !useDbBackedPack ? handleIsolatedDepartmentDelete : undefined}
+          onSave={onAgentsChange}
           onClose={closeDeptModal}
         />
       )}
     </div>
   );
 }
+
+
+
+

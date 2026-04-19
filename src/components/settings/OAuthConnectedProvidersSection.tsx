@@ -26,6 +26,8 @@ export default function OAuthConnectedProvidersSection({
   onToggleAccount,
   onDeleteAccount,
 }: OAuthCommonProps) {
+  void setForm;
+  void persistSettings;
   const common = getSettingsCommonCopy(t);
   const copy = getOauthSettingsCopy(t);
   const detectedProviders = Object.entries(oauthStatus.providers).filter(([, info]) =>
@@ -163,18 +165,8 @@ export default function OAuthConnectedProvidersSection({
                 ) : modelList.length > 0 ? (
                   <select
                     value={providerDefaultModel}
-                    onChange={(event) => {
-                      const nextForm = {
-                        ...form,
-                        providerModelConfig: {
-                          ...form.providerModelConfig,
-                          [modelKey]: { model: event.target.value },
-                        },
-                      };
-                      setForm(nextForm);
-                      persistSettings(nextForm);
-                    }}
-                    className="w-full min-w-0 rounded border border-slate-600 bg-slate-700/50 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none sm:flex-1"
+                    disabled
+                    className="w-full min-w-0 rounded border border-slate-600 bg-slate-700/50 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none sm:flex-1 disabled:cursor-not-allowed disabled:opacity-80"
                   >
                     {!providerDefaultModel && <option value="">{copy.selectPlaceholder}</option>}
                     {modelList.map((model, index) => (
@@ -191,6 +183,14 @@ export default function OAuthConnectedProvidersSection({
                     )}
                   </div>
                 )}
+                <span className="text-[10px] text-slate-500">
+                  {t({
+                    ko: "Provider default model은 compatibility-only로 읽기 전용입니다.",
+                    en: "Provider default model is read-only for compatibility.",
+                    ja: "Provider default model is read-only for compatibility.",
+                    zh: "Provider default model is read-only for compatibility.",
+                  })}
+                </span>
               </div>
             )}
 
@@ -249,10 +249,11 @@ export default function OAuthConnectedProvidersSection({
                           </span>
                           <select
                             value={draft.modelOverride}
+                            disabled
                             onChange={(event) =>
                               onUpdateAccountDraft(account.id, { modelOverride: event.target.value })
                             }
-                            className="w-full rounded border border-slate-600 bg-slate-800/70 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none"
+                            className="w-full rounded border border-slate-600 bg-slate-800/70 px-2 py-1 text-xs text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-80"
                           >
                             <option value="">{copy.useProviderDefault}</option>
                             {hasCustomOverride && <option value={draft.modelOverride}>{draft.modelOverride}</option>}

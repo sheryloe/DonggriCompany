@@ -27,6 +27,7 @@ export type MessageInsertInput = {
   content: string;
   messageType: string;
   taskId?: string | null;
+  projectId?: string | null;
   idempotencyKey?: string | null;
 };
 
@@ -39,6 +40,7 @@ export type StoredMessage = {
   content: string;
   message_type: string;
   task_id: string | null;
+  project_id: string | null;
   idempotency_key: string | null;
   created_at: number;
 };

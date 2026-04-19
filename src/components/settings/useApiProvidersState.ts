@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as api from "../../api";
 import type { ApiProvider } from "../../api";
-import type { Agent, CompanySettings, WorkflowPackKey } from "../../types";
+import type { Agent, WorkflowPackKey } from "../../types";
 import type {
   ApiAssignDepartment,
   ApiAssignTarget,
@@ -35,11 +35,14 @@ function normalizeWorkflowPackKey(value: unknown): WorkflowPackKey {
     : "development";
 }
 
-function resolveAssignablePackKeys(settings: Pick<CompanySettings, "officePackHydratedPacks">): WorkflowPackKey[] {
-  const hydrated = Array.isArray(settings.officePackHydratedPacks) ? settings.officePackHydratedPacks : [];
+function resolveAssignablePackKeysFromProjection(
+  packs: Array<{ key: WorkflowPackKey; enabled?: boolean | null }> | null | undefined,
+): WorkflowPackKey[] {
   const orderedKeys: WorkflowPackKey[] = ["development"];
-  for (const value of hydrated) {
-    const packKey = normalizeWorkflowPackKey(value);
+  for (const pack of packs ?? []) {
+    const packKey = normalizeWorkflowPackKey(pack?.key);
+    if (packKey === "development") continue;
+    if (pack?.enabled === false) continue;
     if (!orderedKeys.includes(packKey)) orderedKeys.push(packKey);
   }
   return orderedKeys;
@@ -48,11 +51,9 @@ function resolveAssignablePackKeys(settings: Pick<CompanySettings, "officePackHy
 export function useApiProvidersState({
   tab,
   t,
-  settings,
 }: {
   tab: SettingsTab;
   t: TFunction;
-  settings: Pick<CompanySettings, "officePackHydratedPacks">;
 }): ApiStateBundle {
   const [apiProviders, setApiProviders] = useState<ApiProvider[]>([]);
   const [apiProvidersLoading, setApiProvidersLoading] = useState(false);
@@ -168,7 +169,12 @@ export function useApiProvidersState({
           [id]: result.ok
             ? {
                 ok: true,
-                msg: `${result.model_count} ${t({ ko: "개 모델 발견", en: "models found", ja: "モデル検出", zh: "个模型" })}`,
+                msg: `${result.model_count} ${t({
+                  ko: "개 모델 확인",
+                  en: "models found",
+                  ja: "個のモデルを確認",
+                  zh: "个模型已确认",
+                })}`,
               }
             : { ok: false, msg: result.error?.slice(0, 200) || `HTTP ${result.status}` },
         }));
@@ -212,7 +218,8 @@ export function useApiProvidersState({
     async (providerId: string, model: string) => {
       setApiAssignTarget({ providerId, model });
       try {
-        const assignPackKeys = resolveAssignablePackKeys(settings);
+        const workflowPackProjection = await api.getWorkflowPacks();
+        const assignPackKeys = resolveAssignablePackKeysFromProjection(workflowPackProjection.packs);
         const [agents, deptLists] = await Promise.all([
           api.getAgents({ includeSeed: true }),
           Promise.all(
@@ -231,78 +238,41 @@ export function useApiProvidersState({
         console.error("Failed to load agents:", error);
       }
     },
-    [settings],
-  );
-
-  const markAgentsWithAssignedApiModel = useCallback(
-    (agentIds: string[]) => {
-      if (!apiAssignTarget || agentIds.length === 0) return;
-      const targetIds = new Set(agentIds);
-      setApiAssignAgents((prev) =>
-        prev.map((agent) =>
-          targetIds.has(agent.id)
-            ? {
-                ...agent,
-                cli_provider: "api",
-                api_provider_id: apiAssignTarget.providerId,
-                api_model: apiAssignTarget.model,
-              }
-            : agent,
-        ),
-      );
-    },
-    [apiAssignTarget],
+    [],
   );
 
   const handleApiAssignToAgent = useCallback(
     async (agentId: string) => {
+      void agentId;
       if (!apiAssignTarget) return;
       setApiAssigning(true);
       try {
-        await api.updateAgent(agentId, {
-          cli_provider: "api",
-          api_provider_id: apiAssignTarget.providerId,
-          api_model: apiAssignTarget.model,
-        });
-        markAgentsWithAssignedApiModel([agentId]);
+        // compatibility-only: manual API model assignment is disabled
       } catch (error) {
         console.error("Failed to assign API model to agent:", error);
       } finally {
         setApiAssigning(false);
       }
     },
-    [apiAssignTarget, markAgentsWithAssignedApiModel],
+    [apiAssignTarget],
   );
 
   const handleApiAssignToDepartment = useCallback(
     async (departmentId: string, workflowPackKey: WorkflowPackKey) => {
+      void departmentId;
+      void workflowPackKey;
       if (!apiAssignTarget) return;
-
-      const targetAgents = apiAssignAgents.filter(
-        (agent) =>
-          agent.department_id === departmentId && normalizeWorkflowPackKey(agent.workflow_pack_key) === workflowPackKey,
-      );
-      if (targetAgents.length === 0) return;
 
       setApiAssigning(true);
       try {
-        await Promise.all(
-          targetAgents.map((agent) =>
-            api.updateAgent(agent.id, {
-              cli_provider: "api",
-              api_provider_id: apiAssignTarget.providerId,
-              api_model: apiAssignTarget.model,
-            }),
-          ),
-        );
-        markAgentsWithAssignedApiModel(targetAgents.map((agent) => agent.id));
+        // compatibility-only: manual API model assignment is disabled
       } catch (error) {
         console.error("Failed to assign API model to department:", error);
       } finally {
         setApiAssigning(false);
       }
     },
-    [apiAssignAgents, apiAssignTarget, markAgentsWithAssignedApiModel],
+    [apiAssignTarget],
   );
 
   return {

@@ -49,8 +49,6 @@ describe("agent-profile helpers", () => {
       class_stage_3: "platform",
     });
     expect(profile.promotion_policy).toEqual({
-      from_role: "junior",
-      to_role: "senior",
       auto_promote_at_xp: 300,
       team_leader_manual: true,
     });
@@ -72,8 +70,6 @@ describe("agent-profile helpers", () => {
         custom_prompt_override: "Always propose the cleanest implementation.",
         class_path: ["engineering", "backend", "platform"],
         promotion_policy: {
-          from_role: "junior",
-          to_role: "senior",
           auto_promote_at_xp: 300,
         },
       },
@@ -89,7 +85,8 @@ describe("agent-profile helpers", () => {
     expect(preview).toContain("Role template: Senior");
     expect(preview).toContain("2x role: Reviewer");
     expect(preview).toContain("Class path: engineering > backend > platform");
-    expect(preview).toContain("Promotion policy: junior -> senior @xp>=300");
+    expect(preview).toContain("Promotion policy: @xp>=300");
+    expect(preview).not.toContain("junior -> senior");
     expect(preview).toContain("Specialties: backend, orchestration");
     expect(preview).toContain("Review lenses: security, performance");
     expect(preview).toContain("Review depth: Force 2-pass");

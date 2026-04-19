@@ -34,6 +34,7 @@ type ResolveCliAccountPoolEnvInput = {
   provider: string;
   cliAccountPoolId?: string | null;
   platform?: NodeJS.Platform;
+  selectionSeed?: string;
   policy?: {
     requireExplicitSelection?: boolean;
     requireConnectedStatus?: boolean;
@@ -74,6 +75,16 @@ function validateProfileHome(params: {
   }
 
   return { ok: true, profileHome };
+}
+
+function computePoolIndex(seed: string | undefined, count: number): number {
+  if (!seed || count <= 1) return 0;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return Number(hash % count);
 }
 
 export function resolveCliAccountPoolEnv(input: ResolveCliAccountPoolEnvInput): CliAccountPoolEnvResolution {
@@ -169,12 +180,10 @@ export function resolveCliAccountPoolEnv(input: ResolveCliAccountPoolEnvInput): 
     }
 
     if (connectedPools.length > 1) {
-      return {
-        ok: false,
-        reason: `multiple_pools_require_explicit_selection: provider=${provider} count=${connectedPools.length}`,
-      };
-    }
-    if (connectedPools.length === 1) {
+      const index = computePoolIndex(input.selectionSeed ?? "", connectedPools.length);
+      resolvedPool = connectedPools[index];
+      selectedBy = "auto";
+    } else if (connectedPools.length === 1) {
       resolvedPool = connectedPools[0];
       selectedBy = "auto";
     }

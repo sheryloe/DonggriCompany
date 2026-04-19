@@ -134,6 +134,12 @@ export async function updateAgent(
       | "run_mode"
       | "cli_account_pool_id"
       | "workflow_profile"
+      | "family"
+      | "career_stage"
+      | "specialization_key"
+      | "authority_level"
+      | "execution_capability_profile"
+      | "canonical_identity_source"
       | "agent_profile"
       | "avatar_emoji"
       | "sprite_number"
@@ -160,6 +166,12 @@ export async function createAgent(data: {
   run_mode?: Agent["run_mode"];
   cli_account_pool_id?: string | null;
   workflow_profile?: Agent["workflow_profile"];
+  family?: Agent["family"];
+  career_stage?: Agent["career_stage"];
+  specialization_key?: Agent["specialization_key"];
+  authority_level?: Agent["authority_level"];
+  execution_capability_profile?: Agent["execution_capability_profile"];
+  canonical_identity_source?: Agent["canonical_identity_source"];
   agent_profile?: Agent["agent_profile"];
   avatar_emoji: string;
   sprite_number?: number | null;

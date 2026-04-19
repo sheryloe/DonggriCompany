@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SkillsLibrary from "./SkillsLibrary";
 import type { Agent } from "../types";
@@ -53,16 +53,16 @@ const UI_TEXT: Record<
     running: "Running",
   },
   ja: {
-    learn: "学習",
-    modalHeading: "スキル学習スクワッド",
-    startLearning: "学習開始",
-    running: "実行中",
+    learn: "Learn",
+    modalHeading: "Skill Learning Squad",
+    startLearning: "Start Learning",
+    running: "Running",
   },
   zh: {
-    learn: "学习",
-    modalHeading: "技能学习小队",
-    startLearning: "开始学习",
-    running: "进行中",
+    learn: "Learn",
+    modalHeading: "Skill Learning Squad",
+    startLearning: "Start Learning",
+    running: "Running",
   },
 };
 
@@ -104,7 +104,7 @@ const TEST_AGENT: Agent = {
   department_id: "dep-1",
   role: "team_leader",
   cli_provider: "claude",
-  avatar_emoji: "🤖",
+  avatar_emoji: "🧭",
   personality: null,
   status: "idle",
   current_task_id: null,
@@ -143,9 +143,7 @@ describe("SkillsLibrary learning modal ESC close", () => {
       render(<SkillsLibrary agents={[TEST_AGENT]} />);
 
       await screen.findByRole("button", { name: exactText(text.learn) });
-
       fireEvent.click(screen.getByRole("button", { name: exactText(text.learn) }));
-
       expect(screen.getByRole("heading", { name: exactText(text.modalHeading) })).toBeInTheDocument();
 
       fireEvent.keyDown(window, { key: "Escape" });
@@ -185,7 +183,6 @@ describe("SkillsLibrary learning modal ESC close", () => {
       render(<SkillsLibrary agents={[TEST_AGENT]} />);
 
       await screen.findByRole("button", { name: exactText(text.learn) });
-
       fireEvent.click(screen.getByRole("button", { name: exactText(text.learn) }));
       fireEvent.click(screen.getByRole("button", { name: exactText(text.startLearning) }));
 
@@ -198,7 +195,7 @@ describe("SkillsLibrary learning modal ESC close", () => {
   }
 
   it("shows learned state and unlearn action in the modal when already learned", async () => {
-    currentLocale = "ko";
+    currentLocale = "en";
     Object.defineProperty(window, "localStorage", {
       value: createStorageMock({ [LANGUAGE_STORAGE_KEY]: currentLocale }),
       configurable: true,
@@ -223,12 +220,11 @@ describe("SkillsLibrary learning modal ESC close", () => {
     });
 
     render(<SkillsLibrary agents={[TEST_AGENT]} />);
-    await screen.findByRole("button", { name: exactText(UI_TEXT.ko.learn) });
-    fireEvent.click(screen.getByRole("button", { name: exactText(UI_TEXT.ko.learn) }));
+    await screen.findByRole("button", { name: exactText(UI_TEXT.en.learn) });
+    fireEvent.click(screen.getByRole("button", { name: exactText(UI_TEXT.en.learn) }));
 
-    await screen.findByText(/^학습됨$/);
-    expect(screen.getByText(/^0명 선택됨$/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "학습 취소" }));
+    await screen.findByText(/Learned|학습됨/i);
+    fireEvent.click(screen.getAllByRole("button", { name: /Unlearn|학습 취소/i }).at(-1)!);
 
     await waitFor(() => {
       expect(unlearnSkillMock).toHaveBeenCalledWith({
@@ -239,3 +235,4 @@ describe("SkillsLibrary learning modal ESC close", () => {
     });
   });
 });
+

@@ -1,3 +1,5 @@
+import { evaluateCanonicalMeetingAuthority } from "../../company/canonical-authority.ts";
+
 type CreatePlannedApprovalToolsDeps = {
   reviewInFlight: Set<string>;
   reviewRoundState: Map<string, number>;
@@ -67,6 +69,29 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
     reviewMeetingOneShotTimeoutMs,
   } = deps;
 
+  let cachedTaskColumns: Set<string> | null = null;
+  function getTaskColumns(): Set<string> {
+    if (cachedTaskColumns) return cachedTaskColumns;
+    const rows = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+    cachedTaskColumns = new Set(rows.map((row) => String(row.name ?? "").trim()).filter(Boolean));
+    return cachedTaskColumns;
+  }
+
+  function parseApprovalGateState(raw?: string | null): { gates: string[]; blockedBy: string[] } {
+    if (!raw || typeof raw !== "string") return { gates: [], blockedBy: [] };
+    try {
+      const parsed = JSON.parse(raw);
+      const gates = Array.isArray(parsed?.gates) ? parsed.gates.map((g: unknown) => String(g ?? "").trim()).filter(Boolean) : [];
+      const blockedBy = new Set<string>();
+      if (parsed?.blocked === true || gates.includes("artifact-health-block")) blockedBy.add("approval_gate_blocked");
+      if (gates.includes("human-approval-general")) blockedBy.add("approval_gate=human-approval-general");
+      if (gates.includes("artifact-health-block")) blockedBy.add("approval_gate=artifact-health-block");
+      return { gates, blockedBy: [...blockedBy] };
+    } catch {
+      return { gates: [], blockedBy: [] };
+    }
+  }
+
   function startPlannedApprovalMeeting(
     taskId: string,
     taskTitle: string,
@@ -82,27 +107,66 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
     void (async () => {
       let meetingId: string | null = null;
       const leaders = getTaskReviewLeaders(taskId, departmentId);
-      if (leaders.length === 0) {
-        reviewInFlight.delete(lockKey);
-        onApproved([]);
-        return;
-      }
+      const quorumReasons = leaders.length >= 2 ? [] : [`quorum_not_met:${leaders.length}/2`];
       try {
         const round = (reviewRoundState.get(lockKey) ?? 0) + 1;
         reviewRoundState.set(lockKey, round);
 
-        const planningLeader = leaders.find((l: any) => l.department_id === "planning") ?? leaders[0];
-        const otherLeaders = leaders.filter((l: any) => l.id !== planningLeader.id);
-        let hasSupplementSignals = false;
-        const seatIndexByAgent = new Map(leaders.slice(0, 6).map((leader: any, idx: number) => [leader.id, idx]));
-
+        const taskColumns = getTaskColumns();
+        const taskSelectColumns = [
+          "description",
+          "project_path",
+          "workflow_pack_key",
+          ...(taskColumns.has("approval_gate_state_json") ? ["approval_gate_state_json"] : []),
+        ];
         const taskCtx = db
-          .prepare("SELECT description, project_path, workflow_pack_key FROM tasks WHERE id = ?")
+          .prepare(`SELECT ${taskSelectColumns.join(", ")} FROM tasks WHERE id = ?`)
           .get(taskId) as
-          | { description: string | null; project_path: string | null; workflow_pack_key: string | null }
+          | {
+              description: string | null;
+              project_path: string | null;
+              workflow_pack_key: string | null;
+              approval_gate_state_json?: string | null;
+            }
           | undefined;
         const taskDescription = taskCtx?.description ?? null;
         const taskWorkflowPackKey = taskCtx?.workflow_pack_key ?? null;
+        const authorityEvaluation = evaluateCanonicalMeetingAuthority(leaders, {
+          taskTitle,
+          taskDescription,
+          workflowPackKey: taskWorkflowPackKey,
+          phase: "planned",
+        });
+        const approvalGateState = parseApprovalGateState(taskCtx?.approval_gate_state_json);
+        const blockedBy = [
+          ...quorumReasons,
+          ...authorityEvaluation.blockedBy,
+          ...approvalGateState.blockedBy,
+        ];
+        if (blockedBy.length > 0) {
+          const reasonText = blockedBy.join(", ");
+          appendTaskLog(taskId, "error", `Planned meeting blocked by canonical authority gate: ${reasonText}`);
+          notifyCeo(
+            pickL(
+              l(
+                [`[CEO OFFICE] '${taskTitle}' Planned 회의를 시작할 수 없습니다. 차단 사유: ${reasonText}`],
+                [`[CEO OFFICE] Planned meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
+                [`[CEO OFFICE] '${taskTitle}' Planned 会議を開始できません。理由: ${reasonText}`],
+                [`[CEO OFFICE] 无法启动 '${taskTitle}' 的 Planned 会议。原因：${reasonText}`],
+              ),
+              resolveLang(taskDescription ?? taskTitle),
+            ),
+            taskId,
+          );
+          reviewRoundState.delete(lockKey);
+          reviewInFlight.delete(lockKey);
+          return;
+        }
+
+        const planningLeader = authorityEvaluation.chair;
+        const otherLeaders = leaders.filter((l: any) => l.id !== planningLeader.id);
+        let hasSupplementSignals = false;
+        const seatIndexByAgent = new Map(leaders.slice(0, 6).map((leader: any, idx: number) => [leader.id, idx]));
         const projectPath = resolveProjectPath({
           title: taskTitle,
           description: taskDescription,
@@ -355,6 +419,8 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
         );
         if (meetingId) finishMeetingMinutes(meetingId, "failed");
         dismissLeadersFromCeoOffice(taskId, leaders);
+      } finally {
+        reviewRoundState.delete(lockKey);
         reviewInFlight.delete(lockKey);
       }
     })();

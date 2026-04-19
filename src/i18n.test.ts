@@ -1,10 +1,11 @@
-import { createElement } from "react";
+﻿import { createElement } from "react";
 import { render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   I18nProvider,
   detectBrowserLanguage,
   type I18nContextValue,
+  LANGUAGE_STORAGE_KEY,
   localeFromLanguage,
   localeName,
   normalizeLanguage,
@@ -26,18 +27,19 @@ describe("i18n helpers", () => {
       configurable: true,
       value: ORIGINAL_LANGUAGES,
     });
+    window.localStorage.removeItem(LANGUAGE_STORAGE_KEY);
   });
 
-  it("normalizeLanguage는 다양한 locale 코드를 표준 언어코드로 정규화한다", () => {
+  it("normalizeLanguage maps only ko/en and falls back to en", () => {
     expect(normalizeLanguage("ko-KR")).toBe("ko");
     expect(normalizeLanguage("en_US")).toBe("en");
-    expect(normalizeLanguage("ja-JP")).toBe("ja");
-    expect(normalizeLanguage("zh-CN")).toBe("zh");
+    expect(normalizeLanguage("ja-JP")).toBe("en");
+    expect(normalizeLanguage("zh-CN")).toBe("en");
     expect(normalizeLanguage("fr-FR")).toBe("en");
     expect(normalizeLanguage(undefined)).toBe("en");
   });
 
-  it("detectBrowserLanguage는 navigator.languages 우선순위로 감지한다", () => {
+  it("detectBrowserLanguage uses ko/en policy only", () => {
     Object.defineProperty(window.navigator, "languages", {
       configurable: true,
       value: ["ja-JP", "en-US"],
@@ -46,15 +48,41 @@ describe("i18n helpers", () => {
       configurable: true,
       value: "ko-KR",
     });
-    expect(detectBrowserLanguage()).toBe("ja");
+    expect(detectBrowserLanguage()).toBe("en");
   });
 
-  it("localeName/pickLang/localeFromLanguage가 fallback 규칙을 지킨다", () => {
+  it("stored ja/zh setting is normalized to en without browser fallback override", () => {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, "ja-JP");
+    Object.defineProperty(window.navigator, "languages", {
+      configurable: true,
+      value: ["ko-KR"],
+    });
+    Object.defineProperty(window.navigator, "language", {
+      configurable: true,
+      value: "ko-KR",
+    });
+
+    let result: I18nContextValue = {
+      language: "en",
+      locale: "en-US",
+      t: (text) => (typeof text === "string" ? text : text.en),
+    };
+    const Probe = () => {
+      result = useI18n();
+      return null;
+    };
+
+    render(createElement(Probe));
+    expect(result.language).toBe("en");
+    expect(result.locale).toBe("en-US");
+  });
+
+  it("localeName/pickLang/localeFromLanguage follow fallback rules", () => {
     const text: LangText = {
-      ko: "안녕하세요",
+      ko: "ko-hello",
       en: "hello",
     };
-    expect(pickLang("ko", text)).toBe("안녕하세요");
+    expect(pickLang("ko", text)).toBe("ko-hello");
     expect(pickLang("ja", text)).toBe("hello");
     expect(pickLang("zh", text)).toBe("hello");
 
@@ -67,17 +95,23 @@ describe("i18n helpers", () => {
     expect(
       localeName("ja", {
         name: "Planning",
-        name_ja: "",
+        name_ja: "企画",
       }),
     ).toBe("Planning");
+    expect(
+      localeName("ko-KR", {
+        name: "Planning",
+        name_ko: "기획",
+      }),
+    ).toBe("기획");
 
     expect(localeFromLanguage("ko")).toBe("ko-KR");
     expect(localeFromLanguage("en")).toBe("en-US");
-    expect(localeFromLanguage("ja")).toBe("ja-JP");
-    expect(localeFromLanguage("zh")).toBe("zh-CN");
+    expect(localeFromLanguage("ja")).toBe("en-US");
+    expect(localeFromLanguage("zh")).toBe("en-US");
   });
 
-  it("useI18n은 override 언어가 있으면 Provider 언어보다 override를 우선한다", () => {
+  it("useI18n languageOverride follows ko/en fallback policy", () => {
     let result: I18nContextValue = {
       language: "en",
       locale: "en-US",
@@ -95,16 +129,16 @@ describe("i18n helpers", () => {
       }),
     );
 
-    expect(result.language).toBe("ja");
-    expect(result.locale).toBe("ja-JP");
+    expect(result.language).toBe("en");
+    expect(result.locale).toBe("en-US");
     expect(
       result.t({
-        ko: "안녕하세요",
+        ko: "ko-hello",
         en: "hello",
-        ja: "こんにちは",
-        zh: "你好",
+        ja: "konnichiwa",
+        zh: "nihao",
       }),
-    ).toBe("こんにちは");
+    ).toBe("hello");
 
     rerender(
       createElement(I18nProvider, {
@@ -117,11 +151,11 @@ describe("i18n helpers", () => {
     expect(result.locale).toBe("ko-KR");
     expect(
       result.t({
-        ko: "안녕하세요",
+        ko: "ko-hello",
         en: "hello",
-        ja: "こんにちは",
-        zh: "你好",
+        ja: "konnichiwa",
+        zh: "nihao",
       }),
-    ).toBe("안녕하세요");
+    ).toBe("ko-hello");
   });
 });

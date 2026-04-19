@@ -106,21 +106,21 @@ export default function ChatMessageList({
           <div className="text-6xl">💬</div>
           <div>
             <p className="font-medium text-gray-400">
-              {tr("대화를 시작해보세요! 👋", "Start a conversation! 👋", "会話を始めましょう! 👋", "开始对话吧! 👋")}
+              {tr("대화를 시작해보세요", "Start a conversation", "会話を始めましょう", "开始对话")}
             </p>
             <p className="mt-1 text-sm text-gray-600">
               {selectedAgent
                 ? tr(
                     `${getAgentName(selectedAgent)}에게 메시지를 보내보세요`,
                     `Send a message to ${getAgentName(selectedAgent)}`,
-                    `${getAgentName(selectedAgent)}にメッセージを送ってみましょう`,
-                    `给 ${getAgentName(selectedAgent)} 发送一条消息吧`,
+                    `${getAgentName(selectedAgent)} にメッセージを送ってください`,
+                    `向 ${getAgentName(selectedAgent)} 发送消息`,
                   )
                 : tr(
                     "전체 에이전트에게 공지를 보내보세요",
                     "Send an announcement to all agents",
-                    "すべてのエージェントに告知を送ってみましょう",
-                    "给所有代理发送一条公告吧",
+                    "すべてのエージェントへ告知を送信してください",
+                    "向全部代理发送公告",
                   )}
             </p>
           </div>
@@ -180,7 +180,7 @@ export default function ChatMessageList({
                           onClick={() => onDecisionManualDraft(decisionRequest.options[0])}
                           className="mt-2 text-[11px] text-indigo-200/90 underline underline-offset-2 hover:text-indigo-100"
                         >
-                          {tr("직접 답변 작성", "Write custom reply", "カスタム返信を作成", "编写自定义回复")}
+                          {tr("직접 답변 작성", "Write custom reply", "手動返信を作成", "自定义回复")}
                         </button>
                       </div>
                     )}
@@ -195,7 +195,7 @@ export default function ChatMessageList({
                 <div key={msg.id} className="flex flex-col items-center gap-1">
                   {isDirective && (
                     <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-xs font-bold text-red-400">
-                      {tr("업무지시", "Directive", "業務指示", "业务指示")}
+                      {tr("업무지시", "Directive", "業務指示", "指令")}
                     </span>
                   )}
                   <div
@@ -261,7 +261,7 @@ export default function ChatMessageList({
                         onClick={() => onDecisionManualDraft(decisionRequest.options[0])}
                         className="mt-2 text-[11px] text-indigo-200/90 underline underline-offset-2 hover:text-indigo-100"
                       >
-                        {tr("직접 답변 작성", "Write custom reply", "カスタム返信を作成", "编写自定义回复")}
+                        {tr("직접 답변 작성", "Write custom reply", "手動返信を作成", "自定义回复")}
                       </button>
                     </div>
                   )}

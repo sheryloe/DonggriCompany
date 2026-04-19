@@ -9,6 +9,7 @@ import { buildAgentPromptProfileBlock } from "../../../workflow/agents/agent-pro
 import { buildWorkflowPackExecutionGuidance } from "../../../workflow/packs/execution-guidance.ts";
 import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-artifact.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/core/video-skill-bootstrap.ts";
+import { previewCanonicalRouting } from "../../../company/canonical-policy.ts";
 import {
   buildInterruptPromptBlock,
   consumeInterruptPrompts,
@@ -427,11 +428,27 @@ Whenever you complete a subtask, report it in this format:
       : "";
 
     const modelConfig = getProviderModelConfig();
-    const providerPolicy = resolveProviderExecutionPolicy({ provider, providerModelConfig: modelConfig });
+    const canonicalExecutionPolicy =
+      typeof executionSession.policyResolutionJson === "string" && executionSession.policyResolutionJson.trim()
+        ? (JSON.parse(executionSession.policyResolutionJson) as ReturnType<typeof previewCanonicalRouting>)
+        : previewCanonicalRouting({
+            text: [task.title, task.description ?? ""].filter(Boolean).join("\n"),
+            projectPath: task.project_path,
+            workflowPackKey: task.workflow_pack_key,
+            providerModelConfig: modelConfig,
+            defaultProvider: provider,
+            policyVersion: executionSession.policyVersion,
+          });
+    const providerPolicy = resolveProviderExecutionPolicy({
+      provider,
+      providerModelConfig: modelConfig,
+      canonicalOverride: canonicalExecutionPolicy,
+    });
     const mainModel = providerPolicy.model;
     const subModel = providerPolicy.subModel;
     const mainReasoningLevel = providerPolicy.reasoningLevel;
     const subReasoningLevel = providerPolicy.subModelReasoningLevel;
+    const canonicalPolicyBlock = `\n[Canonical Policy]\nversion=${canonicalExecutionPolicy.policyVersion}\nfamily=${canonicalExecutionPolicy.family}\nstage=${canonicalExecutionPolicy.stage}\ntier=${canonicalExecutionPolicy.tier}\nspecialization=${canonicalExecutionPolicy.specialization ?? "none"}\napproval_gates=${canonicalExecutionPolicy.approvalGates.join(",") || "none"}\nrequired_artifacts=${canonicalExecutionPolicy.requiredArtifacts.join(",") || "none"}`;
     const subModelHint =
       subModel && (provider === "claude" || provider === "codex")
         ? `\n[Sub-agent model preference] When spawning sub-agents (Task tool), prefer using model: ${subModel}${subReasoningLevel ? ` with reasoning effort: ${subReasoningLevel}` : ""}`
@@ -479,6 +496,7 @@ Whenever you complete a subtask, report it in this format:
         `[Task] ${task.title}`,
         task.description ? `\n${task.description}` : "",
         workflowPackGuidance ? `\n[Workflow Pack Execution Rules]\n${workflowPackGuidance}` : "",
+        canonicalPolicyBlock,
         continuationCtx,
         conversationCtx,
         `\n---`,
@@ -541,9 +559,9 @@ Whenever you complete a subtask, report it in this format:
               [` (isolated branch: climpire/${id.slice(0, 8)})`],
             )
           : l(
-              [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
+              [` (격리 브랜치: climpire/${id.slice(0, 8)})`],
               [` (isolated branch: climpire/${id.slice(0, 8)})`],
-              [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
+              [` (分離ブランチ: climpire/${id.slice(0, 8)})`],
               [` (isolated branch: climpire/${id.slice(0, 8)})`],
             ),
         taskLang,
@@ -558,10 +576,10 @@ Whenever you complete a subtask, report it in this format:
                 [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
               )
             : l(
-                [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
+                [`${assigneeName}이(가) '${task.title}' 작업을 시작했습니다.${worktreeNote}`],
                 [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-                [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
-                [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
+                [`${assigneeName} が '${task.title}' の作業を開始しました。${worktreeNote}`],
+                [`${assigneeName} 已开始处理 '${task.title}'。${worktreeNote}`],
               ),
           taskLang,
         ),
@@ -612,9 +630,9 @@ Whenever you complete a subtask, report it in this format:
               [` (isolated branch: climpire/${id.slice(0, 8)})`],
             )
           : l(
-              [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
+              [` (격리 브랜치: climpire/${id.slice(0, 8)})`],
               [` (isolated branch: climpire/${id.slice(0, 8)})`],
-              [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
+              [` (分離ブランチ: climpire/${id.slice(0, 8)})`],
               [` (isolated branch: climpire/${id.slice(0, 8)})`],
             ),
         taskLang,
@@ -629,10 +647,10 @@ Whenever you complete a subtask, report it in this format:
                 [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
               )
             : l(
-                [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
+                [`${assigneeName}이(가) '${task.title}' 작업을 시작했습니다.${worktreeNote}`],
                 [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-                [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
-                [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
+                [`${assigneeName} が '${task.title}' の作業を開始しました。${worktreeNote}`],
+                [`${assigneeName} 已开始处理 '${task.title}'。${worktreeNote}`],
               ),
           taskLang,
         ),
@@ -685,9 +703,9 @@ Whenever you complete a subtask, report it in this format:
             [` (isolated branch: climpire/${id.slice(0, 8)})`],
           )
         : l(
-            [` (野꺿뫖???됰슢?뽫㎉? climpire/${id.slice(0, 8)})`],
+            [` (격리 브랜치: climpire/${id.slice(0, 8)})`],
             [` (isolated branch: climpire/${id.slice(0, 8)})`],
-            [` (??쎌뜶?戮㏐???덇맒: climpire/${id.slice(0, 8)})`],
+            [` (分離ブランチ: climpire/${id.slice(0, 8)})`],
             [` (isolated branch: climpire/${id.slice(0, 8)})`],
           ),
       taskLang,
@@ -702,10 +720,10 @@ Whenever you complete a subtask, report it in this format:
               [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
             )
           : l(
-              [`${assigneeName}揶쎛 '${task.title}' ?臾믩씜????뽰삂??됰뮸??덈뼄.${worktreeNote}`],
+              [`${assigneeName}이(가) '${task.title}' 작업을 시작했습니다.${worktreeNote}`],
               [`${assigneeName} started work on '${task.title}'.${worktreeNote}`],
-              [`${assigneeName}??'${task.title}' ???녕뮫?援??μ춷??ｊ께??ｊ굴??{worktreeNote}`],
-              [`${assigneeName} ?κ엥??띕뿥夷??'${task.title}'??{worktreeNote}`],
+              [`${assigneeName} が '${task.title}' の作業を開始しました。${worktreeNote}`],
+              [`${assigneeName} 已开始处理 '${task.title}'。${worktreeNote}`],
             ),
         taskLang,
       ),

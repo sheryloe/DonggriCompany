@@ -10,6 +10,13 @@ export interface StreamingMessage {
 
 export type ChatMode = "chat" | "task" | "announcement" | "report";
 
+export type CommandPreview = {
+  code: "directive" | "task" | "prn" | "announcement" | "report" | "chat" | "broadcast";
+  label: string;
+  description: string;
+  routeLabel: string;
+};
+
 export type ProjectMetaPayload = {
   project_id?: string;
   project_path?: string;
@@ -23,6 +30,7 @@ export type PendingSendAction =
   | { kind: "prn"; content: string }
   | { kind: "announcement"; content: string }
   | { kind: "task"; content: string; receiverId: string }
+  | { kind: "task_request"; content: string }
   | { kind: "report"; content: string; receiverId: string }
   | { kind: "chat"; content: string; receiverId: string }
   | { kind: "broadcast"; content: string };

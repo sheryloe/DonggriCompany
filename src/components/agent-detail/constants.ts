@@ -1,4 +1,4 @@
-import type { OAuthAccountInfo } from "../../api";
+﻿import type { OAuthAccountInfo } from "../../api";
 import type { UiLanguage } from "../../i18n";
 
 export type Locale = UiLanguage;
@@ -7,13 +7,13 @@ export type TFunction = (messages: Record<Locale, string>) => string;
 export function roleLabel(role: string, t: TFunction) {
   switch (role) {
     case "team_leader":
-      return t({ ko: "팀장", en: "Team Leader", ja: "チームリーダー", zh: "组长" });
+      return t({ ko: "팀 리드", en: "Team Lead", ja: "チームリード", zh: "团队负责人" });
     case "senior":
       return t({ ko: "시니어", en: "Senior", ja: "シニア", zh: "高级" });
     case "junior":
       return t({ ko: "주니어", en: "Junior", ja: "ジュニア", zh: "初级" });
     case "intern":
-      return t({ ko: "인턴", en: "Intern", ja: "インターン", zh: "实习生" });
+      return t({ ko: "인턴", en: "Intern", ja: "インターン", zh: "实习" });
     default:
       return role;
   }
@@ -21,8 +21,8 @@ export function roleLabel(role: string, t: TFunction) {
 
 function hashSubAgentId(value: string): number {
   let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
   }
   return Math.abs(hash);
 }
@@ -35,11 +35,7 @@ export const STATUS_CONFIG: Record<string, { label: string; color: string; bg: s
   idle: { label: "idle", color: "text-green-400", bg: "bg-green-500/20" },
   working: { label: "working", color: "text-blue-400", bg: "bg-blue-500/20" },
   break: { label: "break", color: "text-yellow-400", bg: "bg-yellow-500/20" },
-  offline: {
-    label: "offline",
-    color: "text-slate-400",
-    bg: "bg-slate-500/20",
-  },
+  offline: { label: "offline", color: "text-slate-400", bg: "bg-slate-500/20" },
 };
 
 export const CLI_LABELS: Record<string, string> = {
@@ -55,10 +51,10 @@ export const CLI_LABELS: Record<string, string> = {
 };
 
 export const SUBTASK_STATUS_ICON: Record<string, string> = {
-  pending: "⏳",
-  in_progress: "🔨",
-  done: "✅",
-  blocked: "🚫",
+  pending: "•",
+  in_progress: "~",
+  done: "OK",
+  blocked: "!",
 };
 
 export function oauthAccountLabel(account: OAuthAccountInfo): string {
@@ -68,11 +64,11 @@ export function oauthAccountLabel(account: OAuthAccountInfo): string {
 export function statusLabel(status: string, t: TFunction) {
   switch (status) {
     case "idle":
-      return t({ ko: "대기 중", en: "Idle", ja: "待機中", zh: "待机中" });
+      return t({ ko: "대기 중", en: "Idle", ja: "待機", zh: "待机" });
     case "working":
       return t({ ko: "작업 중", en: "Working", ja: "作業中", zh: "工作中" });
     case "break":
-      return t({ ko: "휴식 중", en: "Break", ja: "休憩中", zh: "休息中" });
+      return t({ ko: "휴식 중", en: "Break", ja: "休憩", zh: "休息中" });
     case "offline":
       return t({ ko: "오프라인", en: "Offline", ja: "オフライン", zh: "离线" });
     default:
@@ -85,11 +81,11 @@ export function taskStatusLabel(status: string, t: TFunction) {
     case "inbox":
       return t({ ko: "수신함", en: "Inbox", ja: "受信箱", zh: "收件箱" });
     case "planned":
-      return t({ ko: "계획됨", en: "Planned", ja: "計画済み", zh: "已计划" });
+      return t({ ko: "계획", en: "Planned", ja: "計画", zh: "计划" });
     case "in_progress":
       return t({ ko: "진행 중", en: "In Progress", ja: "進行中", zh: "进行中" });
     case "review":
-      return t({ ko: "검토", en: "Review", ja: "レビュー", zh: "审核" });
+      return t({ ko: "리뷰", en: "Review", ja: "レビュー", zh: "审查" });
     case "done":
       return t({ ko: "완료", en: "Done", ja: "完了", zh: "完成" });
     case "pending":
@@ -104,7 +100,7 @@ export function taskStatusLabel(status: string, t: TFunction) {
 export function taskTypeLabel(type: string, t: TFunction) {
   switch (type) {
     case "general":
-      return t({ ko: "일반", en: "General", ja: "一般", zh: "通用" });
+      return t({ ko: "일반", en: "General", ja: "一般", zh: "一般" });
     case "development":
       return t({ ko: "개발", en: "Development", ja: "開発", zh: "开发" });
     case "design":

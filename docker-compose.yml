@@ -11,8 +11,8 @@ services:
     environment:
       PORT: 7777
       HOST: 0.0.0.0
-      API_AUTH_TOKEN: __CHANGE_ME__
-      OAUTH_ENCRYPTION_SECRET: ${OAUTH_ENCRYPTION_SECRET}
+      API_AUTH_TOKEN: ${API_AUTH_TOKEN:-}
+      OAUTH_ENCRYPTION_SECRET: ${OAUTH_ENCRYPTION_SECRET:-}
       OAUTH_BASE_URL: ${OAUTH_BASE_URL}
       OAUTH_GITHUB_CLIENT_ID: ${OAUTH_GITHUB_CLIENT_ID}
       OAUTH_GITHUB_CLIENT_SECRET: ${OAUTH_GITHUB_CLIENT_SECRET}
@@ -32,8 +32,13 @@ services:
     volumes:
       - ./data:/app/data
       - ./data/office-accounts:/app/.office-accounts
-      - /var/run/docker.sock:/var/run/docker.sock
     working_dir: /app
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7777/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     security_opt:
       - no-new-privileges:true
     extra_hosts:

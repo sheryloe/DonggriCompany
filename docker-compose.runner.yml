@@ -1,0 +1,6 @@
+services:
+  donggricompany:
+    environment:
+      OFFICE_RUNNER_DOCKER_ENABLED: ${OFFICE_RUNNER_DOCKER_ENABLED:-1}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw

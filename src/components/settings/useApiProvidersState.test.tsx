@@ -1,7 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useApiProvidersState } from "./useApiProvidersState";
-import { DEFAULT_SETTINGS, type CompanySettings } from "../../types";
 
 const apiMocks = vi.hoisted(() => ({
   createApiProvider: vi.fn(),
@@ -10,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   getApiProviderPresets: vi.fn(),
   getApiProviders: vi.fn(),
   getDepartments: vi.fn(),
+  getWorkflowPacks: vi.fn(),
   testApiProvider: vi.fn(),
   updateAgent: vi.fn(),
   updateApiProvider: vi.fn(),
@@ -22,6 +22,7 @@ vi.mock("../../api", () => ({
   getApiProviderPresets: apiMocks.getApiProviderPresets,
   getApiProviders: apiMocks.getApiProviders,
   getDepartments: apiMocks.getDepartments,
+  getWorkflowPacks: apiMocks.getWorkflowPacks,
   testApiProvider: apiMocks.testApiProvider,
   updateAgent: apiMocks.updateAgent,
   updateApiProvider: apiMocks.updateApiProvider,
@@ -29,13 +30,6 @@ vi.mock("../../api", () => ({
 
 function t(messages: Record<string, string>): string {
   return messages.en ?? messages.ko ?? messages.ja ?? messages.zh ?? Object.values(messages)[0] ?? "";
-}
-
-function makeSettings(overrides: Partial<CompanySettings> = {}): CompanySettings {
-  return {
-    ...DEFAULT_SETTINGS,
-    ...overrides,
-  };
 }
 
 afterEach(() => {
@@ -47,6 +41,7 @@ describe("useApiProvidersState preset loading", () => {
   beforeEach(() => {
     apiMocks.getApiProviders.mockResolvedValue([]);
     apiMocks.getApiProviderPresets.mockRejectedValue(new Error("preset load failed"));
+    apiMocks.getWorkflowPacks.mockResolvedValue({ packs: [{ key: "development", enabled: true }], source: "canonical_projection", readOnly: true });
     apiMocks.createApiProvider.mockResolvedValue({ ok: true, id: "provider-1" });
     apiMocks.deleteApiProvider.mockResolvedValue({ ok: true });
     apiMocks.getAgents.mockResolvedValue([]);
@@ -58,7 +53,7 @@ describe("useApiProvidersState preset loading", () => {
   });
 
   it("does not auto-retry failed preset loads, but allows manual retry", async () => {
-    const { result } = renderHook(() => useApiProvidersState({ tab: "api", t, settings: makeSettings() }));
+    const { result } = renderHook(() => useApiProvidersState({ tab: "api", t }));
 
     await waitFor(() => {
       expect(apiMocks.getApiProviderPresets).toHaveBeenCalledTimes(1);
@@ -96,7 +91,7 @@ describe("useApiProvidersState preset loading", () => {
     expect(result.current.apiOfficialPresets["opencode-go-openai"]?.label).toBe("OpenCode Go (OpenAI)");
   });
 
-  it("assigns an API model to every agent in the selected department", async () => {
+  it("keeps API model assignment actions read-only in compatibility mode", async () => {
     apiMocks.getAgents.mockResolvedValueOnce([
       { id: "design-lead", department_id: "design", workflow_pack_key: "development", cli_provider: "claude" },
       { id: "design-junior", department_id: "design", workflow_pack_key: "development", cli_provider: "gemini" },
@@ -108,13 +103,7 @@ describe("useApiProvidersState preset loading", () => {
     ]);
     apiMocks.updateAgent.mockResolvedValue({ ok: true });
 
-    const { result } = renderHook(() =>
-      useApiProvidersState({
-        tab: "api",
-        t,
-        settings: makeSettings(),
-      }),
-    );
+    const { result } = renderHook(() => useApiProvidersState({ tab: "api", t }));
 
     await waitFor(() => {
       expect(apiMocks.getApiProviders).toHaveBeenCalledTimes(1);
@@ -128,36 +117,7 @@ describe("useApiProvidersState preset loading", () => {
       await result.current.handleApiAssignToDepartment("design", "development");
     });
 
-    expect(apiMocks.updateAgent).toHaveBeenCalledTimes(2);
-    expect(apiMocks.updateAgent).toHaveBeenNthCalledWith(1, "design-lead", {
-      cli_provider: "api",
-      api_provider_id: "provider-google",
-      api_model: "gemini-2.5-flash-image",
-    });
-    expect(apiMocks.updateAgent).toHaveBeenNthCalledWith(2, "design-junior", {
-      cli_provider: "api",
-      api_provider_id: "provider-google",
-      api_model: "gemini-2.5-flash-image",
-    });
-    expect(result.current.apiAssignAgents).toEqual([
-      {
-        id: "design-lead",
-        department_id: "design",
-        workflow_pack_key: "development",
-        cli_provider: "api",
-        api_provider_id: "provider-google",
-        api_model: "gemini-2.5-flash-image",
-      },
-      {
-        id: "design-junior",
-        department_id: "design",
-        workflow_pack_key: "development",
-        cli_provider: "api",
-        api_provider_id: "provider-google",
-        api_model: "gemini-2.5-flash-image",
-      },
-      { id: "dev-senior", department_id: "dev", workflow_pack_key: "development", cli_provider: "codex" },
-    ]);
+    expect(apiMocks.updateAgent).not.toHaveBeenCalled();
   });
 });
 
@@ -165,12 +125,20 @@ describe("useApiProvidersState model assignment", () => {
   beforeEach(() => {
     apiMocks.getApiProviders.mockResolvedValue([]);
     apiMocks.getApiProviderPresets.mockResolvedValue({ presets: {}, official_presets: {} });
+    apiMocks.getWorkflowPacks.mockResolvedValue({
+      packs: [
+        { key: "development", enabled: true },
+        { key: "video_preprod", enabled: true },
+      ],
+      source: "canonical_projection",
+      readOnly: true,
+    });
     apiMocks.getAgents.mockResolvedValue([]);
     apiMocks.getDepartments.mockResolvedValue([]);
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("loads development plus hydrated pack targets when assigning an API model", async () => {
+  it("loads enabled workflow pack projection targets when assigning an API model", async () => {
     apiMocks.getAgents.mockResolvedValueOnce([
       { id: "agent-dev", workflow_pack_key: "development" },
       { id: "agent-video", workflow_pack_key: "video_preprod" },
@@ -184,13 +152,7 @@ describe("useApiProvidersState model assignment", () => {
       return [{ id: "planning", name: "Planning", name_ko: "기획", workflow_pack_key: "development" }];
     });
 
-    const { result } = renderHook(() =>
-      useApiProvidersState({
-        tab: "api",
-        t,
-        settings: makeSettings({ officePackHydratedPacks: ["video_preprod"] }),
-      }),
-    );
+    const { result } = renderHook(() => useApiProvidersState({ tab: "api", t }));
 
     await waitFor(() => {
       expect(apiMocks.getApiProviders).toHaveBeenCalledTimes(1);
@@ -200,6 +162,7 @@ describe("useApiProvidersState model assignment", () => {
       await result.current.handleApiModelAssign("provider-1", "gpt-4o");
     });
 
+    expect(apiMocks.getWorkflowPacks).toHaveBeenCalledTimes(1);
     expect(apiMocks.getAgents).toHaveBeenCalledWith({ includeSeed: true });
     expect(apiMocks.getDepartments).toHaveBeenNthCalledWith(1, { workflowPackKey: "development" });
     expect(apiMocks.getDepartments).toHaveBeenNthCalledWith(2, { workflowPackKey: "video_preprod" });

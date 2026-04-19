@@ -88,7 +88,7 @@ export function createReviewRoundPlanningHelpers(deps: ReviewRoundPlanningDeps):
         if (!currentState || currentState.snapshot_hash !== input.snapshotHash) return;
         if (currentState.status !== "collecting") return;
 
-        const planningLeader = findTeamLeader("planning");
+        const planningLeader = findTeamLeader(null);
         const clip = (text: string, max = 240) => {
           const normalized = String(text ?? "")
             .replace(/\s+/g, " ")

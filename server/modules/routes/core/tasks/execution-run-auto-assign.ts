@@ -1,4 +1,4 @@
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+﻿import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import {
   DEFAULT_WORKFLOW_PACK_KEY,
   isWorkflowPackKey,
@@ -6,7 +6,6 @@ import {
 } from "../../../workflow/packs/definitions.ts";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
-let cachedHasAgentWorkflowPackColumn: boolean | null = null;
 
 type ProjectAssignmentModeRow = {
   assignment_mode?: string | null;
@@ -137,7 +136,7 @@ function normalizeOfficePackProfileDepartment(raw: unknown): OfficePackProfileDe
     name_ko: normalizeText(obj.name_ko) || normalizeText(obj.name) || id,
     name_ja: normalizeText(obj.name_ja),
     name_zh: normalizeText(obj.name_zh),
-    icon: normalizeText(obj.icon) || "?룫",
+    icon: normalizeText(obj.icon) || "ORG",
     color: normalizeText(obj.color) || "#64748b",
     description: normalizeOptionalText(obj.description),
     prompt: normalizeOptionalText(obj.prompt),
@@ -169,7 +168,7 @@ function normalizeOfficePackProfileAgent(raw: unknown): OfficePackProfileAgent |
     department_id: normalizeOptionalText(obj.department_id),
     role,
     cli_provider,
-    avatar_emoji: normalizeText(obj.avatar_emoji) || "?쨼",
+    avatar_emoji: normalizeText(obj.avatar_emoji) || "BOT",
     personality: normalizeOptionalText(obj.personality),
     created_at: normalizePositiveInt(obj.created_at, now),
   };
@@ -179,34 +178,9 @@ function loadOfficePackProfileFromSettings(
   db: DbLike,
   packKey: WorkflowPackKey,
 ): { departments: OfficePackProfileDepartment[]; agents: OfficePackProfileAgent[] } | null {
-  try {
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'officePackProfiles' LIMIT 1").get() as
-      | { value?: unknown }
-      | undefined;
-    if (!row) return null;
-
-    const parsedRaw = typeof row.value === "string" ? safeJsonParse(row.value) : row.value;
-    const root = asObject(parsedRaw);
-    if (!root) return null;
-
-    const packProfileRaw = root[packKey];
-    const packProfile = asObject(packProfileRaw);
-    if (!packProfile) return null;
-
-    const departments = Array.isArray(packProfile.departments)
-      ? packProfile.departments.map(normalizeOfficePackProfileDepartment).filter(Boolean)
-      : [];
-    const agents = Array.isArray(packProfile.agents)
-      ? packProfile.agents.map(normalizeOfficePackProfileAgent).filter(Boolean)
-      : [];
-
-    return {
-      departments: departments as OfficePackProfileDepartment[],
-      agents: agents as OfficePackProfileAgent[],
-    };
-  } catch {
-    return null;
-  }
+  void db;
+  void packKey;
+  return null;
 }
 
 function selectExistingAgentIds(db: DbLike, candidateIds: string[]): string[] {
@@ -248,19 +222,8 @@ function selectAgentIdsByDepartments(db: DbLike, departmentIds: string[]): strin
 }
 
 function loadPackProfileAgentScope(db: DbLike, packKey: WorkflowPackKey): string[] | null {
-  if (packKey === "development") return null;
-
-  const profile = loadOfficePackProfileFromSettings(db, packKey);
-  if (!profile || profile.agents.length <= 0) return null;
-  const profileAgentIds = profile.agents.map((agent) => normalizeText(agent.id)).filter((id) => id.length > 0);
-  const existingIds = selectExistingAgentIds(db, profileAgentIds);
-  if (existingIds.length > 0) return existingIds;
-
-  const profileDepartmentIds = Array.from(
-    new Set(profile.agents.map((agent) => normalizeText(agent.department_id)).filter((id) => id.length > 0)),
-  );
-  const departmentScopedIds = selectAgentIdsByDepartments(db, profileDepartmentIds);
-  if (departmentScopedIds.length > 0) return departmentScopedIds;
+  void db;
+  void packKey;
   return null;
 }
 
@@ -343,22 +306,10 @@ function isOAuthBackedProviderReady(
   return true;
 }
 
-function hasAgentWorkflowPackColumn(db: DbLike): boolean {
-  if (cachedHasAgentWorkflowPackColumn !== null) return cachedHasAgentWorkflowPackColumn;
-  try {
-    const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
-    cachedHasAgentWorkflowPackColumn = cols.some((col) => normalizeText(col.name) === "workflow_pack_key");
-  } catch {
-    cachedHasAgentWorkflowPackColumn = false;
-  }
-  return cachedHasAgentWorkflowPackColumn;
-}
-
 function selectCandidate(
   db: DbLike,
   preferredDeptIds: string[],
   constrainedAgentIds: string[] | null,
-  packKey: WorkflowPackKey,
 ): AutoAssignableAgent | null {
   if (Array.isArray(constrainedAgentIds) && constrainedAgentIds.length === 0) {
     return null;
@@ -379,11 +330,6 @@ function selectCandidate(
   if (Array.isArray(constrainedAgentIds)) {
     conditions.push(`id IN (${constrainedAgentIds.map(() => "?").join(", ")})`);
     params.push(...constrainedAgentIds);
-  }
-
-  if (hasAgentWorkflowPackColumn(db)) {
-    conditions.push("COALESCE(workflow_pack_key, 'development') = ?");
-    params.push(packKey);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -409,17 +355,12 @@ function selectCandidate(
     return index >= 0 ? index : preferredDeptIds.length;
   };
   const statusRank = (status: string): number => (status === "idle" ? 0 : status === "break" ? 1 : 2);
-  const leaderRank = (role: string): number => (role === "team_leader" ? 1 : 0);
-
   runnableRows.sort((a, b) => {
     const byDept = deptRank(a.department_id) - deptRank(b.department_id);
     if (byDept !== 0) return byDept;
 
     const byStatus = statusRank(a.status) - statusRank(b.status);
     if (byStatus !== 0) return byStatus;
-
-    const byLeader = leaderRank(a.role) - leaderRank(b.role);
-    if (byLeader !== 0) return byLeader;
 
     const byTasksDone = (a.stats_tasks_done ?? 0) - (b.stats_tasks_done ?? 0);
     if (byTasksDone !== 0) return byTasksDone;
@@ -445,13 +386,15 @@ export function selectAutoAssignableAgentForTask(
   const preferredDeptIds = buildPreferredDepartmentOrder(packKey, task.department_id);
   const constrainedAgentIds = resolveConstrainedAgentScopeForTask(db, task);
 
-  const preferredCandidate = selectCandidate(db, preferredDeptIds, constrainedAgentIds, packKey);
+  const preferredCandidate = selectCandidate(db, preferredDeptIds, constrainedAgentIds);
   if (preferredCandidate) {
     return { packKey, agent: preferredCandidate };
   }
 
-  const fallbackCandidate = selectCandidate(db, [], constrainedAgentIds, packKey);
+  const fallbackCandidate = selectCandidate(db, [], constrainedAgentIds);
   if (!fallbackCandidate) return null;
 
   return { packKey, agent: fallbackCandidate };
 }
+
+

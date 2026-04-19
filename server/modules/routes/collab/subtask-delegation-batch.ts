@@ -3,6 +3,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { resolveProviderRuntimeKind } from "../../workflow/agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../../workflow/agents/provider-policy-resolver.ts";
+import { previewCanonicalRouting } from "../../company/canonical-policy.ts";
+import { resolveCanonicalIdentity } from "../../company/canonical-identity.ts";
+import { formatDelegationTrace } from "./delegation-log.ts";
 
 import type { Lang } from "../../../types/lang.ts";
 import { resolveWorkflowPackKeyForTask } from "../../workflow/packs/task-pack-resolver.ts";
@@ -70,6 +73,9 @@ interface BatchDeps {
     sessionId: string;
     agentId: string;
     provider: string;
+    policyVersion: string;
+    policySnapshotHash: string | null;
+    policyResolutionJson: string;
   };
   ensureClaudeMd: (projectPath: string, worktreePath: string) => void;
   getProviderModelConfig: () => Record<
@@ -218,15 +224,46 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
 
     const crossLeader = findTeamLeader(targetDeptId, projectCandidateAgentIds);
     if (!crossLeader) {
-      const doneAt = nowMs();
+      const blockedReason = "no_cross_dept_leader";
+      appendTaskLog(
+        parentTask.id,
+        "system",
+        `Subtask delegation blocked: target department has no team leader (dept=${targetDeptName}); ${formatDelegationTrace({
+          label: "Delegation decision",
+          family: "none",
+          specialization: "none",
+          fallbackReason: "department_fallback_none",
+          authorityReason: "missing_team_leader",
+          blockingReason: blockedReason,
+        })}`,
+      );
       for (const sid of subtaskIds) {
-        db.prepare("UPDATE subtasks SET status = 'done', completed_at = ?, blocked_reason = NULL WHERE id = ?").run(
-          doneAt,
+        db.prepare("UPDATE subtasks SET status = 'blocked', blocked_reason = ?, completed_at = NULL WHERE id = ?").run(
+          blockedReason,
           sid,
         );
         broadcast("subtask_update", db.prepare("SELECT * FROM subtasks WHERE id = ?").get(sid));
       }
-      maybeNotifyAllSubtasksComplete(parentTask.id);
+      notifyCeo(
+        pickL(
+          l(
+            [
+              `'${parentTask.title}'의 부서 협업 위임이 차단되었습니다. 대상 부서(${targetDeptName}) 팀장을 찾을 수 없습니다.`,
+            ],
+            [
+              `Delegation for '${parentTask.title}' is blocked. No team leader was found in ${targetDeptName}.`,
+            ],
+            [
+              `'${parentTask.title}' の部門委任はブロックされました。対象部門(${targetDeptName})のチームリーダーが見つかりません。`,
+            ],
+            [
+              `任务 '${parentTask.title}' 的跨部门委派已被阻止。未找到目标部门(${targetDeptName})的组长。`,
+            ],
+          ),
+          lang,
+        ),
+        parentTask.id,
+      );
       onBatchDone?.();
       return;
     }
@@ -320,6 +357,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
         (crossLeaderAllowed ? crossLeader : manualPoolFallbackAtRun) ??
         crossCoordinator ??
         crossLeader;
+      const execCanonicalIdentity = resolveCanonicalIdentity(execAgent);
       const execName = getAgentDisplayName(execAgent, lang);
 
       sendAgentMessage(
@@ -401,7 +439,35 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
           parentTask.project_id,
         );
       }
-      appendTaskLog(delegatedTaskId, "system", `Subtask delegation from '${parentTask.title}' ??${targetDeptName}`);
+      const fallbackReason = crossSubAtRun
+        ? "specialization_second_subordinate"
+        : crossLeaderAllowed
+          ? "specialization_second_team_lead"
+          : manualPoolFallbackAtRun
+            ? "department_fallback_manual_pool"
+            : "department_fallback_leader";
+      const authorityReason = `canonical_stage=${execCanonicalIdentity.career_stage};authority_level=${execCanonicalIdentity.authority_level}`;
+      const blockingReason =
+        crossSubAtRun
+          ? "none"
+          : crossLeaderAllowed
+            ? "no_subordinate_found"
+            : manualPoolFallbackAtRun
+              ? "team_lead_out_of_scope_manual_pool_used"
+              : "team_lead_out_of_scope_no_manual_pool";
+      appendTaskLog(delegatedTaskId, "system", `Subtask delegation from '${parentTask.title}' -> ${targetDeptName}`);
+      appendTaskLog(
+        delegatedTaskId,
+        "system",
+        formatDelegationTrace({
+          label: "Delegation decision",
+          family: execCanonicalIdentity.family,
+          specialization: execCanonicalIdentity.specialization_key,
+          fallbackReason,
+          authorityReason,
+          blockingReason,
+        }),
+      );
       broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(delegatedTaskId));
 
       const ct2 = nowMs();
@@ -412,7 +478,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
         delegatedTaskId,
         execAgent.id,
       );
-      appendTaskLog(delegatedTaskId, "system", `${crossCoordinatorName} ??${execName}`);
+      appendTaskLog(delegatedTaskId, "system", `${crossCoordinatorName} -> ${execName}`);
 
       broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(delegatedTaskId));
       broadcast("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(execAgent.id));
@@ -491,6 +557,14 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
             targetDeptName,
           );
           const executionSession = ensureTaskExecutionSession(delegatedTaskId, execAgent.id, execProvider);
+          const canonicalExecutionPolicy = previewCanonicalRouting({
+            text: [delegatedTitle, delegatedDescription].filter(Boolean).join("\n"),
+            projectPath: projPath,
+            workflowPackKey: delegatedWorkflowPackKey,
+            providerModelConfig: getProviderModelConfig(),
+            defaultProvider: execProvider,
+            policyVersion: executionSession.policyVersion,
+          });
           const worktreeNote = `\nNOTE: You are working in an isolated Git worktree branch (climpire/${delegatedTaskId.slice(0, 8)}). Commit your changes normally.`;
 
           // Build sibling worktree reference block so agents can read prior departments' work
@@ -522,12 +596,12 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
                 "[Prior Department Deliverables]",
                 "The following directories contain completed work from other departments on this project.",
                 "You MUST read and reference these files to ensure consistency with prior deliverables.",
-                "These are READ-ONLY references ??do NOT modify files in these paths.",
+                "These are READ-ONLY references - do NOT modify files in these paths.",
                 ...validSiblings,
               ].join("\n");
             }
           } catch {
-            // best effort ??do not block delegation on sibling lookup failure
+            // best effort - do not block delegation on sibling lookup failure
           }
 
           const sessionPrompt = [
@@ -635,6 +709,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
             const delegatePolicy = resolveProviderExecutionPolicy({
               provider: execProvider,
               providerModelConfig: getProviderModelConfig(),
+              canonicalOverride: canonicalExecutionPolicy,
             });
             let child: {
               on: (event: "close", listener: (code: number | null) => void) => void;

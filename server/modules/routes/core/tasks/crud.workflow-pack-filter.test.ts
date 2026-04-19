@@ -40,6 +40,10 @@ function createTaskCrudHarness(): { db: DatabaseSync; routes: Map<string, RouteH
       priority INTEGER NOT NULL,
       task_type TEXT NOT NULL,
       workflow_pack_key TEXT NOT NULL DEFAULT 'development',
+      policy_version TEXT,
+      resolved_execution_policy_json TEXT,
+      required_artifacts_json TEXT,
+      approval_gate_state_json TEXT,
       workflow_meta_json TEXT,
       output_format TEXT,
       project_path TEXT,
@@ -271,7 +275,7 @@ describe("task CRUD workflow pack behavior", () => {
     }
   });
 
-  it("auto-routes to donggri for instagram card news task and records hydrated pack", () => {
+  it("auto-routes to donggri for instagram card news task without hydrated pack side effects", () => {
     const { db, routes } = createTaskCrudHarness();
     try {
       const handler = routes.get("POST /api/tasks") as RouteHandler | undefined;
@@ -295,9 +299,7 @@ describe("task CRUD workflow pack behavior", () => {
       const hydratedRow = db.prepare("SELECT value FROM settings WHERE key = ?").get("officePackHydratedPacks") as
         | { value?: string }
         | undefined;
-      expect(hydratedRow?.value).toBeTypeOf("string");
-      const hydrated = JSON.parse(String(hydratedRow?.value ?? "[]")) as string[];
-      expect(hydrated).toContain("donggri");
+      expect(hydratedRow).toBeUndefined();
     } finally {
       db.close();
     }
@@ -323,6 +325,90 @@ describe("task CRUD workflow pack behavior", () => {
       expect(res.statusCode).toBe(200);
       const payload = res.payload as { task: { workflow_pack_key: string } };
       expect(payload.task.workflow_pack_key).toBe("report");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("pins policy_version when creating a task", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      const handler = routes.get("POST /api/tasks") as RouteHandler | undefined;
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            title: "Pinned policy task",
+            description: "Implement backend task flow",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { task?: { policy_version?: string | null } };
+      expect(payload.task?.policy_version).toBeTruthy();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("keeps policy_version pinned after task patch", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      db.prepare(
+        `INSERT INTO tasks (
+          id, title, description, department_id, assigned_agent_id, project_id,
+          status, priority, task_type, workflow_pack_key, policy_version,
+          resolved_execution_policy_json, required_artifacts_json, approval_gate_state_json,
+          workflow_meta_json, output_format, project_path, base_branch, result,
+          started_at, completed_at, source_task_id, hidden, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        "task-1",
+        "Initial title",
+        "Initial description",
+        null,
+        null,
+        null,
+        "inbox",
+        1,
+        "general",
+        "development",
+        "2026-04-15-abcdef123456",
+        "{}",
+        "[]",
+        '{"gates":[]}',
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        1,
+        1,
+      );
+
+      const handler = routes.get("PATCH /api/tasks/:id") as RouteHandler | undefined;
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          params: { id: "task-1" },
+          body: { title: "Updated title" },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { task?: { policy_version?: string | null } };
+      expect(payload.task?.policy_version).toBe("2026-04-15-abcdef123456");
     } finally {
       db.close();
     }

@@ -41,6 +41,7 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
   app.get("/api/messages", (req, res) => {
     const receiverType = firstQueryValue(req.query.receiver_type);
     const receiverId = firstQueryValue(req.query.receiver_id);
+    const projectId = firstQueryValue(req.query.project_id);
     const limitRaw = firstQueryValue(req.query.limit);
     const limit = Math.min(Math.max(Number(limitRaw) || 50, 1), 500);
 
@@ -59,6 +60,10 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
     } else if (receiverId) {
       conditions.push("(receiver_id = ? OR receiver_type = 'all')");
       params.push(receiverId);
+    }
+    if (projectId) {
+      conditions.push("m.project_id = ?");
+      params.push(projectId);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -124,6 +129,7 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
         content,
         messageType,
         taskId,
+        projectId,
         idempotencyKey,
       }));
     } catch (err) {
@@ -238,7 +244,7 @@ export function registerChatMessageRoutes(ctx: ChatMessageRouteCtx, deps: ChatMe
               if (deptId === senderAgent.department_id) continue; // Skip own department
               handleMentionDelegation(senderAgent, deptId, content, lang);
             }
-            // Handle agent mentions — find their department and delegate there
+            // Handle agent mentions - find their department and delegate there
             for (const agentId of mentions.agentIds) {
               const mentioned = db.prepare("SELECT * FROM agents WHERE id = ?").get(agentId) as AgentRow | undefined;
               if (mentioned && mentioned.department_id && mentioned.department_id !== senderAgent.department_id) {

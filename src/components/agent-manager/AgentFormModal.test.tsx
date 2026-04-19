@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -46,9 +46,8 @@ function ModalHarness({ initialForm = buildForm(), currentXp = 0 }: { initialFor
 
   return (
     <AgentFormModal
-      isKo={false}
       locale="en"
-      tr={(_ko, en) => en}
+      tr={(_ko, en, ja = en, zh = en) => en ?? ja ?? zh}
       form={form}
       setForm={setForm}
       cliAccountPools={[]}
@@ -69,17 +68,20 @@ function getPreviewTextarea(): HTMLTextAreaElement {
   return preview;
 }
 
-describe("AgentFormModal agent profile builder", () => {
-  it("applies role presets and regenerates the preview", async () => {
-    const user = userEvent.setup();
+describe("AgentFormModal canonical cutover", () => {
+  it("shows canonical identity controls and compatibility mirrors", async () => {
     render(<ModalHarness />);
 
-    await user.click(screen.getByRole("button", { name: "Senior" }));
-
-    await waitFor(() => {
-      expect(getPreviewTextarea().value).toContain("Role template: Senior");
-      expect(getPreviewTextarea().value).toContain("Applied growth tier: 3/5");
-    });
+    expect(screen.getByText("Canonical Identity")).toBeInTheDocument();
+    expect(screen.getByText("Legacy Compatibility")).toBeInTheDocument();
+    expect(screen.getByLabelText("Family")).toBeInTheDocument();
+    expect(screen.getByLabelText("Career Stage")).toBeInTheDocument();
+    expect(screen.getByLabelText("Authority Level")).toBeInTheDocument();
+    expect(screen.getByLabelText("Specialization Key")).toBeInTheDocument();
+    expect(screen.getByLabelText("Execution Capability Profile")).toBeInTheDocument();
+    expect(screen.getAllByText("Junior").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Reviewer").length).toBeGreaterThan(0);
+    expect(getPreviewTextarea().value).toContain("Role template: Junior");
   });
 
   it("updates the generated prompt preview immediately when sliders change", async () => {
@@ -90,29 +92,23 @@ describe("AgentFormModal agent profile builder", () => {
     fireEvent.change(sliders[1], { target: { value: "5" } });
 
     await waitFor(() => {
-      expect(getPreviewTextarea().value).toContain("Applied growth tier: 5/5");
       expect(getPreviewTextarea().value).toContain("Execution Expert(5)");
     });
   });
 
-  it("updates workflow preview when the workflow role changes", async () => {
+  it("switches canonical identity source to stored when canonical fields are edited", async () => {
     const user = userEvent.setup();
     render(<ModalHarness />);
 
-    expect(screen.getByLabelText("Review Lenses")).toBeInTheDocument();
-    expect(screen.getByLabelText("Require 2-pass review")).toBeInTheDocument();
-    expect(screen.getByLabelText("Max Review Rounds")).toBeInTheDocument();
-    expect(getPreviewTextarea().value).toContain("2x role: Reviewer");
-    expect(getPreviewTextarea().value).toContain("Review depth: Force 2-pass");
-
-    await user.selectOptions(screen.getByLabelText("Workflow Role"), "primary_author");
-    await user.clear(screen.getByLabelText("Max Review Rounds"));
-    await user.type(screen.getByLabelText("Max Review Rounds"), "2");
+    await user.selectOptions(screen.getByLabelText("Family"), "reviewer");
+    await user.selectOptions(screen.getByLabelText("Career Stage"), "team-lead");
+    await user.clear(screen.getByLabelText("Authority Level"));
+    await user.type(screen.getByLabelText("Authority Level"), "4");
+    await user.type(screen.getByLabelText("Specialization Key"), "security.audit");
 
     await waitFor(() => {
-      expect(getPreviewTextarea().value).toContain("2x role: Primary Author");
-      expect(getPreviewTextarea().value).toContain("Max review rounds: 2");
-      expect(getPreviewTextarea().value).not.toContain("Review depth: Force 2-pass");
+      expect(screen.getAllByText("stored").length).toBeGreaterThan(0);
+      expect(screen.getByText(/Resolved identity:/)).toHaveTextContent("Reviewer / Team Lead");
     });
   });
 
@@ -127,7 +123,6 @@ describe("AgentFormModal agent profile builder", () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Codex Model")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Reasoning Level")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Codex Plan Mode")).not.toBeInTheDocument();
   });
 
   it("keeps provider-specific model controls out of the modal for gemini", async () => {
@@ -141,6 +136,5 @@ describe("AgentFormModal agent profile builder", () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Gemini Model")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Reasoning Level")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Codex Plan Mode")).not.toBeInTheDocument();
   });
 });

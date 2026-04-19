@@ -1,6 +1,7 @@
 import type { KeyboardEvent, RefObject } from "react";
 import type { Agent } from "../../types";
 import ChatModeHint from "./ChatModeHint";
+import type { CommandPreview } from "./model";
 
 type ChatMode = "chat" | "task" | "announcement" | "report";
 type Tr = (ko: string, en: string, ja?: string, zh?: string) => string;
@@ -12,6 +13,7 @@ interface ChatComposerProps {
   isDirectiveMode: boolean;
   isPrnCommandMode: boolean;
   isAnnouncementMode: boolean;
+  commandPreview: CommandPreview | null;
   tr: Tr;
   getAgentName: (agent: Agent | null | undefined) => string;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -29,6 +31,7 @@ export default function ChatComposer({
   isDirectiveMode,
   isPrnCommandMode,
   isAnnouncementMode,
+  commandPreview,
   tr,
   getAgentName,
   textareaRef,
@@ -38,6 +41,7 @@ export default function ChatComposer({
   onCreatePrn,
   onKeyDown,
 }: ChatComposerProps) {
+  const isTaskPreview = commandPreview?.code === "task";
   return (
     <>
       <div className="flex flex-shrink-0 gap-2 border-t border-gray-700/50 px-4 pb-1 pt-3">
@@ -50,7 +54,7 @@ export default function ChatComposer({
               : "bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
           }`}
         >
-          <span>{tr("업무 지시", "Task", "タスク", "任务")}</span>
+          <span>{tr("작업", "Task")}</span>
         </button>
 
         <button
@@ -59,7 +63,7 @@ export default function ChatComposer({
             mode === "announcement" ? "bg-yellow-500 text-gray-900" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
           }`}
         >
-          <span>{tr("공지", "Announcement", "告知", "公告")}</span>
+          <span>{tr("공지", "Announcement")}</span>
         </button>
 
         <button
@@ -71,7 +75,7 @@ export default function ChatComposer({
               : "bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
           }`}
         >
-          <span>{tr("보고 요청", "Report", "レポート", "报告")}</span>
+          <span>{tr("보고", "Report")}</span>
         </button>
 
         <button
@@ -79,11 +83,23 @@ export default function ChatComposer({
           disabled={!input.trim()}
           className="flex flex-1 items-center justify-center rounded-lg bg-indigo-700 px-2 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <span>{tr("PRN 작성", "Create PRN", "PRN作成", "生成PRN")}</span>
+          <span>{tr("PRN 작성", "Create PRN")}</span>
         </button>
       </div>
 
       <ChatModeHint mode={mode} isDirectiveMode={isDirectiveMode} isPrnCommandMode={isPrnCommandMode} tr={tr} />
+
+      {commandPreview ? (
+        <div className="border-t border-slate-800 bg-slate-950/80 px-4 py-2" data-testid="command-preview">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-md border border-cyan-400/40 bg-cyan-500/10 px-2 py-1 font-semibold text-cyan-200">
+              {commandPreview.label}
+            </span>
+            <span className="text-slate-300">{commandPreview.description}</span>
+            <span className="font-mono text-[11px] text-slate-500">{commandPreview.routeLabel}</span>
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex-shrink-0 px-4 pb-4 pt-2">
         <div
@@ -92,6 +108,8 @@ export default function ChatComposer({
               ? "border-red-500/50 focus-within:border-red-400"
               : isPrnCommandMode
                 ? "border-indigo-500/50 focus-within:border-indigo-400"
+                : isTaskPreview
+                  ? "border-blue-500/50 focus-within:border-blue-400"
                 : isAnnouncementMode
                   ? "border-yellow-500/50 focus-within:border-yellow-400"
                   : mode === "task"
@@ -108,29 +126,17 @@ export default function ChatComposer({
             onKeyDown={onKeyDown}
             placeholder={
               isAnnouncementMode
-                ? tr("공지 내용을 입력하세요...", "Write an announcement...", "告知内容を入力...", "输入公告内容...")
+                ? tr("공지 내용을 입력하세요...", "Write an announcement...")
                 : mode === "task"
-                  ? tr(
-                      "업무 지시 내용을 입력하세요...",
-                      "Write a task instruction...",
-                      "タスク指示を入力...",
-                      "输入任务指令...",
-                    )
+                  ? tr("작업 지시를 입력하세요...", "Write a task instruction...")
                   : mode === "report"
-                    ? tr(
-                        "보고 요청 내용을 입력하세요...",
-                        "Write a report request...",
-                        "レポート依頼を入力...",
-                        "输入报告请求...",
-                      )
+                    ? tr("보고 요청을 입력하세요...", "Write a report request...")
                     : selectedAgent
                       ? tr(
                           `${getAgentName(selectedAgent)}에게 메시지 보내기...`,
                           `Send a message to ${getAgentName(selectedAgent)}...`,
-                          `${getAgentName(selectedAgent)} へメッセージ送信...`,
-                          `发送消息给 ${getAgentName(selectedAgent)}...`,
                         )
-                      : tr("메시지를 입력하세요...", "Type a message...", "メッセージを入力...", "输入消息...")
+                      : tr("메시지를 입력하세요...", "Type a message...")
             }
             rows={1}
             className="min-h-[44px] max-h-32 flex-1 resize-none overflow-y-auto bg-transparent px-4 py-3 text-sm leading-relaxed text-gray-100 placeholder-gray-500 focus:outline-none"
@@ -150,6 +156,8 @@ export default function ChatComposer({
                   ? "bg-red-600 text-white hover:bg-red-500"
                   : isPrnCommandMode
                     ? "bg-indigo-600 text-white hover:bg-indigo-500"
+                    : isTaskPreview
+                      ? "bg-blue-600 text-white hover:bg-blue-500"
                     : isAnnouncementMode
                       ? "bg-yellow-500 text-gray-900 hover:bg-yellow-400"
                       : mode === "task"
@@ -159,7 +167,7 @@ export default function ChatComposer({
                           : "bg-blue-600 text-white hover:bg-blue-500"
                 : "cursor-not-allowed bg-gray-700 text-gray-600"
             }`}
-            aria-label={tr("전송", "Send", "送信", "发送")}
+            aria-label={tr("전송", "Send")}
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
               <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
@@ -168,10 +176,8 @@ export default function ChatComposer({
         </div>
         <p className="mt-1.5 px-1 text-xs text-gray-600">
           {tr(
-            "Enter 전송, Shift+Enter 줄바꿈, /prn 요구사항 생성",
+            "Enter 전송, Shift+Enter 줄바꿈, /prn 요구사항 초안 작성",
             "Enter to send, Shift+Enter newline, /prn to draft requirements",
-            "Enter送信, Shift+Enter改行, /prn で要件草案",
-            "Enter发送，Shift+Enter换行，/prn 生成需求草案",
           )}
         </p>
       </div>

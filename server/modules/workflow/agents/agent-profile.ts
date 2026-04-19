@@ -30,8 +30,6 @@ export interface AgentClassPath {
 
 export interface AgentPromotionPolicy {
   auto_promote_at_xp?: number;
-  from_role?: string;
-  to_role?: string;
   team_leader_manual?: boolean;
   notes?: string;
 }
@@ -197,10 +195,6 @@ function normalizePromotionPolicy(value: unknown): AgentProfile["promotion_polic
   if (Number.isFinite(Number(source.auto_promote_at_xp))) {
     output.auto_promote_at_xp = Number(source.auto_promote_at_xp);
   }
-  const fromRole = normalizeText(source.from_role);
-  if (fromRole) output.from_role = fromRole;
-  const toRole = normalizeText(source.to_role);
-  if (toRole) output.to_role = toRole;
   if (typeof source.team_leader_manual === "boolean") {
     output.team_leader_manual = source.team_leader_manual;
   }
@@ -387,14 +381,11 @@ export function buildAgentPromptProfileBlock(input: {
     const value = profile.promotion_policy;
     if (!value) return "";
     if (typeof value === "string") return value;
-    const fromRole = normalizeText(value.from_role);
-    const toRole = normalizeText(value.to_role);
     const atXp = Number.isFinite(Number(value.auto_promote_at_xp)) ? Number(value.auto_promote_at_xp) : null;
     const teamLeaderManual = value.team_leader_manual === true ? "team_leader_manual" : "";
-    const base = [fromRole, toRole].filter(Boolean).length > 0 ? `${fromRole || "?"} -> ${toRole || "?"}` : "";
     const xpPart = atXp !== null ? `@xp>=${atXp}` : "";
     const notePart = normalizeText(value.notes);
-    return [base, xpPart, teamLeaderManual, notePart].filter(Boolean).join(" ");
+    return [xpPart, teamLeaderManual, notePart].filter(Boolean).join(" ");
   })();
   const overrideText = normalizeText(profile.custom_prompt_override) || legacyPersonality;
 

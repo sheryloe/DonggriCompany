@@ -17,9 +17,16 @@ type TranslationInput = LangText | string;
 function parseLanguage(value?: string | null): UiLanguage | null {
   const code = (value ?? "").toLowerCase().replace("_", "-");
   if (code === "ko" || code.startsWith("ko-")) return "ko";
-  if (code === "en" || code.startsWith("en-")) return "en";
-  if (code === "ja" || code.startsWith("ja-")) return "ja";
-  if (code === "zh" || code.startsWith("zh-")) return "zh";
+  if (
+    code === "en" ||
+    code.startsWith("en-") ||
+    code === "ja" ||
+    code.startsWith("ja-") ||
+    code === "zh" ||
+    code.startsWith("zh-")
+  ) {
+    return "en";
+  }
   return null;
 }
 
@@ -32,10 +39,8 @@ export function localeName(
   locale: UiLanguage | string,
   obj: { name: string; name_ko?: string | null; name_ja?: string | null; name_zh?: string | null },
 ): string {
-  const lang = (typeof locale === "string" ? locale : "en").slice(0, 2);
+  const lang = normalizeLanguage(typeof locale === "string" ? locale : "en");
   if (lang === "ko") return obj.name_ko || obj.name;
-  if (lang === "ja") return obj.name_ja || obj.name;
-  if (lang === "zh") return obj.name_zh || obj.name;
   return obj.name;
 }
 
@@ -60,37 +65,19 @@ function detectRuntimeLanguage(): UiLanguage {
   } catch {
     storedLanguage = null;
   }
-  return parseLanguage(storedLanguage) ?? detectBrowserLanguage();
+  if (storedLanguage && storedLanguage.trim()) {
+    return normalizeLanguage(storedLanguage);
+  }
+  return detectBrowserLanguage();
 }
 
 export function localeFromLanguage(lang: UiLanguage): string {
-  switch (lang) {
-    case "ko":
-      return "ko-KR";
-    case "en":
-      return "en-US";
-    case "ja":
-      return "ja-JP";
-    case "zh":
-      return "zh-CN";
-    default:
-      return "en-US";
-  }
+  if (lang === "ko") return "ko-KR";
+  return "en-US";
 }
 
 export function pickLang(lang: UiLanguage, text: LangText): string {
-  switch (lang) {
-    case "ko":
-      return text.ko;
-    case "en":
-      return text.en;
-    case "ja":
-      return text.ja ?? text.en;
-    case "zh":
-      return text.zh ?? text.en;
-    default:
-      return text.en;
-  }
+  return lang === "ko" ? text.ko : text.en;
 }
 
 export interface I18nContextValue {

@@ -246,7 +246,7 @@ describe("selectAutoAssignableAgentForTask", () => {
         project_id: null,
       });
 
-      expect(scope).toEqual(["novel-pack-agent"]);
+      expect(scope).toBeNull();
       expect(selected?.agent.id).toBe("novel-pack-agent");
     } finally {
       db.close();
@@ -294,7 +294,7 @@ describe("selectAutoAssignableAgentForTask", () => {
       });
       const afterCount = (db.prepare("SELECT COUNT(*) AS c FROM agents").get() as { c: number }).c;
 
-      expect(scope).toEqual(["agent-global-design"]);
+      expect(scope).toBeNull();
       expect(afterCount).toBe(beforeCount);
       expect(selected?.agent.id).toBe("agent-global-design");
     } finally {

@@ -98,18 +98,9 @@ function parseJsonObject(raw: unknown): Record<string, unknown> | null {
   return raw as Record<string, unknown>;
 }
 
-function isJulesAgent(agentName: unknown, cliProvider: unknown): boolean {
-  const provider = normalizeText(cliProvider).toLowerCase();
-  if (provider === "jules") return true;
-  const name = normalizeText(agentName).toLowerCase();
-  return name === "jules";
-}
-
 export function resolveAgentWorkflowProfile(input: ResolveAgentWorkflowProfileInput): AgentWorkflowProfile {
   const rawObject = parseJsonObject(input.workflowProfileRaw);
-  const defaultRole: AgentWorkflowRole = isJulesAgent(input.agentName, input.cliProvider)
-    ? "primary_author"
-    : "reviewer";
+  const defaultRole: AgentWorkflowRole = "reviewer";
   const role = normalizeRole(rawObject?.role) ?? defaultRole;
   const twoPassRequired = normalizeBoolean(rawObject?.two_pass_required, true);
   const maxReviewRounds = normalizeMaxReviewRounds(rawObject?.max_review_rounds, role === "primary_author" ? 2 : null);

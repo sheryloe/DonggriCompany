@@ -4,18 +4,30 @@
 # Local/runtime artifacts
 .git
 .gitignore
+.climpire
+.climpire-worktrees
+.local
 node_modules
 data
 logs
 coverage
 playwright-report
+reports
+test-results
+tests
 
 # Build/test caches
 dist
 .tmp
+.tmp*
 *.tsbuildinfo
 
 # OS/editor noise
 .DS_Store
 .vscode
 .idea
+
+# Local db/log secrets
+*.sqlite
+*.sqlite-*
+*.log

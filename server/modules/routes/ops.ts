@@ -16,6 +16,7 @@ import { registerSkillRoutes } from "./ops/skills/routes.ts";
 import { registerCodexSubagentCatalogRoutes } from "./ops/subagents/catalog-routes.ts";
 import { registerApiDocsRoutes } from "./ops/api-docs.ts";
 import { registerWorkflowPackRoutes } from "./ops/workflow-packs.ts";
+import { registerCompanyRoutes } from "./ops/company-routes.ts";
 
 export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   const __ctx: RuntimeContext = ctx;
@@ -214,6 +215,7 @@ export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   registerOfficeRunnerRoutes(__ctx);
 
   registerModelRoutes(__ctx);
+  registerCompanyRoutes(__ctx);
 
   const { normalizeSkillLearnProviders } = registerSkillRoutes(__ctx);
   registerCodexSubagentCatalogRoutes(__ctx);

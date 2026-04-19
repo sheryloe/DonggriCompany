@@ -11,6 +11,14 @@ export type ProviderModelConfig = Record<
 type ResolveProviderExecutionPolicyInput = {
   provider: string | null | undefined;
   providerModelConfig: ProviderModelConfig;
+  canonicalOverride?: {
+    provider?: string | null;
+    model?: string | null;
+    reasoningLevel?: string | null;
+    subProvider?: string | null;
+    subModel?: string | null;
+    subReasoningLevel?: string | null;
+  } | null;
 };
 
 export type ProviderExecutionPolicy = {
@@ -29,11 +37,20 @@ export function resolveProviderExecutionPolicy(input: ResolveProviderExecutionPo
   const provider = String(input.provider ?? "")
     .trim()
     .toLowerCase();
-  const providerConfig = input.providerModelConfig[provider] ?? null;
+  const canonicalProvider = String(input.canonicalOverride?.provider ?? input.canonicalOverride?.subProvider ?? "")
+    .trim()
+    .toLowerCase();
+  const canonicalOverride =
+    input.canonicalOverride &&
+    (!canonicalProvider || !provider || canonicalProvider === provider)
+      ? input.canonicalOverride
+      : null;
   return {
-    model: normalizeOptionalString(providerConfig?.model),
-    subModel: normalizeOptionalString(providerConfig?.subModel),
-    reasoningLevel: normalizeOptionalString(providerConfig?.reasoningLevel),
-    subModelReasoningLevel: normalizeOptionalString(providerConfig?.subModelReasoningLevel),
+    model: normalizeOptionalString(canonicalOverride?.model),
+    subModel: normalizeOptionalString(canonicalOverride?.subModel),
+    reasoningLevel:
+      normalizeOptionalString(canonicalOverride?.reasoningLevel),
+    subModelReasoningLevel:
+      normalizeOptionalString(canonicalOverride?.subReasoningLevel),
   };
 }

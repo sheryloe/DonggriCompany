@@ -40,6 +40,22 @@ const CAPABILITY_LABELS = {
     communication: "Communication",
     leadership: "Leadership",
   },
+  ja: {
+    execution: "Execution",
+    architecture: "Architecture",
+    review: "Review",
+    research: "Research",
+    communication: "Communication",
+    leadership: "Leadership",
+  },
+  zh: {
+    execution: "Execution",
+    architecture: "Architecture",
+    review: "Review",
+    research: "Research",
+    communication: "Communication",
+    leadership: "Leadership",
+  },
 } as const;
 
 const STYLE_LABELS = {
@@ -50,6 +66,18 @@ const STYLE_LABELS = {
     collaboration: "협업",
   },
   en: {
+    tone: "Tone",
+    autonomy: "Autonomy",
+    strictness: "Strictness",
+    collaboration: "Collaboration",
+  },
+  ja: {
+    tone: "Tone",
+    autonomy: "Autonomy",
+    strictness: "Strictness",
+    collaboration: "Collaboration",
+  },
+  zh: {
     tone: "Tone",
     autonomy: "Autonomy",
     strictness: "Strictness",
@@ -66,6 +94,20 @@ const LEVEL_WORDS = {
     5: "전문가",
   },
   en: {
+    1: "Very low",
+    2: "Low",
+    3: "Medium",
+    4: "High",
+    5: "Expert",
+  },
+  ja: {
+    1: "Very low",
+    2: "Low",
+    3: "Medium",
+    4: "High",
+    5: "Expert",
+  },
+  zh: {
     1: "Very low",
     2: "Low",
     3: "Medium",
@@ -117,12 +159,12 @@ const PROFILE_PRESETS: Record<AgentRole, AgentProfile> = {
   },
 };
 
-function normalizeLocale(locale?: string): "ko" | "en" {
-  return String(locale ?? "")
-    .toLowerCase()
-    .startsWith("ko")
-    ? "ko"
-    : "en";
+function normalizeLocale(locale?: string): "ko" | "en" | "ja" | "zh" {
+  const normalized = String(locale ?? "").toLowerCase();
+  if (normalized.startsWith("ko")) return "ko";
+  if (normalized.startsWith("ja")) return "ja";
+  if (normalized.startsWith("zh")) return "zh";
+  return "en";
 }
 
 function normalizeLevel(value: unknown, fallback: AgentLevelValue): AgentLevelValue {
@@ -168,11 +210,7 @@ function normalizePromotionPolicy(value: unknown): AgentProfile["promotion_polic
   const source = value as Record<string, unknown>;
   const output: AgentPromotionPolicy = {};
   if (Number.isFinite(Number(source.auto_promote_at_xp))) output.auto_promote_at_xp = Number(source.auto_promote_at_xp);
-  const fromRole = normalizeString(source.from_role);
-  const toRole = normalizeString(source.to_role);
   const notes = normalizeString(source.notes);
-  if (fromRole) output.from_role = fromRole;
-  if (toRole) output.to_role = toRole;
   if (typeof source.team_leader_manual === "boolean") output.team_leader_manual = source.team_leader_manual;
   if (notes) output.notes = notes;
   return Object.keys(output).length > 0 ? output : null;
@@ -305,13 +343,10 @@ function formatClassPath(value: AgentProfile["class_path"]): string {
 function formatPromotionPolicy(value: AgentProfile["promotion_policy"]): string {
   if (!value) return "";
   if (typeof value === "string") return value;
-  const fromRole = normalizeString(value.from_role);
-  const toRole = normalizeString(value.to_role);
   const xp = Number.isFinite(Number(value.auto_promote_at_xp)) ? Number(value.auto_promote_at_xp) : null;
   const manual = value.team_leader_manual ? "team_leader_manual" : "";
   const notes = normalizeString(value.notes);
-  const base = [fromRole, toRole].filter(Boolean).length > 0 ? `${fromRole || "?"} -> ${toRole || "?"}` : "";
-  return [base, xp !== null ? `@xp>=${xp}` : "", manual, notes].filter(Boolean).join(" ");
+  return [xp !== null ? `@xp>=${xp}` : "", manual, notes].filter(Boolean).join(" ");
 }
 
 export function buildAgentPromptPreview(params: {

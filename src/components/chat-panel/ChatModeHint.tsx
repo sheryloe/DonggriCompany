@@ -17,19 +17,19 @@ export default function ChatModeHint({ mode, isDirectiveMode, isPrnCommandMode, 
       {isDirectiveMode ? (
         <p className="text-xs font-medium text-red-400">
           {tr(
-            "Directive 모드: 기획팀이 자동으로 팀장 파이프라인을 시작합니다.",
+            "Directive 모드: 기획 리더 파이프라인이 자동 시작됩니다.",
             "Directive mode: Planning leader pipeline starts automatically.",
-            "Directiveモード: 企画チームが自動でチームリーダーパイプラインを開始します。",
-            "Directive 模式：企划组自动启动组长流水线。",
+            "Directive モード: Planning leader pipeline が自動開始されます。",
+            "Directive 模式：规划负责人流程将自动启动。",
           )}
         </p>
       ) : isPrnCommandMode ? (
         <p className="text-xs font-medium text-indigo-300">
           {tr(
-            "/prn 명령: 요구사항(PRN) 초안을 생성한 뒤 대표 검토 후 지시로 전환합니다.",
+            "/prn 명령: PRN 초안을 생성하고 검토 후 directive로 전환합니다.",
             "/prn command: generate a PRN draft, review it, then convert to directive.",
-            "/prn コマンド: PRN草案を生成し、確認後に指示へ変換します。",
-            "/prn 命令：先生成 PRN 草案，确认后再转为指令。",
+            "/prn コマンド: PRN 下書きを生成し、確認後に directive へ変換します。",
+            "/prn 命令：先生成 PRN 草案，审阅后再转换为 directive。",
           )}
         </p>
       ) : (
@@ -37,30 +37,30 @@ export default function ChatModeHint({ mode, isDirectiveMode, isPrnCommandMode, 
           {mode === "task" && (
             <p className="text-xs text-blue-400">
               {tr(
-                "업무 지시 모드: 선택한 에이전트에게 태스크를 전달합니다.",
+                "작업 모드: 선택한 에이전트에게 작업 지시를 전달합니다.",
                 "Task mode: send work instructions to the selected agent.",
-                "タスクモード: 選択したエージェントに指示を送信します。",
-                "任务模式：向所选代理发送任务指令。",
+                "タスクモード: 選択したエージェントに作業指示を送ります。",
+                "任务模式：向已选择的代理发送任务指令。",
               )}
             </p>
           )}
           {mode === "announcement" && (
             <p className="text-xs text-yellow-400">
               {tr(
-                "공지 모드: 전체 에이전트에게 브로드캐스트됩니다.",
+                "공지 모드: 전체 에이전트에게 브로드캐스트합니다.",
                 "Announcement mode: broadcast to all agents.",
-                "告知モード: 全エージェントへ配信されます。",
-                "公告模式：广播给所有代理。",
+                "告知モード: すべてのエージェントへブロードキャストします。",
+                "公告模式：向全部代理广播。",
               )}
             </p>
           )}
           {mode === "report" && (
             <p className="text-xs text-emerald-400">
               {tr(
-                "보고 요청 모드: 보고서/발표 자료 작성을 요청합니다.",
+                "보고 모드: 보고서/발표 초안을 요청합니다.",
                 "Report mode: request a report or presentation draft.",
-                "レポートモード: レポート/資料作成を依頼します。",
-                "报告模式：请求生成报告或汇报材料。",
+                "レポートモード: レポート/発表下書きを依頼します。",
+                "报告模式：请求报告或演示稿草案。",
               )}
             </p>
           )}

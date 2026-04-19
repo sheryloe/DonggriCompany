@@ -39,11 +39,7 @@ function isReasoningStreamLine(line: string): boolean {
 }
 
 function detectSignals(text: string): { remotionSignals: string[]; forbiddenSignals: string[] } {
-  const remotionSignals: string[] = [];
-  for (const pattern of REMOTION_PATTERNS) {
-    if (pattern.regex.test(text)) remotionSignals.push(pattern.key);
-  }
-
+  const remotionSignals = new Set<string>();
   const forbiddenSignals = new Set<string>();
   const lines = text.split(/\r?\n/);
   for (const rawLine of lines) {
@@ -53,6 +49,11 @@ function detectSignals(text: string): { remotionSignals: string[]; forbiddenSign
     // Treat only execution/report content as policy evidence.
     if (isReasoningStreamLine(line)) continue;
     if (hasNegationHint(line)) continue;
+    for (const pattern of REMOTION_PATTERNS) {
+      if (pattern.regex.test(line)) {
+        remotionSignals.add(pattern.key);
+      }
+    }
     for (const pattern of FORBIDDEN_USAGE_PATTERNS) {
       if (pattern.regex.test(line)) {
         forbiddenSignals.add(pattern.key);
@@ -61,7 +62,7 @@ function detectSignals(text: string): { remotionSignals: string[]; forbiddenSign
   }
 
   return {
-    remotionSignals,
+    remotionSignals: [...remotionSignals],
     forbiddenSignals: [...forbiddenSignals],
   };
 }

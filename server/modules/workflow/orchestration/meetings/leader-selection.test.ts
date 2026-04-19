@@ -93,44 +93,6 @@ function insertLeader(db: DatabaseSync, input: { id: string; dept: string; name?
   ).run(input.id, input.name ?? input.id, input.name ?? input.id, input.status ?? "idle", input.dept);
 }
 
-function buildFindTeamLeader(db: DatabaseSync) {
-  return (departmentId: string, candidateAgentIds?: string[] | null): AgentRow | null => {
-    if (!departmentId) return null;
-    if (Array.isArray(candidateAgentIds)) {
-      if (candidateAgentIds.length === 0) return null;
-      const placeholders = candidateAgentIds.map(() => "?").join(",");
-      return (
-        (db
-          .prepare(
-            `
-            SELECT *
-            FROM agents
-            WHERE department_id = ?
-              AND role = 'team_leader'
-              AND id IN (${placeholders})
-            ORDER BY created_at ASC
-            LIMIT 1
-          `,
-          )
-          .get(departmentId, ...candidateAgentIds) as AgentRow | undefined) ?? null
-      );
-    }
-    return (
-      (db
-        .prepare(
-          `
-          SELECT *
-          FROM agents
-          WHERE department_id = ? AND role = 'team_leader'
-          ORDER BY created_at ASC
-          LIMIT 1
-        `,
-        )
-        .get(departmentId) as AgentRow | undefined) ?? null
-    );
-  };
-}
-
 describe("meeting leader selection - office pack scope", () => {
   it("video_preprod task review leader 선정 시 동일 팩 리더만 참여한다", () => {
     const db = setupDb();
@@ -161,7 +123,6 @@ describe("meeting leader selection - office pack scope", () => {
 
       const tools = createMeetingLeaderSelectionTools({
         db,
-        findTeamLeader: buildFindTeamLeader(db),
         detectTargetDepartments: () => [],
       });
 
@@ -232,7 +193,6 @@ describe("meeting leader selection - office pack scope", () => {
 
       const tools = createMeetingLeaderSelectionTools({
         db,
-        findTeamLeader: buildFindTeamLeader(db),
         detectTargetDepartments: () => ["design", "dev"],
       });
 

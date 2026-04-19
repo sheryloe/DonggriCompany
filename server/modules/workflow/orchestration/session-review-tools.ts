@@ -1,4 +1,5 @@
 import type { Lang } from "../../../types/lang.ts";
+import { getCanonicalSnapshotByVersion, previewCanonicalRouting } from "../../company/canonical-policy.ts";
 
 type CreateSessionReviewToolsDeps = Record<string, any>;
 
@@ -22,16 +23,101 @@ export function createSessionReviewTools(deps: CreateSessionReviewToolsDeps) {
     pickL,
     l,
     db,
+    getProviderModelConfig,
     finishReview,
     randomDelay,
     startPlannedApprovalMeeting,
   } = deps;
+  const taskColumns = (() => {
+    try {
+      const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name?: unknown }>;
+      return new Set(columns.map((column) => String(column.name ?? "").trim()).filter(Boolean));
+    } catch {
+      return new Set<string>();
+    }
+  })();
 
   function ensureTaskExecutionSession(taskId: string, agentId: string, provider: string): any {
     const now = nowMs();
+    const taskRow = db.prepare(
+      `SELECT id, title, description, project_path, workflow_pack_key, policy_version, resolved_execution_policy_json
+       FROM tasks
+       WHERE id = ?`,
+    ).get(taskId) as
+      | {
+          id: string;
+          title: string | null;
+          description: string | null;
+          project_path: string | null;
+          workflow_pack_key: string | null;
+          policy_version: string | null;
+          resolved_execution_policy_json: string | null;
+        }
+      | undefined;
+    if (!taskRow) {
+      throw new Error(`task_not_found:${taskId}`);
+    }
+
+    let policyVersion = String(taskRow.policy_version ?? "").trim() || null;
+    if (!policyVersion) {
+      const compatPolicy = previewCanonicalRouting({
+        text: [taskRow.title ?? "", taskRow.description ?? ""].filter(Boolean).join("\n"),
+        projectPath: taskRow.project_path,
+        workflowPackKey: taskRow.workflow_pack_key,
+        providerModelConfig: getProviderModelConfig(),
+        defaultProvider: provider,
+      });
+      const updates: string[] = [];
+      const params: unknown[] = [];
+      if (taskColumns.has("policy_version")) {
+        updates.push("policy_version = ?");
+        params.push(compatPolicy.policyVersion);
+      }
+      if (taskColumns.has("resolved_execution_policy_json")) {
+        updates.push("resolved_execution_policy_json = ?");
+        params.push(JSON.stringify(compatPolicy));
+      }
+      if (taskColumns.has("required_artifacts_json")) {
+        updates.push("required_artifacts_json = ?");
+        params.push(JSON.stringify(compatPolicy.requiredArtifacts));
+      }
+      if (taskColumns.has("approval_gate_state_json")) {
+        updates.push("approval_gate_state_json = ?");
+        params.push(
+          JSON.stringify({
+            gates: compatPolicy.approvalGates,
+            blocked: compatPolicy.approvalGates.includes("artifact-health-block"),
+          }),
+        );
+      }
+      if (updates.length > 0) {
+        params.push(taskId);
+        db.prepare(`UPDATE tasks SET ${updates.join(", ")} WHERE id = ?`).run(...params);
+      }
+      policyVersion = compatPolicy.policyVersion;
+      appendTaskLog(taskId, "system", `policy_snapshot_missing_on_legacy_row -> bound ${policyVersion}`);
+      console.info("[workflow] policy_snapshot_bound_to_task", { taskId, policyVersion, reason: "execution_session" });
+    }
+
+    const pinnedSnapshot = getCanonicalSnapshotByVersion(policyVersion);
+    if (!pinnedSnapshot) {
+      appendTaskLog(taskId, "system", `policy_snapshot_lookup_failed (${policyVersion})`);
+      console.warn("[workflow] policy_snapshot_lookup_failed", { taskId, policyVersion });
+      throw new Error(`policy_snapshot_lookup_failed:${policyVersion}`);
+    }
+    const policyResolution = previewCanonicalRouting({
+      text: [taskRow.title ?? "", taskRow.description ?? ""].filter(Boolean).join("\n"),
+      projectPath: taskRow.project_path,
+      workflowPackKey: taskRow.workflow_pack_key,
+      providerModelConfig: getProviderModelConfig(),
+      defaultProvider: provider,
+      policyVersion,
+    });
     const existing = taskExecutionSessions.get(taskId);
-    if (existing && existing.agentId === agentId && existing.provider === provider) {
+    if (existing && existing.agentId === agentId && existing.provider === provider && existing.policyVersion === policyVersion) {
       existing.lastTouchedAt = now;
+      existing.policySnapshotHash = pinnedSnapshot.policy.hash;
+      existing.policyResolutionJson = JSON.stringify(policyResolution);
       taskExecutionSessions.set(taskId, existing);
       return existing;
     }
@@ -43,14 +129,23 @@ export function createSessionReviewTools(deps: CreateSessionReviewToolsDeps) {
       provider,
       openedAt: now,
       lastTouchedAt: now,
+      policyVersion,
+      policySnapshotHash: pinnedSnapshot.policy.hash,
+      policyResolutionJson: JSON.stringify(policyResolution),
     };
     taskExecutionSessions.set(taskId, nextSession);
+    appendTaskLog(taskId, "system", `policy_snapshot_bound_to_session (${policyVersion})`);
+    console.info("[workflow] policy_snapshot_bound_to_session", {
+      taskId,
+      sessionId: nextSession.sessionId,
+      policyVersion,
+    });
     appendTaskLog(
       taskId,
       "system",
       existing
-        ? `Execution session rotated: ${existing.sessionId} -> ${nextSession.sessionId} (agent=${agentId}, provider=${provider})`
-        : `Execution session opened: ${nextSession.sessionId} (agent=${agentId}, provider=${provider})`,
+        ? `Execution session rotated: ${existing.sessionId} -> ${nextSession.sessionId} (agent=${agentId}, provider=${provider}, policy=${policyVersion})`
+        : `Execution session opened: ${nextSession.sessionId} (agent=${agentId}, provider=${provider}, policy=${policyVersion})`,
     );
     return nextSession;
   }

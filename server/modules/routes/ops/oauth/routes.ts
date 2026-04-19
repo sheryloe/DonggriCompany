@@ -426,18 +426,20 @@ export function registerOAuthRoutes(ctx: RuntimeContext): void {
         status?: "active" | "disabled";
       }) ?? {};
 
-    const existing = db.prepare("SELECT id FROM oauth_accounts WHERE id = ?").get(id) as { id: string } | undefined;
+    const existing = db.prepare("SELECT id, provider FROM oauth_accounts WHERE id = ?").get(id) as
+      | { id: string; provider: string }
+      | undefined;
     if (!existing) return res.status(404).json({ error: "account_not_found" });
 
-    const updates: string[] = ["updated_at = ?"];
-    const params: unknown[] = [nowMs()];
+    const warnings: string[] = [];
+    const updates: string[] = [];
+    const params: unknown[] = [];
     if ("label" in body) {
       updates.push("label = ?");
       params.push(body.label ?? null);
     }
     if ("model_override" in body) {
-      updates.push("model_override = ?");
-      params.push(body.model_override ?? null);
+      warnings.push("model_override_ignored_compatibility_only");
     }
     if (typeof body.priority === "number" && Number.isFinite(body.priority)) {
       updates.push("priority = ?");
@@ -448,10 +450,14 @@ export function registerOAuthRoutes(ctx: RuntimeContext): void {
       params.push(body.status);
     }
 
-    params.push(id);
-    db.prepare(`UPDATE oauth_accounts SET ${updates.join(", ")} WHERE id = ?`).run(...(params as SQLInputValue[]));
-    const providerRow = db.prepare("SELECT provider FROM oauth_accounts WHERE id = ?").get(id) as { provider: string };
-    ensureOAuthActiveAccount(providerRow.provider);
-    res.json({ ok: true });
+    if (updates.length > 0) {
+      updates.push("updated_at = ?");
+      params.push(nowMs());
+      params.push(id);
+      db.prepare(`UPDATE oauth_accounts SET ${updates.join(", ")} WHERE id = ?`).run(...(params as SQLInputValue[]));
+      ensureOAuthActiveAccount(existing.provider);
+    }
+
+    res.json({ ok: true, warnings });
   });
 }

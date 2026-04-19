@@ -28,7 +28,16 @@ RUN groupadd --gid ${APP_GID} app \
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
-COPY . .
+COPY index.html vite.config.ts eslint.config.mjs tsconfig.json tsconfig.app.json tsconfig.node.json ./
+COPY src ./src
+COPY server ./server
+COPY scripts ./scripts
+COPY public ./public
+COPY assets ./assets
+COPY agents ./agents
+COPY templates ./templates
+COPY tools ./tools
+COPY AGENTS.md AgentSelectModels.md skills.md README.md README_ko.md README_jp.md README_zh.md SECURITY.md LICENSE ./
 RUN pnpm build
 
 # Ensure runtime paths are writable by non-root user

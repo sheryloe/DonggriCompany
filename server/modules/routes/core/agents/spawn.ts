@@ -7,6 +7,7 @@ import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-a
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/core/video-skill-bootstrap.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
+import { previewCanonicalRouting } from "../../../company/canonical-policy.ts";
 
 export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
   const {
@@ -209,6 +210,18 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
     const workflowPackGuidance = buildWorkflowPackExecutionGuidance(task.workflow_pack_key, taskLang, {
       videoArtifactRelativePath: videoArtifactSpec?.relativePath,
     });
+    const modelConfig = getProviderModelConfig();
+    const canonicalExecutionPolicy =
+      typeof executionSession.policyResolutionJson === "string" && executionSession.policyResolutionJson.trim()
+        ? (JSON.parse(executionSession.policyResolutionJson) as ReturnType<typeof previewCanonicalRouting>)
+        : previewCanonicalRouting({
+            text: [task.title, task.description ?? ""].filter(Boolean).join("\n"),
+            projectPath: task.project_path,
+            workflowPackKey: task.workflow_pack_key,
+            providerModelConfig: modelConfig,
+            defaultProvider: provider,
+            policyVersion: executionSession.policyVersion,
+          });
 
     const prompt = buildTaskExecutionPrompt(
       [
@@ -218,6 +231,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
         `[Task] ${task.title}`,
         task.description ? `\n${task.description}` : "",
         workflowPackGuidance ? `\n[Workflow Pack Execution Rules]\n${workflowPackGuidance}` : "",
+        `\n[Canonical Policy]\nversion=${canonicalExecutionPolicy.policyVersion}\nfamily=${canonicalExecutionPolicy.family}\nstage=${canonicalExecutionPolicy.stage}\ntier=${canonicalExecutionPolicy.tier}\nspecialization=${canonicalExecutionPolicy.specialization ?? "none"}`,
         `NOTE: You are working in an isolated Git worktree branch (climpire/${taskId.slice(0, 8)}). Commit your changes normally.`,
         `Agent: ${agent.name} (${roleLabel}, ${agent.department_name || "Unassigned"})`,
         agentProfileBlock,
@@ -244,7 +258,8 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
 
     const spawnPolicy = resolveProviderExecutionPolicy({
       provider,
-      providerModelConfig: getProviderModelConfig(),
+      providerModelConfig: modelConfig,
+      canonicalOverride: canonicalExecutionPolicy,
     });
     const spawnModel = spawnPolicy.model;
     const spawnReasoningLevel = spawnPolicy.reasoningLevel;

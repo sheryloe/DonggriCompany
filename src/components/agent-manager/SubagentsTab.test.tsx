@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -33,9 +33,8 @@ function Harness() {
 
   return (
     <SubagentsTab
-      tr={(_ko, en) => en}
+      tr={(_ko, en, ja = en, zh = en) => en ?? ja ?? zh}
       locale="en"
-      isKo={false}
       departments={departments}
       deptTab={deptTab}
       setDeptTab={setDeptTab}

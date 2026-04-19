@@ -32,7 +32,7 @@ export function getApiSettingsCopy(t: TFunction) {
   return {
     title: t({ ko: "API 제공자", en: "API Providers" }),
     intro: t({
-      ko: "로컬 모델, 프론티어 모델, 호환 API를 등록하고 에이전트 실행에 연결합니다.",
+      ko: "로컬, 프론티어, 호환 API를 등록하고 에이전트 실행과 연결합니다.",
       en: "Register local, frontier, and compatible APIs, then connect them to agent execution.",
     }),
     editProvider: t({ ko: "제공자 수정", en: "Edit Provider" }),
@@ -61,7 +61,7 @@ export function getApiSettingsCopy(t: TFunction) {
       en: "The selected preset manages the protocol and Base URL.",
     }),
     usuallyNotNeededForLocal: t({ ko: "로컬 환경에서는 보통 필요하지 않음", en: "usually not needed for local" }),
-    changeApiKeyPlaceholder: t({ ko: "변경하려면 입력 (비워두면 유지)", en: "Enter to change (blank=keep)" }),
+    changeApiKeyPlaceholder: t({ ko: "변경하려면 입력 (비우면 유지)", en: "Enter to change (blank=keep)" }),
     noProviders: t({
       ko: "등록된 API 제공자가 없습니다. 상단의 추가 버튼으로 시작하세요.",
       en: "No API providers registered. Click Add above to get started.",
@@ -90,7 +90,7 @@ export function getGatewaySettingsCopy(t: TFunction) {
     assignedAgent: t({ ko: "연결 에이전트", en: "Agent" }),
     noAssignedAgent: t({ ko: "연결된 에이전트 없음", en: "No agent assigned" }),
     directiveRoutingHelp: t({
-      ko: "$로 시작하면 회사 지시가 되고, 일반 메시지는 선택한 에이전트에게 1:1로 전달됩니다.",
+      ko: "$로 시작하면 회사 지시가 되고, 일반 메시지는 선택된 에이전트에게 1:1로 전달됩니다.",
       en: "Messages starting with $ become company directives; normal messages go 1:1 to the selected agent.",
     }),
     testSend: t({ ko: "테스트 전송", en: "Test Send" }),
@@ -131,7 +131,7 @@ export function getOauthSettingsCopy(t: TFunction) {
     connectFailed: t({ ko: "OAuth 연결 실패", en: "OAuth connection failed" }),
     connected: t({ ko: "연결 완료", en: "connected" }),
     storageReady: t({
-      ko: "OAuth 저장소 활성화 (암호화 키 설정됨)",
+      ko: "OAuth 저장소 활성 (암호화 키 설정됨)",
       en: "OAuth storage is active (encryption key configured)",
     }),
     storageMissing: t({
@@ -143,7 +143,7 @@ export function getOauthSettingsCopy(t: TFunction) {
     detectedNotRunnable: t({ ko: "감지됨 (실행 불가)", en: "Detected (not runnable)" }),
     autoRefreshed: t({ ko: "자동 갱신됨", en: "Auto-refreshed" }),
     refreshFailed: t({ ko: "갱신 실패", en: "Refresh failed" }),
-    expiredReauth: t({ ko: "만료 · 재인증 필요", en: "Expired · re-auth needed" }),
+    expiredReauth: t({ ko: "만료 - 재인증 필요", en: "Expired - re-auth needed" }),
     expired: t({ ko: "만료됨", en: "Expired" }),
     reconnect: t({ ko: "다시 연결", en: "Reconnect" }),
     disconnecting: t({ ko: "연결 해제 중...", en: "Disconnecting..." }),
@@ -181,7 +181,7 @@ export function getOauthSettingsCopy(t: TFunction) {
     save: t({ ko: "저장", en: "Save" }),
     executionAccounts: t({ ko: "실행 계정 연결", en: "Execution Accounts" }),
     encryptionKeyRequired: t({ ko: "암호화 키 필요", en: "Encryption key required" }),
-    executionReady: t({ ko: "실행 가능", en: "Execution Ready" }),
+    executionReady: t({ ko: "실행 준비 완료", en: "Execution Ready" }),
     reauthRequired: t({ ko: "재연결 필요", en: "Re-auth Required" }),
     connectable: t({ ko: "연결 가능", en: "Connectable" }),
     waitingDeviceCode: t({ ko: "기기 코드를 입력하는 중입니다...", en: "Waiting for device-code confirmation..." }),
@@ -189,7 +189,7 @@ export function getOauthSettingsCopy(t: TFunction) {
     addAccount: t({ ko: "계정 추가", en: "Add Account" }),
     githubAccountConnected: t({ ko: "GitHub 실행 계정 연결 완료", en: "GitHub execution account connected" }),
     githubAccountConnectedHelp: t({
-      ko: "Copilot 구독이 있으면 AI 모델 실행에 사용되고, 구독이 없어도 GitHub 가져오기와 저장소 연결은 계속 사용할 수 있습니다.",
+      ko: "Copilot 구독이 있으면 AI 모델 실행에 사용하고, 구독이 없어도 GitHub 가져오기와 저장소 연결은 계속 사용할 수 있습니다.",
       en: "If you have Copilot, it is used for AI execution. Without it, GitHub import and repository linking still work.",
     }),
   };

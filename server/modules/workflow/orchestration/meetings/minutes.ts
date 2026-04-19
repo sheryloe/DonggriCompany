@@ -1,5 +1,6 @@
 import type { Lang } from "../../../../types/lang.ts";
 import { randomUUID } from "node:crypto";
+import { getCanonicalSnapshotByVersion } from "../../../company/canonical-policy.ts";
 
 interface AgentRow {
   id: string;
@@ -64,6 +65,22 @@ export function createMeetingMinutesTools(deps: MeetingMinutesDeps) {
     REVIEW_MAX_MEMO_ITEMS_PER_ROUND,
     REVIEW_MAX_MEMO_ITEMS_PER_DEPT,
   } = deps;
+  const hasMeetingPolicyVersionColumn = (() => {
+    try {
+      const columns = db.prepare("PRAGMA table_info(meeting_minutes)").all() as Array<{ name?: unknown }>;
+      return columns.some((column) => String(column.name ?? "").trim() === "policy_version");
+    } catch {
+      return false;
+    }
+  })();
+  const hasMeetingPolicySnapshotHashColumn = (() => {
+    try {
+      const columns = db.prepare("PRAGMA table_info(meeting_minutes)").all() as Array<{ name?: unknown }>;
+      return columns.some((column) => String(column.name ?? "").trim() === "policy_snapshot_hash");
+    } catch {
+      return false;
+    }
+  })();
 
   function beginMeetingMinutes(
     taskId: string,
@@ -73,12 +90,30 @@ export function createMeetingMinutesTools(deps: MeetingMinutesDeps) {
   ): string {
     const meetingId = randomUUID();
     const t = nowMs();
+    const taskPolicyRow = db.prepare("SELECT policy_version FROM tasks WHERE id = ?").get(taskId) as
+      | { policy_version?: string | null }
+      | undefined;
+    const policyVersion = String(taskPolicyRow?.policy_version ?? "").trim() || null;
+    const policySnapshotHash = policyVersion ? (getCanonicalSnapshotByVersion(policyVersion)?.policy.hash ?? null) : null;
+    const columns = ["id", "task_id", "meeting_type", "round", "title", "status"];
+    const values: unknown[] = [meetingId, taskId, meetingType, round, title, "in_progress"];
+    if (hasMeetingPolicyVersionColumn) {
+      columns.push("policy_version");
+      values.push(policyVersion);
+    }
+    if (hasMeetingPolicySnapshotHashColumn) {
+      columns.push("policy_snapshot_hash");
+      values.push(policySnapshotHash);
+    }
+    columns.push("started_at", "created_at");
+    values.push(t, t);
     db.prepare(
-      `
-    INSERT INTO meeting_minutes (id, task_id, meeting_type, round, title, status, started_at, created_at)
-    VALUES (?, ?, ?, ?, ?, 'in_progress', ?, ?)
-  `,
-    ).run(meetingId, taskId, meetingType, round, title, t, t);
+      `INSERT INTO meeting_minutes (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
+    ).run(...values);
+    if (policyVersion) {
+      appendTaskLog(taskId, "system", `policy_snapshot_bound_to_meeting (${policyVersion})`);
+      console.info("[workflow] policy_snapshot_bound_to_meeting", { taskId, meetingId, policyVersion });
+    }
     return meetingId;
   }
 

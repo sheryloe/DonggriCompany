@@ -41,7 +41,7 @@ function setupDb(): DatabaseSync {
       name_ko TEXT NOT NULL DEFAULT '',
       name_ja TEXT NOT NULL DEFAULT '',
       name_zh TEXT NOT NULL DEFAULT '',
-      icon TEXT NOT NULL DEFAULT '🏢',
+      icon TEXT NOT NULL DEFAULT '',
       color TEXT NOT NULL DEFAULT '#64748b',
       description TEXT,
       prompt TEXT,
@@ -59,7 +59,7 @@ function setupDb(): DatabaseSync {
       role TEXT NOT NULL DEFAULT 'senior',
       acts_as_planning_leader INTEGER NOT NULL DEFAULT 0,
       cli_provider TEXT,
-      avatar_emoji TEXT NOT NULL DEFAULT '🤖',
+      avatar_emoji TEXT NOT NULL DEFAULT '🙂',
       personality TEXT,
       status TEXT NOT NULL DEFAULT 'idle',
       current_task_id TEXT,
@@ -113,7 +113,7 @@ function createHarness(db: DatabaseSync) {
 }
 
 describe("ops settings seed init guard", () => {
-  it("서버 재시작 시 officePackProfiles가 있어도 seed agent를 대량 주입하지 않는다", () => {
+  it("seed init guard ignores officePackProfiles and preserves seed agents", () => {
     const db = setupDb();
     try {
       db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
@@ -135,19 +135,17 @@ describe("ops settings seed init guard", () => {
           c: number;
         }
       ).c;
-      const initFlag = db.prepare("SELECT value FROM settings WHERE key = 'officePackSeedAgentsInitialized'").get() as
-        | { value: string }
-        | undefined;
-
       expect(totalAgents).toBe(1);
       expect(seedAgents).toBe(0);
-      expect(initFlag?.value).toBe("true");
+      expect(
+        db.prepare("SELECT value FROM settings WHERE key = 'officePackSeedAgentsInitialized'").get(),
+      ).toBeUndefined();
     } finally {
       db.close();
     }
   });
 
-  it("PUT /api/settings 로 officePackProfiles 저장해도 seed agent를 주입하지 않는다", () => {
+  it("PUT /api/settings rejects officePackProfiles updates as projection-only", () => {
     const db = setupDb();
     try {
       db.prepare("INSERT INTO agents (id, name) VALUES (?, ?)").run("dev-leader", "Dev Leader");
@@ -170,7 +168,12 @@ describe("ops settings seed init guard", () => {
         res,
       );
 
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(409);
+      expect(res.payload).toEqual({
+        ok: false,
+        error: "canonical_projection_read_only",
+        blocked_keys: ["officePackProfiles"],
+      });
 
       const totalAgents = (db.prepare("SELECT COUNT(*) AS c FROM agents").get() as { c: number }).c;
       const seedAgents = (
@@ -178,45 +181,40 @@ describe("ops settings seed init guard", () => {
           c: number;
         }
       ).c;
-      const initFlag = db.prepare("SELECT value FROM settings WHERE key = 'officePackSeedAgentsInitialized'").get() as
-        | { value: string }
-        | undefined;
-
       expect(totalAgents).toBe(1);
       expect(seedAgents).toBe(0);
-      expect(initFlag?.value).toBe("true");
+      expect(
+        db.prepare("SELECT value FROM settings WHERE key = 'officePackSeedAgentsInitialized'").get(),
+      ).toBeUndefined();
     } finally {
       db.close();
     }
   });
 
-  it("GET /api/settings 시 활성 오피스팩 seed를 1회 hydrate한다", () => {
+  it("GET /api/settings returns stored values and does not hydrate seed agents", () => {
     const db = setupDb();
     try {
       db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
         "officePackProfiles",
         JSON.stringify({
           video_preprod: {
-            departments: [{ id: "planning", name: "Planning", name_ko: "기획팀", icon: "🎬", color: "#f59e0b" }],
+            departments: [{ id: "planning", name: "Planning", name_ko: "기획", icon: "🧭", color: "#f59e0b" }],
             agents: [
               {
                 id: "video_preprod-seed-1",
                 name: "Rian",
-                name_ko: "리안",
+                name_ko: "리언",
                 department_id: "planning",
                 role: "team_leader",
                 cli_provider: "claude",
-                avatar_emoji: "🎬",
+                avatar_emoji: "🚀",
                 sprite_number: 6,
               },
             ],
           },
         }),
       );
-      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
-        "officeWorkflowPack",
-        JSON.stringify("video_preprod"),
-      );
+      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("officeWorkflowPack", JSON.stringify("video_preprod"));
 
       const { getRoutes } = createHarness(db);
       const getHandler = getRoutes.get("/api/settings");
@@ -225,23 +223,23 @@ describe("ops settings seed init guard", () => {
       const res = createFakeResponse();
       getHandler?.({}, res);
       expect(res.statusCode).toBe(200);
+      expect((res.payload as any).settings.officeWorkflowPack).toBe("video_preprod");
+      expect(Array.isArray((res.payload as any).settings.officePackProfiles.video_preprod.agents)).toBe(true);
 
-      const seedAgent = db.prepare("SELECT id, sprite_number FROM agents WHERE id = 'video_preprod-seed-1'").get() as
-        | { id?: string; sprite_number?: number }
+      const seedAgent = db.prepare("SELECT id FROM agents WHERE id = 'video_preprod-seed-1'").get() as
+        | { id: string }
         | undefined;
       const hydratedPacks = db.prepare("SELECT value FROM settings WHERE key = 'officePackHydratedPacks'").get() as
         | { value: string }
         | undefined;
-
-      expect(seedAgent?.id).toBe("video_preprod-seed-1");
-      expect(seedAgent?.sprite_number).toBe(6);
-      expect(hydratedPacks?.value).toContain("video_preprod");
+      expect(seedAgent).toBeUndefined();
+      expect(hydratedPacks).toBeUndefined();
     } finally {
       db.close();
     }
   });
 
-  it("officeWorkflowPack 첫 선택 시 해당 팩 seed를 1회 hydrate한다", () => {
+  it("officeWorkflowPack PUT is rejected when officePackProfiles is included", () => {
     const db = setupDb();
     try {
       db.prepare("INSERT INTO agents (id, name) VALUES (?, ?)").run("dev-leader", "Dev Leader");
@@ -253,77 +251,39 @@ describe("ops settings seed init guard", () => {
       putHandler?.(
         {
           body: {
+            officeWorkflowPack: "video_preprod",
             officePackProfiles: {
               video_preprod: {
-                departments: [
-                  {
-                    id: "planning",
-                    name: "Planning",
-                    name_ko: "기획팀",
-                    icon: "🎬",
-                    color: "#f59e0b",
-                  },
-                ],
-                agents: [
-                  {
-                    id: "video_preprod-seed-1",
-                    name: "Rian",
-                    name_ko: "리안",
-                    department_id: "planning",
-                    role: "team_leader",
-                    cli_provider: "claude",
-                    avatar_emoji: "🎬",
-                  },
-                ],
+                departments: [{ id: "planning", name: "Planning" }],
+                agents: [{ id: "video_preprod-seed-1", department_id: "planning" }],
               },
             },
-            officeWorkflowPack: "video_preprod",
           },
         },
         res,
       );
 
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(409);
+      expect(res.payload).toEqual({
+        ok: false,
+        error: "canonical_projection_read_only",
+        blocked_keys: ["officePackProfiles"],
+      });
 
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'officeWorkflowPack'").get()).toBeUndefined();
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'officePackProfiles'").get()).toBeUndefined();
       const seedAgentCount = (
-        db.prepare("SELECT COUNT(*) AS c FROM agents WHERE id LIKE 'video_preprod-seed-%'").get() as {
-          c: number;
-        }
+        db.prepare("SELECT COUNT(*) AS c FROM agents WHERE id LIKE 'video_preprod-seed-%'").get() as { c: number }
       ).c;
-      const hydratedPacks = db.prepare("SELECT value FROM settings WHERE key = 'officePackHydratedPacks'").get() as
-        | { value: string }
-        | undefined;
-
-      expect(seedAgentCount).toBe(1);
-      expect(hydratedPacks?.value).toContain("video_preprod");
+      expect(seedAgentCount).toBe(0);
     } finally {
       db.close();
     }
   });
 
-  it("이미 hydrate된 팩은 재선택해도 재주입하지 않는다", () => {
+  it("keeps existing hydrated packs when officePackHydratedPacks is omitted", () => {
     const db = setupDb();
     try {
-      db.prepare("INSERT INTO agents (id, name) VALUES (?, ?)").run("dev-leader", "Dev Leader");
-      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
-        "officePackProfiles",
-        JSON.stringify({
-          video_preprod: {
-            departments: [{ id: "planning", name: "Planning", name_ko: "기획팀", icon: "🎬", color: "#f59e0b" }],
-            agents: [
-              {
-                id: "video_preprod-seed-1",
-                name: "Rian",
-                name_ko: "리안",
-                department_id: "planning",
-                role: "team_leader",
-                cli_provider: "claude",
-                avatar_emoji: "🎬",
-              },
-            ],
-          },
-        }),
-      );
       db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
         "officePackHydratedPacks",
         JSON.stringify(["video_preprod"]),
@@ -332,93 +292,107 @@ describe("ops settings seed init guard", () => {
       const { putRoutes } = createHarness(db);
       const putHandler = putRoutes.get("/api/settings");
       expect(putHandler).toBeTypeOf("function");
-
-      // 해고된 상태를 가정(= seed 없음)
-      db.prepare("DELETE FROM agents WHERE id LIKE 'video_preprod-seed-%'").run();
 
       const res = createFakeResponse();
       putHandler?.({ body: { officeWorkflowPack: "video_preprod" } }, res);
       expect(res.statusCode).toBe(200);
 
-      const seedAgentCount = (
-        db.prepare("SELECT COUNT(*) AS c FROM agents WHERE id LIKE 'video_preprod-seed-%'").get() as {
-          c: number;
-        }
-      ).c;
-      expect(seedAgentCount).toBe(0);
+      const hydrated = db.prepare("SELECT value FROM settings WHERE key = 'officePackHydratedPacks'").get() as
+        | { value: string }
+        | undefined;
+      expect(hydrated?.value).toBe(JSON.stringify(["video_preprod"]));
     } finally {
       db.close();
     }
   });
 
-  it("이미 hydrate된 팩은 officePackProfiles와 함께 저장해도 재주입하지 않는다", () => {
+  it("rejects officePackHydratedPacks as read-only at write time", () => {
     const db = setupDb();
     try {
-      db.prepare("INSERT INTO agents (id, name) VALUES (?, ?)").run("dev-leader", "Dev Leader");
-      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
-        "officePackProfiles",
-        JSON.stringify({
-          video_preprod: {
-            departments: [{ id: "planning", name: "Planning", name_ko: "기획팀", icon: "🎬", color: "#f59e0b" }],
-            agents: [
-              {
-                id: "video_preprod-seed-1",
-                name: "Rian",
-                name_ko: "리안",
-                department_id: "planning",
-                role: "team_leader",
-                cli_provider: "claude",
-                avatar_emoji: "🎬",
-              },
-            ],
-          },
-        }),
-      );
-      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
-        "officePackHydratedPacks",
-        JSON.stringify(["video_preprod"]),
-      );
-
       const { putRoutes } = createHarness(db);
       const putHandler = putRoutes.get("/api/settings");
       expect(putHandler).toBeTypeOf("function");
 
-      // 이미 hydrate된 팩의 seed를 비운 상태를 가정
-      db.prepare("DELETE FROM agents WHERE id LIKE 'video_preprod-seed-%'").run();
+      const res = createFakeResponse();
+      putHandler?.({ body: { officePackHydratedPacks: ["video_preprod", "novel"], officeWorkflowPack: "video_preprod" } }, res);
+
+      expect(res.statusCode).toBe(409);
+      expect(res.payload).toEqual({
+        ok: false,
+        error: "canonical_projection_read_only",
+        blocked_keys: ["officePackHydratedPacks"],
+      });
+
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'officePackHydratedPacks'").get()).toBeUndefined();
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'officeWorkflowPack'").get()).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects when both officePackProfiles and officePackHydratedPacks are provided", () => {
+    const db = setupDb();
+    try {
+      const { putRoutes } = createHarness(db);
+      const putHandler = putRoutes.get("/api/settings");
+      expect(putHandler).toBeTypeOf("function");
 
       const res = createFakeResponse();
       putHandler?.(
         {
           body: {
+            officePackProfiles: {},
+            officePackHydratedPacks: ["video_preprod", "novel"],
             officeWorkflowPack: "video_preprod",
-            officePackProfiles: {
-              video_preprod: {
-                departments: [{ id: "planning", name: "Planning", name_ko: "기획팀", icon: "🎬", color: "#f59e0b" }],
-                agents: [
-                  {
-                    id: "video_preprod-seed-1",
-                    name: "Rian",
-                    name_ko: "리안",
-                    department_id: "planning",
-                    role: "team_leader",
-                    cli_provider: "gemini",
-                    avatar_emoji: "🎬",
-                  },
-                ],
-              },
-            },
           },
         },
         res,
       );
-      expect(res.statusCode).toBe(200);
 
-      const seedAgentCount = (
-        db.prepare("SELECT COUNT(*) AS c FROM agents WHERE id LIKE 'video_preprod-seed-%'").get() as {
-          c: number;
-        }
-      ).c;
-      expect(seedAgentCount).toBe(0);
+      expect(res.statusCode).toBe(409);
+      expect(res.payload).toEqual({
+        ok: false,
+        error: "canonical_projection_read_only",
+        blocked_keys: ["officePackProfiles", "officePackHydratedPacks"],
+      });
+
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'officePackProfiles'").get()).toBeUndefined();
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'officePackHydratedPacks'").get()).toBeUndefined();
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'officeWorkflowPack'").get()).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects providerModelConfig writes as canonical projection read-only", () => {
+    const db = setupDb();
+    try {
+      const { putRoutes } = createHarness(db);
+      const putHandler = putRoutes.get("/api/settings");
+      expect(putHandler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      putHandler?.(
+        {
+          body: {
+            providerModelConfig: {
+              codex: { model: "gpt-5.3-codex", reasoningLevel: "medium" },
+            },
+            officeWorkflowPack: "development",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(409);
+      expect(res.payload).toEqual({
+        ok: false,
+        error: "canonical_projection_read_only",
+        blocked_keys: ["providerModelConfig"],
+      });
+
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'providerModelConfig'").get()).toBeUndefined();
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'officeWorkflowPack'").get()).toBeUndefined();
     } finally {
       db.close();
     }

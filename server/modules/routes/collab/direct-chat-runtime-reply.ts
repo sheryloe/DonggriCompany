@@ -232,21 +232,22 @@ export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
     });
   }
 
-  function insertStreamingMessage(msgId: string, agent: AgentRow, content: string): void {
+  function insertStreamingMessage(msgId: string, agent: AgentRow, content: string, projectId: string | null = null): void {
     const endedAt = deps.nowMs();
     deps.db
       .prepare(
         `
-          INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, created_at)
-          VALUES (?, 'agent', ?, 'agent', NULL, ?, 'chat', NULL, ?)
+          INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, project_id, created_at)
+          VALUES (?, 'agent', ?, 'agent', NULL, ?, 'chat', NULL, ?, ?)
         `,
       )
-      .run(msgId, agent.id, content, endedAt);
+      .run(msgId, agent.id, content, projectId, endedAt);
     deps.broadcast("chat_stream", {
       phase: "end",
       message_id: msgId,
       agent_id: agent.id,
       content,
+      project_id: projectId,
       created_at: endedAt,
     });
   }
@@ -345,7 +346,7 @@ export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
             }
             finalReply = normalizeAgentReply(finalReply);
 
-            insertStreamingMessage(msgId, agent, finalReply);
+            insertStreamingMessage(msgId, agent, finalReply, options.projectId ?? null);
             void relayReplyToMessenger(options, agent, finalReply).catch((err) => {
               console.warn(`[messenger-reply] failed to relay API reply from ${agent.name}: ${String(err)}`);
             });
@@ -427,7 +428,7 @@ export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
             }
             finalReply = normalizeAgentReply(finalReply);
 
-            insertStreamingMessage(msgId, agent, finalReply);
+            insertStreamingMessage(msgId, agent, finalReply, options.projectId ?? null);
             void relayReplyToMessenger(options, agent, finalReply).catch((err) => {
               console.warn(`[messenger-reply] failed to relay OAuth reply from ${agent.name}: ${String(err)}`);
             });

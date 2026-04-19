@@ -81,6 +81,7 @@ export default function CliSettingsTab({
 }: CliSettingsTabProps) {
   const [verifyMessageByKey, setVerifyMessageByKey] = useState<Record<string, string>>({});
   const [labelDraftByKey, setLabelDraftByKey] = useState<Record<string, string>>({});
+  const [verifyAllCodexBusy, setVerifyAllCodexBusy] = useState(false);
 
   const updateProviderPolicy = (
     provider: OfficeExecutionProvider,
@@ -94,19 +95,9 @@ export default function CliSettingsTab({
       subModel?: string;
       reasoningLevel?: string;
       subModelReasoningLevel?: string;
-    },
-  ) => {
-    const current = form.providerModelConfig?.[provider] ?? {};
-    const nextProviderConfig = updater(current);
-    const nextForm = {
-      ...form,
-      providerModelConfig: {
-        ...(form.providerModelConfig ?? {}),
-        [provider]: nextProviderConfig,
-      },
-    };
-    setForm(nextForm);
-    persistSettings(nextForm);
+    }) => {
+      void provider;
+      void updater;
   };
 
   const activeRunnerCount = useMemo(
@@ -118,6 +109,41 @@ export default function CliSettingsTab({
     () => officeRunnerQueue.filter((item) => item.status === "queued").slice(0, 5),
     [officeRunnerQueue],
   );
+  const codexPools = useMemo(
+    () => cliAccountPools.filter((pool) => pool.provider === "codex"),
+    [cliAccountPools],
+  );
+
+  const codexPoolRows = useMemo(() => {
+    return codexPools.map((pool) => {
+      const runner = officeRunners.find(
+        (item) => item.provider === "codex" && item.accountPoolId === pool.accountPoolId,
+      );
+      return {
+        poolId: pool.accountPoolId,
+        label: pool.label,
+        accountStatus: pool.status,
+        lastVerifiedAt: pool.lastVerifiedAt,
+        runnerStatus: runner?.status ?? null,
+      };
+    });
+  }, [codexPools, officeRunners]);
+
+  const handleVerifyAllCodexPools = async () => {
+    if (codexPools.length <= 0 || verifyAllCodexBusy) return;
+    setVerifyAllCodexBusy(true);
+    try {
+      for (const pool of codexPools) {
+        const response = await onVerifyPool("codex", pool.accountPoolId);
+        setVerifyMessageByKey((prev) => ({
+          ...prev,
+          [`codex:${pool.accountPoolId}`]: response.pool.status,
+        }));
+      }
+    } finally {
+      setVerifyAllCodexBusy(false);
+    }
+  };
 
   return (
     <section
@@ -133,9 +159,59 @@ export default function CliSettingsTab({
             zh: "CLI 账号/运行状态",
           })}
         </h3>
-        <button onClick={onRefresh} className="text-xs text-blue-400 transition-colors hover:text-blue-300">
-          {t({ ko: "새로고침", en: "Refresh", ja: "更新", zh: "刷新" })}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              void handleVerifyAllCodexPools();
+            }}
+            disabled={verifyAllCodexBusy || codexPools.length === 0}
+            className="rounded border border-cyan-400/40 px-2 py-1 text-xs text-cyan-300 enabled:hover:bg-cyan-500/10 disabled:opacity-40"
+          >
+            {verifyAllCodexBusy
+              ? t({ ko: "Codex 전체 검증 중...", en: "Verifying Codex pools...", ja: "Verifying Codex pools...", zh: "Verifying Codex pools..." })
+              : t({ ko: "Codex 풀 전체 검증", en: "Verify All Codex Pools", ja: "Verify All Codex Pools", zh: "Verify All Codex Pools" })}
+          </button>
+          <button onClick={onRefresh} className="text-xs text-blue-400 transition-colors hover:text-blue-300">
+            {t({ ko: "새로고침", en: "Refresh", ja: "更新", zh: "刷新" })}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+        <div className="mb-2 text-xs font-semibold text-cyan-200">
+          {t({ ko: "Codex 다중 인증 풀 상태", en: "Codex Multi-Auth Pools", ja: "Codex Multi-Auth Pools", zh: "Codex Multi-Auth Pools" })}
+        </div>
+        {codexPoolRows.length === 0 ? (
+          <div className="text-xs text-slate-400">
+            {t({ ko: "등록된 Codex 계정풀이 없습니다.", en: "No Codex pools configured.", ja: "No Codex pools configured.", zh: "No Codex pools configured." })}
+          </div>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {codexPoolRows.map((row) => (
+              <div key={row.poolId} className="rounded border border-slate-700/70 bg-slate-900/50 px-2.5 py-2 text-xs">
+                <div className="truncate font-medium text-slate-100">{row.label}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusChipClass(row.accountStatus)}`}>
+                    {row.accountStatus}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] ${
+                      row.runnerStatus
+                        ? runnerChipClass(row.runnerStatus)
+                        : "bg-slate-600/30 text-slate-300 border border-slate-500/30"
+                    }`}
+                  >
+                    {row.runnerStatus ?? "no_runner"}
+                  </span>
+                </div>
+                <div className="mt-1 text-[10px] text-slate-400">
+                  {t({ ko: "마지막 검증", en: "Last verify", ja: "Last verify", zh: "Last verify" })}:{" "}
+                  {row.lastVerifiedAt ? new Date(row.lastVerifiedAt).toLocaleString() : "-"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid gap-2 rounded-lg border border-slate-700/60 bg-slate-900/30 p-3 text-xs sm:grid-cols-3">
@@ -398,6 +474,14 @@ export default function CliSettingsTab({
                     zh: "Provider policy",
                   })}
                 </div>
+                <div className="text-[11px] text-slate-500">
+                  {t({
+                    ko: "model/reasoning override는 compatibility-only이며 여기서는 읽기 전용으로 표시됩니다.",
+                    en: "Model/reasoning overrides are compatibility-only and shown read-only here.",
+                    ja: "Model/reasoning overrides are compatibility-only and shown read-only here.",
+                    zh: "Model/reasoning overrides are compatibility-only and shown read-only here.",
+                  })}
+                </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1">
@@ -407,6 +491,7 @@ export default function CliSettingsTab({
                     {providerModels.length > 0 ? (
                       <select
                         value={selectedModel}
+                        disabled
                         onChange={(event) => {
                           const nextModel = event.target.value;
                           const nextModelInfo = providerModels.find((model) => model.slug === nextModel) ?? null;
@@ -448,6 +533,7 @@ export default function CliSettingsTab({
                     {mainReasoningOptions.length > 0 ? (
                       <select
                         value={selectedReasoningLevel}
+                        disabled
                         onChange={(event) =>
                           updateProviderPolicy(provider, (current) => ({
                             ...current,
@@ -490,6 +576,7 @@ export default function CliSettingsTab({
                       </span>
                       <select
                         value={selectedSubModel}
+                        disabled
                         onChange={(event) => {
                           const nextModel = event.target.value;
                           const nextModelInfo = subModelOptions.find((model) => model.slug === nextModel) ?? null;
@@ -524,6 +611,7 @@ export default function CliSettingsTab({
                       {subReasoningOptions.length > 0 ? (
                         <select
                           value={selectedSubReasoningLevel}
+                          disabled
                           onChange={(event) =>
                             updateProviderPolicy(provider, (current) => ({
                               ...current,
@@ -599,3 +687,4 @@ export default function CliSettingsTab({
     </section>
   );
 }
+

@@ -34,7 +34,7 @@ export type LocalizedMessages = {
 export type TFunction = (messages: LocalizedMessages) => string;
 
 export type LocalSettings = Omit<CompanySettings, "language"> & { language: Locale };
-export type SettingsTab = "general" | "cli" | "oauth" | "api" | "workflow-packs" | "gateway";
+export type SettingsTab = "general" | "cli" | "oauth" | "api" | "workflow-packs" | "canonical" | "gateway";
 
 export type SetLocalSettings = Dispatch<SetStateAction<LocalSettings>>;
 

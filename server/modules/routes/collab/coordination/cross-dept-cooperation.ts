@@ -5,7 +5,10 @@ import { getDepartmentPromptForPack } from "../../../workflow/packs/department-s
 import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack-resolver.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
+import { previewCanonicalRouting } from "../../../company/canonical-policy.ts";
+import { resolveCanonicalIdentity } from "../../../company/canonical-identity.ts";
 import { resolveConstrainedAgentScopeForTask } from "../../core/tasks/execution-run-auto-assign.ts";
+import { formatDelegationTrace } from "../delegation-log.ts";
 import type { AgentRow } from "./types.ts";
 
 interface CrossDeptContext {
@@ -271,7 +274,39 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
         : getConstrainedAgentIds(resolvedPackKey ?? null, resolvedProjectId, ctx.leaderDeptId);
     const crossLeader = findTeamLeader(crossDeptId, projectCandidateAgentIds);
     if (!crossLeader) {
-      // Skip this dept, try next
+      const blockingReason = "no_cross_dept_leader";
+      appendTaskLog(
+        taskId,
+        "system",
+        `Cross-dept delegation blocked for ${getDeptName(crossDeptId)}: ${formatDelegationTrace({
+          label: "Delegation decision",
+          family: "none",
+          specialization: "none",
+          fallbackReason: "department_fallback_none",
+          authorityReason: "missing_team_leader",
+          blockingReason,
+        })}`,
+      );
+      notifyCeo(
+        pickL(
+          l(
+            [
+              `'${taskTitle}' 협업 라우팅 중 ${getDeptName(crossDeptId)} 부서 팀장을 찾지 못해 해당 부서 위임을 건너뜁니다. (${blockingReason})`,
+            ],
+            [
+              `While routing collaboration for '${taskTitle}', no team leader was found in ${getDeptName(crossDeptId)}. Skipping that department. (${blockingReason})`,
+            ],
+            [
+              `'${taskTitle}' の協業ルーティング中に ${getDeptName(crossDeptId)} のチームリーダーが見つからなかったため、その部門はスキップします。(${blockingReason})`,
+            ],
+            [
+              `在 '${taskTitle}' 协作路由中未找到 ${getDeptName(crossDeptId)} 的组长，已跳过该部门。(${blockingReason})`,
+            ],
+          ),
+          lang,
+        ),
+        taskId,
+      );
       startCrossDeptCooperation(deptIds, index + 1, ctx, onAllDone);
       return;
     }
@@ -402,7 +437,36 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
           (crossLeaderAllowed ? crossLeader : manualPoolFallbackAtRun) ??
           crossCoordinator ??
           crossLeader;
+        const execCanonicalIdentity = resolveCanonicalIdentity(execAgent);
         const execName = lang === "ko" ? execAgent.name_ko || execAgent.name : execAgent.name;
+        const fallbackReason = crossSubAtRun
+          ? "specialization_second_subordinate"
+          : crossLeaderAllowed
+            ? "specialization_second_team_lead"
+            : manualPoolFallbackAtRun
+              ? "department_fallback_manual_pool"
+              : "department_fallback_leader";
+        const authorityReason = `canonical_stage=${execCanonicalIdentity.career_stage};authority_level=${execCanonicalIdentity.authority_level}`;
+        const blockingReason =
+          crossSubAtRun
+            ? "none"
+            : crossLeaderAllowed
+              ? "no_subordinate_found"
+              : manualPoolFallbackAtRun
+                ? "team_lead_out_of_scope_manual_pool_used"
+                : "team_lead_out_of_scope_no_manual_pool";
+        appendTaskLog(
+          taskId,
+          "system",
+          formatDelegationTrace({
+            label: "Cross-dept delegation decision",
+            family: execCanonicalIdentity.family,
+            specialization: execCanonicalIdentity.specialization_key,
+            fallbackReason,
+            authorityReason,
+            blockingReason,
+          }),
+        );
 
         const crossAckMsg =
           execAgent.id !== crossCoordinator.id
@@ -527,6 +591,18 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
           );
         }
         appendTaskLog(crossTaskId, "system", `Cross-dept request from ${leaderName} (${leaderDeptName})`);
+        appendTaskLog(
+          crossTaskId,
+          "system",
+          formatDelegationTrace({
+            label: "Delegation decision",
+            family: execCanonicalIdentity.family,
+            specialization: execCanonicalIdentity.specialization_key,
+            fallbackReason,
+            authorityReason,
+            blockingReason,
+          }),
+        );
         broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(crossTaskId));
         const linkedSubtaskId = linkCrossDeptTaskToParentSubtask(taskId, crossDeptId, crossTaskId);
         if (linkedSubtaskId) {
@@ -620,6 +696,14 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
               },
             );
             const executionSession = ensureTaskExecutionSession(crossTaskId, execAgent.id, execProvider);
+            const canonicalExecutionPolicy = previewCanonicalRouting({
+              text: [crossTaskData.title, crossTaskData.description ?? ""].filter(Boolean).join("\n"),
+              projectPath: projPath,
+              workflowPackKey: crossTaskData.workflow_pack_key,
+              providerModelConfig: getProviderModelConfig(),
+              defaultProvider: execProvider,
+              policyVersion: executionSession.policyVersion,
+            });
             const sessionPrompt = [
               `[Task Session] id=${executionSession.sessionId} owner=${executionSession.agentId} provider=${executionSession.provider}`,
               "Task-scoped session: keep continuity only for this collaboration task.",
@@ -667,6 +751,7 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
               const crossPolicy = resolveProviderExecutionPolicy({
                 provider: execProvider,
                 providerModelConfig: getProviderModelConfig(),
+                canonicalOverride: canonicalExecutionPolicy,
               });
               const child = spawnCliAgent(
                 crossTaskId,

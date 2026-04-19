@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS agents (
   run_mode TEXT NOT NULL DEFAULT 'standard' CHECK(run_mode IN ('standard','plan')),
   cli_account_pool_id TEXT,
   workflow_profile TEXT,
+  family TEXT,
+  career_stage TEXT,
+  specialization_key TEXT,
+  authority_level INTEGER NOT NULL DEFAULT 0,
+  execution_capability_profile TEXT,
   agent_profile_json TEXT,
   avatar_emoji TEXT NOT NULL DEFAULT '🤖',
   sprite_number INTEGER,
@@ -70,6 +75,9 @@ CREATE TABLE IF NOT EXISTS projects (
   project_path TEXT NOT NULL,
   core_goal TEXT NOT NULL,
   default_pack_key TEXT NOT NULL DEFAULT 'development',
+  canonical_pack_profile TEXT NOT NULL DEFAULT 'development',
+  artifact_root_mode TEXT NOT NULL DEFAULT 'project_root',
+  artifact_projection_version TEXT,
   last_used_at INTEGER,
   created_at INTEGER DEFAULT (unixepoch()*1000),
   updated_at INTEGER DEFAULT (unixepoch()*1000)
@@ -103,6 +111,10 @@ CREATE TABLE IF NOT EXISTS tasks (
   workflow_meta_json TEXT,
   output_format TEXT,
   project_path TEXT,
+  policy_version TEXT,
+  resolved_execution_policy_json TEXT,
+  required_artifacts_json TEXT,
+  approval_gate_state_json TEXT,
   result TEXT,
   started_at INTEGER,
   completed_at INTEGER,
@@ -143,6 +155,7 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL,
   message_type TEXT DEFAULT 'chat' CHECK(message_type IN ('chat','task_assign','announcement','directive','report','status_update')),
   task_id TEXT REFERENCES tasks(id),
+  project_id TEXT REFERENCES projects(id),
   idempotency_key TEXT,
   created_at INTEGER DEFAULT (unixepoch()*1000)
 );
@@ -182,6 +195,8 @@ CREATE TABLE IF NOT EXISTS meeting_minutes (
   meeting_type TEXT NOT NULL CHECK(meeting_type IN ('planned','review')),
   round INTEGER NOT NULL,
   title TEXT NOT NULL,
+  policy_version TEXT,
+  policy_snapshot_hash TEXT,
   status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress','completed','revision_requested','failed')),
   started_at INTEGER NOT NULL,
   completed_at INTEGER,
@@ -410,4 +425,45 @@ CREATE TABLE IF NOT EXISTS api_providers (
   updated_at INTEGER DEFAULT (unixepoch()*1000)
 );
 `);
+
+  ensureCanonicalCompatibilityColumns(db);
+  ensureCanonicalCompatibilityIndexes(db);
+}
+
+function ensureCanonicalCompatibilityColumns(db: DbLike): void {
+  execIgnoreDuplicateColumn(db, "ALTER TABLE tasks ADD COLUMN policy_version TEXT;");
+  execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN family TEXT;");
+  execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN career_stage TEXT;");
+  execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN specialization_key TEXT;");
+  execIgnoreDuplicateColumn(
+    db,
+    "ALTER TABLE agents ADD COLUMN authority_level INTEGER NOT NULL DEFAULT 0;",
+  );
+  execIgnoreDuplicateColumn(
+    db,
+    "ALTER TABLE projects ADD COLUMN canonical_pack_profile TEXT NOT NULL DEFAULT 'development';",
+  );
+  execIgnoreDuplicateColumn(db, "ALTER TABLE projects ADD COLUMN artifact_projection_version TEXT;");
+  execIgnoreDuplicateColumn(db, "ALTER TABLE messages ADD COLUMN project_id TEXT;");
+}
+
+function ensureCanonicalCompatibilityIndexes(db: DbLike): void {
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_policy_version ON tasks(policy_version, updated_at DESC);");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_agents_canonical_identity ON agents(family, career_stage, specialization_key, authority_level, created_at);",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_projects_canonical_pack ON projects(canonical_pack_profile, artifact_projection_version, updated_at DESC);",
+  );
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_project ON messages(project_id, created_at DESC);");
+}
+
+function execIgnoreDuplicateColumn(db: DbLike, sql: string): void {
+  try {
+    db.exec(sql);
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    if (message.includes("duplicate column name")) return;
+    throw error;
+  }
 }

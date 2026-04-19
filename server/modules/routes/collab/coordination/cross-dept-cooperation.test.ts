@@ -94,11 +94,12 @@ describe("createCrossDeptCooperationTools", () => {
     const launchApiProviderAgent = vi.fn();
     const launchHttpAgent = vi.fn();
     const spawnCliAgent = vi.fn();
+    const appendTaskLog = vi.fn();
 
     const { startCrossDeptCooperation } = createCrossDeptCooperationTools({
       db,
       nowMs: () => 1_717_171_717_000,
-      appendTaskLog: vi.fn(),
+      appendTaskLog,
       broadcast: vi.fn(),
       recordTaskCreationAudit: vi.fn(),
       delegatedTaskToSubtask: new Map(),
@@ -172,6 +173,15 @@ describe("createCrossDeptCooperationTools", () => {
       assigned_agent_id: "dev-worker",
       source_task_id: "task-parent",
     });
+    const decisionLog = appendTaskLog.mock.calls.find(
+      (call) => call[0] === "task-parent" && String(call[2]).includes("Cross-dept delegation decision"),
+    );
+    expect(decisionLog).toBeTruthy();
+    expect(String(decisionLog?.[2] ?? "")).toContain("family=");
+    expect(String(decisionLog?.[2] ?? "")).toContain("specialization=");
+    expect(String(decisionLog?.[2] ?? "")).toContain("fallback_reason=");
+    expect(String(decisionLog?.[2] ?? "")).toContain("authority_reason=");
+    expect(String(decisionLog?.[2] ?? "")).toContain("blocking_reason=");
     expect(spawnCliAgent).not.toHaveBeenCalled();
 
     if (launchKind === "api") {
@@ -196,6 +206,7 @@ describe("createCrossDeptCooperationTools", () => {
 
     const handleSubtaskDelegationComplete = vi.fn();
     const handleTaskRunComplete = vi.fn();
+    const appendTaskLog = vi.fn();
     const launchApiProviderAgent = vi.fn((...args: any[]) => {
       const onComplete = args[8] as ((exitCode: number) => void) | undefined;
       onComplete?.(0);
@@ -208,7 +219,7 @@ describe("createCrossDeptCooperationTools", () => {
     const { startCrossDeptCooperation } = createCrossDeptCooperationTools({
       db,
       nowMs: () => 1_717_171_717_000,
-      appendTaskLog: vi.fn(),
+      appendTaskLog,
       broadcast: vi.fn(),
       recordTaskCreationAudit: vi.fn(),
       delegatedTaskToSubtask: new Map(),
@@ -274,5 +285,98 @@ describe("createCrossDeptCooperationTools", () => {
     expect(crossTask?.id).toBeTruthy();
     expect(handleSubtaskDelegationComplete).toHaveBeenCalledWith(crossTask?.id, "subtask-linked", 0);
     expect(handleTaskRunComplete).not.toHaveBeenCalled();
+    const decisionLog = appendTaskLog.mock.calls.find(
+      (call) => call[0] === "task-parent" && String(call[2]).includes("Cross-dept delegation decision"),
+    );
+    expect(decisionLog).toBeTruthy();
+    expect(String(decisionLog?.[2] ?? "")).toContain("authority_reason=");
+    expect(String(decisionLog?.[2] ?? "")).toContain("blocking_reason=");
+  });
+
+  it("logs full delegation tracking schema when cross-dept leader is missing", () => {
+    db = new DatabaseSync(":memory:");
+    applyBaseSchema(db);
+    applyTaskSchemaMigrations(db);
+
+    const { teamLeader } = seedCollaborationFixture(db, "api");
+
+    const appendTaskLog = vi.fn();
+    const notifyCeo = vi.fn();
+
+    const { startCrossDeptCooperation } = createCrossDeptCooperationTools({
+      db,
+      nowMs: () => 1_717_171_717_000,
+      appendTaskLog,
+      broadcast: vi.fn(),
+      recordTaskCreationAudit: vi.fn(),
+      delegatedTaskToSubtask: new Map(),
+      crossDeptNextCallbacks: new Map(),
+      findTeamLeader: vi.fn(() => null),
+      findBestSubordinate: vi.fn(() => null),
+      resolveLang: () => "en",
+      getDeptName: (deptId: string) => (deptId === "dev" ? "Development" : "Planning"),
+      getAgentDisplayName: (agent: { name?: string }) => agent.name ?? "",
+      sendAgentMessage: vi.fn(),
+      notifyCeo,
+      l: (ko: unknown, en: unknown, ja: unknown, zh: unknown) => ({ ko, en, ja, zh }),
+      pickL: (messages: Record<string, unknown>, lang: string) =>
+        pickVariant(messages[lang] ?? messages.en ?? messages.ko),
+      startTaskExecutionForAgent: vi.fn(),
+      linkCrossDeptTaskToParentSubtask: vi.fn(() => null),
+      detectProjectPath: vi.fn(() => "/workspace/demo"),
+      resolveProjectPath: vi.fn((task: { project_path?: string | null }) => task.project_path ?? "/workspace/demo"),
+      logsDir: "/tmp",
+      getDeptRoleConstraint: vi.fn(() => ""),
+      getRecentConversationContext: vi.fn(() => ""),
+      buildAvailableSkillsPromptBlock: vi.fn(() => ""),
+      buildTaskExecutionPrompt: vi.fn((parts: unknown[]) =>
+        parts
+          .map((part) => String(part ?? "").trim())
+          .filter(Boolean)
+          .join("\n"),
+      ),
+      hasExplicitWarningFixRequest: vi.fn(() => false),
+      ensureTaskExecutionSession: vi.fn((taskId: string, agentId: string, currentProvider: string) => ({
+        sessionId: `session-${taskId}`,
+        agentId,
+        provider: currentProvider,
+      })),
+      getProviderModelConfig: vi.fn(() => ({})),
+      spawnCliAgent: vi.fn(),
+      launchApiProviderAgent: vi.fn(),
+      launchHttpAgent: vi.fn(),
+      getNextHttpAgentPid: vi.fn(() => 4242),
+      handleSubtaskDelegationComplete: vi.fn(),
+      handleTaskRunComplete: vi.fn(),
+      startProgressTimer: vi.fn(),
+    });
+
+    startCrossDeptCooperation(["dev"], 0, {
+      teamLeader,
+      taskTitle: "Parent task",
+      ceoMessage: "Need development support",
+      leaderDeptId: "planning",
+      leaderDeptName: "Planning",
+      leaderName: "Planner",
+      lang: "en",
+      taskId: "task-parent",
+      projectId: "project-1",
+    });
+
+    vi.runAllTimers();
+
+    const blockedLog = appendTaskLog.mock.calls.find(
+      (call) => call[0] === "task-parent" && String(call[2]).includes("Cross-dept delegation blocked"),
+    );
+    expect(blockedLog).toBeTruthy();
+    expect(String(blockedLog?.[2] ?? "")).toContain("family=");
+    expect(String(blockedLog?.[2] ?? "")).toContain("specialization=");
+    expect(String(blockedLog?.[2] ?? "")).toContain("fallback_reason=");
+    expect(String(blockedLog?.[2] ?? "")).toContain("authority_reason=missing_team_leader");
+    expect(String(blockedLog?.[2] ?? "")).toContain("blocking_reason=no_cross_dept_leader");
+    expect(notifyCeo).toHaveBeenCalled();
+
+    const crossTask = db.prepare("SELECT id FROM tasks WHERE source_task_id = ?").get("task-parent");
+    expect(crossTask).toBeUndefined();
   });
 });

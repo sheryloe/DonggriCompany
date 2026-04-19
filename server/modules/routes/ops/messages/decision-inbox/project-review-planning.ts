@@ -181,7 +181,7 @@ export function createProjectReviewPlanningHelpers(deps: ProjectReviewPlanningDe
   }
 
   function resolvePlanningLeadMeta(lang: string, decisionState?: PlanningLeadStateLike | null): PlanningLeadMeta {
-    const fallbackLead = findTeamLeader("planning");
+    const fallbackLead = findTeamLeader(null);
     const stateAgentId = String(decisionState?.planner_agent_id ?? "").trim();
     const stateAgent = stateAgentId
       ? (db
@@ -265,7 +265,7 @@ export function createProjectReviewPlanningHelpers(deps: ProjectReviewPlanningDe
         }>;
 
         if (taskRows.length <= 0) return;
-        const planningLeader = findTeamLeader("planning");
+        const planningLeader = findTeamLeader(null);
         const clip = (text: string, max = 180) => {
           const normalized = String(text ?? "")
             .replace(/\s+/g, " ")

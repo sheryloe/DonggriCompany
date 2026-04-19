@@ -428,6 +428,7 @@ export function useRealtimeSync({
           agent_avatar?: string;
           text?: string;
           content?: string;
+          project_id?: string | null;
           created_at?: number;
         };
         if (p.phase === "start") {
@@ -455,6 +456,7 @@ export function useRealtimeSync({
               content: p.content,
               message_type: "chat",
               task_id: null,
+              project_id: p.project_id ?? null,
               created_at: p.created_at ?? Date.now(),
             };
             setMessages((prev) => {

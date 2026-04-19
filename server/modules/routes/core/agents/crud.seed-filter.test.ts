@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -52,6 +52,7 @@ function createHarness(): { db: DatabaseSync; routes: Map<string, RouteHandler> 
       name_ja TEXT NOT NULL DEFAULT '',
       name_zh TEXT NOT NULL DEFAULT '',
       department_id TEXT,
+      workflow_pack_key TEXT,
       role TEXT NOT NULL,
       acts_as_planning_leader INTEGER NOT NULL DEFAULT 0,
       cli_provider TEXT,
@@ -62,7 +63,13 @@ function createHarness(): { db: DatabaseSync; routes: Map<string, RouteHandler> 
       cli_reasoning_level TEXT,
       run_mode TEXT NOT NULL DEFAULT 'standard',
       cli_account_pool_id TEXT,
-      avatar_emoji TEXT NOT NULL DEFAULT '🤖',
+      workflow_profile TEXT,
+      family TEXT,
+      career_stage TEXT,
+      specialization_key TEXT,
+      authority_level INTEGER NOT NULL DEFAULT 0,
+      execution_capability_profile TEXT,
+      avatar_emoji TEXT NOT NULL DEFAULT '?',
       sprite_number INTEGER,
       personality TEXT,
       agent_profile_json TEXT,
@@ -145,10 +152,10 @@ describe("agent CRUD seed filter", () => {
     }
   });
 
-  it("GET /api/agents 기본 응답은 seed 에이전트를 제외한다", () => {
+  it("GET /api/agents excludes seed agents by default", () => {
     const { db, routes } = createHarness();
     try {
-      db.prepare("INSERT INTO departments (id, name, name_ko, color) VALUES ('dev', 'Dev', '개발팀', '#3b82f6')").run();
+      db.prepare("INSERT INTO departments (id, name, name_ko, color) VALUES ('dev', 'Dev', 'Development', '#3b82f6')").run();
       db.prepare(
         "INSERT INTO agents (id, name, department_id, role, status, created_at) VALUES (?, ?, 'dev', 'team_leader', 'idle', 1)",
       ).run("dev-leader", "Dev Leader");
@@ -170,10 +177,10 @@ describe("agent CRUD seed filter", () => {
     }
   });
 
-  it("GET /api/agents?include_seed=true 는 seed 에이전트를 포함한다", () => {
+  it("GET /api/agents?include_seed=true includes seed agents", () => {
     const { db, routes } = createHarness();
     try {
-      db.prepare("INSERT INTO departments (id, name, name_ko, color) VALUES ('dev', 'Dev', '개발팀', '#3b82f6')").run();
+      db.prepare("INSERT INTO departments (id, name, name_ko, color) VALUES ('dev', 'Dev', 'Development', '#3b82f6')").run();
       db.prepare(
         "INSERT INTO agents (id, name, department_id, role, status, created_at) VALUES (?, ?, 'dev', 'team_leader', 'idle', 1)",
       ).run("dev-leader", "Dev Leader");
@@ -195,7 +202,7 @@ describe("agent CRUD seed filter", () => {
     }
   });
 
-  it("PATCH /api/agents/:id 는 팩 내 기존 Lead가 있으면 409를 반환한다", () => {
+  it("PATCH /api/agents/:id ignores planning leader override and returns canonical warning", () => {
     const { db, routes } = createHarness();
     try {
       db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("officeWorkflowPack", "video_preprod");
@@ -229,25 +236,28 @@ describe("agent CRUD seed filter", () => {
         res,
       );
 
-      expect(res.statusCode).toBe(409);
-      expect((res.payload as { error?: string }).error).toBe("planning_leader_exists");
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { warnings?: string[] };
+      expect(payload.warnings).toContain("acts_as_planning_leader_ignored_canonical_authority_only");
+      expect(payload.warnings).toContain("workflow_pack_key_ignored_projection_only");
     } finally {
       db.close();
     }
   });
 
-  it("PATCH /api/agents/:id force override 로 팩 리더를 교체한다", () => {
+  it("PATCH /api/agents/:id force override compatibility-only warning only", () => {
     const { db, routes } = createHarness();
     try {
+      const officePackProfiles = {
+        video_preprod: {
+          departments: [{ id: "planning" }],
+          agents: [{ id: "video_preprod-seed-1" }, { id: "video_preprod-seed-2" }],
+        },
+      };
       db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("officeWorkflowPack", "video_preprod");
       db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
         "officePackProfiles",
-        JSON.stringify({
-          video_preprod: {
-            departments: [{ id: "planning" }],
-            agents: [{ id: "video_preprod-seed-1" }, { id: "video_preprod-seed-2" }],
-          },
-        }),
+        JSON.stringify(officePackProfiles),
       );
       db.prepare(
         "INSERT INTO agents (id, name, role, acts_as_planning_leader, created_at) VALUES (?, ?, 'team_leader', ?, ?)",
@@ -272,27 +282,95 @@ describe("agent CRUD seed filter", () => {
       );
 
       expect(res.statusCode).toBe(200);
+      const payload = res.payload as { warnings?: string[] };
       const before = db
         .prepare("SELECT acts_as_planning_leader FROM agents WHERE id = ?")
         .get("video_preprod-seed-1") as { acts_as_planning_leader: number } | undefined;
       const after = db
         .prepare("SELECT acts_as_planning_leader FROM agents WHERE id = ?")
         .get("video_preprod-seed-2") as { acts_as_planning_leader: number } | undefined;
-      expect(before?.acts_as_planning_leader).toBe(0);
-      expect(after?.acts_as_planning_leader).toBe(1);
+      expect(before?.acts_as_planning_leader).toBe(1);
+      expect(after?.acts_as_planning_leader).toBe(0);
+      expect(payload.warnings).toContain("acts_as_planning_leader_ignored_canonical_authority_only");
+      expect(payload.warnings).toContain("workflow_pack_key_ignored_projection_only");
+      expect(payload.warnings).toContain("force_planning_leader_override_ignored");
 
       const profileRow = db.prepare("SELECT value FROM settings WHERE key = 'officePackProfiles'").get() as
         | { value?: string }
         | undefined;
-      const parsed = profileRow?.value ? (JSON.parse(profileRow.value) as any) : null;
-      const leadFlags = (parsed?.video_preprod?.agents ?? []).map((agent: any) => ({
-        id: agent.id,
-        acts: agent.acts_as_planning_leader ?? 0,
-      }));
-      expect(leadFlags).toEqual([
-        { id: "video_preprod-seed-1", acts: 0 },
-        { id: "video_preprod-seed-2", acts: 1 },
-      ]);
+      const parsed = profileRow?.value ? (JSON.parse(profileRow.value) as typeof officePackProfiles) : null;
+      expect(parsed).toEqual(officePackProfiles);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("PATCH /api/agents/:id ignores workflow_role and returns compatibility warning", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare(
+        "INSERT INTO agents (id, name, role, authority_level, execution_capability_profile, created_at) VALUES (?, ?, 'junior', 1, 'reviewer', 1)",
+      ).run("agent-compat", "Compatibility Workflow Role Agent");
+
+      const handler = routes.get("PATCH /api/agents/:id");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          params: { id: "agent-compat" },
+          body: {
+            workflow_role: "reviewer",
+            authority_level: 5,
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { warnings?: string[] };
+      expect(payload.warnings).toContain("workflow_role_ignored_compatibility_only");
+
+      const updated = db
+        .prepare("SELECT authority_level, execution_capability_profile FROM agents WHERE id = ?")
+        .get("agent-compat") as { authority_level: number; execution_capability_profile: string | null } | undefined;
+      expect(updated?.authority_level).toBe(5);
+      expect(updated?.execution_capability_profile).toBe("reviewer");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("PATCH /api/agents/:id ignores legacy role input and recomputes compatibility role from canonical fields", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare(
+        "INSERT INTO agents (id, name, role, authority_level, execution_capability_profile, created_at) VALUES (?, ?, 'junior', 1, 'reviewer', 1)",
+      ).run("agent-role-compat", "Role Compatibility Agent");
+
+      const handler = routes.get("PATCH /api/agents/:id");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          params: { id: "agent-role-compat" },
+          body: {
+            role: "team_leader",
+            authority_level: 7,
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { warnings?: string[] };
+      expect(payload.warnings).toContain("role_ignored_compatibility_only");
+      const updated = db
+        .prepare("SELECT role, authority_level FROM agents WHERE id = ?")
+        .get("agent-role-compat") as { role: string; authority_level: number } | undefined;
+      expect(updated?.role).toBe("team_leader");
+      expect(updated?.authority_level).toBe(7);
     } finally {
       db.close();
     }
@@ -388,7 +466,7 @@ describe("agent CRUD seed filter", () => {
     }
   });
 
-  it("POST /api/agents rejects invalid roles", () => {
+  it("POST /api/agents ignores invalid legacy role as compatibility-only", () => {
     const { db, routes } = createHarness();
     try {
       const handler = routes.get("POST /api/agents");
@@ -406,14 +484,17 @@ describe("agent CRUD seed filter", () => {
         res,
       );
 
-      expect(res.statusCode).toBe(400);
-      expect((res.payload as { error?: string }).error).toBe("invalid_role");
+      expect(res.statusCode).toBe(201);
+      const payload = res.payload as { warnings?: string[]; agent?: { role?: string; canonical_identity_source?: string } };
+      expect(payload.warnings).toContain("role_ignored_compatibility_only");
+      expect(payload.agent?.role).toBe("junior");
+      expect(payload.agent?.canonical_identity_source).toBe("stored");
     } finally {
       db.close();
     }
   });
 
-  it("PATCH /api/agents/:id rejects invalid roles", () => {
+  it("PATCH /api/agents/:id ignores invalid role as compatibility-only and keeps role unchanged", () => {
     const { db, routes } = createHarness();
     try {
       db.prepare(
@@ -434,8 +515,13 @@ describe("agent CRUD seed filter", () => {
         res,
       );
 
-      expect(res.statusCode).toBe(400);
-      expect((res.payload as { error?: string }).error).toBe("invalid_role");
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { warnings?: string[]; agent?: { role?: string } };
+      expect(payload.warnings).toContain("role_ignored_compatibility_only");
+      expect(payload.agent?.role).toBe("junior");
+
+      const row = db.prepare("SELECT role FROM agents WHERE id = ?").get("agent-1") as { role: string } | undefined;
+      expect(row?.role).toBe("junior");
     } finally {
       db.close();
     }
@@ -490,6 +576,117 @@ describe("agent CRUD seed filter", () => {
     }
   });
 
+  it("POST /api/agents strips legacy planning leader/pack override fields into warnings", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("officeWorkflowPack", "development");
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Compatibility Legacy Agent",
+            role: "junior",
+            cli_provider: "claude",
+            workflow_pack_key: "video_preprod",
+            acts_as_planning_leader: 1,
+            force_planning_leader_override: true,
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(201);
+      const payload = res.payload as { warnings?: string[] };
+      expect(payload.warnings).toContain("acts_as_planning_leader_ignored_canonical_authority_only");
+      expect(payload.warnings).toContain("workflow_pack_key_ignored_projection_only");
+      expect(payload.warnings).toContain("force_planning_leader_override_ignored");
+
+      const created = db
+        .prepare("SELECT workflow_pack_key, acts_as_planning_leader FROM agents WHERE name = ?")
+        .get("Compatibility Legacy Agent") as { workflow_pack_key: string; acts_as_planning_leader: number } | undefined;
+      expect(created?.workflow_pack_key).toBe("development");
+      expect(created?.acts_as_planning_leader).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents reports legacy role as compatibility-only", () => {
+    const { db, routes } = createHarness();
+    try {
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Legacy Role Agent",
+            role: "team_leader",
+            cli_provider: "claude",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(201);
+      const payload = res.payload as {
+        warnings?: string[];
+        agent?: { role?: string; family?: string; canonical_identity_source?: string; career_stage?: string };
+      };
+      expect(payload.warnings).toContain("role_ignored_compatibility_only");
+      expect(payload.agent?.role).toBe("junior");
+      expect(payload.agent?.family).toBe("backend");
+      expect(payload.agent?.career_stage).toBe("junior");
+      expect(payload.agent?.canonical_identity_source).toBe("stored");
+
+      const row = db
+        .prepare("SELECT role, family, career_stage FROM agents WHERE name = ?")
+        .get("Legacy Role Agent") as { role: string; family: string; career_stage: string } | undefined;
+      expect(row?.role).toBe("junior");
+      expect(row?.family).toBe("backend");
+      expect(row?.career_stage).toBe("junior");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents strips legacy workflow_role into compatibility warning", () => {
+    const { db, routes } = createHarness();
+    try {
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Legacy Workflow Role Agent",
+            role: "junior",
+            cli_provider: "claude",
+            workflow_role: "reviewer",
+            execution_capability_profile: "reviewer",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(201);
+      const payload = res.payload as { warnings?: string[]; agent?: { execution_capability_profile?: string | null } };
+      expect(payload.warnings).toContain("workflow_role_ignored_compatibility_only");
+      expect(payload.agent?.execution_capability_profile).toBe("reviewer");
+      const row = db
+        .prepare("SELECT execution_capability_profile FROM agents WHERE name = ?")
+        .get("Legacy Workflow Role Agent") as { execution_capability_profile: string | null } | undefined;
+      expect(row?.execution_capability_profile).toBe("reviewer");
+    } finally {
+      db.close();
+    }
+  });
+
   it("POST /api/agents returns 400 when codex cli_account_pool_id does not exist", () => {
     const { db, routes } = createHarness();
     try {
@@ -511,6 +708,92 @@ describe("agent CRUD seed filter", () => {
 
       expect(res.statusCode).toBe(400);
       expect((res.payload as { error?: string }).error).toBe("cli_account_pool_not_found");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("POST /api/agents derives canonical identity without using legacy role input", () => {
+    const { db, routes } = createHarness();
+    try {
+      const handler = routes.get("POST /api/agents");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            name: "Planner",
+            name_ko: "Planning Agent",
+            role: "team_leader",
+            cli_provider: "claude",
+            workflow_profile: {
+              role: "primary_author",
+              review_lenses: [],
+              two_pass_required: true,
+              max_review_rounds: 2,
+            },
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(201);
+      const agent = (res.payload as { agent?: Record<string, unknown> }).agent ?? {};
+      expect(agent.family).toBe("backend");
+      expect(agent.career_stage).toBe("junior");
+      expect(agent.authority_level).toBe(1);
+      expect(agent.execution_capability_profile).toBe("primary_author");
+      expect(agent.canonical_identity_source).toBe("stored");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("PATCH /api/agents/:id persists explicit canonical identity overrides", () => {
+    const { db, routes } = createHarness();
+    try {
+      db.prepare(
+        `INSERT INTO agents (
+          id, name, role, cli_provider, workflow_profile, family, career_stage, specialization_key, authority_level, execution_capability_profile, status, created_at
+        ) VALUES (?, ?, 'junior', 'claude', ?, 'backend', 'junior', NULL, 1, 'reviewer', 'idle', 1)`,
+      ).run(
+        "agent-1",
+        "Agent One",
+        JSON.stringify({
+          role: "reviewer",
+          review_lenses: ["general"],
+          two_pass_required: true,
+          max_review_rounds: null,
+        }),
+      );
+
+      const handler = routes.get("PATCH /api/agents/:id");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          params: { id: "agent-1" },
+          body: {
+            family: "researcher",
+            career_stage: "pro-senior",
+            specialization_key: "research.deep-dive",
+            authority_level: 5,
+            execution_capability_profile: "analysis",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const agent = (res.payload as { agent?: Record<string, unknown> }).agent ?? {};
+      expect(agent.family).toBe("researcher");
+      expect(agent.career_stage).toBe("pro-senior");
+      expect(agent.specialization_key).toBe("research.deep-dive");
+      expect(agent.authority_level).toBe(5);
+      expect(agent.execution_capability_profile).toBe("analysis");
+      expect(agent.canonical_identity_source).toBe("stored");
     } finally {
       db.close();
     }
@@ -734,3 +1017,4 @@ describe("agent CRUD seed filter", () => {
     }
   });
 });
+

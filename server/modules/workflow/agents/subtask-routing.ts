@@ -15,7 +15,7 @@ type SubtaskRoutingDeps = {
   runAgentOneShot: (agent: any, prompt: string, options: any) => Promise<{ text: string }>;
   resolveProjectPath: (task: { title?: string; description?: string | null; project_path?: string | null }) => string;
   resolveLang: (text: string) => Lang;
-  findTeamLeader: (departmentId: string, candidateAgentIds?: string[] | null) => any;
+  findTeamLeader: (departmentId: string | null, candidateAgentIds?: string[] | null) => any;
   getDeptName: (departmentId: string) => string;
   pickL: (choices: any, lang: string) => string;
   l: (ko: string[], en: string[], ja: string[], zh: string[]) => any;
@@ -233,7 +233,7 @@ export function createSubtaskRoutingTools(deps: SubtaskRoutingDeps) {
         workflow_pack_key: task.workflow_pack_key,
         department_id: task.department_id ?? ownerDeptId,
       });
-      const planningLeader = findTeamLeader("planning", constrainedAgentIds);
+      const planningLeader = findTeamLeader(null, constrainedAgentIds);
       if (!planningLeader) return;
 
       const baseDeptId = ownerDeptId ?? task.department_id;
@@ -279,7 +279,7 @@ export function createSubtaskRoutingTools(deps: SubtaskRoutingDeps) {
         .join("\n");
 
       const reroutePrompt = [
-        "You are the planning team leader responsible for precise subtask department assignment.",
+        "You are the canonical orchestration lead responsible for precise subtask family and department assignment.",
         "Decide the target department for each subtask.",
         "",
         `Task: ${task.title}`,

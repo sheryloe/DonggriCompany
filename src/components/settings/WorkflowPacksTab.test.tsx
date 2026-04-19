@@ -1,22 +1,22 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+﻿import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import WorkflowPacksTab from "./WorkflowPacksTab";
 
 const apiMocks = vi.hoisted(() => ({
   getWorkflowPacks: vi.fn(),
-  updateWorkflowPack: vi.fn(),
 }));
 
 vi.mock("../../api", () => ({
   getWorkflowPacks: apiMocks.getWorkflowPacks,
-  updateWorkflowPack: apiMocks.updateWorkflowPack,
 }));
 
 describe("WorkflowPacksTab", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMocks.getWorkflowPacks.mockResolvedValue({
+      source: "canonical_projection",
+      readOnly: true,
       packs: [
         {
           key: "development",
@@ -28,79 +28,48 @@ describe("WorkflowPacksTab", () => {
           qa_rules: { checklist: ["tests"] },
           output_template: { sections: ["summary"] },
           cost_profile: { tier: "standard" },
-          created_at: 1,
-          updated_at: 1,
+          required_artifacts: ["STATUS.md"],
+          output_contract: ["summary"],
+          base_key: "donggri",
+          derived_from: "donggri",
+          model_tier_preference: "tier-2",
+          source_layer: "compiler",
         },
       ],
     });
-    apiMocks.updateWorkflowPack.mockResolvedValue({
-      ok: true,
-      pack: {
-        key: "development",
-        name: "Development Updated",
-        enabled: false,
-        routing_keywords: ["ship"],
-        input_schema: { required: ["task", "owner"] },
-        prompt_preset: { system: "Updated" },
-        qa_rules: { checklist: ["tests", "lint"] },
-        output_template: { sections: ["summary", "risks"] },
-        cost_profile: { tier: "lean" },
-        created_at: 1,
-        updated_at: 2,
-      },
-    });
   });
 
-  it("loads packs and saves validated JSON payloads", async () => {
+  it("renders canonical projection sections in read-only mode", async () => {
+    render(<WorkflowPacksTab t={(messages) => messages.en} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Workflow Pack Inspector")).toBeInTheDocument();
+      expect(screen.getByText("Development")).toBeInTheDocument();
+      expect(screen.getByText("development")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Projection")).toBeInTheDocument();
+    expect(screen.getByText("canonical_projection")).toBeInTheDocument();
+    expect(screen.getByText("base:donggri")).toBeInTheDocument();
+    expect(screen.getByText("derived:donggri")).toBeInTheDocument();
+    expect(screen.getByText("tier:tier-2")).toBeInTheDocument();
+    expect(screen.getByText("Routing Keywords")).toBeInTheDocument();
+    expect(screen.getByText(/STATUS\.md/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save pack" })).not.toBeInTheDocument();
+  });
+
+  it("refreshes the projection", async () => {
     const user = userEvent.setup();
     render(<WorkflowPacksTab t={(messages) => messages.en} />);
 
     await waitFor(() => {
-      expect(screen.getByText("development")).toBeInTheDocument();
+      expect(apiMocks.getWorkflowPacks).toHaveBeenCalledTimes(1);
     });
 
-    await user.clear(screen.getByLabelText("Name"));
-    await user.type(screen.getByLabelText("Name"), "Development Updated");
-    fireEvent.change(screen.getByLabelText("Routing keywords"), { target: { value: '["ship"]' } });
-    fireEvent.change(screen.getByLabelText("Input schema"), { target: { value: '{"required":["task","owner"]}' } });
-    fireEvent.change(screen.getByLabelText("Prompt preset"), { target: { value: '{"system":"Updated"}' } });
-    fireEvent.change(screen.getByLabelText("QA rules"), { target: { value: '{"checklist":["tests","lint"]}' } });
-    fireEvent.change(screen.getByLabelText("Output template"), {
-      target: { value: '{"sections":["summary","risks"]}' },
-    });
-    fireEvent.change(screen.getByLabelText("Cost profile"), { target: { value: '{"tier":"lean"}' } });
-    await user.click(screen.getByRole("checkbox"));
-    await user.click(screen.getByRole("button", { name: "Save pack" }));
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
 
     await waitFor(() => {
-      expect(apiMocks.updateWorkflowPack).toHaveBeenCalledWith("development", {
-        name: "Development Updated",
-        enabled: false,
-        routing_keywords: ["ship"],
-        input_schema: { required: ["task", "owner"] },
-        prompt_preset: { system: "Updated" },
-        qa_rules: { checklist: ["tests", "lint"] },
-        output_template: { sections: ["summary", "risks"] },
-        cost_profile: { tier: "lean" },
-      });
+      expect(apiMocks.getWorkflowPacks).toHaveBeenCalledTimes(2);
     });
-
-    expect(screen.getByText("Workflow pack policy saved.")).toBeInTheDocument();
-  });
-
-  it("blocks save when JSON is invalid", async () => {
-    const user = userEvent.setup();
-    render(<WorkflowPacksTab t={(messages) => messages.en} />);
-
-    await waitFor(() => {
-      expect(screen.getByText("development")).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByLabelText("QA rules"), { target: { value: "{invalid" } });
-    await user.click(screen.getByRole("button", { name: "Save pack" }));
-
-    expect(apiMocks.updateWorkflowPack).not.toHaveBeenCalled();
-    expect(screen.getByText("Fix JSON validation errors before saving.")).toBeInTheDocument();
-    expect(screen.getByText("Enter valid JSON.")).toBeInTheDocument();
   });
 });

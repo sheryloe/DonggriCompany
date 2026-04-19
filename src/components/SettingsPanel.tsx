@@ -18,6 +18,7 @@ import CliSettingsTab from "./settings/CliSettingsTab";
 import GatewaySettingsTab from "./settings/GatewaySettingsTab";
 import GeneralSettingsTab from "./settings/GeneralSettingsTab";
 import OAuthSettingsTab from "./settings/OAuthSettingsTab";
+import CanonicalInspectorTab from "./settings/CanonicalInspectorTab";
 import SettingsTabNav from "./settings/SettingsTabNav";
 import WorkflowPacksTab from "./settings/WorkflowPacksTab";
 import type { AccountDraftMap, AccountDraftPatch, LocalSettings, SettingsTab } from "./settings/types";
@@ -142,7 +143,7 @@ export default function SettingsPanel({
     [onSave],
   );
 
-  const apiState = useApiProvidersState({ tab, t, settings });
+  const apiState = useApiProvidersState({ tab, t });
 
   const loadOAuthStatus = useCallback(async () => {
     setOauthLoading(true);
@@ -750,6 +751,8 @@ export default function SettingsPanel({
       {tab === "api" && <ApiSettingsTab t={t} localeTag={localeTag} apiState={apiState} />}
 
       {tab === "workflow-packs" && <WorkflowPacksTab t={t} />}
+
+      {tab === "canonical" && <CanonicalInspectorTab t={t} locale={form.language} />}
 
       {tab === "gateway" && (
         <GatewaySettingsTab t={t} form={form} setForm={setForm} persistSettings={persistSettings} />

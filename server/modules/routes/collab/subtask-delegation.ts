@@ -73,6 +73,9 @@ interface SubtaskDelegationDeps {
     sessionId: string;
     agentId: string;
     provider: string;
+    policyVersion: string;
+    policySnapshotHash: string | null;
+    policyResolutionJson: string;
   };
   ensureClaudeMd: (projectPath: string, worktreePath: string) => void;
   getProviderModelConfig: () => Record<

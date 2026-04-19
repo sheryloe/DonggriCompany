@@ -81,7 +81,12 @@ export function useAppActions({
           project_context: projectMeta?.project_context,
           skipPlannedMeeting: projectMeta?.skipPlannedMeeting,
         });
-        const msgs = await api.getMessages({ receiver_type: receiverType, receiver_id: receiverId, limit: 50 });
+        const msgs = await api.getMessages({
+          receiver_type: receiverType,
+          receiver_id: receiverId,
+          project_id: projectMeta?.project_id,
+          limit: 50,
+        });
         setMessages(msgs);
       } catch (error) {
         console.error("Send message failed:", error);

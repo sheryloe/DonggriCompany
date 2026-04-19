@@ -105,6 +105,31 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
   } catch {
     /* already exists */
   }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN family TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN career_stage TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN specialization_key TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN authority_level INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN execution_capability_profile TEXT");
+  } catch {
+    /* already exists */
+  }
   // 부서 다국어 + 프롬프트 컬럼 추가
   try {
     db.exec("ALTER TABLE departments ADD COLUMN name_ja TEXT NOT NULL DEFAULT ''");
@@ -151,6 +176,13 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
       const cliAccountPoolExpr = hasColumn("agents", "cli_account_pool_id") ? "cli_account_pool_id" : "NULL";
       const workflowProfileExpr = hasColumn("agents", "workflow_profile") ? "workflow_profile" : "NULL";
       const runModeExpr = hasColumn("agents", "run_mode") ? "run_mode" : "'standard'";
+      const familyExpr = hasColumn("agents", "family") ? "family" : "NULL";
+      const careerStageExpr = hasColumn("agents", "career_stage") ? "career_stage" : "NULL";
+      const specializationKeyExpr = hasColumn("agents", "specialization_key") ? "specialization_key" : "NULL";
+      const authorityLevelExpr = hasColumn("agents", "authority_level") ? "authority_level" : "0";
+      const executionCapabilityProfileExpr = hasColumn("agents", "execution_capability_profile")
+        ? "execution_capability_profile"
+        : "NULL";
       runInTransaction(() => {
         db.exec(`
         DROP TABLE IF EXISTS agents_new;
@@ -173,6 +205,11 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
           run_mode TEXT NOT NULL DEFAULT 'standard' CHECK(run_mode IN ('standard','plan')),
           cli_account_pool_id TEXT,
           workflow_profile TEXT,
+          family TEXT,
+          career_stage TEXT,
+          specialization_key TEXT,
+          authority_level INTEGER NOT NULL DEFAULT 0,
+          execution_capability_profile TEXT,
           agent_profile_json TEXT,
           avatar_emoji TEXT NOT NULL DEFAULT '🤖',
           sprite_number INTEGER,
@@ -186,7 +223,8 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
         INSERT INTO agents_new (
           id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key,
           role, acts_as_planning_leader, cli_provider, oauth_account_id,
-          api_provider_id, api_model, cli_model, cli_reasoning_level, run_mode, cli_account_pool_id, workflow_profile, agent_profile_json,
+          api_provider_id, api_model, cli_model, cli_reasoning_level, run_mode, cli_account_pool_id, workflow_profile,
+          family, career_stage, specialization_key, authority_level, execution_capability_profile, agent_profile_json,
           avatar_emoji, sprite_number, personality, status, current_task_id,
           stats_tasks_done, stats_xp, created_at
         )
@@ -209,6 +247,11 @@ export function initializeOAuthRuntime(deps: OAuthRuntimeDeps): OAuthRuntimeHelp
           ${runModeExpr},
           ${cliAccountPoolExpr},
           ${workflowProfileExpr},
+          ${familyExpr},
+          ${careerStageExpr},
+          ${specializationKeyExpr},
+          ${authorityLevelExpr},
+          ${executionCapabilityProfileExpr},
           agent_profile_json,
           avatar_emoji,
           sprite_number,

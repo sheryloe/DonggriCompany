@@ -1,9 +1,9 @@
-import type { Dispatch, SetStateAction } from "react";
+﻿import type { Dispatch, SetStateAction } from "react";
 import AgentSelect from "../../AgentSelect";
 import type { Agent, MessengerChannelType, MessengerChannelsConfig, WorkflowPackKey } from "../../../types";
 import type { ChannelSettingsTabProps } from "../types";
 import { getSettingsCommonCopy } from "../settings-copy";
-import { CHANNEL_META, channelTargetHint, isWorkflowPackKey } from "./constants";
+import { CHANNEL_META, channelTargetHint } from "./constants";
 import type { ChatEditorState } from "./state";
 import { MESSENGER_CHANNELS } from "../../../types";
 
@@ -55,6 +55,8 @@ export default function ChatEditorModal({
   const common = getSettingsCommonCopy(t);
   const discordSelectedChannel =
     editor.channel === "discord" ? discordChannels.find((entry) => entry.id === editor.targetId.trim()) : null;
+  const selectedWorkflowPack =
+    workflowPackOptions.find((pack) => pack.key === editor.workflowPackKey) ?? workflowPackOptions[0] ?? null;
 
   return (
     <div className="fixed inset-0 z-[2200] flex items-center justify-center px-4">
@@ -227,23 +229,15 @@ export default function ChatEditorModal({
 
         <div>
           <label className="mb-1 block text-xs text-slate-400">{t({ ko: "워크플로 팩", en: "Workflow Pack" })}</label>
-          <select
-            value={editor.workflowPackKey}
-            onChange={(e) =>
-              setEditor((prev) => ({
-                ...prev,
-                workflowPackKey: isWorkflowPackKey(e.target.value) ? e.target.value : "development",
-              }))
-            }
-            className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-          >
-            {workflowPackOptions.map((pack) => (
-              <option key={pack.key} value={pack.key} disabled={!pack.enabled && pack.key !== editor.workflowPackKey}>
-                {pack.name}
-                {!pack.enabled ? ` (${common.disabled.toLowerCase()})` : ""}
-              </option>
-            ))}
-          </select>
+          <div className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200">
+            {selectedWorkflowPack?.name ?? editor.workflowPackKey}
+          </div>
+          <div className="mt-1 text-[11px] text-slate-500">
+            {t({
+              ko: "workflow pack 라우팅 편집은 compatibility-only로 읽기 전용입니다.",
+              en: "Workflow pack routing edits are compatibility-only and read-only.",
+            })}
+          </div>
           {workflowPacksLoading && (
             <div className="mt-1 text-[11px] text-slate-500">
               {t({ ko: "팩 목록 불러오는 중...", en: "Loading packs..." })}

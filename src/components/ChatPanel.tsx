@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { checkProjectPath, createProject, createPrnDraft, getProjects, isApiRequestError } from "../api";
 import { useI18n } from "../i18n";
@@ -13,6 +13,7 @@ import {
   ROLE_LABELS,
   STATUS_COLORS,
   STATUS_LABELS,
+  type CommandPreview,
   type ChatMode,
   type PendingSendAction,
   type ProjectMetaPayload,
@@ -57,6 +58,7 @@ type ProjectOverrideResolution =
     };
 
 const GLOBAL_PROJECT_CONTEXT_KEY = "__global__";
+const ALL_PROJECT_CHANNEL_ID = "__all__";
 
 function extractPrnPrompt(raw: string): string {
   const trimmed = raw.trim();
@@ -145,6 +147,23 @@ function mergeProjectsById(projects: Project[]): Project[] {
   return merged;
 }
 
+function projectTimestamp(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function getRecentProjectScore(project: Project): number {
+  return Math.max(
+    projectTimestamp(project.last_used_at),
+    projectTimestamp(project.updated_at),
+    projectTimestamp(project.created_at),
+  );
+}
+
 export function ChatPanel({
   selectedAgent,
   messages,
@@ -158,6 +177,7 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>(selectedAgent ? "task" : "announcement");
+  const [selectedProjectChannelId, setSelectedProjectChannelId] = useState<string>(ALL_PROJECT_CHANNEL_ID);
   const [conversationContexts, setConversationContexts] = useState<Record<string, ChatConversationContext>>({});
   const [pendingSend, setPendingSend] = useState<PendingSendAction | null>(null);
   const [projectFlowOpen, setProjectFlowOpen] = useState(false);
@@ -272,6 +292,77 @@ export function ChatPanel({
     : selectedAgent?.department_id;
   const selectedTaskId = selectedAgent?.current_task_id;
 
+  const commandPreview = useMemo<CommandPreview | null>(() => {
+    const trimmed = input.trimStart();
+    if (!trimmed) return null;
+    if (trimmed.startsWith("$")) {
+      return {
+        code: "directive",
+        label: tr("CEO 지시", "CEO Directive"),
+        description: currentProject
+          ? tr(`프로젝트: ${currentProject.name}`, `Project: ${currentProject.name}`)
+          : tr("프로젝트 선택 후 전달", "Select a project before sending"),
+        routeLabel: "/api/directives",
+      };
+    }
+    if (trimmed.startsWith("#")) {
+      return {
+        code: "task",
+        label: tr("태스크 요청", "Task Request"),
+        description: selectedAgent
+          ? tr(`${getAgentName(selectedAgent)}에게 작업 배정`, `Assign task to ${getAgentName(selectedAgent)}`)
+          : tr("프로젝트 기준 태스크 요청", "Project-scoped task request"),
+        routeLabel: "/api/messages task_assign",
+      };
+    }
+    if (trimmed.toLowerCase().startsWith("/prn")) {
+      return {
+        code: "prn",
+        label: "PRN",
+        description: tr("요구사항 초안 작성", "Draft requirements"),
+        routeLabel: "/api/prn-draft",
+      };
+    }
+    if (mode === "announcement") {
+      return {
+        code: "announcement",
+        label: tr("공지", "Announcement"),
+        description: tr("전체 채널로 전송", "Send to the company channel"),
+        routeLabel: "/api/announcements",
+      };
+    }
+    if (mode === "task" && selectedAgent) {
+      return {
+        code: "task",
+        label: tr("작업", "Task"),
+        description: tr(`${getAgentName(selectedAgent)}에게 작업 배정`, `Assign task to ${getAgentName(selectedAgent)}`),
+        routeLabel: "/api/messages task_assign",
+      };
+    }
+    if (mode === "report" && selectedAgent) {
+      return {
+        code: "report",
+        label: tr("보고", "Report"),
+        description: tr(`${getAgentName(selectedAgent)}에게 보고 요청`, `Request report from ${getAgentName(selectedAgent)}`),
+        routeLabel: "/api/messages report",
+      };
+    }
+    if (selectedAgent) {
+      return {
+        code: "chat",
+        label: tr("대화", "Chat"),
+        description: tr(`${getAgentName(selectedAgent)}에게 메시지`, `Message ${getAgentName(selectedAgent)}`),
+        routeLabel: "/api/messages chat",
+      };
+    }
+    return {
+      code: "broadcast",
+      label: tr("전체 메시지", "Broadcast"),
+      description: tr("전체 채널로 전송", "Send to the company channel"),
+      routeLabel: "/api/messages",
+    };
+  }, [currentProject, getAgentName, input, mode, selectedAgent, tr]);
+
   const updateConversationContext = useCallback(
     (
       conversationId: string | null,
@@ -346,7 +437,7 @@ export function ChatPanel({
         setPrnDraft(draft);
       } catch (err) {
         console.error("Failed to create PRN draft:", err);
-        setPrnDraftError(tr("PRN 초안 생성에 실패했습니다.", "Failed to create PRN draft."));
+        setPrnDraftError(tr("PRN 초안 생성에 실패했습니다.", "Failed to create PRN draft.", "PRN 下書きの生成に失敗しました。", "PRN 草稿生成失败。"));
       } finally {
         setPrnDraftLoading(false);
       }
@@ -375,6 +466,10 @@ export function ChatPanel({
       }
       if (action.kind === "task") {
         onSendMessage(action.content, "agent", action.receiverId, "task_assign", projectMeta);
+        return;
+      }
+      if (action.kind === "task_request") {
+        onSendMessage(action.content, "all", undefined, "task_assign", projectMeta);
         return;
       }
       if (action.kind === "report") {
@@ -427,7 +522,9 @@ export function ChatPanel({
       setManualPathPickerOpen(false);
       setNewProjectGoal(
         params.suggestedGoal ??
-          (params.pendingAction?.kind === "directive" || params.pendingAction?.kind === "prn"
+          (params.pendingAction?.kind === "directive" ||
+          params.pendingAction?.kind === "prn" ||
+          params.pendingAction?.kind === "task_request"
             ? params.pendingAction.content
             : ""),
       );
@@ -476,7 +573,7 @@ export function ChatPanel({
               feedback: {
                 tone: error.status >= 400 && error.status < 500 ? "info" : "error",
                 message: resolvePathHelperErrorMessage(error, {
-                  ko: "프로젝트 경로를 확인하지 못했습니다.",
+                  ko: "프로젝트 경로 확인에 실패했습니다.",
                   en: "Failed to validate the project path.",
                   ja: "Failed to validate the project path.",
                   zh: "Failed to validate the project path.",
@@ -504,9 +601,17 @@ export function ChatPanel({
   const executeAction = useCallback(
     async (action: PendingSendAction) => {
       const requiresProject =
-        action.kind === "directive" || action.kind === "prn" || action.kind === "task" || action.kind === "report";
+        action.kind === "directive" ||
+        action.kind === "prn" ||
+        action.kind === "task" ||
+        action.kind === "task_request" ||
+        action.kind === "report";
+      const channelProject =
+        selectedProjectChannelId !== ALL_PROJECT_CHANNEL_ID
+          ? (projects.find((project) => project.id === selectedProjectChannelId) ?? null)
+          : null;
       if (!requiresProject) {
-        dispatchPending(action);
+        dispatchPending(action, buildProjectMeta(channelProject));
         setInput("");
         textareaRef.current?.focus();
         return;
@@ -514,6 +619,7 @@ export function ChatPanel({
 
       const conversationId = selectedAgentId ?? GLOBAL_PROJECT_CONTEXT_KEY;
       const context = conversationContexts[conversationId] ?? null;
+      const contextProject = context?.project ?? channelProject;
       const override = await resolveProjectOverride(action);
 
       if (override?.kind === "resolved") {
@@ -541,18 +647,21 @@ export function ChatPanel({
           suggestedName: override.suggestedName,
           suggestedPath: override.suggestedPath,
           suggestedGoal:
-            action.kind === "directive" || action.kind === "prn" ? action.content : (context?.project?.core_goal ?? ""),
+            action.kind === "directive" || action.kind === "prn" || action.kind === "task_request"
+              ? action.content
+              : (context?.project?.core_goal ?? ""),
           skipPlannedMeeting: context?.skipPlannedMeeting ?? false,
           feedback: override.feedback ?? null,
         });
         return;
       }
 
-      if (context?.project) {
+      if (contextProject) {
         dispatchPending(
           action,
-          buildProjectMeta(context.project, {
-            skipPlannedMeeting: (action.kind === "directive" || action.kind === "prn") && context.skipPlannedMeeting,
+          buildProjectMeta(contextProject, {
+            skipPlannedMeeting:
+              (action.kind === "directive" || action.kind === "prn") && Boolean(context?.skipPlannedMeeting),
           }),
         );
         setInput("");
@@ -571,7 +680,9 @@ export function ChatPanel({
       conversationContexts,
       dispatchPending,
       openProjectFlow,
+      projects,
       resolveProjectOverride,
+      selectedProjectChannelId,
       selectedAgentId,
       updateConversationContext,
     ],
@@ -658,7 +769,9 @@ export function ChatPanel({
             setProjectFlowFeedback({
               tone: "info",
               message: tr(
-                `'${conflictingProject.name}' 프로젝트가 같은 경로를 이미 사용 중이라 해당 프로젝트로 전환했습니다.`,
+                `경로가 이미 등록되어 '${conflictingProject.name}' 프로젝트로 전환했습니다.`,
+                `Switched to '${conflictingProject.name}' because that path is already registered.`,
+                `Switched to '${conflictingProject.name}' because that path is already registered.`,
                 `Switched to '${conflictingProject.name}' because that path is already registered.`,
               ),
             });
@@ -675,7 +788,7 @@ export function ChatPanel({
               ko: "프로젝트 생성에 실패했습니다.",
               en: "Failed to create a project.",
             })
-          : tr("프로젝트 생성에 실패했습니다.", "Failed to create a project."),
+          : tr("프로젝트 생성에 실패했습니다.", "Failed to create a project.", "Failed to create a project.", "Failed to create a project."),
       });
     } finally {
       setProjectSaving(false);
@@ -705,6 +818,12 @@ export function ChatPanel({
       const directiveContent = trimmed.slice(1).trim();
       if (!directiveContent) return;
       action = { kind: "directive", content: directiveContent };
+    } else if (trimmed.startsWith("#")) {
+      const taskContent = trimmed.slice(1).trim();
+      if (!taskContent) return;
+      action = selectedAgent
+        ? { kind: "task", content: taskContent, receiverId: selectedAgent.id }
+        : { kind: "task_request", content: taskContent };
     } else if (trimmed.toLowerCase().startsWith("/prn")) {
       const prompt = extractPrnPrompt(trimmed);
       if (!prompt) return;
@@ -716,7 +835,7 @@ export function ChatPanel({
     } else if (mode === "report" && selectedAgent) {
       action = {
         kind: "report",
-        content: `[${tr("보고 요청", "Report Request")}] ${trimmed}`,
+        content: `[${tr("보고 요청", "Report Request", "Report Request", "Report Request")}] ${trimmed}`,
         receiverId: selectedAgent.id,
       };
     } else if (selectedAgent) {
@@ -803,6 +922,38 @@ export function ChatPanel({
 
   const contextBarVisible = Boolean(currentProject || currentSkipMeeting);
 
+  const projectById = useMemo(() => {
+    return new Map(projects.map((project) => [project.id, project]));
+  }, [projects]);
+
+  const recentProjects = useMemo(() => {
+    return mergeProjectsById(projects)
+      .slice()
+      .sort((a, b) => getRecentProjectScore(b) - getRecentProjectScore(a))
+      .slice(0, 5);
+  }, [projects]);
+
+  const projectChannels = useMemo(() => {
+    const ids = new Set<string>();
+    for (const message of messages) {
+      if (typeof message.project_id === "string" && message.project_id.trim()) {
+        ids.add(message.project_id);
+      }
+    }
+    if (currentProject?.id) ids.add(currentProject.id);
+    const resolved = Array.from(ids)
+      .map((projectId) => projectById.get(projectId))
+      .filter((project): project is Project => Boolean(project))
+      .sort((a, b) => b.updated_at - a.updated_at);
+    return resolved;
+  }, [messages, currentProject?.id, projectById]);
+
+  useEffect(() => {
+    if (selectedProjectChannelId === ALL_PROJECT_CHANNEL_ID) return;
+    if (projectChannels.some((project) => project.id === selectedProjectChannelId)) return;
+    setSelectedProjectChannelId(ALL_PROJECT_CHANNEL_ID);
+  }, [projectChannels, selectedProjectChannelId]);
+
   const { handleDecisionOptionReply, handleDecisionManualDraft } = useDecisionReplyHandlers({
     tr,
     onSendMessage,
@@ -815,6 +966,10 @@ export function ChatPanel({
   const visibleMessages = useMemo(
     () =>
       messages.filter((msg) => {
+        if (selectedProjectChannelId !== ALL_PROJECT_CHANNEL_ID) {
+          const messageProjectId = typeof msg.project_id === "string" ? msg.project_id : null;
+          if (messageProjectId !== selectedProjectChannelId) return false;
+        }
         if (!selectedAgentId) {
           return msg.receiver_type === "all" || msg.message_type === "announcement" || msg.message_type === "directive";
         }
@@ -827,7 +982,7 @@ export function ChatPanel({
           msg.receiver_type === "all"
         );
       }),
-    [messages, selectedAgentId, selectedTaskId],
+    [messages, selectedAgentId, selectedTaskId, selectedProjectChannelId],
   );
 
   const decisionRequestByMessage = useMemo(() => {
@@ -858,6 +1013,40 @@ export function ChatPanel({
         onClose={onClose}
       />
 
+      <div className="border-b border-slate-800 bg-slate-900/70 px-4 py-2">
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+          {tr("프로젝트 채널", "Project Channels", "プロジェクトチャンネル", "项目频道")}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedProjectChannelId(ALL_PROJECT_CHANNEL_ID)}
+            className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+              selectedProjectChannelId === ALL_PROJECT_CHANNEL_ID
+                ? "border-cyan-400/70 bg-cyan-500/15 text-cyan-200"
+                : "border-slate-700 text-slate-300 hover:border-slate-500"
+            }`}
+          >
+            {tr("전체", "All", "All", "All")}
+          </button>
+          {projectChannels.map((project) => (
+            <button
+              key={project.id}
+              type="button"
+              onClick={() => setSelectedProjectChannelId(project.id)}
+              className={`max-w-[180px] truncate rounded-full border px-2.5 py-1 text-[11px] transition ${
+                selectedProjectChannelId === project.id
+                  ? "border-cyan-400/70 bg-cyan-500/15 text-cyan-200"
+                  : "border-slate-700 text-slate-300 hover:border-slate-500"
+              }`}
+              title={project.project_path}
+            >
+              {project.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <ChatMessageList
         selectedAgent={selectedAgent}
         visibleMessages={visibleMessages}
@@ -880,7 +1069,7 @@ export function ChatPanel({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  {tr("현재 대화 프로젝트", "Conversation Project")}
+                  {tr("현재 대화 프로젝트", "Conversation Project", "現在の会話プロジェクト", "当前会话项目")}
                 </p>
                 {currentProject ? (
                   <>
@@ -888,11 +1077,11 @@ export function ChatPanel({
                     <p className="mt-1 break-all text-[11px] text-slate-400">{currentProject.project_path}</p>
                   </>
                 ) : (
-                  <p className="mt-1 text-sm text-slate-300">{tr("프로젝트 미선택", "No project selected")}</p>
+                  <p className="mt-1 text-sm text-slate-300">{tr("프로젝트 미선택", "No project selected", "プロジェクト未選択", "未选择项目")}</p>
                 )}
               </div>
               <div className="rounded-full border border-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-200">
-                {currentSkipMeeting ? tr("회의 생략", "No Meeting") : tr("기본 회의 정책", "Default Meeting")}
+                {currentSkipMeeting ? tr("회의 생략", "No Meeting", "会議なし", "无会议") : tr("기본 회의 정책", "Default Meeting", "既定の会議方針", "默认会议策略")}
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -901,14 +1090,14 @@ export function ChatPanel({
                 onClick={handleOpenProjectContextManager}
                 className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-slate-800 hover:text-white"
               >
-                {tr("프로젝트 변경", "Change Project")}
+                {tr("프로젝트 변경", "Change Project", "プロジェクト変更", "更改项目")}
               </button>
               <button
                 type="button"
                 onClick={handleClearProjectContext}
                 className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-slate-800 hover:text-white"
               >
-                {tr("프로젝트 해제", "Clear Project")}
+                {tr("프로젝트 해제", "Clear Project", "プロジェクト解除", "清除项目")}
               </button>
               <button
                 type="button"
@@ -920,8 +1109,8 @@ export function ChatPanel({
                 }`}
               >
                 {currentSkipMeeting
-                  ? tr("회의 없이 실행", "Execute Without Meeting")
-                  : tr("회의 모드 변경", "Change Meeting Mode")}
+                  ? tr("회의 없이 실행", "Execute Without Meeting", "会議なしで実行", "无会议执行")
+                  : tr("회의 모드 변경", "Change Meeting Mode", "会議モード変更", "更改会议模式")}
               </button>
             </div>
           </div>
@@ -936,6 +1125,7 @@ export function ChatPanel({
         pendingContent={pendingSend?.content ?? ""}
         projectQuery={projectQuery}
         projectsLoading={projectsLoading}
+        recentProjects={recentProjects}
         filteredProjects={filteredProjects}
         selectedProject={selectedProject}
         createNewProjectMode={createNewProjectMode}
@@ -1014,6 +1204,7 @@ export function ChatPanel({
         isDirectiveMode={isDirectiveMode}
         isPrnCommandMode={isPrnCommandMode}
         isAnnouncementMode={isAnnouncementMode}
+        commandPreview={commandPreview}
         tr={tr}
         getAgentName={getAgentName}
         textareaRef={textareaRef}
@@ -1030,3 +1221,5 @@ export function ChatPanel({
     </div>
   );
 }
+
+

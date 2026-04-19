@@ -1,5 +1,4 @@
-import { Suspense, lazy, useCallback, useMemo, type ReactNode } from "react";
-import { createPresetAgentProfile } from "../agent-profile";
+﻿import { Suspense, lazy, useCallback, useMemo, type ReactNode } from "react";
 import Sidebar from "../components/Sidebar";
 import { I18nProvider } from "../i18n";
 import type {
@@ -20,12 +19,10 @@ import type { UpdateStatus } from "../api";
 import type { OAuthCallbackResult, RoomThemeMap, View } from "./types";
 import AppHeaderBar from "./AppHeaderBar";
 import {
-  buildOfficePackStarterAgents,
   buildOfficePackPresentation,
   getOfficePackRoomThemes,
   listOfficePackOptions,
   normalizeOfficeWorkflowPack,
-  resolveOfficePackSeedProvider,
 } from "./office-workflow-pack";
 import { resolvePackAgentViews, resolvePackDepartmentsForDisplay } from "./office-pack-display";
 import { applyOfficePackToTaskInput, filterTasksByOfficePack, type TaskCreateInput } from "./task-workflow-pack";
@@ -196,33 +193,16 @@ export default function AppMainLayout({
   officePackBootstrappingLabel,
   children,
 }: AppMainLayoutProps) {
-  const uiLanguage =
-    labels.uiLanguage === "ko" || labels.uiLanguage === "ja" || labels.uiLanguage === "zh" ? labels.uiLanguage : "en";
+  const uiLanguage = labels.uiLanguage === "ko" ? "ko" : "en";
   const officePackKey = normalizeOfficeWorkflowPack(activeOfficeWorkflowPack);
   const officePackOptions = useMemo(() => listOfficePackOptions(uiLanguage), [uiLanguage]);
-  const officePackLabel =
-    labels.uiLanguage === "ko"
-      ? "오피스 팩"
-      : labels.uiLanguage === "ja"
-        ? "オフィスパック"
-        : labels.uiLanguage === "zh"
-          ? "办公室包"
-          : "Office Pack";
+  const officePackLabel = uiLanguage === "ko" ? "오피스 팩" : "Office Pack";
   const officePackBootstrappingMessage = useMemo(() => {
     if (!officePackBootstrappingLabel) return null;
-    if (uiLanguage === "ko") return `${officePackBootstrappingLabel} 오피스 팩 배치중...`;
-    if (uiLanguage === "ja") return `${officePackBootstrappingLabel} オフィスパックを配置中...`;
-    if (uiLanguage === "zh") return `${officePackBootstrappingLabel} 办公室包部署中...`;
+    if (uiLanguage === "ko") return `${officePackBootstrappingLabel} 오피스 팩 배치를 적용하는 중입니다...`;
     return `Deploying ${officePackBootstrappingLabel} office pack...`;
   }, [officePackBootstrappingLabel, uiLanguage]);
-  const viewLoadingLabel =
-    uiLanguage === "ko"
-      ? "화면을 불러오는 중입니다..."
-      : uiLanguage === "ja"
-        ? "画面を読み込み中です..."
-        : uiLanguage === "zh"
-          ? "正在加载界面..."
-          : "Loading view...";
+  const viewLoadingLabel = uiLanguage === "ko" ? "화면 데이터를 불러오는 중..." : "Loading view...";
   const generatedOfficePresentation = useMemo(
     () =>
       buildOfficePackPresentation({
@@ -235,73 +215,17 @@ export default function AppMainLayout({
     [officePackKey, uiLanguage, departments, agents, customRoomThemes],
   );
 
-  const activePackProfile =
-    officePackKey === "development" ? null : (settings.officePackProfiles?.[officePackKey] ?? null);
-
-  const seededPackAgents = useMemo(() => {
-    if (officePackKey === "development") return [] as Agent[];
-    if (activePackProfile?.agents?.length) return activePackProfile.agents;
-    const drafts = buildOfficePackStarterAgents({
-      packKey: officePackKey,
-      departments: generatedOfficePresentation.departments,
-      targetCount: 8,
-      locale: uiLanguage,
-    });
-    const now = Date.now();
-    return drafts.map((draft, index) => ({
-      id: `${officePackKey}-seed-${index + 1}`,
-      name: draft.name,
-      name_ko: draft.name_ko,
-      name_ja: draft.name_ja,
-      name_zh: draft.name_zh,
-      department_id: draft.department_id,
-      role: draft.role,
-      acts_as_planning_leader: draft.acts_as_planning_leader,
-      cli_provider: resolveOfficePackSeedProvider({
-        packKey: officePackKey,
-        departmentId: draft.department_id,
-        role: draft.role,
-        seedIndex: index + 1,
-        seedOrderInDepartment: draft.seed_order_in_department,
-      }),
-      avatar_emoji: draft.avatar_emoji,
-      sprite_number: draft.sprite_number,
-      personality: draft.personality,
-      agent_profile: {
-        ...createPresetAgentProfile(draft.role),
-        specialties: [],
-        custom_prompt_override: draft.personality,
-      },
-      status: "idle" as const,
-      current_task_id: null,
-      stats_tasks_done: 0,
-      stats_xp: 0,
-      created_at: now,
-    }));
-  }, [activePackProfile?.agents, generatedOfficePresentation.departments, officePackKey, uiLanguage]);
-
-  const packProfileDepartments =
-    officePackKey === "development"
-      ? null
-      : (activePackProfile?.departments ?? generatedOfficePresentation.departments);
-  const packProfileAgents = officePackKey === "development" ? null : (activePackProfile?.agents ?? seededPackAgents);
-
-  const isHydratedOfficePack = useMemo(() => {
-    if (officePackKey === "development") return false;
-    const hydrated = settings.officePackHydratedPacks;
-    if (!Array.isArray(hydrated)) return false;
-    return hydrated.map((value) => String(value ?? "").trim()).includes(officePackKey);
-  }, [officePackKey, settings.officePackHydratedPacks]);
+  const isHydratedOfficePack = false;
 
   const displayDepartments = useMemo(
     () =>
       resolvePackDepartmentsForDisplay({
         packKey: officePackKey,
         globalDepartments: departments,
-        packDepartments: packProfileDepartments,
-        preferPackProfile: !isHydratedOfficePack,
+        packDepartments: null,
+        preferPackProfile: false,
       }),
-    [departments, isHydratedOfficePack, officePackKey, packProfileDepartments],
+    [departments, officePackKey],
   );
 
   const { scopedAgents: officeScopedAgents, mergedAgents: displayAgents } = useMemo(
@@ -309,24 +233,13 @@ export default function AppMainLayout({
       resolvePackAgentViews({
         packKey: officePackKey,
         globalAgents: agents,
-        packAgents: packProfileAgents,
+        packAgents: null,
       }),
-    [agents, officePackKey, packProfileAgents],
+    [agents, officePackKey],
   );
 
-  const managerDepartments =
-    officePackKey === "development"
-      ? departments
-      : isHydratedOfficePack
-        ? displayDepartments
-        : (activePackProfile?.departments ?? generatedOfficePresentation.departments);
-
-  const managerAgents =
-    officePackKey === "development"
-      ? agents
-      : isHydratedOfficePack
-        ? officeScopedAgents
-        : (activePackProfile?.agents ?? seededPackAgents);
+  const managerDepartments = officePackKey === "development" ? departments : displayDepartments;
+  const managerAgents = officePackKey === "development" ? agents : officeScopedAgents;
 
   const officePresentation = useMemo(() => {
     if (officePackKey === "development") return generatedOfficePresentation;
@@ -349,7 +262,7 @@ export default function AppMainLayout({
   );
 
   return (
-    <I18nProvider language={labels.uiLanguage}>
+    <I18nProvider language={uiLanguage}>
       <div className="app-shell flex h-[100dvh] min-h-[100dvh] overflow-hidden">
         <div className="hidden lg:flex lg:flex-shrink-0">
           <Sidebar
@@ -548,16 +461,7 @@ export default function AppMainLayout({
                   onAgentsChange={onAgentsChange}
                   activeOfficeWorkflowPack={officePackKey}
                   dbBackedOfficePack={isHydratedOfficePack}
-                  onSaveOfficePackProfile={async (packKey, profile) => {
-                    if (packKey === "development") return;
-                    await onSaveSettings({
-                      ...settings,
-                      officePackProfiles: {
-                        ...(settings.officePackProfiles ?? {}),
-                        [packKey]: profile,
-                      },
-                    });
-                  }}
+                  onSaveOfficePackProfile={async () => {}}
                 />
               )}
 
@@ -586,3 +490,5 @@ export default function AppMainLayout({
     </I18nProvider>
   );
 }
+
+

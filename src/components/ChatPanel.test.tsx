@@ -146,12 +146,18 @@ vi.mock("./chat-panel/PrnDraftModal", () => ({
 vi.mock("./chat-panel/ChatComposer", () => ({
   default: function MockChatComposer(props: {
     input: string;
+    commandPreview: { label: string; description: string; routeLabel: string } | null;
     onInputChange: (value: string) => void;
     onSend: () => void;
     onCreatePrn: () => void;
   }) {
     return (
       <div>
+        {props.commandPreview ? (
+          <div data-testid="command-preview">
+            {props.commandPreview.label} {props.commandPreview.description} {props.commandPreview.routeLabel}
+          </div>
+        ) : null}
         <textarea
           aria-label="chat-input"
           value={props.input}
@@ -171,6 +177,7 @@ vi.mock("./chat-panel/ChatComposer", () => ({
 vi.mock("./chat-panel/ProjectFlowDialog", () => ({
   default: function MockProjectFlowDialog(props: {
     open: boolean;
+    recentProjects: Project[];
     filteredProjects: Project[];
     selectedProject: Project | null;
     skipPlannedMeeting: boolean;
@@ -183,6 +190,18 @@ vi.mock("./chat-panel/ProjectFlowDialog", () => ({
       <div data-testid="project-flow-dialog">
         <div data-testid="selected-project-id">{props.selectedProject?.id ?? ""}</div>
         <div data-testid="skip-meeting-state">{props.skipPlannedMeeting ? "skip" : "default"}</div>
+        <div data-testid="recent-projects">
+          {props.recentProjects.map((project) => (
+            <button
+              key={project.id}
+              type="button"
+              aria-label={`quick-project-${project.name}`}
+              onClick={() => props.onSelectProject(project)}
+            >
+              {project.name}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => props.onSelectProject(props.filteredProjects[0] ?? null)}
@@ -260,6 +279,16 @@ describe("ChatPanel directive project context", () => {
     last_used_at: null,
     created_at: 1,
     updated_at: 1,
+  };
+  const recentProject: Project = {
+    id: "project-2",
+    name: "Recent Forge",
+    project_path: "D:\\Projects\\RecentForge",
+    core_goal: "Ship the recent project",
+    assignment_mode: "auto",
+    last_used_at: 30,
+    created_at: 2,
+    updated_at: 20,
   };
 
   beforeEach(() => {
@@ -353,6 +382,45 @@ describe("ChatPanel directive project context", () => {
     expect(screen.queryByTestId("project-flow-dialog")).not.toBeInTheDocument();
   });
 
+  it("offers recent projects as quick selections and persists the selected context", async () => {
+    uiMockState.projects = [existingProject, recentProject];
+    const { onSendDirective } = renderChatPanel({});
+
+    fireEvent.change(screen.getByLabelText("chat-input"), { target: { value: "$use recent context" } });
+    fireEvent.click(screen.getByRole("button", { name: "send" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("project-flow-dialog")).toBeInTheDocument();
+    });
+
+    const recentButtons = screen.getByTestId("recent-projects").querySelectorAll("button");
+    expect(Array.from(recentButtons).map((button) => button.textContent)).toEqual(["Recent Forge", "Empire"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "quick-project-Recent Forge" }));
+    fireEvent.click(screen.getByRole("button", { name: "confirm-project" }));
+
+    await waitFor(() => {
+      expect(onSendDirective).toHaveBeenCalledWith("use recent context", {
+        project_id: "project-2",
+        project_path: "D:\\Projects\\RecentForge",
+        project_context: "Ship the recent project",
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("chat-input"), { target: { value: "$reuse recent context" } });
+    fireEvent.click(screen.getByRole("button", { name: "send" }));
+
+    await waitFor(() => {
+      expect(onSendDirective).toHaveBeenNthCalledWith(2, "reuse recent context", {
+        project_id: "project-2",
+        project_path: "D:\\Projects\\RecentForge",
+        project_context: "Ship the recent project",
+      });
+    });
+
+    expect(screen.queryByTestId("project-flow-dialog")).not.toBeInTheDocument();
+  });
+
   it("forwards skipPlannedMeeting only when the meeting mode is toggled off", async () => {
     const { onSendDirective } = renderChatPanel({});
 
@@ -417,5 +485,31 @@ describe("ChatPanel directive project context", () => {
     });
 
     expect(screen.queryByTestId("project-flow-dialog")).not.toBeInTheDocument();
+  });
+
+  it("previews hash-prefixed task requests and dispatches them as project-bound task assignments", async () => {
+    const { onSendMessage } = renderChatPanel({});
+
+    fireEvent.change(screen.getByLabelText("chat-input"), { target: { value: "#fix the build" } });
+
+    expect(screen.getByTestId("command-preview")).toHaveTextContent("Task Request");
+    expect(screen.getByTestId("command-preview")).toHaveTextContent("/api/messages task_assign");
+
+    fireEvent.click(screen.getByRole("button", { name: "send" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("project-flow-dialog")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "select-first-project" }));
+    fireEvent.click(screen.getByRole("button", { name: "confirm-project" }));
+
+    await waitFor(() => {
+      expect(onSendMessage).toHaveBeenCalledWith("fix the build", "agent", "agent-1", "task_assign", {
+        project_id: "project-1",
+        project_path: "D:\\Projects\\Empire",
+        project_context: "Build Empire Claw",
+      });
+    });
   });
 });

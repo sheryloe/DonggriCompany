@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as api from "../../api";
 import AgentAvatar, { useSpriteMap } from "../AgentAvatar";
 import {
@@ -20,6 +20,14 @@ import {
   normalizeChannelsConfig,
   resolveChannelsConfig,
 } from "./gateway-settings/state";
+
+function resolveLocalizedAgentName(agent: Agent, localeTag: string): string {
+  const locale = (localeTag || "en").toLowerCase();
+  if (locale.startsWith("ko")) return agent.name_ko || agent.name || agent.name_ja || agent.name_zh || "";
+  if (locale.startsWith("ja")) return agent.name_ja || agent.name || agent.name_ko || agent.name_zh || "";
+  if (locale.startsWith("zh")) return agent.name_zh || agent.name || agent.name_ko || agent.name_ja || "";
+  return agent.name || agent.name_ko || agent.name_ja || agent.name_zh || "";
+}
 
 export default function GatewaySettingsTab({ t, form, setForm, persistSettings }: ChannelSettingsTabProps) {
   const common = getSettingsCommonCopy(t);
@@ -406,7 +414,7 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
               const meta = CHANNEL_META[row.channel];
               const assignedAgent = row.session.agentId ? agentById.get(row.session.agentId) : undefined;
               const assignedAgentName = assignedAgent
-                ? assignedAgent.name_ko || assignedAgent.name
+                ? resolveLocalizedAgentName(assignedAgent, form.language)
                 : row.session.agentId || "";
               const workflowPackKey = isWorkflowPackKey(row.session.workflowPackKey)
                 ? row.session.workflowPackKey
@@ -623,3 +631,4 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
     </section>
   );
 }
+

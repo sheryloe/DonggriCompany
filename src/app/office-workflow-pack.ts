@@ -1,543 +1,304 @@
-import type { Agent, AgentRole, CliProvider, Department, RoomTheme, WorkflowPackKey } from "../types";
+﻿import type { Agent, AgentRole, Department, RoomTheme, WorkflowPackKey } from "../types";
 
 export type UiLanguageLike = "ko" | "en" | "ja" | "zh";
 
-type Localized = { ko: string; en: string; ja: string; zh: string };
-type DeptPreset = {
-  name: Localized;
-  icon: string;
-  agentPrefix: Localized;
-  avatarPool: string[];
+type Localized = {
+  ko: string;
+  en: string;
+  ja: string;
+  zh: string;
 };
 
-type StaffPreset = {
-  nonLeaderDeptCycle: string[];
-  planningLeadDeptIds?: string[];
-};
-
-type SeedProfile = {
-  nameOffset: number;
-  tone: Localized;
-};
-
-type PackPreset = {
-  key: WorkflowPackKey;
-  slug: string;
+type PackMeta = {
   label: Localized;
   summary: Localized;
-  roomThemes: Record<string, RoomTheme>;
-  departments: Partial<Record<string, DeptPreset>>;
-  staff?: StaffPreset;
+  slug: string;
+  accent: number;
 };
 
-type OfficePackPresentation = {
-  departments: Department[];
-  agents: Agent[];
-  roomThemes: Record<string, RoomTheme>;
+type DepartmentCopy = {
+  description: Localized;
+  promptTitle: Localized;
+  promptBody: Localized;
 };
 
-export type OfficePackStarterAgentDraft = {
-  name: string;
-  name_ko: string;
-  name_ja: string;
-  name_zh: string;
-  department_id: string | null;
+export type OfficePackStarterAgentDraft = Agent & {
   seed_order_in_department: number;
-  role: AgentRole;
-  acts_as_planning_leader: number;
-  avatar_emoji: string;
-  sprite_number: number;
-  personality: string | null;
 };
 
-type OfficePackSeedProvider = Extract<CliProvider, "claude" | "codex">;
-const OFFICE_SEED_SPRITE_POOL = Array.from({ length: 40 }, (_, idx) => idx + 1);
+const WORKFLOW_PACK_KEYS: WorkflowPackKey[] = [
+  "development",
+  "donggri",
+  "novel",
+  "report",
+  "video_preprod",
+  "web_research_report",
+  "roleplay",
+];
 
-const DEV_THEMES: Record<string, RoomTheme> = {
-  ceoOffice: { floor1: 0xe5d9b9, floor2: 0xdfd0a8, wall: 0x998243, accent: 0xa77d0c },
-  planning: { floor1: 0xf0e1c5, floor2: 0xeddaba, wall: 0xae9871, accent: 0xd4a85a },
-  dev: { floor1: 0xd8e8f5, floor2: 0xcce1f2, wall: 0x6c96b7, accent: 0x5a9fd4 },
-  design: { floor1: 0xe8def2, floor2: 0xe1d4ee, wall: 0x9378ad, accent: 0x9a6fc4 },
-  qa: { floor1: 0xf0cbcb, floor2: 0xedc0c0, wall: 0xae7979, accent: 0xd46a6a },
-  devsecops: { floor1: 0xf0d5c5, floor2: 0xedcdba, wall: 0xae8871, accent: 0xd4885a },
-  operations: { floor1: 0xd0eede, floor2: 0xc4ead5, wall: 0x6eaa89, accent: 0x5ac48a },
-  breakRoom: { floor1: 0xf7e2b7, floor2: 0xf6dead, wall: 0xa99c83, accent: 0xf0c878 },
-};
-
-const DEPARTMENT_PERSON_NAME_POOL: Partial<Record<string, Localized[]>> = {
-  planning: [
-    { ko: "세이지", en: "Sage", ja: "Sage", zh: "Sage" },
-    { ko: "미나", en: "Mina", ja: "Mina", zh: "Mina" },
-    { ko: "준", en: "Juno", ja: "Juno", zh: "Juno" },
-    { ko: "리안", en: "Rian", ja: "Rian", zh: "Rian" },
-    { ko: "하루", en: "Haru", ja: "Haru", zh: "Haru" },
-    { ko: "노아", en: "Noa", ja: "Noa", zh: "Noa" },
-  ],
-  dev: [
-    { ko: "아리아", en: "Aria", ja: "Aria", zh: "Aria" },
-    { ko: "테오", en: "Theo", ja: "Theo", zh: "Theo" },
-    { ko: "카이", en: "Kai", ja: "Kai", zh: "Kai" },
-    { ko: "리암", en: "Liam", ja: "Liam", zh: "Liam" },
-    { ko: "세나", en: "Sena", ja: "Sena", zh: "Sena" },
-    { ko: "로완", en: "Rowan", ja: "Rowan", zh: "Rowan" },
-  ],
-  design: [
-    { ko: "도로", en: "Doro", ja: "Doro", zh: "Doro" },
-    { ko: "루나", en: "Luna", ja: "Luna", zh: "Luna" },
-    { ko: "픽셀", en: "Pixel", ja: "Pixel", zh: "Pixel" },
-    { ko: "유나", en: "Yuna", ja: "Yuna", zh: "Yuna" },
-    { ko: "미로", en: "Miro", ja: "Miro", zh: "Miro" },
-    { ko: "아이리스", en: "Iris", ja: "Iris", zh: "Iris" },
-  ],
-  qa: [
-    { ko: "호크", en: "Hawk", ja: "Hawk", zh: "Hawk" },
-    { ko: "베라", en: "Vera", ja: "Vera", zh: "Vera" },
-    { ko: "퀸", en: "Quinn", ja: "Quinn", zh: "Quinn" },
-    { ko: "토리", en: "Tori", ja: "Tori", zh: "Tori" },
-    { ko: "하윤", en: "Hayoon", ja: "Hayoon", zh: "Hayoon" },
-    { ko: "린트", en: "Lint", ja: "Lint", zh: "Lint" },
-  ],
-  operations: [
-    { ko: "아틀라스", en: "Atlas", ja: "Atlas", zh: "Atlas" },
-    { ko: "나리", en: "Nari", ja: "Nari", zh: "Nari" },
-    { ko: "오웬", en: "Owen", ja: "Owen", zh: "Owen" },
-    { ko: "다미", en: "Dami", ja: "Dami", zh: "Dami" },
-    { ko: "키라", en: "Kira", ja: "Kira", zh: "Kira" },
-    { ko: "솔", en: "Sol", ja: "Sol", zh: "Sol" },
-  ],
-  devsecops: [
-    { ko: "볼트", en: "Volt", ja: "Volt", zh: "Volt" },
-    { ko: "시온", en: "Sion", ja: "Sion", zh: "Sion" },
-    { ko: "녹스", en: "Knox", ja: "Knox", zh: "Knox" },
-    { ko: "레이븐", en: "Raven", ja: "Raven", zh: "Raven" },
-    { ko: "미라", en: "Mira", ja: "Mira", zh: "Mira" },
-    { ko: "알렉스", en: "Alex", ja: "Alex", zh: "Alex" },
-  ],
-};
-
-const PACK_SEED_PROFILE: Partial<Record<WorkflowPackKey, SeedProfile>> = {
-  report: {
-    nameOffset: 0,
-    tone: {
-      ko: "근거와 문서 완성도를 최우선으로 판단합니다.",
-      en: "Prioritizes evidence quality and document completeness.",
-      ja: "Prioritizes evidence quality and document completeness.",
-      zh: "Prioritizes evidence quality and document completeness.",
-    },
-  },
-  web_research_report: {
-    nameOffset: 1,
-    tone: {
-      ko: "출처 신뢰성과 사실 검증을 최우선으로 판단합니다.",
-      en: "Focused on source credibility and fact verification.",
-      ja: "Focused on source credibility and fact verification.",
-      zh: "Focused on source credibility and fact verification.",
-    },
-  },
-  novel: {
-    nameOffset: 2,
-    tone: {
-      ko: "서사 몰입감과 캐릭터 일관성을 최우선으로 판단합니다.",
-      en: "Values narrative immersion and character consistency the most.",
-      ja: "Values narrative immersion and character consistency the most.",
-      zh: "Values narrative immersion and character consistency the most.",
-    },
-  },
-  video_preprod: {
-    nameOffset: 3,
-    tone: {
-      ko: "콘티 품질, 샷 구성, 제작 효율을 최우선으로 판단합니다.",
-      en: "Prioritizes storyboard quality, shot composition, and production efficiency.",
-      ja: "Prioritizes storyboard quality, shot composition, and production efficiency.",
-      zh: "Prioritizes storyboard quality, shot composition, and production efficiency.",
-    },
-  },
-  roleplay: {
-    nameOffset: 4,
-    tone: {
-      ko: "캐릭터 몰입감과 대사 리듬을 최우선으로 판단합니다.",
-      en: "Prioritizes character immersion and dialogue rhythm.",
-      ja: "Prioritizes character immersion and dialogue rhythm.",
-      zh: "Prioritizes character immersion and dialogue rhythm.",
-    },
-  },
-  donggri: {
-    nameOffset: 5,
-    tone: {
-      ko: "개발 실행력, 리서치 근거, 보고서 구조, 소설 몰입감을 함께 유지합니다.",
-      en: "Balances implementation, research rigor, report clarity, and narrative immersion in one flow.",
-      ja: "Balances implementation, research rigor, report clarity, and narrative immersion in one flow.",
-      zh: "Balances implementation, research rigor, report clarity, and narrative immersion in one flow.",
-    },
-  },
-};
-
-const PACK_PRESETS: Record<WorkflowPackKey, PackPreset> = {
+const PACK_META: Record<WorkflowPackKey, PackMeta> = {
   development: {
-    key: "development",
-    slug: "DEV",
-    label: {
-      ko: "개발 오피스",
-      en: "Development Office",
-      ja: "Development Office",
-      zh: "Development Office",
-    },
+    label: { ko: "개발", en: "Development", ja: "Development", zh: "Development" },
     summary: {
-      ko: "기본 개발 조직 구조",
-      en: "Default engineering organization",
-      ja: "Default engineering organization",
-      zh: "Default engineering organization",
+      ko: "기본 엔지니어링 실행 팩",
+      en: "Default engineering execution pack",
+      ja: "Default engineering execution pack",
+      zh: "Default engineering execution pack",
     },
-    roomThemes: DEV_THEMES,
-    departments: {},
+    slug: "dev",
+    accent: 2,
   },
   donggri: {
-    key: "donggri",
-    slug: "DGR",
-    label: {
-      ko: "동그리 통합 오피스",
-      en: "Donggri Unified Office",
-      ja: "Donggri Unified Office",
-      zh: "Donggri Unified Office",
-    },
+    label: { ko: "동그리", en: "Donggri", ja: "Donggri", zh: "Donggri" },
     summary: {
-      ko: "개발, 보고서, 웹 리서치, 소설 워크플로우를 한 번에 처리하는 통합 팩",
-      en: "Unified pack for development, report, web research, and novel workflows.",
-      ja: "Unified pack for development, report, web research, and novel workflows.",
-      zh: "Unified pack for development, report, web research, and novel workflows.",
+      ko: "회사 전체 구조를 포함하는 기준 팩",
+      en: "Base pack that spans the full company structure",
+      ja: "Base pack that spans the full company structure",
+      zh: "Base pack that spans the full company structure",
     },
-    roomThemes: {
-      ...DEV_THEMES,
-      ceoOffice: { floor1: 0xe8e2d6, floor2: 0xe0d7c4, wall: 0x7a6857, accent: 0xa56d36 },
-      planning: { floor1: 0xe8edf4, floor2: 0xdfe7f1, wall: 0x596b86, accent: 0x668cc0 },
-      dev: { floor1: 0xe2ecf8, floor2: 0xd7e5f4, wall: 0x4f6f9c, accent: 0x5689d1 },
-      design: { floor1: 0xf0e7f2, floor2: 0xe7dced, wall: 0x7b5f86, accent: 0xa072b8 },
-    },
-    departments: {
-      planning: {
-        name: {
-          ko: "통합 기획 허브",
-          en: "Unified Planning Hub",
-          ja: "Unified Planning Hub",
-          zh: "Unified Planning Hub",
-        },
-        icon: "🧭",
-        agentPrefix: {
-          ko: "통합 기획 PM",
-          en: "Unified PM",
-          ja: "Unified PM",
-          zh: "Unified PM",
-        },
-        avatarPool: ["🧭", "🛰️", "📚", "🧠"],
-      },
-      dev: {
-        name: {
-          ko: "개발·리서치 엔진",
-          en: "Build & Research Engine",
-          ja: "Build & Research Engine",
-          zh: "Build & Research Engine",
-        },
-        icon: "🛠️",
-        agentPrefix: {
-          ko: "통합 엔지니어",
-          en: "Fusion Engineer",
-          ja: "Fusion Engineer",
-          zh: "Fusion Engineer",
-        },
-        avatarPool: ["🛠️", "🧪", "💻", "🧩"],
-      },
-      design: {
-        name: {
-          ko: "콘셉트·캐릭터 디자인",
-          en: "Concept & Character Design",
-          ja: "Concept & Character Design",
-          zh: "Concept & Character Design",
-        },
-        icon: "🎨",
-        agentPrefix: {
-          ko: "콘셉트 디자이너",
-          en: "Concept Designer",
-          ja: "Concept Designer",
-          zh: "Concept Designer",
-        },
-        avatarPool: ["🎨", "🖋️", "🧵", "✨"],
-      },
-      qa: {
-        name: {
-          ko: "팩트·문체 검증",
-          en: "Fact & Style QA",
-          ja: "Fact & Style QA",
-          zh: "Fact & Style QA",
-        },
-        icon: "🔎",
-        agentPrefix: {
-          ko: "통합 검증 리뷰어",
-          en: "Fusion Reviewer",
-          ja: "Fusion Reviewer",
-          zh: "Fusion Reviewer",
-        },
-        avatarPool: ["🔎", "📌", "🗂️", "✅"],
-      },
-    },
-    staff: {
-      nonLeaderDeptCycle: [
-        "planning",
-        "dev",
-        "design",
-        "qa",
-        "dev",
-        "planning",
-        "design",
-        "qa",
-        "operations",
-        "devsecops",
-      ],
-      planningLeadDeptIds: ["planning", "dev"],
-    },
-  },
-  report: {
-    key: "report",
-    slug: "RPT",
-    label: { ko: "보고서 오피스", en: "Report Office", ja: "Report Office", zh: "Report Office" },
-    summary: {
-      ko: "리서치 문서화 중심 팀",
-      en: "Research and documentation focused crew",
-      ja: "Research and documentation focused crew",
-      zh: "Research and documentation focused crew",
-    },
-    roomThemes: DEV_THEMES,
-    departments: {
-      planning: {
-        name: { ko: "편집 기획", en: "Editorial Planning", ja: "Editorial Planning", zh: "Editorial Planning" },
-        icon: "📝",
-        agentPrefix: { ko: "편집 PM", en: "Editorial PM", ja: "Editorial PM", zh: "Editorial PM" },
-        avatarPool: ["📝", "📚", "🧠"],
-      },
-    },
-    staff: { nonLeaderDeptCycle: ["planning", "dev", "qa", "design", "operations"] },
-  },
-  web_research_report: {
-    key: "web_research_report",
-    slug: "WEB",
-    label: { ko: "웹 리서치 오피스", en: "Web Research Office", ja: "Web Research Office", zh: "Web Research Office" },
-    summary: {
-      ko: "출처 검증 기반 조사팀",
-      en: "Source collection and citation verification",
-      ja: "Source collection and citation verification",
-      zh: "Source collection and citation verification",
-    },
-    roomThemes: DEV_THEMES,
-    departments: {
-      planning: {
-        name: { ko: "조사 전략", en: "Research Strategy", ja: "Research Strategy", zh: "Research Strategy" },
-        icon: "🔬",
-        agentPrefix: { ko: "전략 분석가", en: "Strategy Analyst", ja: "Strategy Analyst", zh: "Strategy Analyst" },
-        avatarPool: ["🔬", "🧭", "📡"],
-      },
-    },
-    staff: { nonLeaderDeptCycle: ["planning", "dev", "qa", "dev", "operations"] },
+    slug: "core",
+    accent: 9,
   },
   novel: {
-    key: "novel",
-    slug: "NOV",
-    label: { ko: "소설 스튜디오", en: "Novel Studio", ja: "Novel Studio", zh: "Novel Studio" },
+    label: { ko: "소설", en: "Novel", ja: "Novel", zh: "Novel" },
     summary: {
-      ko: "세계관/캐릭터/서사 중심",
-      en: "Worldbuilding, character and narrative setup",
-      ja: "Worldbuilding, character and narrative setup",
-      zh: "Worldbuilding, character and narrative setup",
+      ko: "서사와 장면 구성 중심 팩",
+      en: "Narrative-focused pack for story and scene construction",
+      ja: "Narrative-focused pack for story and scene construction",
+      zh: "Narrative-focused pack for story and scene construction",
     },
-    roomThemes: DEV_THEMES,
-    departments: {
-      planning: {
-        name: { ko: "세계관 팀", en: "Worldbuilding", ja: "Worldbuilding", zh: "Worldbuilding" },
-        icon: "📖",
-        agentPrefix: { ko: "로어 라이터", en: "Lore Writer", ja: "Lore Writer", zh: "Lore Writer" },
-        avatarPool: ["📖", "🗺️", "🧭"],
-      },
+    slug: "novel",
+    accent: 11,
+  },
+  report: {
+    label: { ko: "리포트", en: "Report", ja: "Report", zh: "Report" },
+    summary: {
+      ko: "리서치, 검증, 문서화 중심 팩",
+      en: "Research, validation, and documentation team pack",
+      ja: "Research, validation, and documentation team pack",
+      zh: "Research, validation, and documentation team pack",
     },
-    staff: { nonLeaderDeptCycle: ["planning", "design", "dev", "design", "qa", "operations"] },
+    slug: "report",
+    accent: 6,
   },
   video_preprod: {
-    key: "video_preprod",
-    slug: "VID",
-    label: {
-      ko: "영상 프리프로덕션",
-      en: "Video Pre-production",
-      ja: "Video Pre-production",
-      zh: "Video Pre-production",
-    },
+    label: { ko: "영상 프리프로덕션", en: "Video Pre-production", ja: "Video Pre-production", zh: "Video Pre-production" },
     summary: {
-      ko: "콘티/샷리스트 중심",
-      en: "Storyboard and shot-list focused setup",
-      ja: "Storyboard and shot-list focused setup",
-      zh: "Storyboard and shot-list focused setup",
+      ko: "기획/디자인/운영 조율 팩",
+      en: "Planning, design, and operations coordination pack",
+      ja: "Planning, design, and operations coordination pack",
+      zh: "Planning, design, and operations coordination pack",
     },
-    roomThemes: DEV_THEMES,
-    departments: {
-      planning: {
-        name: { ko: "프리프로덕션", en: "Pre-production", ja: "Pre-production", zh: "Pre-production" },
-        icon: "🎬",
-        agentPrefix: { ko: "프로듀서", en: "Producer", ja: "Producer", zh: "Producer" },
-        avatarPool: ["🎬", "📷", "🧾"],
-      },
+    slug: "video",
+    accent: 12,
+  },
+  web_research_report: {
+    label: { ko: "웹 리서치 리포트", en: "Web Research Report", ja: "Web Research Report", zh: "Web Research Report" },
+    summary: {
+      ko: "웹 조사/리포트 산출 팩",
+      en: "Web investigation and report-output focused pack",
+      ja: "Web investigation and report-output focused pack",
+      zh: "Web investigation and report-output focused pack",
     },
-    staff: { nonLeaderDeptCycle: ["planning", "design", "dev", "operations", "qa"] },
+    slug: "web-research",
+    accent: 8,
   },
   roleplay: {
-    key: "roleplay",
-    slug: "RPG",
-    label: { ko: "롤플레이 스튜디오", en: "Roleplay Studio", ja: "Roleplay Studio", zh: "Roleplay Studio" },
+    label: { ko: "롤플레이", en: "Roleplay", ja: "Roleplay", zh: "Roleplay" },
     summary: {
-      ko: "캐릭터 몰입형 대화 중심",
-      en: "Character role and dialogue immersion",
-      ja: "Character role and dialogue immersion",
-      zh: "Character role and dialogue immersion",
+      ko: "시나리오/캐릭터 상호작용 중심 팩",
+      en: "Scenario and character-interaction focused pack",
+      ja: "Scenario and character-interaction focused pack",
+      zh: "Scenario and character-interaction focused pack",
     },
-    roomThemes: DEV_THEMES,
-    departments: {
-      planning: {
-        name: { ko: "캐릭터 기획", en: "Character Planning", ja: "Character Planning", zh: "Character Planning" },
-        icon: "🗣️",
-        agentPrefix: { ko: "캐릭터 플래너", en: "Character Planner", ja: "Character Planner", zh: "Character Planner" },
-        avatarPool: ["🗣️", "🎭", "📓"],
-      },
-    },
-    staff: { nonLeaderDeptCycle: ["planning", "design", "dev", "design", "qa", "operations"] },
+    slug: "roleplay",
+    accent: 14,
   },
 };
+
+const DEPARTMENT_COPY: Record<string, DepartmentCopy> = {
+  planning: {
+    description: {
+      ko: "작업 범위를 정리하고 실행 순서를 설계합니다.",
+      en: "The planning team defines scope and sequences the work.",
+      ja: "The planning team defines scope and sequences the work.",
+      zh: "The planning team defines scope and sequences the work.",
+    },
+    promptTitle: { ko: "[부서 역할]", en: "[Department Role]", ja: "[Department Role]", zh: "[Department Role]" },
+    promptBody: {
+      ko: "목표를 분해하고 팀 간 조율 기준을 명확히 합니다.",
+      en: "Break down the objective and clarify cross-team coordination criteria.",
+      ja: "Break down the objective and clarify cross-team coordination criteria.",
+      zh: "Break down the objective and clarify cross-team coordination criteria.",
+    },
+  },
+  dev: {
+    description: {
+      ko: "실행 가능한 코드와 통합 결과를 책임집니다.",
+      en: "The development team owns implementation and integration work.",
+      ja: "The development team owns implementation and integration work.",
+      zh: "The development team owns implementation and integration work.",
+    },
+    promptTitle: { ko: "[부서 역할]", en: "[Department Role]", ja: "[Department Role]", zh: "[Department Role]" },
+    promptBody: {
+      ko: "동작하는 코드를 만들고 실행 결과를 검증합니다.",
+      en: "Produce working code and verify the execution outcome.",
+      ja: "Produce working code and verify the execution outcome.",
+      zh: "Produce working code and verify the execution outcome.",
+    },
+  },
+  design: {
+    description: {
+      ko: "화면, 흐름, 시각 언어를 설계합니다.",
+      en: "The design team shapes screens, flows, and visual language.",
+      ja: "The design team shapes screens, flows, and visual language.",
+      zh: "The design team shapes screens, flows, and visual language.",
+    },
+    promptTitle: { ko: "[부서 역할]", en: "[Department Role]", ja: "[Department Role]", zh: "[Department Role]" },
+    promptBody: {
+      ko: "사용자 경험을 유지하는 명확한 인터페이스를 설계합니다.",
+      en: "Design clear interfaces that preserve user experience quality.",
+      ja: "Design clear interfaces that preserve user experience quality.",
+      zh: "Design clear interfaces that preserve user experience quality.",
+    },
+  },
+  qa: {
+    description: {
+      ko: "검증 기준과 품질 리스크를 관리합니다.",
+      en: "The QA team manages validation criteria and quality risk.",
+      ja: "The QA team manages validation criteria and quality risk.",
+      zh: "The QA team manages validation criteria and quality risk.",
+    },
+    promptTitle: { ko: "[부서 역할]", en: "[Department Role]", ja: "[Department Role]", zh: "[Department Role]" },
+    promptBody: {
+      ko: "테스트와 증거로 릴리스 안정성을 확보합니다.",
+      en: "Use tests and evidence to protect release stability.",
+      ja: "Use tests and evidence to protect release stability.",
+      zh: "Use tests and evidence to protect release stability.",
+    },
+  },
+  operations: {
+    description: {
+      ko: "배포, 환경, 관측 가능성을 관리합니다.",
+      en: "The operations team manages deployment, environments, and observability.",
+      ja: "The operations team manages deployment, environments, and observability.",
+      zh: "The operations team manages deployment, environments, and observability.",
+    },
+    promptTitle: { ko: "[부서 역할]", en: "[Department Role]", ja: "[Department Role]", zh: "[Department Role]" },
+    promptBody: {
+      ko: "실행 환경과 운영 리스크를 안정적으로 통제합니다.",
+      en: "Control runtime environments and operational risk.",
+      ja: "Control runtime environments and operational risk.",
+      zh: "Control runtime environments and operational risk.",
+    },
+  },
+  devsecops: {
+    description: {
+      ko: "보안과 운영 통제 레이어를 점검합니다.",
+      en: "The security platform team audits policy and protection layers.",
+      ja: "The security platform team audits policy and protection layers.",
+      zh: "The security platform team audits policy and protection layers.",
+    },
+    promptTitle: { ko: "[부서 역할]", en: "[Department Role]", ja: "[Department Role]", zh: "[Department Role]" },
+    promptBody: {
+      ko: "보안, 권한, 운영 통제가 기준에 맞는지 확인합니다.",
+      en: "Ensure security, permissions, and operational controls are aligned.",
+      ja: "Ensure security, permissions, and operational controls are aligned.",
+      zh: "Ensure security, permissions, and operational controls are aligned.",
+    },
+  },
+};
+
+const PACK_ROOM_THEMES: Record<WorkflowPackKey, Record<string, RoomTheme>> = {
+  development: {},
+  donggri: {},
+  novel: {},
+  report: {},
+  video_preprod: {},
+  web_research_report: {},
+  roleplay: {},
+};
+
+function normalizeLocale(locale: unknown): UiLanguageLike {
+  const value = String(locale ?? "").trim().toLowerCase();
+  if (value.startsWith("ko")) return "ko";
+  return "en";
+}
+
+function pickLocalized(locale: UiLanguageLike, text: Localized): string {
+  return locale === "ko" ? text.ko : text.en;
+}
+
+function roleName(role: AgentRole, locale: UiLanguageLike): string {
+  const labels: Record<AgentRole, Localized> = {
+    team_leader: { ko: "팀 리드", en: "Team Lead", ja: "Team Lead", zh: "Team Lead" },
+    senior: { ko: "시니어", en: "Senior", ja: "Senior", zh: "Senior" },
+    junior: { ko: "주니어", en: "Junior", ja: "Junior", zh: "Junior" },
+    intern: { ko: "인턴", en: "Intern", ja: "Intern", zh: "Intern" },
+  };
+  return pickLocalized(locale, labels[role]);
+}
+
+function makeTheme(seed: number): RoomTheme {
+  return {
+    floor1: ((seed + 0) % 16) + 1,
+    floor2: ((seed + 3) % 16) + 1,
+    wall: ((seed + 6) % 16) + 1,
+    accent: ((seed + 9) % 16) + 1,
+  };
+}
+
+function normalizeDepartmentText(department: Department, locale: UiLanguageLike): string {
+  if (locale === "ko") return department.name_ko || department.name;
+  return department.name;
+}
+
+function buildSeedPlan(packKey: WorkflowPackKey, departments: Department[], targetCount: number): Array<{ department: Department; role: AgentRole }> {
+  if (packKey === "development") return [];
+  if (departments.length === 0 || targetCount <= 0) return [];
+
+  const orderedDepartments = [...departments].sort((a, b) => a.sort_order - b.sort_order);
+  const result: Array<{ department: Department; role: AgentRole }> = [];
+
+  for (const department of orderedDepartments) {
+    if (result.length >= targetCount) break;
+    result.push({ department, role: "team_leader" });
+  }
+
+  const roleCycle: AgentRole[] = ["senior", "junior", "intern"];
+  let cycleIndex = 0;
+  while (result.length < targetCount) {
+    for (const department of orderedDepartments) {
+      if (result.length >= targetCount) break;
+      result.push({ department, role: roleCycle[cycleIndex % roleCycle.length] });
+    }
+    cycleIndex += 1;
+  }
+
+  return result;
+}
+
+function makeLocalizedPersonality(packKey: WorkflowPackKey, departmentId: string, role: AgentRole, locale: UiLanguageLike): string {
+  if (locale === "ko") {
+    return `증거 품질을 우선하고 ${departmentId} 작업을 ${roleName(role, locale)} 기준으로 정리합니다. (${packKey})`;
+  }
+  return `Prioritizes evidence quality and aligns ${departmentId} work to ${roleName(role, locale)} standards. (${packKey})`;
+}
 
 export function normalizeOfficeWorkflowPack(value: unknown): WorkflowPackKey {
-  if (typeof value !== "string") return "development";
-  return value in PACK_PRESETS ? (value as WorkflowPackKey) : "development";
-}
-
-function pickText(locale: UiLanguageLike, text: Localized): string {
-  switch (locale) {
-    case "ko":
-      return text.ko;
-    case "ja":
-      return text.ja || text.en;
-    case "zh":
-      return text.zh || text.en;
-    case "en":
-    default:
-      return text.en;
+  const normalized = String(value ?? "").trim();
+  if (WORKFLOW_PACK_KEYS.includes(normalized as WorkflowPackKey)) {
+    return normalized as WorkflowPackKey;
   }
+  return "development";
 }
 
-function localizedNumberedName(
-  prefix: Localized,
-  order: number,
-): {
-  name: string;
-  name_ko: string;
-  name_ja: string;
-  name_zh: string;
-} {
-  return {
-    name: `${prefix.en} ${order}`,
-    name_ko: `${prefix.ko} ${order}`,
-    name_ja: `${prefix.ja} ${order}`,
-    name_zh: `${prefix.zh} ${order}`,
-  };
-}
-
-function localizedStaffDisplayName(params: {
-  packKey: WorkflowPackKey;
-  deptId: string;
-  order: number;
-  fallbackPrefix: Localized;
-}): { name: string; name_ko: string; name_ja: string; name_zh: string } {
-  const { packKey, deptId, order, fallbackPrefix } = params;
-  const pool = DEPARTMENT_PERSON_NAME_POOL[deptId];
-  if (!pool || pool.length <= 0) return localizedNumberedName(fallbackPrefix, order);
-
-  const seedOffset = PACK_SEED_PROFILE[packKey]?.nameOffset ?? 0;
-  const base = pool[(order - 1 + seedOffset) % pool.length] ?? pool[0];
-  const cycle = Math.floor((order - 1) / pool.length) + 1;
-  const suffix = cycle > 1 ? ` ${cycle}` : "";
-  return {
-    name: `${base.en}${suffix}`,
-    name_ko: `${base.ko}${suffix}`,
-    name_ja: `${base.ja}${suffix}`,
-    name_zh: `${base.zh}${suffix}`,
-  };
-}
-
-function resolveSeedSpriteNumber(
-  params: {
-    packKey: WorkflowPackKey;
-    deptId: string;
-    role: AgentRole;
-    order: number;
-  },
-  usedSpriteNumbers: Set<number>,
-): number {
-  const seed = `${params.packKey}:${params.deptId}:${params.role}:${params.order}`;
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  }
-  const poolSize = OFFICE_SEED_SPRITE_POOL.length;
-  const start = hash % poolSize;
-  for (let offset = 0; offset < poolSize; offset += 1) {
-    const candidate = OFFICE_SEED_SPRITE_POOL[(start + offset) % poolSize];
-    if (candidate != null && !usedSpriteNumbers.has(candidate)) return candidate;
-  }
-  return OFFICE_SEED_SPRITE_POOL[start] ?? 1;
-}
-
-function buildSeedPersonality(params: {
-  packKey: WorkflowPackKey;
-  role: AgentRole;
-  locale: UiLanguageLike;
-}): string | null {
-  if (params.packKey === "development") return null;
-  const tone = PACK_SEED_PROFILE[params.packKey]?.tone;
-  if (!tone) return null;
-  const roleLabelMap: Record<AgentRole, string> = {
-    team_leader: "team lead",
-    senior: "senior member",
-    junior: "junior member",
-    intern: "intern",
-  };
-  const toneText = pickText(params.locale, tone);
-  return `${toneText} Serves as a ${roleLabelMap[params.role]}.`;
-}
-
-function buildPackDepartmentDescription(params: {
-  locale: UiLanguageLike;
-  packSummary: Localized;
-  departmentName: Localized;
-}): string {
-  const summary = pickText(params.locale, params.packSummary);
-  const deptName = pickText(params.locale, params.departmentName);
-  if (params.locale === "ko") return `${deptName} 팀입니다. ${summary} 목표를 위해 작업합니다.`;
-  return `${deptName} team. Collaborates to deliver the ${summary.toLowerCase()} goal.`;
-}
-
-function buildPackDepartmentPrompt(params: {
-  locale: UiLanguageLike;
-  packSummary: Localized;
-  departmentName: Localized;
-}): string {
-  const summary = pickText(params.locale, params.packSummary);
-  const deptName = pickText(params.locale, params.departmentName);
-  if (params.locale === "ko") {
-    return `[부서 역할] ${deptName}\n[업무 기준] ${summary}\n요청을 실행 가능한 단계로 나누고 근거와 산출물을 명확히 제시하세요.`;
-  }
-  return `[Department Role] ${deptName}\n[Execution Standard] ${summary}\nBreak requests into actionable steps and clearly provide rationale and deliverables.`;
-}
-
-export function getOfficePackMeta(packKey: WorkflowPackKey): { label: Localized; summary: Localized } {
-  const preset = PACK_PRESETS[packKey] ?? PACK_PRESETS.development;
-  return { label: preset.label, summary: preset.summary };
+export function getOfficePackMeta(packKey: WorkflowPackKey): PackMeta {
+  return PACK_META[normalizeOfficeWorkflowPack(packKey)];
 }
 
 export function getOfficePackRoomThemes(packKey: WorkflowPackKey): Record<string, RoomTheme> {
-  const preset = PACK_PRESETS[packKey] ?? PACK_PRESETS.development;
-  return preset.roomThemes;
+  return { ...(PACK_ROOM_THEMES[normalizeOfficeWorkflowPack(packKey)] ?? {}) };
 }
 
 export function listOfficePackOptions(locale: UiLanguageLike): Array<{
@@ -547,13 +308,17 @@ export function listOfficePackOptions(locale: UiLanguageLike): Array<{
   slug: string;
   accent: number;
 }> {
-  return (Object.keys(PACK_PRESETS) as WorkflowPackKey[]).map((key) => ({
-    key,
-    label: pickText(locale, PACK_PRESETS[key].label),
-    summary: pickText(locale, PACK_PRESETS[key].summary),
-    slug: PACK_PRESETS[key].slug,
-    accent: PACK_PRESETS[key].roomThemes.ceoOffice?.accent ?? 0x5a9fd4,
-  }));
+  const normalizedLocale = normalizeLocale(locale);
+  return WORKFLOW_PACK_KEYS.map((packKey) => {
+    const meta = getOfficePackMeta(packKey);
+    return {
+      key: packKey,
+      label: pickLocalized(normalizedLocale, meta.label),
+      summary: pickLocalized(normalizedLocale, meta.summary),
+      slug: meta.slug,
+      accent: meta.accent,
+    };
+  });
 }
 
 export function buildOfficePackPresentation(params: {
@@ -562,64 +327,52 @@ export function buildOfficePackPresentation(params: {
   departments: Department[];
   agents: Agent[];
   customRoomThemes: Record<string, RoomTheme>;
-}): OfficePackPresentation {
-  const { packKey, locale, departments, agents, customRoomThemes } = params;
-  if (packKey === "development") return { departments, agents, roomThemes: customRoomThemes };
+}): {
+  departments: Department[];
+  agents: Agent[];
+  roomThemes: Record<string, RoomTheme>;
+} {
+  const packKey = normalizeOfficeWorkflowPack(params.packKey);
+  const locale = normalizeLocale(params.locale);
+  const roomThemes = { ...params.customRoomThemes };
 
-  const preset = PACK_PRESETS[packKey] ?? PACK_PRESETS.development;
-  const transformedDepartments = departments.map((dept) => {
-    const deptPreset = preset.departments[dept.id];
-    if (!deptPreset) return dept;
-    const localizedName: Localized = {
-      ko: deptPreset.name.ko || dept.name_ko || dept.name,
-      en: deptPreset.name.en || dept.name,
-      ja: deptPreset.name.ja || dept.name_ja || dept.name,
-      zh: deptPreset.name.zh || dept.name_zh || dept.name,
+  const departments = params.departments.map((department) => {
+    const copy = DEPARTMENT_COPY[department.id];
+    const nextDepartment: Department = {
+      ...department,
+      description: copy ? pickLocalized(locale, copy.description) : department.description,
+      prompt: copy
+        ? `${pickLocalized(locale, copy.promptTitle)}\n${pickLocalized(locale, copy.promptBody)}`
+        : department.prompt,
     };
-    return {
-      ...dept,
-      icon: deptPreset.icon,
-      name: deptPreset.name.en,
-      name_ko: deptPreset.name.ko,
-      name_ja: deptPreset.name.ja,
-      name_zh: deptPreset.name.zh,
-      description: buildPackDepartmentDescription({
-        locale,
-        packSummary: preset.summary,
-        departmentName: localizedName,
-      }),
-      prompt: buildPackDepartmentPrompt({ locale, packSummary: preset.summary, departmentName: localizedName }),
-    };
+    roomThemes[department.id] = roomThemes[department.id] ?? getOfficePackRoomThemes(packKey)[department.id] ?? makeTheme(department.sort_order);
+    return nextDepartment;
   });
 
   return {
-    departments: transformedDepartments,
-    agents,
-    roomThemes: {
-      ...customRoomThemes,
-      ...preset.roomThemes,
-    },
+    departments,
+    agents: params.agents,
+    roomThemes,
   };
 }
 
 export function resolveOfficePackSeedProvider(params: {
   packKey: WorkflowPackKey;
-  departmentId?: string | null;
+  departmentId: string;
   role: AgentRole;
   seedIndex: number;
   seedOrderInDepartment?: number;
-}): OfficePackSeedProvider {
-  if (params.packKey === "development") return "claude";
-  const dept = String(params.departmentId ?? "")
-    .trim()
-    .toLowerCase();
-  if (dept === "planning") {
-    const order = params.seedOrderInDepartment ?? params.seedIndex;
-    return order % 2 === 0 ? "codex" : "claude";
+}): Agent["cli_provider"] {
+  const departmentId = String(params.departmentId ?? "").trim().toLowerCase();
+  const order = Number(params.seedOrderInDepartment ?? params.seedIndex ?? 1);
+
+  if (departmentId === "planning") {
+    return order % 2 === 1 ? "claude" : "codex";
   }
-  if (dept === "dev" || dept === "design") return "claude";
-  if (dept === "devsecops" || dept === "operations" || dept === "qa") return "codex";
-  return params.seedIndex % 2 === 0 ? "codex" : "claude";
+  if (departmentId === "dev" || departmentId === "design") {
+    return "claude";
+  }
+  return "codex";
 }
 
 export function buildOfficePackStarterAgents(params: {
@@ -628,93 +381,67 @@ export function buildOfficePackStarterAgents(params: {
   targetCount?: number;
   locale?: UiLanguageLike;
 }): OfficePackStarterAgentDraft[] {
-  const { packKey, departments } = params;
-  const locale = params.locale ?? "en";
-  if (packKey === "development") return [];
+  const packKey = normalizeOfficeWorkflowPack(params.packKey);
+  const locale = normalizeLocale(params.locale);
+  const targetCount =
+    typeof params.targetCount === "number" && params.targetCount > 0
+      ? Math.trunc(params.targetCount)
+      : packKey === "donggri"
+        ? 12
+        : packKey === "report"
+          ? 8
+          : 10;
 
-  const preset = PACK_PRESETS[packKey] ?? PACK_PRESETS.development;
-  const departmentById = new Map(departments.map((department) => [department.id, department]));
-  const baseDeptOrder = ["planning", "dev", "design", "qa", "operations", "devsecops"].filter((deptId) =>
-    departmentById.has(deptId),
-  );
-  if (baseDeptOrder.length <= 0) return [];
+  const plan = buildSeedPlan(packKey, params.departments, targetCount);
+  const seedOrderByDepartment = new Map<string, number>();
 
-  const nonLeaderCycle = (preset.staff?.nonLeaderDeptCycle ?? []).filter((deptId) => departmentById.has(deptId));
-  const planningLeadDeptIds = (preset.staff?.planningLeadDeptIds ?? ["planning"]).filter((deptId) =>
-    departmentById.has(deptId),
-  );
-  const workerCycle = nonLeaderCycle.length > 0 ? nonLeaderCycle : baseDeptOrder;
-  const rolePool: AgentRole[] = ["senior", "junior", "intern"];
-  const baseDesiredCount = Math.max(
-    baseDeptOrder.length + 2,
-    params.targetCount ?? Math.min(10, baseDeptOrder.length * 2),
-  );
-  const desiredCount = packKey === "donggri" ? Math.max(baseDesiredCount, 12) : baseDesiredCount;
+  return plan.map(({ department, role }, index) => {
+    const seedOrderInDepartment = (seedOrderByDepartment.get(department.id) ?? 0) + 1;
+    seedOrderByDepartment.set(department.id, seedOrderInDepartment);
 
-  const perDeptCounter = new Map<string, number>();
-  const usedSpriteNumbers = new Set<number>();
-  const result: OfficePackStarterAgentDraft[] = [];
-
-  const resolveDeptPrefix = (deptId: string): Localized => {
-    const presetInfo = preset.departments[deptId];
-    if (presetInfo) return presetInfo.agentPrefix;
-    const department = departmentById.get(deptId);
-    const baseName = department?.name ?? deptId;
-    const baseNameKo = department?.name_ko ?? baseName;
-    const baseNameJa = department?.name_ja ?? baseName;
-    const baseNameZh = department?.name_zh ?? baseName;
-    return {
-      ko: `${baseNameKo} 담당`,
-      en: `${baseName} Member`,
-      ja: `${baseNameJa} Member`,
-      zh: `${baseNameZh} Member`,
-    };
-  };
-
-  const resolveAvatar = (deptId: string, order: number): string => {
-    const presetInfo = preset.departments[deptId];
-    if (presetInfo && presetInfo.avatarPool.length > 0) {
-      return presetInfo.avatarPool[(order - 1) % presetInfo.avatarPool.length] ?? presetInfo.icon;
-    }
-    return departmentById.get(deptId)?.icon ?? "🙂";
-  };
-
-  const pushAgent = (deptId: string, role: AgentRole) => {
-    const nextOrder = (perDeptCounter.get(deptId) ?? 0) + 1;
-    perDeptCounter.set(deptId, nextOrder);
-    const prefix = resolveDeptPrefix(deptId);
-    const localizedNames = localizedStaffDisplayName({
+    const cliProvider = resolveOfficePackSeedProvider({
       packKey,
-      deptId,
-      order: nextOrder,
-      fallbackPrefix: prefix,
-    });
-    const spriteNumber = resolveSeedSpriteNumber({ packKey, deptId, role, order: nextOrder }, usedSpriteNumbers);
-    usedSpriteNumbers.add(spriteNumber);
-    result.push({
-      ...localizedNames,
-      department_id: deptId,
-      seed_order_in_department: nextOrder,
+      departmentId: department.id,
       role,
-      acts_as_planning_leader: role === "team_leader" && planningLeadDeptIds.includes(deptId) ? 1 : 0,
-      avatar_emoji: resolveAvatar(deptId, nextOrder),
-      sprite_number: spriteNumber,
-      personality: buildSeedPersonality({ packKey, role, locale }),
+      seedIndex: index + 1,
+      seedOrderInDepartment,
     });
-  };
 
-  for (const deptId of baseDeptOrder) {
-    pushAgent(deptId, "team_leader");
-  }
+    const localizedDepartmentName = normalizeDepartmentText(department, locale);
+    const localizedRoleName = roleName(role, locale);
+    const baseName = `${department.name} ${role === "team_leader" ? "Lead" : role === "senior" ? "Core" : "Runner"}`;
 
-  let cursor = 0;
-  while (result.length < desiredCount) {
-    const deptId = workerCycle[cursor % workerCycle.length];
-    const role = rolePool[cursor % rolePool.length] ?? "junior";
-    if (!deptId) break;
-    pushAgent(deptId, role);
-    cursor += 1;
-  }
-
-  return result;
+    return {
+      id: `${packKey}-seed-${index + 1}`,
+      name: `${baseName} ${index + 1}`,
+      name_ko: `${department.name_ko || department.name} ${localizedRoleName} ${index + 1}`,
+      name_ja: `${department.name_ja || department.name} ${localizedRoleName} ${index + 1}`,
+      name_zh: `${department.name_zh || department.name} ${localizedRoleName} ${index + 1}`,
+      department_id: department.id,
+      workflow_pack_key: packKey,
+      role,
+      acts_as_planning_leader: 0,
+      cli_provider: cliProvider,
+      cli_model: null,
+      cli_reasoning_level: null,
+      run_mode: "standard",
+      cli_account_pool_id: null,
+      workflow_profile: null,
+      family: department.id === "planning" ? "orchestrator" : department.id === "qa" ? "qa" : department.id === "design" ? "frontend" : "backend",
+      career_stage: role === "team_leader" ? "team-lead" : role === "senior" ? "senior" : "junior",
+      specialization_key: null,
+      authority_level: role === "team_leader" ? 3 : role === "senior" ? 2 : 1,
+      execution_capability_profile: packKey,
+      canonical_identity_source: "derived",
+      avatar_emoji: localizedDepartmentName.slice(0, 2).toUpperCase(),
+      sprite_number: index + 1,
+      personality: makeLocalizedPersonality(packKey, department.id, role, locale),
+      status: "idle",
+      current_task_id: null,
+      stats_tasks_done: 0,
+      stats_xp: role === "team_leader" ? 240 : role === "senior" ? 120 : 40,
+      created_at: Date.now(),
+      seed_order_in_department: seedOrderInDepartment,
+    };
+  });
 }

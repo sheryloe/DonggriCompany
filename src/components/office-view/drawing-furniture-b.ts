@@ -1,4 +1,4 @@
-import { type Container, Graphics } from "pixi.js";
+﻿import { type Container, Graphics } from "pixi.js";
 import { blendColor } from "./drawing-core";
 import { LOCALE_TEXT, OFFICE_PASTEL, pickLocale, type SupportedLocale } from "./themes-locale";
 
@@ -203,27 +203,19 @@ function formatReset(iso: string, locale: SupportedLocale): string {
   const m = Math.floor((diff % 3_600_000) / 60_000);
   if (h > 0) {
     if (locale === "ko") return `${h}시간 ${m}분`;
-    if (locale === "ja") return `${h}時間 ${m}分`;
-    if (locale === "zh") return `${h}小时 ${m}分`;
     return `${h}h ${m}m`;
   }
   if (locale === "ko") return `${m}분`;
-  if (locale === "ja") return `${m}分`;
-  if (locale === "zh") return `${m}分`;
   return `${m}m`;
 }
 
 function formatPeopleCount(count: number, locale: SupportedLocale): string {
   if (locale === "ko") return `${count}명`;
-  if (locale === "ja") return `${count}人`;
-  if (locale === "zh") return `${count}人`;
   return `${count}`;
 }
 
 function formatTaskCount(count: number, locale: SupportedLocale): string {
   if (locale === "ko") return `${count}건`;
-  if (locale === "ja") return `${count}件`;
-  if (locale === "zh") return `${count}项`;
   return `${count}`;
 }
 
@@ -238,3 +230,4 @@ export {
   formatPeopleCount,
   formatTaskCount,
 };
+

@@ -87,6 +87,14 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
         </div>
 
         <p className="text-xs text-slate-500">{copy.intro}</p>
+        <p className="text-[11px] text-slate-500">
+          {t({
+            ko: "agent/dept API 모델 강제 할당은 compatibility-only로 전환되어 읽기 전용입니다.",
+            en: "Agent/department API model assignment is compatibility-only and read-only.",
+            ja: "Agent/department API model assignment is compatibility-only and read-only.",
+            zh: "Agent/department API model assignment is compatibility-only and read-only.",
+          })}
+        </p>
 
         {apiAddMode && (
           <div className="space-y-3 rounded-lg border border-blue-500/30 bg-slate-900/50 p-4">
@@ -422,10 +430,16 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
                                 <span className="truncate">{model}</span>
                                 <button
                                   onClick={() => void handleApiModelAssign(provider.id, model)}
-                                  className="ml-2 whitespace-nowrap rounded bg-blue-600/60 px-1.5 py-0.5 text-[9px] text-blue-200 opacity-0 transition-opacity hover:bg-blue-500 group-hover/model:opacity-100"
-                                  title={copy.assignToAgent}
+                                  disabled
+                                  className="ml-2 whitespace-nowrap rounded bg-slate-700/70 px-1.5 py-0.5 text-[9px] text-slate-400 opacity-0 transition-opacity group-hover/model:opacity-100 disabled:cursor-not-allowed"
+                                  title={t({
+                                    ko: "읽기 전용(compatibility-only)",
+                                    en: "Read-only (compatibility-only)",
+                                    ja: "Read-only (compatibility-only)",
+                                    zh: "Read-only (compatibility-only)",
+                                  })}
                                 >
-                                  {common.assign}
+                                  {t({ ko: "읽기전용", en: "Read-only", ja: "Read-only", zh: "Read-only" })}
                                 </button>
                               </div>
                             ))}

@@ -159,6 +159,7 @@ export interface CodexSubagentEntry {
   upstreamCategory: string;
   upstreamPath: string;
   department: CodexSubagentDepartment;
+  family?: string;
   class_stage_1?: string;
   class_stage_2?: string;
   class_stage_3?: string;
@@ -349,6 +350,12 @@ export interface WorkflowPackConfig {
   output_template: unknown;
   routing_keywords: unknown;
   cost_profile: unknown;
+  required_artifacts?: unknown;
+  output_contract?: unknown;
+  base_key?: string | null;
+  derived_from?: string | null;
+  model_tier_preference?: string | null;
+  source_layer?: string | null;
   created_at?: number;
   updated_at?: number;
 }
@@ -361,19 +368,17 @@ export interface WorkflowRoutePreviewResult {
   requiresConfirmation: boolean;
 }
 
-export async function getWorkflowPacks(): Promise<{ packs: WorkflowPackConfig[]; source?: string }> {
-  return request<{ packs: WorkflowPackConfig[]; source?: string }>("/api/workflow-packs");
+export async function getWorkflowPacks(): Promise<{ packs: WorkflowPackConfig[]; source?: string; readOnly?: boolean }> {
+  return request<{ packs: WorkflowPackConfig[]; source?: string; readOnly?: boolean }>("/api/workflow-packs");
 }
 
 export async function updateWorkflowPack(
   key: WorkflowPackKey,
   input: Partial<Omit<WorkflowPackConfig, "key" | "created_at" | "updated_at">>,
 ): Promise<{ ok: boolean; pack: WorkflowPackConfig }> {
-  return request<{ ok: boolean; pack: WorkflowPackConfig }>(`/api/workflow-packs/${encodeURIComponent(key)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
+  void key;
+  void input;
+  throw new Error("canonical_projection_read_only");
 }
 
 export async function previewWorkflowRoute(input: {

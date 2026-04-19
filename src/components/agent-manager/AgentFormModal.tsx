@@ -1,14 +1,24 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { createPresetAgentProfile } from "../../agent-profile";
-import type { AgentRole, Department } from "../../types";
+import { localeName, type UiLanguage } from "../../i18n";
+import { getWorkflowRoleDisplayLabel } from "../../app/canonical-display";
+import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../../i18n/canonical-label-registry";
+import type { Department } from "../../types";
 import type { CliAccountPoolView } from "../../api";
 import * as api from "../../api";
-import { CLI_PROVIDERS, ROLE_BADGE, ROLE_LABEL, ROLES } from "./constants";
+import { CLI_PROVIDERS, getLegacyRoleLabel } from "./constants";
+import { CANONICAL_FAMILY_OPTIONS, CANONICAL_STAGE_OPTIONS } from "./canonical-identity";
 import AgentProfileBuilder from "./AgentProfileBuilder";
 import EmojiPicker from "./EmojiPicker";
 import type { FormData } from "./types";
 
 const CLI_POOL_PROVIDERS: FormData["cli_provider"][] = ["codex", "gemini", "jules"];
+
+type CanonicalEditableField =
+  | "family"
+  | "career_stage"
+  | "authority_level"
+  | "specialization_key"
+  | "execution_capability_profile";
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -20,7 +30,6 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export default function AgentFormModal({
-  isKo,
   locale,
   tr,
   form,
@@ -34,9 +43,8 @@ export default function AgentFormModal({
   onSave,
   onClose,
 }: {
-  isKo: boolean;
   locale: string;
-  tr: (ko: string, en: string) => string;
+  tr: (ko: string, en: string, ja?: string, zh?: string) => string;
   form: FormData;
   setForm: (f: FormData) => void;
   cliAccountPools: CliAccountPoolView[];
@@ -99,7 +107,7 @@ export default function AgentFormModal({
   }, [form, requiresCliPool, selectedProviderPools, setForm]);
 
   const inputClass =
-    "w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-colors";
+    "w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500";
   const inputStyle = {
     background: "var(--th-input-bg)",
     borderColor: "var(--th-input-border)",
@@ -107,22 +115,26 @@ export default function AgentFormModal({
   };
   const cliProviderFieldId = "agent-form-cli-provider";
   const cliAccountPoolFieldId = "agent-form-cli-account-pool";
-  const workflowRoleFieldId = "agent-form-workflow-role";
-  const reviewLensesFieldId = "agent-form-review-lenses";
-  const maxReviewRoundsFieldId = "agent-form-max-review-rounds";
+  const canonicalFamilyFieldId = "agent-form-canonical-family";
+  const canonicalStageFieldId = "agent-form-canonical-stage";
+  const canonicalAuthorityFieldId = "agent-form-canonical-authority";
+  const specializationFieldId = "agent-form-specialization-key";
+  const capabilityProfileFieldId = "agent-form-execution-capability-profile";
 
   const canSave = Boolean(form.name.trim()) && (!requiresCliPool || Boolean(form.cli_account_pool_id));
+  const uiLocale = locale as UiLanguage;
+  const legacyRoleLabel = getLegacyRoleLabel(form.role, locale);
+  const workflowRoleLabel = getWorkflowRoleDisplayLabel(form.workflow_role, locale);
+  const workflowCapabilityText =
+    String(form.execution_capability_profile ?? "").trim() || String(form.workflow_role ?? "").trim();
+  const canonicalFamilyLabel = getCanonicalFamilyLabel(form.family, uiLocale);
+  const canonicalStageLabel = getCanonicalStageLabel(form.career_stage, uiLocale);
 
-  const applyRolePreset = (role: AgentRole) => {
-    const preset = createPresetAgentProfile(role);
+  const updateCanonicalIdentity = (key: CanonicalEditableField, value: FormData[CanonicalEditableField]) => {
     setForm({
       ...form,
-      role,
-      agent_profile: {
-        ...preset,
-        specialties: form.agent_profile.specialties,
-        custom_prompt_override: form.personality.trim() || null,
-      },
+      [key]: value,
+      canonical_identity_source: "stored",
     });
   };
 
@@ -136,64 +148,68 @@ export default function AgentFormModal({
       }}
     >
       <div
-        className="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl p-6 shadow-2xl"
+        className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl p-6 shadow-2xl"
         style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)" }}
       >
-        <div className="flex items-center justify-between mb-5">
+        <div className="mb-5 flex items-center justify-between">
           <h3 className="text-base font-bold" style={{ color: "var(--th-text-heading)" }}>
             {isEdit ? tr("에이전트 수정", "Edit Agent") : tr("신규 에이전트", "Create Agent")}
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-[var(--th-bg-surface-hover)]"
+            className="h-8 w-8 rounded-lg hover:bg-[var(--th-bg-surface-hover)]"
             style={{ color: "var(--th-text-muted)" }}
           >
             ×
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-3">
-            <label className="block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
-              {tr("이름", "Name")} *
-            </label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className={inputClass}
-              style={inputStyle}
-            />
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
+                {tr("이름", "Name")} *
+              </label>
+              <input
+                value={form.name}
+                onChange={(event) => setForm({ ...form, name: event.target.value })}
+                className={inputClass}
+                style={inputStyle}
+              />
+            </div>
 
-            <label className="block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
-              {tr("한글 이름", "Korean Name")}
-            </label>
-            <input
-              value={form.name_ko}
-              onChange={(e) => setForm({ ...form, name_ko: e.target.value })}
-              className={inputClass}
-              style={inputStyle}
-            />
+            <div>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
+                {tr("한글 이름", "Korean Name")}
+              </label>
+              <input
+                value={form.name_ko}
+                onChange={(event) => setForm({ ...form, name_ko: event.target.value })}
+                className={inputClass}
+                style={inputStyle}
+              />
+            </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
                   {tr("일본어 이름", "Japanese Name")}
                 </label>
                 <input
                   value={form.name_ja}
-                  onChange={(e) => setForm({ ...form, name_ja: e.target.value })}
+                  onChange={(event) => setForm({ ...form, name_ja: event.target.value })}
                   className={inputClass}
                   style={inputStyle}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
+                <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
                   {tr("중국어 이름", "Chinese Name")}
                 </label>
                 <input
                   value={form.name_zh}
-                  onChange={(e) => setForm({ ...form, name_zh: e.target.value })}
+                  onChange={(event) => setForm({ ...form, name_zh: event.target.value })}
                   className={inputClass}
                   style={inputStyle}
                 />
@@ -201,47 +217,61 @@ export default function AgentFormModal({
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
                 {tr("부서", "Department")}
               </label>
               <select
                 value={form.department_id}
-                onChange={(e) => setForm({ ...form, department_id: e.target.value })}
+                onChange={(event) => setForm({ ...form, department_id: event.target.value })}
                 className={inputClass}
                 style={inputStyle}
               >
                 <option value="">{tr("부서 미지정", "Unassigned")}</option>
                 {departments.map((department) => (
                   <option key={department.id} value={department.id}>
-                    {isKo ? department.name_ko || department.name : department.name}
+                    {localeName(uiLocale, department)}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium mb-2" style={{ color: "var(--th-text-secondary)" }}>
-                {tr("역할", "Role")}
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {ROLES.map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => applyRolePreset(role)}
-                    className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${ROLE_BADGE[role]}`}
-                    style={{ borderColor: form.role === role ? "var(--th-text-heading)" : "var(--th-card-border)" }}
-                  >
-                    {ROLE_LABEL[role]?.[isKo ? "ko" : "en"] ?? role}
-                  </button>
-                ))}
+            <div className="rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
+              <div className="mb-2 text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                {tr("Legacy Compatibility", "Legacy Compatibility")}
               </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--th-input-border)" }}>
+                  <div className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                    {tr("레거시 역할", "Legacy Role")}
+                  </div>
+                  <div className="mt-1 text-sm font-medium" style={{ color: "var(--th-text-heading)" }}>
+                    {legacyRoleLabel}
+                  </div>
+                </div>
+                <div className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--th-input-border)" }}>
+                  <div className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                    {tr("워크플로우 capability (호환)", "Workflow Capability (compat)")}
+                  </div>
+                  <div className="mt-1 text-sm font-medium" style={{ color: "var(--th-text-heading)" }}>
+                    {workflowCapabilityText || workflowRoleLabel}
+                  </div>
+                  <div className="mt-0.5 text-[10px]" style={{ color: "var(--th-text-muted)" }}>
+                    {workflowRoleLabel}
+                  </div>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                {tr(
+                  "role / workflow_role / review 제어값은 compatibility mirror로만 유지됩니다.",
+                  "role / workflow_role / review controls remain compatibility mirrors only.",
+                )}
+              </p>
             </div>
 
             <div>
               <label
                 htmlFor={cliProviderFieldId}
-                className="block text-xs font-medium mb-1.5"
+                className="mb-1.5 block text-xs font-medium"
                 style={{ color: "var(--th-text-secondary)" }}
               >
                 {tr("CLI Provider", "CLI Provider")}
@@ -249,7 +279,7 @@ export default function AgentFormModal({
               <select
                 id={cliProviderFieldId}
                 value={form.cli_provider}
-                onChange={(e) => setForm({ ...form, cli_provider: e.target.value as FormData["cli_provider"] })}
+                onChange={(event) => setForm({ ...form, cli_provider: event.target.value as FormData["cli_provider"] })}
                 className={inputClass}
                 style={inputStyle}
               >
@@ -267,7 +297,7 @@ export default function AgentFormModal({
               </p>
             </div>
 
-            {requiresCliPool && (
+            {requiresCliPool ? (
               <div className="space-y-2 rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
                 <div className="flex items-center justify-between gap-2">
                   <label
@@ -277,16 +307,16 @@ export default function AgentFormModal({
                   >
                     {tr("실행 계정 풀", "Execution Account Pool")}
                   </label>
-                  {cliAccountPoolsLoading && (
+                  {cliAccountPoolsLoading ? (
                     <span className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
                       {tr("불러오는 중...", "Loading...")}
                     </span>
-                  )}
+                  ) : null}
                 </div>
                 <select
                   id={cliAccountPoolFieldId}
                   value={form.cli_account_pool_id}
-                  onChange={(e) => setForm({ ...form, cli_account_pool_id: e.target.value })}
+                  onChange={(event) => setForm({ ...form, cli_account_pool_id: event.target.value })}
                   className={inputClass}
                   style={inputStyle}
                 >
@@ -300,86 +330,165 @@ export default function AgentFormModal({
                   ))}
                 </select>
               </div>
-            )}
+            ) : null}
 
-            <div>
-              <label
-                htmlFor={workflowRoleFieldId}
-                className="block text-xs font-medium mb-1.5"
-                style={{ color: "var(--th-text-secondary)" }}
-              >
-                {tr("워크플로 역할", "Workflow Role")}
-              </label>
-              <select
-                id={workflowRoleFieldId}
-                value={form.workflow_role}
-                onChange={(e) => setForm({ ...form, workflow_role: e.target.value as FormData["workflow_role"] })}
-                className={inputClass}
-                style={inputStyle}
-              >
-                <option value="reviewer">{tr("리뷰어", "Reviewer")}</option>
-                <option value="primary_author">{tr("주 작성자", "Primary Author")}</option>
-              </select>
+            <div className="rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
+              <div className="mb-2 text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                {tr("Canonical Identity", "Canonical Identity")}
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor={canonicalFamilyFieldId}
+                    className="mb-1.5 block text-xs font-medium"
+                    style={{ color: "var(--th-text-secondary)" }}
+                  >
+                    {tr("Family", "Family")}
+                  </label>
+                  <select
+                    id={canonicalFamilyFieldId}
+                    value={form.family}
+                    onChange={(event) => updateCanonicalIdentity("family", event.target.value as FormData["family"])}
+                    className={inputClass}
+                    style={inputStyle}
+                  >
+                    {CANONICAL_FAMILY_OPTIONS.map((family) => (
+                      <option key={family} value={family}>
+                        {getCanonicalFamilyLabel(family, uiLocale)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor={canonicalStageFieldId}
+                    className="mb-1.5 block text-xs font-medium"
+                    style={{ color: "var(--th-text-secondary)" }}
+                  >
+                    {tr("Career Stage", "Career Stage")}
+                  </label>
+                  <select
+                    id={canonicalStageFieldId}
+                    value={form.career_stage}
+                    onChange={(event) =>
+                      updateCanonicalIdentity("career_stage", event.target.value as FormData["career_stage"])
+                    }
+                    className={inputClass}
+                    style={inputStyle}
+                  >
+                    {CANONICAL_STAGE_OPTIONS.map((stage) => (
+                      <option key={stage} value={stage}>
+                        {getCanonicalStageLabel(stage, uiLocale)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor={canonicalAuthorityFieldId}
+                    className="mb-1.5 block text-xs font-medium"
+                    style={{ color: "var(--th-text-secondary)" }}
+                  >
+                    {tr("Authority Level", "Authority Level")}
+                  </label>
+                  <input
+                    id={canonicalAuthorityFieldId}
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={form.authority_level}
+                    onChange={(event) =>
+                      updateCanonicalIdentity("authority_level", Math.max(1, Number(event.target.value) || 1))
+                    }
+                    className={inputClass}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
+                    {tr("Source", "Source")}
+                  </label>
+                  <div
+                    className="rounded-lg border px-3 py-2 text-sm"
+                    style={{ ...inputStyle, borderColor: "var(--th-input-border)" }}
+                  >
+                    {form.canonical_identity_source}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor={specializationFieldId}
+                    className="mb-1.5 block text-xs font-medium"
+                    style={{ color: "var(--th-text-secondary)" }}
+                  >
+                    {tr("Specialization Key", "Specialization Key")}
+                  </label>
+                  <input
+                    id={specializationFieldId}
+                    value={form.specialization_key}
+                    onChange={(event) => updateCanonicalIdentity("specialization_key", event.target.value)}
+                    className={inputClass}
+                    style={inputStyle}
+                    placeholder="frontend.react"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor={capabilityProfileFieldId}
+                    className="mb-1.5 block text-xs font-medium"
+                    style={{ color: "var(--th-text-secondary)" }}
+                  >
+                    {tr("Execution Capability Profile", "Execution Capability Profile")}
+                  </label>
+                  <input
+                    id={capabilityProfileFieldId}
+                    value={form.execution_capability_profile}
+                    onChange={(event) =>
+                      updateCanonicalIdentity("execution_capability_profile", event.target.value)
+                    }
+                    className={inputClass}
+                    style={inputStyle}
+                    placeholder="reviewer"
+                  />
+                </div>
+              </div>
+              <p className="mt-2 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                {tr(
+                  `Resolved identity: ${canonicalFamilyLabel} / ${canonicalStageLabel}`,
+                  `Resolved identity: ${canonicalFamilyLabel} / ${canonicalStageLabel}`,
+                )}
+              </p>
             </div>
 
-            <div>
-              <label
-                htmlFor={reviewLensesFieldId}
-                className="block text-xs font-medium mb-1.5"
-                style={{ color: "var(--th-text-secondary)" }}
-              >
-                {tr("리뷰 렌즈", "Review Lenses")}
-              </label>
-              <input
-                id={reviewLensesFieldId}
-                value={form.review_lenses_text}
-                onChange={(e) => setForm({ ...form, review_lenses_text: e.target.value })}
-                className={inputClass}
-                style={inputStyle}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex items-center gap-2 text-xs" style={{ color: "var(--th-text-secondary)" }}>
-                <input
-                  type="checkbox"
-                  checked={form.two_pass_required}
-                  onChange={(e) => setForm({ ...form, two_pass_required: e.target.checked })}
-                />
-                <span>{tr("2패스 리뷰 강제", "Require 2-pass review")}</span>
-              </label>
-              <div>
-                <label
-                  htmlFor={maxReviewRoundsFieldId}
-                  className="block text-xs font-medium mb-1.5"
-                  style={{ color: "var(--th-text-secondary)" }}
-                >
-                  {tr("최대 리뷰 라운드", "Max Review Rounds")}
-                </label>
-                <input
-                  id={maxReviewRoundsFieldId}
-                  type="number"
-                  min={1}
-                  max={2}
-                  value={form.max_review_rounds ?? ""}
-                  onChange={(e) =>
-                    setForm({ ...form, max_review_rounds: e.target.value ? Number(e.target.value) : null })
-                  }
-                  className={inputClass}
-                  style={inputStyle}
-                />
+            <div className="rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
+              <div className="text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                {tr("Policy Notes", "Policy Notes")}
+              </div>
+              <div className="mt-2 space-y-1 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                <div>
+                  {tr(
+                    "workflow_role / review_lenses / review rounds는 canonical capability와 provider policy에서 파생됩니다.",
+                    "workflow_role / review_lenses / review rounds are derived from canonical capability and provider policy.",
+                  )}
+                </div>
+                <div>
+                  {tr(
+                    "UI는 현재 언어로만 표시하고 canonical key와 source 파일은 영어로 유지합니다.",
+                    "The UI follows the selected locale, while canonical keys and source files remain in English.",
+                  )}
+                </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--th-text-secondary)" }}>
+              <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
                 {tr("아바타", "Avatar")}
               </label>
-              <EmojiPicker
-                tr={tr}
-                value={form.avatar_emoji}
-                onChange={(emoji) => setForm({ ...form, avatar_emoji: emoji })}
-              />
+              <EmojiPicker tr={tr} value={form.avatar_emoji} onChange={(emoji) => setForm({ ...form, avatar_emoji: emoji })} />
             </div>
           </div>
 
@@ -389,13 +498,13 @@ export default function AgentFormModal({
         </div>
 
         <div className="mt-5 pt-4" style={{ borderTop: "1px solid var(--th-card-border)" }}>
-          <div className="text-xs font-semibold mb-3" style={{ color: "var(--th-text-secondary)" }}>
+          <div className="mb-3 text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
             {tr("캐릭터 스프라이트", "Character Sprite")}
           </div>
 
-          {!previews && !processing && (
+          {!previews && !processing ? (
             <label
-              className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed cursor-pointer"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-6"
               style={{ borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" }}
             >
               <span className="text-xs">{tr("2x2 스프라이트 시트 업로드", "Upload 2x2 sprite sheet")}</span>
@@ -422,32 +531,27 @@ export default function AgentFormModal({
                 }}
               />
             </label>
-          )}
+          ) : null}
 
-          {processing && (
+          {processing ? (
             <div className="text-sm" style={{ color: "var(--th-text-muted)" }}>
               {tr("처리 중...", "Processing...")}
             </div>
-          )}
+          ) : null}
 
-          {previews && !processing && (
+          {previews && !processing ? (
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-3">
                 {(["D", "L", "R"] as const).map((dir) => (
                   <div key={dir} className="text-center">
-                    <div className="text-[10px] mb-1" style={{ color: "var(--th-text-muted)" }}>
+                    <div className="mb-1 text-[10px]" style={{ color: "var(--th-text-muted)" }}>
                       {dir}
                     </div>
                     <div
-                      className="rounded-lg p-2 flex items-center justify-center h-24"
+                      className="flex h-24 items-center justify-center rounded-lg p-2"
                       style={{ background: "var(--th-input-bg)", border: "1px solid var(--th-input-border)" }}
                     >
-                      <img
-                        src={previews[dir]}
-                        alt={dir}
-                        className="max-h-20 object-contain"
-                        style={{ imageRendering: "pixelated" }}
-                      />
+                      <img src={previews[dir]} alt={dir} className="max-h-20 object-contain" style={{ imageRendering: "pixelated" }} />
                     </div>
                   </div>
                 ))}
@@ -461,8 +565,8 @@ export default function AgentFormModal({
                   type="number"
                   min={1}
                   value={spriteNum}
-                  onChange={(e) => setSpriteNum(Math.max(1, Number(e.target.value) || 1))}
-                  className="w-20 px-2 py-1 border rounded-lg text-sm"
+                  onChange={(event) => setSpriteNum(Math.max(1, Number(event.target.value) || 1))}
+                  className="w-20 rounded-lg border px-2 py-1 text-sm"
                   style={inputStyle}
                 />
                 <button
@@ -481,7 +585,7 @@ export default function AgentFormModal({
                     }
                   }}
                   disabled={registering || !spriteNum || registered}
-                  className="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white disabled:opacity-50"
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white disabled:opacity-50"
                 >
                   {registering
                     ? tr("등록 중...", "Registering...")
@@ -491,26 +595,22 @@ export default function AgentFormModal({
                 </button>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
-        <div className="flex gap-2 mt-5 pt-4" style={{ borderTop: "1px solid var(--th-card-border)" }}>
+        <div className="mt-5 flex gap-2 border-t pt-4" style={{ borderTop: "1px solid var(--th-card-border)" }}>
           <button
             type="button"
             onClick={onSave}
             disabled={saving || !canSave}
-            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white disabled:opacity-40"
+            className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40"
           >
-            {saving
-              ? tr("저장 중...", "Saving...")
-              : isEdit
-                ? tr("변경 저장", "Save Changes")
-                : tr("에이전트 생성", "Create Agent")}
+            {saving ? tr("저장 중...", "Saving...") : isEdit ? tr("변경 저장", "Save Changes") : tr("에이전트 생성", "Create Agent")}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-lg text-sm font-medium"
+            className="rounded-lg px-4 py-2.5 text-sm font-medium"
             style={{ border: "1px solid var(--th-input-border)", color: "var(--th-text-secondary)" }}
           >
             {tr("취소", "Cancel")}

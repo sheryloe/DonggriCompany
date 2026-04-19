@@ -85,6 +85,34 @@ export default function ProjectInsightsPanel({
       .sort((a, b) => (a.startAt ?? 0) - (b.startAt ?? 0));
   }, [groupedTaskCards]);
 
+  const rollout20 = useMemo(() => {
+    const sampleMode = groupedTaskCards.length === 0 && sortedDecisionEvents.length === 0;
+    const blockedEvent = sortedDecisionEvents.find((event) =>
+      /block|blocked|gate|quorum|authority/i.test(`${event.summary} ${event.note ?? ""}`),
+    );
+    const latestDecisionAt = sortedDecisionEvents[0]?.created_at ?? null;
+    const latestTaskAt = groupedTaskCards[0]?.latestAt ?? null;
+    const latestAt = latestDecisionAt ?? latestTaskAt ?? null;
+
+    const steps = [
+      { key: "20A", label: "20-A Locale", done: groupedTaskCards.length > 0 || sampleMode, blocked: false },
+      { key: "20B", label: "20-B Legacy Compat", done: sortedDecisionEvents.length > 0 || sampleMode, blocked: false },
+      { key: "20C", label: "20-C Authority", done: Boolean(latestDecisionAt) || sampleMode, blocked: Boolean(blockedEvent) },
+      { key: "20D", label: "20-D Delegation Log", done: groupedTaskCards.length >= 2 || sampleMode, blocked: false },
+      { key: "20E", label: "20-E Provider Read-only", done: groupedTaskCards.length >= 3 || sampleMode, blocked: false },
+      { key: "20F", label: "20-F Integration Gate", done: Boolean(latestAt) || sampleMode, blocked: false },
+    ];
+    const doneCount = steps.filter((step) => step.done).length;
+    const progress = Math.round((doneCount / steps.length) * 100);
+    return {
+      sampleMode,
+      progress,
+      blockedReason: blockedEvent ? blockedEvent.summary : null,
+      latestAt,
+      steps,
+    };
+  }, [groupedTaskCards, sortedDecisionEvents]);
+
   const tabs: Array<{ key: ProjectDetailView; label: string }> = [
     { key: "overview", label: t({ ko: "개요", en: "Overview", ja: "Overview", zh: "Overview" }) },
     { key: "board", label: t({ ko: "이슈 보드", en: "Issue Board", ja: "Issue Board", zh: "Issue Board" }) },
@@ -97,6 +125,10 @@ export default function ProjectInsightsPanel({
         ja: "Reports / Decisions",
         zh: "Reports / Decisions",
       }),
+    },
+    {
+      key: "rollout20",
+      label: t({ ko: "Rollout 20", en: "Rollout 20", ja: "Rollout 20", zh: "Rollout 20" }),
     },
   ];
   const boardViewColumns: Array<{ key: BoardColumnKey; title: string }> = [
@@ -342,6 +374,71 @@ export default function ProjectInsightsPanel({
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeView === "rollout20" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold text-white">
+                {t({ ko: "20단계 진행률", en: "Rollout 20 Progress", ja: "Rollout 20 Progress", zh: "Rollout 20 Progress" })}
+              </h4>
+              {rollout20.sampleMode ? (
+                <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
+                  {t({ ko: "샘플 데이터", en: "Sample Data", ja: "Sample Data", zh: "Sample Data" })}
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-xs text-slate-300">
+                <span>{t({ ko: "전체 진행", en: "Overall", ja: "Overall", zh: "Overall" })}</span>
+                <span className="font-semibold text-cyan-200">{rollout20.progress}%</span>
+              </div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
+                <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: `${rollout20.progress}%` }} />
+              </div>
+            </div>
+            {rollout20.blockedReason ? (
+              <div className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                {t({ ko: "블록 사유", en: "Blocking Reason", ja: "Blocking Reason", zh: "Blocking Reason" })}: {rollout20.blockedReason}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+            <h4 className="text-sm font-semibold text-white">
+              {t({ ko: "단계 타임라인", en: "Step Timeline", ja: "Step Timeline", zh: "Step Timeline" })}
+            </h4>
+            <div className="mt-3 space-y-2">
+              {rollout20.steps.map((step) => (
+                <div key={step.key} className="rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-slate-100">{step.label}</p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] ${
+                        step.blocked
+                          ? "bg-rose-500/20 text-rose-200"
+                          : step.done
+                            ? "bg-emerald-500/20 text-emerald-200"
+                            : "bg-slate-700 text-slate-300"
+                      }`}
+                    >
+                      {step.blocked
+                        ? t({ ko: "차단", en: "Blocked", ja: "Blocked", zh: "Blocked" })
+                        : step.done
+                          ? t({ ko: "완료", en: "Done", ja: "Done", zh: "Done" })
+                          : t({ ko: "대기", en: "Pending", ja: "Pending", zh: "Pending" })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 text-[11px] text-slate-400">
+              {t({ ko: "최근 갱신", en: "Last updated", ja: "Last updated", zh: "Last updated" })}:{" "}
+              {rollout20.latestAt ? fmtTime(rollout20.latestAt) : "-"}
             </div>
           </div>
         </div>

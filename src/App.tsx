@@ -44,11 +44,7 @@ import { useAppBootstrapData } from "./app/useAppBootstrapData";
 import { useLiveSyncScheduler } from "./app/useLiveSyncScheduler";
 import { resolvePackAgentViews, resolvePackDepartmentsForDisplay } from "./app/office-pack-display";
 import {
-  buildOfficePackPresentation,
-  buildOfficePackStarterAgents,
-  getOfficePackMeta,
   normalizeOfficeWorkflowPack,
-  resolveOfficePackSeedProvider,
 } from "./app/office-workflow-pack";
 
 export type { OAuthCallbackResult } from "./app/types";
@@ -124,122 +120,21 @@ export default function App() {
   activeChatRef.current = { showChat, agentId: chatAgent?.id ?? null };
   const officePackBootstrapReqRef = useRef(0);
 
-  const readHydratedPackSet = (source: CompanySettings): Set<string> => {
-    const raw = source.officePackHydratedPacks;
-    if (!Array.isArray(raw)) return new Set<string>();
-    return new Set(raw.map((value) => String(value ?? "").trim()).filter((value) => value.length > 0));
-  };
-
-  const getPackLabelByLanguage = (packKey: WorkflowPackKey, language: string): string => {
-    const label = getOfficePackMeta(packKey).label;
-    const lang = normalizeLanguage(language);
-    if (lang === "ko") return label.ko || label.en;
-    if (lang === "ja") return label.ja || label.en;
-    if (lang === "zh") return label.zh || label.en;
-    return label.en;
-  };
-
-  const maybeBuildSeedProfileForPack = (
-    packKey: WorkflowPackKey,
-    sourceSettings: CompanySettings,
-  ): OfficePackProfile | null => {
-    if (packKey === "development") return null;
-
-    const existingProfile = sourceSettings.officePackProfiles?.[packKey];
-    if (existingProfile?.departments?.length && existingProfile?.agents?.length) {
-      return null;
-    }
-
-    const locale = normalizeLanguage(sourceSettings.language) as "ko" | "en" | "ja" | "zh";
-    const presentation = buildOfficePackPresentation({
-      packKey,
-      locale,
-      departments,
-      agents,
-      customRoomThemes,
-    });
-    if (presentation.departments.length <= 0) return null;
-
-    const starterDrafts = buildOfficePackStarterAgents({
-      packKey,
-      departments: presentation.departments,
-      targetCount: 8,
-      locale,
-    });
-    if (starterDrafts.length <= 0) return null;
-
-    const now = Date.now();
-    const seededAgents: Agent[] = starterDrafts.map((draft, index) => ({
-      id: `${packKey}-seed-${index + 1}`,
-      name: draft.name,
-      name_ko: draft.name_ko,
-      name_ja: draft.name_ja,
-      name_zh: draft.name_zh,
-      department_id: draft.department_id,
-      role: draft.role,
-      acts_as_planning_leader: draft.acts_as_planning_leader,
-      cli_provider: resolveOfficePackSeedProvider({
-        packKey,
-        departmentId: draft.department_id,
-        role: draft.role,
-        seedIndex: index + 1,
-        seedOrderInDepartment: draft.seed_order_in_department,
-      }),
-      avatar_emoji: draft.avatar_emoji,
-      sprite_number: draft.sprite_number,
-      personality: draft.personality,
-      agent_profile: {
-        ...createPresetAgentProfile(draft.role),
-        specialties: [],
-        custom_prompt_override: draft.personality,
-      },
-      status: "idle",
-      current_task_id: null,
-      stats_tasks_done: 0,
-      stats_xp: 0,
-      created_at: now + index,
-    }));
-
-    return {
-      departments: presentation.departments,
-      agents: seededAgents,
-      updated_at: now,
-    };
-  };
-
   const handleOfficeWorkflowPackChange = (packKey: WorkflowPackKey) => {
     const previousPack = settings.officeWorkflowPack ?? "development";
-    const previousProfiles = settings.officePackProfiles;
-    const currentHydratedSet = readHydratedPackSet(settings);
-    const shouldShowBootstrap = packKey !== "development" && !currentHydratedSet.has(packKey);
-    const seedProfile = shouldShowBootstrap ? maybeBuildSeedProfileForPack(packKey, settings) : null;
-    const nextOfficePackProfiles = seedProfile
-      ? {
-          ...(settings.officePackProfiles ?? {}),
-          [packKey]: seedProfile,
-        }
-      : settings.officePackProfiles;
     const patchPayload: Record<string, unknown> = { officeWorkflowPack: packKey };
-    if (seedProfile) {
-      patchPayload.officePackProfiles = nextOfficePackProfiles;
-    }
     const reqId = ++officePackBootstrapReqRef.current;
-    if (shouldShowBootstrap) {
-      setOfficePackBootstrappingLabel(getPackLabelByLanguage(packKey, settings.language));
-    } else {
-      setOfficePackBootstrappingLabel(null);
-    }
+    setOfficePackBootstrappingLabel(null);
     setSettings((prev) => ({
       ...prev,
       officeWorkflowPack: packKey,
-      ...(seedProfile ? { officePackProfiles: nextOfficePackProfiles } : {}),
     }));
     api
       .saveSettingsPatch(patchPayload)
       .then(async () => {
         const [nextDepartments, nextAgents, nextSettingsRaw] = await Promise.all([
           api.getDepartments({ workflowPackKey: packKey }),
-          api.getAgents({ includeSeed: packKey !== "development" }),
+          api.getAgents(),
           api.getSettings(),
         ]);
         setDepartments(nextDepartments);
@@ -249,11 +144,7 @@ export default function App() {
           if (officePackBootstrapReqRef.current !== reqId) return;
           setOfficePackBootstrappingLabel(null);
         };
-        if (shouldShowBootstrap) {
-          setTimeout(clearNotice, 650);
-        } else {
-          clearNotice();
-        }
+        clearNotice();
       })
       .catch((error) => {
         console.error("Save office workflow pack failed:", error);
@@ -265,7 +156,6 @@ export default function App() {
             ? {
                 ...prev,
                 officeWorkflowPack: previousPack,
-                ...(seedProfile ? { officePackProfiles: previousProfiles } : {}),
               }
             : prev,
         );
@@ -274,8 +164,8 @@ export default function App() {
 
   const { connected, on } = useWebSocket();
   const shouldIncludeSeedAgents = useCallback(
-    () => normalizeOfficeWorkflowPack(settings.officeWorkflowPack ?? "development") !== "development",
-    [settings.officeWorkflowPack],
+    () => false,
+    [],
   );
   const scheduleLiveSync = useLiveSyncScheduler({
     setTasks,
@@ -368,25 +258,23 @@ export default function App() {
   });
 
   const activePackKey = normalizeOfficeWorkflowPack(settings.officeWorkflowPack ?? "development");
-  const activePackProfile =
-    activePackKey === "development" ? null : (settings.officePackProfiles?.[activePackKey] ?? null);
   const overlayDepartments = useMemo(
     () =>
       resolvePackDepartmentsForDisplay({
         packKey: activePackKey,
         globalDepartments: departments,
-        packDepartments: activePackProfile?.departments ?? null,
+        packDepartments: null,
       }),
-    [activePackKey, activePackProfile?.departments, departments],
+    [activePackKey, departments],
   );
   const { mergedAgents: overlayAgents } = useMemo(
     () =>
       resolvePackAgentViews({
         packKey: activePackKey,
         globalAgents: agents,
-        packAgents: activePackProfile?.agents ?? null,
+        packAgents: null,
       }),
-    [activePackKey, activePackProfile?.agents, agents],
+    [activePackKey, agents],
   );
 
   if (loading) {
@@ -433,11 +321,7 @@ export default function App() {
         const candidateAgents = overlayAgents;
         const leader =
           candidateAgents.find((agent) => agent.department_id === department.id && agent.role === "team_leader") ??
-          (department.id === "planning"
-            ? candidateAgents.find(
-                (agent) => agent.role === "team_leader" && Number(agent.acts_as_planning_leader ?? 0) === 1,
-              )
-            : undefined);
+          undefined;
         if (leader) actions.handleOpenChat(leader);
       }}
       onCreateTask={actions.handleCreateTask}
@@ -518,7 +402,7 @@ export default function App() {
             .then(async (nextSettingsRaw) => {
               const nextSettings = mergeSettingsWithDefaults(nextSettingsRaw);
               const activePack = nextSettings.officeWorkflowPack ?? "development";
-              const nextAgents = await api.getAgents({ includeSeed: activePack !== "development" });
+              const nextAgents = await api.getAgents();
               setAgents(nextAgents);
               setSettings(nextSettings);
 
@@ -526,15 +410,6 @@ export default function App() {
               const fromAgents = nextAgents.find((agent) => agent.id === selectedAgent.id);
               if (fromAgents) {
                 setSelectedAgent(fromAgents);
-                return;
-              }
-
-              const profilePackKey = nextSettings.officeWorkflowPack ?? "development";
-              const fromPackProfile = nextSettings.officePackProfiles?.[profilePackKey]?.agents?.find(
-                (agent) => agent.id === selectedAgent.id,
-              );
-              if (fromPackProfile) {
-                setSelectedAgent(fromPackProfile);
               }
             })
             .catch(console.error);

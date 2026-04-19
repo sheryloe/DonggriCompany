@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import {
   discoverVideoArtifact,
@@ -47,6 +47,83 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
     startReviewConsensusMeeting,
     processSubtaskDelegations,
   } = deps;
+
+  const taskHasCompletedAt = (() => {
+    try {
+      const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name?: string }>;
+      return columns.some((c) => c?.name === "completed_at");
+    } catch {
+      return false;
+    }
+  })();
+
+  function parseWorkflowMeta(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw !== "string") return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function mergeWorkflowMeta(taskId: string, mutate: (meta: Record<string, unknown>) => void): void {
+    const row = db.prepare("SELECT workflow_meta_json FROM tasks WHERE id = ?").get(taskId) as
+      | { workflow_meta_json: string | null }
+      | undefined;
+    const current = row ? parseWorkflowMeta(row.workflow_meta_json) : {};
+    const next = { ...current };
+    mutate(next);
+    db.prepare("UPDATE tasks SET workflow_meta_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify(next),
+      nowMs(),
+      taskId,
+    );
+  }
+
+  function normalizeBlockedCode(rawReason: string): string {
+    const reason = String(rawReason ?? "").trim();
+    if (reason.startsWith("quorum_not_met")) return "quorum_not_met";
+    if (reason.includes("approval_gate")) return "approval_gate_blocked";
+    if (reason.includes("authority") || reason.includes("orchestrator") || reason.includes("missing_")) return "authority_missing";
+    if (reason.length === 0) return "authority_missing";
+    return reason;
+  }
+
+  function markReviewConsentBlocked(taskId: string, blockedBy: string[]): void {
+    const normalized = [...new Set(blockedBy.map((reason) => normalizeBlockedCode(reason)))];
+    const normalizedNow = nowMs();
+    mergeWorkflowMeta(taskId, (meta) => {
+      const existing = meta.review_consent;
+      const base = existing && typeof existing === "object" ? (existing as Record<string, unknown>) : {};
+      meta.review_consent = {
+        ...base,
+        stage: "review_consensus",
+        blocked: true,
+        blocked_at: normalizedNow,
+        blocked_by: normalized,
+        trigger: "hard_block",
+        state: "blocked",
+      };
+    });
+  }
+
+  function clearReviewConsentBlocked(taskId: string): void {
+    mergeWorkflowMeta(taskId, (meta) => {
+      const existing = meta.review_consent;
+      if (!existing || typeof existing !== "object") {
+        return;
+      }
+      const reviewConsent = existing as Record<string, unknown>;
+      meta.review_consent = {
+        ...reviewConsent,
+        blocked: false,
+        blocked_by: [],
+        state: "approved",
+      };
+    });
+  }
 
   function reconcileDelegatedSubtasksAfterRun(taskId: string, exitCode: number): void {
     const linked = db
@@ -167,16 +244,16 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
             pickL(
               l(
                 [
-                  `[CEO OFFICE] 프로젝트 '${projectName}'의 활성 항목 ${gateSnapshot.activeTotal}건이 모두 Review 상태입니다. 의사결정 인박스에서 승인하면 팀장 회의를 시작합니다.`,
+                  `[CEO OFFICE] 프로젝트 '${projectName}'의 활성 작업 ${gateSnapshot.activeTotal}건이 모두 Review 상태입니다. Decision Inbox에서 승인하면 팀장 리뷰 회의를 시작합니다.`,
                 ],
                 [
                   `[CEO OFFICE] Project '${projectName}' now has all ${gateSnapshot.activeTotal} active tasks in Review. Approve from Decision Inbox to start team-lead review meetings.`,
                 ],
                 [
-                  `[CEO OFFICE] プロジェクト'${projectName}'のアクティブタスク${gateSnapshot.activeTotal}件がすべてReviewに到達しました。Decision Inboxで承認するとチームリーダー会議を開始します。`,
+                  `[CEO OFFICE] プロジェクト '${projectName}' の有効タスク ${gateSnapshot.activeTotal} 件がすべて Review 状態です。Decision Inbox で承認するとチームリードレビュー会議を開始します。`,
                 ],
                 [
-                  `[CEO OFFICE] 项目'${projectName}'的 ${gateSnapshot.activeTotal} 个活跃任务已全部进入 Review。请在 Decision Inbox 批准后启动组长评审会议。`,
+                  `[CEO OFFICE] 项目 '${projectName}' 的活跃任务共 ${gateSnapshot.activeTotal} 项，已全部进入 Review。请在 Decision Inbox 批准后启动组长评审会议。`,
                 ],
               ),
               lang,
@@ -228,7 +305,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
         .get(taskId) as { cnt: number }
     ).cnt;
     if (remainingSubtaskCount > 0) {
-      // Check if only VIDEO_FINAL_RENDER subtask(s) remain — trigger delegation instead of blocking forever
+      // Check if only VIDEO_FINAL_RENDER subtask(s) remain - trigger delegation instead of blocking forever
       let pendingRender = db
         .prepare(
           "SELECT * FROM subtasks WHERE task_id = ? AND status NOT IN ('done', 'cancelled') AND title LIKE '%[VIDEO_FINAL_RENDER]%'",
@@ -271,7 +348,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
           appendTaskLog(
             taskId,
             "system",
-            "Review hold: only VIDEO_FINAL_RENDER remains — unblocking and triggering delegation.",
+            "Review hold: only VIDEO_FINAL_RENDER remains -> unblocking and triggering delegation.",
           );
           processSubtaskDelegations(taskId, { includeRender: true });
         } else {
@@ -283,10 +360,10 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
       notifyCeo(
         pickL(
           l(
-            [`'${taskTitle}' 는 아직 ${remainingSubtaskCount}개 서브태스크가 남아 있어 Review 단계에서 대기합니다.`],
+            [`'${taskTitle}'은(는) 미완료 서브태스크 ${remainingSubtaskCount}건 때문에 Review 단계에서 대기 중입니다.`],
             [`'${taskTitle}' is waiting in Review because ${remainingSubtaskCount} subtasks are still unfinished.`],
-            [`'${taskTitle}' は未完了サブタスクが${remainingSubtaskCount}件あるため、Reviewで待機しています。`],
-            [`'${taskTitle}' 仍有 ${remainingSubtaskCount} 个 SubTask 未完成，当前在 Review 阶段等待。`],
+            [`'${taskTitle}' は未完了サブタスク ${remainingSubtaskCount} 件のため、Review 段階で待機中です。`],
+            [`'${taskTitle}' 因仍有 ${remainingSubtaskCount} 个子任务未完成，当前在 Review 阶段等待。`],
           ),
           lang,
         ),
@@ -319,14 +396,14 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
         notifyCeo(
           pickL(
             l(
-              [`'${taskTitle}' 는 협업 하위 태스크 ${waiting}건이 아직 Review 진입 전이라 전체 팀장회의를 대기합니다.`],
+              [`'${taskTitle}'은(는) 하위 협업 태스크 ${waiting}건이 Review에 도달할 때까지 단일 팀장 회의를 대기합니다.`],
               [
                 `'${taskTitle}' is waiting for ${waiting} collaboration child task(s) to reach review before the single team-lead meeting starts.`,
               ],
               [
-                `'${taskTitle}' は協業子タスク${waiting}件がまだReview未到達のため、全体チームリーダー会議を待機しています。`,
+                `'${taskTitle}' は協업子タスク ${waiting} 件が Review に到達するまで、単一チームリード会議を待機します。`,
               ],
-              [`'${taskTitle}' 仍有 ${waiting} 个协作子任务尚未进入 Review，当前等待后再开启一次团队负责人会议。`],
+              [`'${taskTitle}' 正在等待 ${waiting} 个协作子任务进入 Review，之后才会启动单次组长会议。`],
             ),
             lang,
           ),
@@ -411,16 +488,16 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
           pickL(
             l(
               [
-                `'${taskTitle}' 는 영상 산출물(\`${videoArtifactSpec.relativePath}\`)이 확인되지 않아 팀장회의 승인/머지가 보류되었습니다. 렌더 결과를 확인한 뒤 다시 승인해 주세요.`,
+                `'${taskTitle}'의 영상 산출물(\`${videoArtifactSpec.relativePath}\`)이 확인되지 않아 팀장 승인/머지가 보류되었습니다. 렌더 결과를 확인한 뒤 다시 승인해 주세요.`,
               ],
               [
                 `'${taskTitle}' approval/merge is on hold because \`${videoArtifactSpec.relativePath}\` is not verified. Verify rendered output first, then approve again.`,
               ],
               [
-                `'${taskTitle}' は \`${videoArtifactSpec.relativePath}\` 未確認のため承認/マージが保留されました。レンダー結果確認後に再承認してください。`,
+                `'${taskTitle}' は \`${videoArtifactSpec.relativePath}\` が未確認のため、承認/マージを保留しました。レンダー結果を確認して再承認してください。`,
               ],
               [
-                `'${taskTitle}' 因 \`${videoArtifactSpec.relativePath}\` 未验证，审批/合并已暂停。请先确认渲染结果后再审批。`,
+                `'${taskTitle}' 的视频产物（\`${videoArtifactSpec.relativePath}\`）未验证，已暂缓批准/合并。请确认渲染结果后再次批准。`,
               ],
             ),
             lang,
@@ -490,16 +567,16 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
           pickL(
             l(
               [
-                `'${taskTitle}' 는 Remotion 렌더 실행 증빙이 확인되지 않아 승인/머지가 보류되었습니다. [VIDEO_FINAL_RENDER]는 Remotion으로 다시 렌더 후 승인해 주세요.`,
+                `'${taskTitle}'은(는) Remotion 렌더 실행 증빙이 확인되지 않아 승인/머지가 보류되었습니다. [VIDEO_FINAL_RENDER]를 Remotion으로 다시 렌더 후 재승인해 주세요.`,
               ],
               [
                 `'${taskTitle}' approval/merge is on hold because Remotion render evidence was not verified. Re-render [VIDEO_FINAL_RENDER] with Remotion, then approve again.`,
               ],
               [
-                `'${taskTitle}' は Remotion レンダー実行の証跡が確認できないため承認/マージを保留しました。[VIDEO_FINAL_RENDER] を Remotion で再レンダー後に再承認してください。`,
+                `'${taskTitle}' は Remotion レンダー実行証跡が未確認のため承認/マージを保留しました。[VIDEO_FINAL_RENDER] を Remotion で再レンダーして再承認してください。`,
               ],
               [
-                `'${taskTitle}' 因未验证到 Remotion 渲染证据，审批/合并已暂停。请使用 Remotion 重新渲染 [VIDEO_FINAL_RENDER] 后再审批。`,
+                `'${taskTitle}' 因未验证到 Remotion 渲染证据，已暂缓批准/合并。请使用 Remotion 重新渲染 [VIDEO_FINAL_RENDER] 后再批准。`,
               ],
             ),
             lang,
@@ -526,8 +603,10 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
       // If task has a worktree, merge the branch back before marking done
       const wtInfo = taskWorktrees.get(taskId);
       let mergeNote = "";
+      let mergeBlocked = false;
+      let mergeBlockedReasons: string[] = [];
       if (wtInfo) {
-        // Check if this is a GitHub project → merge to dev + PR flow
+      // Check if this is a GitHub project - merge to dev + PR flow
         const projectRow = currentTask.project_id
           ? (db.prepare("SELECT github_repo FROM projects WHERE id = ?").get(currentTask.project_id) as
               | { github_repo: string | null }
@@ -546,25 +625,27 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
           mergeNote = githubRepo
             ? pickL(
                 l(
-                  [" (dev 병합 + PR 생성)"],
+                  [" (dev 蹂묓빀 + PR ?앹꽦)"],
                   [" (merged to dev + PR)"],
-                  [" (dev マージ + PR)"],
-                  ["（合并到 dev + PR）"],
+                  [" (dev マージ + PR 作成)"],
+                  [" (合并到 dev + PR)"],
                 ),
                 lang,
               )
-            : pickL(l([" (병합 완료)"], [" (merged)"], [" (マージ完了)"], ["（已合并）"]), lang);
+            : pickL(l([" (병합 완료)"], [" (merged)"], [" (マージ完了)"], [" (已合并)"]), lang);
         } else {
+          mergeBlocked = true;
+          mergeBlockedReasons = mergeResult.conflicts?.length ? ["merge_conflict"] : ["merge_failed"];
           appendTaskLog(taskId, "system", `Git merge failed: ${mergeResult.message}`);
 
           const conflictLeader = findTeamLeader(latestTask.department_id);
           const conflictLeaderName = conflictLeader
             ? getAgentDisplayName(conflictLeader, lang)
-            : pickL(l(["팀장"], ["Team Lead"], ["チームリーダー"], ["组长"]), lang);
+            : pickL(l(["팀장"], ["Team Lead"], ["チームリード"], ["组长"]), lang);
           const conflictFiles = mergeResult.conflicts?.length
             ? pickL(
                 l(
-                  [`\n충돌 파일: ${mergeResult.conflicts.join(", ")}`],
+                  [`\n異⑸룎 ?뚯씪: ${mergeResult.conflicts.join(", ")}`],
                   [`\nConflicting files: ${mergeResult.conflicts.join(", ")}`],
                   [`\n競合ファイル: ${mergeResult.conflicts.join(", ")}`],
                   [`\n冲突文件: ${mergeResult.conflicts.join(", ")}`],
@@ -585,7 +666,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
                   `${conflictLeaderName}: '${taskTitle}' のマージ中に競合が発生しました。手動解決が必要です。${conflictFiles}\nブランチ: ${wtInfo.branchName}`,
                 ],
                 [
-                  `${conflictLeaderName}：合并 '${taskTitle}' 时发生冲突，需要手动解决。${conflictFiles}\n分支: ${wtInfo.branchName}`,
+                  `${conflictLeaderName}: '${taskTitle}' 合并时发生冲突，需要人工解决。${conflictFiles}\n分支: ${wtInfo.branchName}`,
                 ],
               ),
               lang,
@@ -598,17 +679,36 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
               [" (병합 충돌 - 수동 해결 필요)"],
               [" (merge conflict - manual resolution required)"],
               [" (マージ競合 - 手動解決が必要)"],
-              ["（合并冲突 - 需要手动解决）"],
+              [" (合并冲突 - 需要人工解决)"],
             ),
             lang,
           );
         }
       }
 
-      db.prepare("UPDATE tasks SET status = 'done', completed_at = ?, updated_at = ? WHERE id = ?").run(t, t, taskId);
+      if (mergeBlocked) {
+        markReviewConsentBlocked(taskId, mergeBlockedReasons);
+        appendTaskLog(
+          taskId,
+          "system",
+          `Review hold: merge is not complete (${mergeBlockedReasons.join(", ")}). Final approval remains blocked.`,
+        );
+        const blockedTask = db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId);
+        broadcast("task_update", blockedTask);
+        notifyTaskStatus(taskId, taskTitle, "review", lang);
+        return;
+      }
+
+      clearReviewConsentBlocked(taskId);
+
+      if (taskHasCompletedAt) {
+        db.prepare("UPDATE tasks SET status = 'done', completed_at = ?, updated_at = ? WHERE id = ?").run(t, t, taskId);
+      } else {
+        db.prepare("UPDATE tasks SET status = 'done', updated_at = ? WHERE id = ?").run(t, taskId);
+      }
       setTaskCreationAuditCompletion(taskId, true);
 
-      appendTaskLog(taskId, "system", "Status → done (all leaders approved)");
+      appendTaskLog(taskId, "system", "Status done (all leaders approved)");
       endTaskExecutionSession(taskId, "task_done");
 
       const updatedTask = db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId);
@@ -628,18 +728,18 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
       const leader = findTeamLeader(latestTask.department_id);
       const leaderName = leader
         ? getAgentDisplayName(leader, lang)
-        : pickL(l(["팀장"], ["Team Lead"], ["チームリーダー"], ["组长"]), lang);
+        : pickL(l(["팀장"], ["Team Lead"], ["チームリード"], ["组长"]), lang);
       const subtaskProgressSummary = formatTaskSubtaskProgressSummary(taskId, lang);
       const progressSuffix = subtaskProgressSummary
-        ? `\n${pickL(l(["보완/협업 완료 현황"], ["Remediation/Collaboration completion"], ["補完/協業 完了状況"], ["整改/协作完成情况"]), lang)}\n${subtaskProgressSummary}`
+        ? `\n${pickL(l(["보완/협업 완료 현황"], ["Remediation/Collaboration completion"], ["修正/協업完了状況"], ["修复/协作完成情况"]), lang)}\n${subtaskProgressSummary}`
         : "";
       notifyCeo(
         pickL(
           l(
             [`${leaderName}: '${taskTitle}' 최종 승인 완료 보고드립니다.${mergeNote}${progressSuffix}`],
             [`${leaderName}: Final approval completed for '${taskTitle}'.${mergeNote}${progressSuffix}`],
-            [`${leaderName}: '${taskTitle}' の最終承認が完了しました。${mergeNote}${progressSuffix}`],
-            [`${leaderName}：'${taskTitle}' 最终审批已完成。${mergeNote}${progressSuffix}`],
+            [`${leaderName}: '${taskTitle}' の最終承認完了を報告します。${mergeNote}${progressSuffix}`],
+            [`${leaderName}: '${taskTitle}' 最终批准已完成。${mergeNote}${progressSuffix}`],
           ),
           lang,
         ),
@@ -690,7 +790,16 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
       return;
     }
 
-    startReviewConsensusMeeting(taskId, taskTitle, currentTask.department_id, finalizeApprovedReview);
+    startReviewConsensusMeeting(
+      taskId,
+      taskTitle,
+      currentTask.department_id,
+      finalizeApprovedReview,
+      (blockedBy: string[]) => {
+        markReviewConsentBlocked(taskId, blockedBy);
+        appendTaskLog(taskId, "system", `Review consensus hard-blocked before approval: ${blockedBy.join(", ")}`);
+      },
+    );
   }
 
   return {

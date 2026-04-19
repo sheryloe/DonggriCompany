@@ -1,6 +1,15 @@
-import type { Agent, AgentProfile, Department, OfficePackProfile, WorkflowPackKey } from "../../types";
+import type {
+  Agent,
+  AgentProfile,
+  CanonicalAgentFamily,
+  CanonicalCareerStage,
+  CanonicalIdentitySource,
+  Department,
+  OfficePackProfile,
+  WorkflowPackKey,
+} from "../../types";
 
-export type Translator = (ko: string, en: string) => string;
+export type Translator = (ko: string, en: string, ja?: string, zh?: string) => string;
 
 export interface AgentManagerProps {
   agents: Agent[];
@@ -24,6 +33,12 @@ export interface FormData {
   review_lenses_text: string;
   two_pass_required: boolean;
   max_review_rounds: number | null;
+  family: CanonicalAgentFamily;
+  career_stage: CanonicalCareerStage;
+  specialization_key: string;
+  authority_level: number;
+  execution_capability_profile: string;
+  canonical_identity_source: CanonicalIdentitySource;
   avatar_emoji: string;
   sprite_number: number | null;
   personality: string;

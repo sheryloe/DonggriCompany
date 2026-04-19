@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -135,7 +135,7 @@ describe("CliSettingsTab multi-account", () => {
     expect(screen.getByRole("option", { name: "Gemini 3 Pro Preview" })).toBeInTheDocument();
   });
 
-  it("persists main and sub-agent provider policy selections", async () => {
+  it("shows provider policy controls as read-only in compatibility mode", async () => {
     const user = userEvent.setup();
     const persistSettings = vi.fn();
     const initialForm: LocalSettings = {
@@ -206,17 +206,94 @@ describe("CliSettingsTab multi-account", () => {
     render(<Harness />);
 
     const selects = screen.getAllByRole("combobox");
-    await user.selectOptions(selects[1]!, "gpt-5.4");
-    await user.selectOptions(selects[2]!, "low");
-    await user.selectOptions(selects[3]!, "gpt-5.4-mini");
-    await user.selectOptions(selects[4]!, "medium");
+    expect(selects[1]).toBeDisabled();
+    expect(selects[2]).toBeDisabled();
+    expect(selects[3]).toBeDisabled();
+    expect(selects[4]).toBeDisabled();
+    expect(persistSettings).not.toHaveBeenCalled();
+  });
 
-    const lastPersistCall = persistSettings.mock.calls.at(-1)?.[0];
-    expect(lastPersistCall?.providerModelConfig?.codex).toEqual({
-      model: "gpt-5.4",
-      reasoningLevel: "low",
-      subModel: "gpt-5.4-mini",
-      subModelReasoningLevel: "medium",
-    });
+  it("verifies all codex pools from the bulk action button", async () => {
+    const user = userEvent.setup();
+    const onVerifyPool = vi.fn(async (provider: OfficeExecutionProvider, accountPoolId: string) => ({
+      pool: {
+        id: `${provider}-${accountPoolId}`,
+        provider,
+        accountPoolId,
+        label: accountPoolId,
+        profileHome: `/app/.office-accounts/${provider}/${accountPoolId}`,
+        status: "connected" as const,
+        lastVerifiedAt: Date.now(),
+        lastError: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+      binaryInstalled: true,
+      authArtifactFound: true,
+    }));
+
+    render(
+      <CliSettingsTab
+        t={(messages) => messages.en}
+        cliStatus={null}
+        cliModels={null}
+        cliModelsLoading={false}
+        officeExecutionProviders={providers}
+        cliAccountPools={[
+          {
+            id: "codex-main",
+            provider: "codex",
+            accountPoolId: "codex-main",
+            label: "codex-main",
+            profileHome: "/app/.office-accounts/codex/codex-main",
+            status: "auth_required",
+            lastVerifiedAt: null,
+            lastError: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+          {
+            id: "codex-backup",
+            provider: "codex",
+            accountPoolId: "codex-backup",
+            label: "codex-backup",
+            profileHome: "/app/.office-accounts/codex/codex-backup",
+            status: "auth_required",
+            lastVerifiedAt: null,
+            lastError: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ]}
+        officeRunners={[]}
+        officeRunnerQueue={[]}
+        runnerMeta={{ maxActive: 5, idleTtlMs: 900000, dockerEnabled: false }}
+        cliAuthBusyKey={null}
+        selectedPoolByProvider={{
+          codex: "codex-main",
+          gemini: "",
+          claude: "",
+          jules: "",
+        }}
+        form={{ ...(DEFAULT_SETTINGS as LocalSettings), language: "en" }}
+        setForm={vi.fn()}
+        persistSettings={vi.fn()}
+        onRefresh={vi.fn()}
+        onPoolSelect={vi.fn()}
+        onCreatePool={vi.fn(async () => undefined)}
+        onUpdatePool={vi.fn(async () => undefined)}
+        onDeletePool={vi.fn(async () => undefined)}
+        onVerifyPool={onVerifyPool}
+        onCopyLoginCommand={vi.fn(async () => undefined)}
+        onActivateRunner={vi.fn(async () => undefined)}
+        onDeactivateRunner={vi.fn(async () => undefined)}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Verify All Codex Pools" }));
+
+    expect(onVerifyPool).toHaveBeenCalledWith("codex", "codex-main");
+    expect(onVerifyPool).toHaveBeenCalledWith("codex", "codex-backup");
+    expect(onVerifyPool).toHaveBeenCalledTimes(2);
   });
 });

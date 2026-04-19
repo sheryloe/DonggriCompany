@@ -269,10 +269,10 @@ export function createOAuthTools(deps: CreateOAuthToolsDeps) {
     string,
     { model: string; subModel?: string; reasoningLevel?: string; subModelReasoningLevel?: string }
   > {
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'providerModelConfig'").get() as
-      | { value: string }
-      | undefined;
-    return row ? JSON.parse(row.value) : {};
+    // Compatibility-only path:
+    // runtime execution policy is canonical-authoritative and must not source
+    // model decisions from mutable settings.
+    return {};
   }
 
   async function refreshGoogleToken(credential: DecryptedOAuthToken): Promise<string> {

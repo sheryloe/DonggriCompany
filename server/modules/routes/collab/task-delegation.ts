@@ -7,7 +7,9 @@ import type { L10n } from "./language-policy.ts";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import { resolveWorkflowPackKeyForTask } from "../../workflow/packs/task-pack-resolver.ts";
 import { isWorkflowPackKey } from "../../workflow/packs/definitions.ts";
+import { resolveCanonicalIdentity } from "../../company/canonical-identity.ts";
 import { resolveConstrainedAgentScopeForTask } from "../core/tasks/execution-run-auto-assign.ts";
+import { formatDelegationTrace } from "./delegation-log.ts";
 import {
   buildDelegateMessage,
   buildLeaderAckMessage,
@@ -239,9 +241,10 @@ export function createTaskDelegationHandler(deps: TaskDelegationDeps) {
         broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId));
 
         const mentionedDepts = [...new Set(detectTargetDepartments(ceoMessage).filter((d) => d !== leaderDeptId))];
+        const leaderCanonicalIdentity = resolveCanonicalIdentity(teamLeader);
         const isPlanningLead =
-          leaderDeptId === "planning" ||
-          Number((teamLeader as unknown as { acts_as_planning_leader?: unknown }).acts_as_planning_leader ?? 0) === 1;
+          leaderCanonicalIdentity.family === "orchestrator" &&
+          leaderCanonicalIdentity.career_stage === "team-lead";
 
         if (isPlanningLead) {
           const relatedLabel =
@@ -403,6 +406,19 @@ export function createTaskDelegationHandler(deps: TaskDelegationDeps) {
         if (subordinate) {
           const subName = lang === "ko" ? subordinate.name_ko || subordinate.name : subordinate.name;
           const subRole = getRoleLabel(subordinate.role, lang);
+          const subCanonicalIdentity = resolveCanonicalIdentity(subordinate);
+          appendTaskLog(
+            taskId,
+            "system",
+            formatDelegationTrace({
+              label: "Delegation decision",
+              family: subCanonicalIdentity.family,
+              specialization: subCanonicalIdentity.specialization_key,
+              fallbackReason: "family_first_subordinate",
+              authorityReason: `canonical_stage=${subCanonicalIdentity.career_stage};authority_level=${subCanonicalIdentity.authority_level}`,
+              blockingReason: "none",
+            }),
+          );
 
           const ackMsg = buildLeaderAckMessage({
             l,
@@ -465,6 +481,28 @@ export function createTaskDelegationHandler(deps: TaskDelegationDeps) {
             taskId,
           );
           db.prepare("UPDATE agents SET current_task_id = ? WHERE id = ?").run(taskId, teamLeader.id);
+          const selfFallbackReason = manualFallbackToLeader
+            ? "department_fallback_team_lead"
+            : subordinate
+              ? "family_first_team_lead"
+              : "specialization_second_team_lead";
+          const selfBlockingReason = subordinate
+            ? "none"
+            : manualFallbackToLeader
+              ? "no_subordinate_in_scope"
+              : "no_subordinate_found";
+          appendTaskLog(
+            taskId,
+            "system",
+            formatDelegationTrace({
+              label: "Delegation decision",
+              family: leaderCanonicalIdentity.family,
+              specialization: leaderCanonicalIdentity.specialization_key,
+              fallbackReason: selfFallbackReason,
+              authorityReason: `canonical_stage=${leaderCanonicalIdentity.career_stage};authority_level=${leaderCanonicalIdentity.authority_level}`,
+              blockingReason: selfBlockingReason,
+            }),
+          );
           appendTaskLog(taskId, "system", `${leaderName} self-assigned (planned)`);
 
           broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId));

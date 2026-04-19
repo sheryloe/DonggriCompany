@@ -71,11 +71,9 @@ describe("resolveDirectiveLeaderCandidateScope", () => {
       db.prepare("INSERT INTO agents (id, department_id) VALUES (?, ?)").run("novel-seed-2", "design");
 
       const scope = resolveDirectiveLeaderCandidateScope(db, "proj-1");
-      expect(sorted(scope)).toEqual(sorted(["video_preprod-seed-1"]));
-      expect(scope).not.toContain("planning-global");
-      expect(scope).not.toContain("novel-seed-1");
+      expect(scope).toBeNull();
       const devScope = resolveDirectiveLeaderCandidateScope(db, "proj-1", "dev");
-      expect(sorted(devScope)).toEqual(sorted(["video_preprod-seed-2"]));
+      expect(devScope).toBeNull();
     } finally {
       db.close();
     }
@@ -107,10 +105,9 @@ describe("resolveDirectiveLeaderCandidateScope", () => {
       db.prepare("INSERT INTO agents (id, department_id) VALUES (?, ?)").run("novel-seed-2", "design");
 
       const scope = resolveDirectiveLeaderCandidateScope(db, "proj-2");
-      expect(sorted(scope)).toEqual(sorted(["novel-seed-1"]));
-      expect(scope).not.toContain("planning-global");
+      expect(scope).toBeNull();
       const designScope = resolveDirectiveLeaderCandidateScope(db, "proj-2", "design");
-      expect(sorted(designScope)).toEqual(sorted(["novel-seed-2"]));
+      expect(designScope).toBeNull();
     } finally {
       db.close();
     }

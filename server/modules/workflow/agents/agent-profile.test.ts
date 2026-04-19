@@ -38,8 +38,6 @@ describe("server agent profile helpers", () => {
       class_stage_3: "platform",
     });
     expect(profile.promotion_policy).toEqual({
-      from_role: "junior",
-      to_role: "senior",
       auto_promote_at_xp: 300,
       team_leader_manual: true,
     });
@@ -63,8 +61,6 @@ describe("server agent profile helpers", () => {
         custom_prompt_override: "Escalate risk early and justify tradeoffs.",
         class_path: ["engineering", "backend", "platform"],
         promotion_policy: {
-          from_role: "junior",
-          to_role: "senior",
           auto_promote_at_xp: 300,
         },
       },
@@ -80,7 +76,8 @@ describe("server agent profile helpers", () => {
     expect(block).toContain("Applied growth tier: 5/5");
     expect(block).toContain("2x workflow role: reviewer");
     expect(block).toContain("Class path: engineering > backend > platform");
-    expect(block).toContain("Promotion policy: junior -> senior @xp>=300");
+    expect(block).toContain("Promotion policy: @xp>=300");
+    expect(block).not.toContain("junior -> senior");
     expect(block).toContain("Specialties: backend, agent orchestration");
     expect(block).toContain("Review lenses to emphasize: security, performance");
     expect(block).toContain("Review depth: force_2_pass");

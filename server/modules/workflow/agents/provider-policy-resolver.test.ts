@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveProviderExecutionPolicy } from "./provider-policy-resolver.ts";
 
 describe("resolveProviderExecutionPolicy", () => {
-  it("returns main and sub-agent policy fields from provider config", () => {
+  it("does not use providerModelConfig as execution policy source without canonical override", () => {
     expect(
       resolveProviderExecutionPolicy({
         provider: "codex",
@@ -16,24 +16,23 @@ describe("resolveProviderExecutionPolicy", () => {
         },
       }),
     ).toEqual({
-      model: "gpt-5.4",
-      reasoningLevel: "medium",
-      subModel: "gpt-5.4-mini",
-      subModelReasoningLevel: "high",
+      model: undefined,
+      reasoningLevel: undefined,
+      subModel: undefined,
+      subModelReasoningLevel: undefined,
     });
   });
 
-  it("normalizes missing or blank values to undefined", () => {
+  it("normalizes canonical override blanks to undefined", () => {
     expect(
       resolveProviderExecutionPolicy({
         provider: "claude",
-        providerModelConfig: {
-          claude: {
-            model: "  ",
-            reasoningLevel: "",
-            subModel: "claude-sonnet-4-6",
-            subModelReasoningLevel: "   ",
-          },
+        providerModelConfig: {},
+        canonicalOverride: {
+          model: "  ",
+          reasoningLevel: "",
+          subModel: "claude-sonnet-4-6",
+          subReasoningLevel: "   ",
         },
       }),
     ).toEqual({
@@ -41,6 +40,34 @@ describe("resolveProviderExecutionPolicy", () => {
       reasoningLevel: undefined,
       subModel: "claude-sonnet-4-6",
       subModelReasoningLevel: undefined,
+    });
+  });
+
+  it("prefers canonical override when provider matches", () => {
+    expect(
+      resolveProviderExecutionPolicy({
+        provider: "codex",
+        providerModelConfig: {
+          codex: {
+            model: "gpt-5.3-codex",
+            reasoningLevel: "high",
+            subModel: "gpt-5.3-codex",
+            subModelReasoningLevel: "high",
+          },
+        },
+        canonicalOverride: {
+          provider: "codex",
+          model: "gpt-5.4",
+          reasoningLevel: "medium",
+          subModel: "gpt-5.4-mini",
+          subReasoningLevel: "low",
+        },
+      }),
+    ).toEqual({
+      model: "gpt-5.4",
+      reasoningLevel: "medium",
+      subModel: "gpt-5.4-mini",
+      subModelReasoningLevel: "low",
     });
   });
 });

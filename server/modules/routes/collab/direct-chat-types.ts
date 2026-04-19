@@ -6,8 +6,14 @@ export interface AgentRow {
   id: string;
   name: string;
   name_ko: string;
+  created_at?: number | null;
   role: string;
   acts_as_planning_leader?: number | null;
+  family?: string | null;
+  career_stage?: string | null;
+  specialization_key?: string | null;
+  authority_level?: number | null;
+  execution_capability_profile?: string | null;
   personality: string | null;
   status: string;
   department_id: string | null;

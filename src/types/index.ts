@@ -22,6 +22,27 @@ export interface Department {
 export type AgentRole = "team_leader" | "senior" | "junior" | "intern";
 export type AgentStatus = "idle" | "working" | "break" | "offline";
 export type AgentRunMode = "standard" | "plan";
+export type CanonicalAgentFamily =
+  | "architect"
+  | "backend"
+  | "documenter"
+  | "frontend"
+  | "memory-manager"
+  | "orchestrator"
+  | "product-manager"
+  | "qa"
+  | "refactor"
+  | "researcher"
+  | "reviewer";
+export type CanonicalCareerStage =
+  | "junior"
+  | "advancement-1"
+  | "senior"
+  | "advancement-2"
+  | "pro-senior"
+  | "advancement-3"
+  | "team-lead";
+export type CanonicalIdentitySource = "stored" | "derived";
 export type CliProvider =
   | "claude"
   | "codex"
@@ -110,6 +131,12 @@ export interface Agent {
   run_mode?: AgentRunMode | null;
   cli_account_pool_id?: string | null;
   workflow_profile?: AgentWorkflowProfile | null;
+  family?: CanonicalAgentFamily | null;
+  career_stage?: CanonicalCareerStage | null;
+  specialization_key?: string | null;
+  authority_level?: number | null;
+  execution_capability_profile?: string | null;
+  canonical_identity_source?: CanonicalIdentitySource | null;
   agent_profile_json?: string | null;
   agent_profile?: AgentProfile | null;
   avatar_emoji: string;
@@ -197,6 +224,12 @@ export interface Task {
   workflow_meta_json?: string | null;
   output_format?: string | null;
   project_path: string | null;
+  policy_version?: string | null;
+  policy_snapshot_found?: boolean;
+  policy_snapshot_missing?: boolean;
+  resolved_execution_policy_json?: string | null;
+  required_artifacts_json?: string | null;
+  approval_gate_state_json?: string | null;
   result: string | null;
   started_at: number | null;
   completed_at: number | null;
@@ -216,6 +249,9 @@ export interface Project {
   project_path: string;
   core_goal: string;
   default_pack_key?: WorkflowPackKey;
+  canonical_pack_profile?: WorkflowPackKey | string;
+  artifact_root_mode?: string | null;
+  artifact_projection_version?: string | null;
   assignment_mode: AssignmentMode;
   assigned_agent_ids?: string[];
   last_used_at: number | null;
@@ -248,6 +284,8 @@ export interface MeetingMinuteEntry {
 export interface MeetingMinute {
   id: string;
   task_id: string;
+  policy_version?: string | null;
+  policy_snapshot_hash?: string | null;
   meeting_type: "planned" | "review";
   round: number;
   title: string;
@@ -275,6 +313,7 @@ export interface Message {
   content: string;
   message_type: MessageType;
   task_id: string | null;
+  project_id?: string | null;
   created_at: number;
 }
 

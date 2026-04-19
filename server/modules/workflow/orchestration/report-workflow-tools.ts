@@ -135,7 +135,7 @@ export function createReportWorkflowTools(deps: CreateReportWorkflowToolsDeps) {
     department_id?: string | null;
   }): boolean {
     if (task.source_task_id) return false;
-    const planningLeader = findTeamLeader("planning") || findTeamLeader(task.department_id ?? "");
+    const planningLeader = findTeamLeader(null) || findTeamLeader(task.department_id ?? "");
     return Boolean(planningLeader);
   }
 

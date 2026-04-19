@@ -12,6 +12,8 @@ import { initializeCollabLanguagePolicy } from "./collab/language-policy.ts";
 import { initializeProjectResolution, type DelegationOptions } from "./collab/project-resolution.ts";
 import { initializeSubtaskDelegation } from "./collab/subtask-delegation.ts";
 import { createTaskDelegationHandler } from "./collab/task-delegation.ts";
+import { deriveFamilyFromDepartment, getCanonicalStageRank, resolveCanonicalIdentity } from "../company/canonical-identity.ts";
+import { pickCanonicalMeetingChair } from "../company/canonical-authority.ts";
 import { getDepartmentForPack, readActiveOfficeWorkflowPackKey } from "../workflow/packs/department-scope.ts";
 
 export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
@@ -427,25 +429,33 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       return /foreign key constraint failed/i.test(msg);
     };
     let persistedTaskId = taskId && taskExists(taskId) ? taskId : null;
+    let persistedProjectId: string | null = null;
+    if (persistedTaskId) {
+      const taskRow = db
+        .prepare("SELECT project_id FROM tasks WHERE id = ?")
+        .get(persistedTaskId) as { project_id?: string | null } | undefined;
+      persistedProjectId = taskRow?.project_id ?? null;
+    }
 
     try {
       db.prepare(
         `
-      INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, created_at)
-      VALUES (?, 'agent', ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, project_id, created_at)
+      VALUES (?, 'agent', ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-      ).run(id, agent.id, receiverType, receiverId, content, messageType, persistedTaskId, t);
+      ).run(id, agent.id, receiverType, receiverId, content, messageType, persistedTaskId, persistedProjectId, t);
     } catch (err) {
       if (persistedTaskId && isForeignKeyError(err)) {
         // Task row can disappear between async timers and insert time; fall back to task-less message.
         try {
           persistedTaskId = null;
+          persistedProjectId = null;
           db.prepare(
             `
-          INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, created_at)
-          VALUES (?, 'agent', ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, project_id, created_at)
+          VALUES (?, 'agent', ?, ?, ?, ?, ?, ?, ?, ?)
         `,
-          ).run(id, agent.id, receiverType, receiverId, content, messageType, null, t);
+          ).run(id, agent.id, receiverType, receiverId, content, messageType, null, null, t);
         } catch (fallbackErr) {
           console.warn(`[sendAgentMessage] drop message after FK fallback failure: ${String(fallbackErr)}`);
           return;
@@ -465,6 +475,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       content,
       message_type: messageType,
       task_id: persistedTaskId,
+      project_id: persistedProjectId,
       created_at: t,
       sender_name: agent.name,
       sender_avatar: agent.avatar_emoji ?? "🤖",
@@ -561,7 +572,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
 
   /** Handle mention-based delegation: create task in mentioned department */
   function handleMentionDelegation(originLeader: AgentRow, targetDeptId: string, ceoMessage: string, lang: Lang): void {
-    const crossLeader = findTeamLeader(targetDeptId);
+    const crossLeader = findCanonicalTeamLeader(targetDeptId);
     if (!crossLeader) return;
     const crossDeptName = getDeptName(targetDeptId);
     const crossLeaderName = lang === "ko" ? crossLeader.name_ko || crossLeader.name : crossLeader.name;
@@ -606,125 +617,140 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     excludeId: string,
     candidateAgentIds?: string[] | null,
   ): AgentRow | null {
-    // candidateAgentIds가 지정되면 해당 목록에서만 선택 (manual 모드, 부서 고정)
-    if (Array.isArray(candidateAgentIds)) {
-      if (candidateAgentIds.length === 0) {
-        return null;
-      }
-      const placeholders = candidateAgentIds.map(() => "?").join(",");
-      const agents = db
-        .prepare(
-          `SELECT * FROM agents WHERE id IN (${placeholders}) AND department_id = ? AND id != ? AND role != 'team_leader' ORDER BY
-         CASE status WHEN 'idle' THEN 0 WHEN 'break' THEN 1 WHEN 'working' THEN 2 ELSE 3 END,
-         CASE role WHEN 'senior' THEN 0 WHEN 'junior' THEN 1 WHEN 'intern' THEN 2 ELSE 3 END`,
-        )
-        .all(...candidateAgentIds, deptId, excludeId) as unknown as AgentRow[];
-      return agents[0] ?? null;
-    }
-    // 기존 로직: 부서 전체에서 선택
-    const agents = db
-      .prepare(
-        `SELECT * FROM agents WHERE department_id = ? AND id != ? AND role != 'team_leader' ORDER BY
-       CASE status WHEN 'idle' THEN 0 WHEN 'break' THEN 1 WHEN 'working' THEN 2 ELSE 3 END,
-       CASE role WHEN 'senior' THEN 0 WHEN 'junior' THEN 1 WHEN 'intern' THEN 2 ELSE 3 END`,
-      )
-      .all(deptId, excludeId) as unknown as AgentRow[];
-    return agents[0] ?? null;
+    return findCanonicalBestSubordinate(deptId, excludeId, candidateAgentIds);
   }
 
   function findTeamLeader(deptId: string | null, candidateAgentIds?: string[] | null): AgentRow | null {
-    if (!deptId) return null;
-    const isPlanningLookup = deptId === "planning";
-    if (Array.isArray(candidateAgentIds)) {
-      const scopedIds = [...new Set(candidateAgentIds.map((id) => String(id || "").trim()).filter(Boolean))];
-      if (scopedIds.length === 0) return null;
-      const placeholders = scopedIds.map(() => "?").join(", ");
-      if (isPlanningLookup) {
-        try {
-          return (
-            (db
-              .prepare(
-                `
-              SELECT *
-              FROM agents
-              WHERE role = 'team_leader'
-                AND id IN (${placeholders})
-                AND (
-                  department_id = ?
-                  OR COALESCE(acts_as_planning_leader, 0) = 1
-                )
-              ORDER BY
-                CASE status WHEN 'idle' THEN 0 WHEN 'break' THEN 1 WHEN 'working' THEN 2 ELSE 3 END,
-                CASE WHEN COALESCE(acts_as_planning_leader, 0) = 1 THEN 0 ELSE 1 END,
-                created_at ASC
-              LIMIT 1
-            `,
-              )
-              .get(...scopedIds, deptId) as AgentRow | undefined) ?? null
-          );
-        } catch {
-          // Older test schemas may not have acts_as_planning_leader.
-        }
-      }
-      return (
-        (db
-          .prepare(
-            `
-          SELECT *
-          FROM agents
-          WHERE department_id = ?
-            AND role = 'team_leader'
-            AND id IN (${placeholders})
-          ORDER BY
-            CASE status WHEN 'idle' THEN 0 WHEN 'break' THEN 1 WHEN 'working' THEN 2 ELSE 3 END,
-            created_at ASC
-          LIMIT 1
-        `,
-          )
-          .get(deptId, ...scopedIds) as AgentRow | undefined) ?? null
-      );
-    }
-    if (isPlanningLookup) {
-      try {
-        return (
-          (db
-            .prepare(
-              `
-            SELECT *
-            FROM agents
-            WHERE role = 'team_leader'
-              AND (
-                department_id = ?
-                OR COALESCE(acts_as_planning_leader, 0) = 1
-              )
-            ORDER BY
-              CASE status WHEN 'idle' THEN 0 WHEN 'break' THEN 1 WHEN 'working' THEN 2 ELSE 3 END,
-              CASE WHEN COALESCE(acts_as_planning_leader, 0) = 1 THEN 0 ELSE 1 END,
-              created_at ASC
-            LIMIT 1
-          `,
-            )
-            .get(deptId) as AgentRow | undefined) ?? null
-        );
-      } catch {
-        // Older test schemas may not have acts_as_planning_leader.
-      }
-    }
-    return (
-      (db
-        .prepare(
-          `
+    return findCanonicalTeamLeader(deptId, candidateAgentIds);
+  }
+
+  function findCanonicalBestSubordinate(
+    deptId: string,
+    excludeId: string,
+    candidateAgentIds?: string[] | null,
+  ): AgentRow | null {
+    const scopedIds = Array.isArray(candidateAgentIds)
+      ? [...new Set(candidateAgentIds.map((id) => String(id || "").trim()).filter(Boolean))]
+      : null;
+    if (Array.isArray(scopedIds) && scopedIds.length === 0) return null;
+
+    const targetFamily = deriveFamilyFromDepartment(deptId);
+    const placeholders = Array.isArray(scopedIds) ? scopedIds.map(() => "?").join(", ") : "";
+    const scopedClause = Array.isArray(scopedIds) ? `AND id IN (${placeholders})` : "";
+    const agents = db
+      .prepare(
+        `
         SELECT *
         FROM agents
-        WHERE department_id = ?
-          AND role = 'team_leader'
-        ORDER BY
-          CASE status WHEN 'idle' THEN 0 WHEN 'break' THEN 1 WHEN 'working' THEN 2 ELSE 3 END,
-          created_at ASC
-        LIMIT 1
+        WHERE id != ?
+          AND role != 'team_leader'
+          AND status != 'offline'
+          ${scopedClause}
       `,
-        )
-        .get(deptId) as AgentRow | undefined) ?? null
+      )
+      .all(excludeId, ...(scopedIds ?? [])) as unknown as AgentRow[];
+
+    const statusRank = (status: string | null | undefined): number => {
+      if (status === "idle") return 0;
+      if (status === "break") return 1;
+      if (status === "working") return 2;
+      return 3;
+    };
+
+    return (
+      agents
+        .map((agent) => ({
+          agent,
+          canonical: resolveCanonicalIdentity(agent),
+          sameDept: (agent.department_id ?? null) === deptId,
+        }))
+        .sort((left, right) => {
+          const leftFamily = left.canonical.family === targetFamily ? 0 : 1;
+          const rightFamily = right.canonical.family === targetFamily ? 0 : 1;
+          if (leftFamily !== rightFamily) return leftFamily - rightFamily;
+
+          const leftStatus = statusRank(left.agent.status);
+          const rightStatus = statusRank(right.agent.status);
+          if (leftStatus !== rightStatus) return leftStatus - rightStatus;
+
+          if (left.sameDept !== right.sameDept) return left.sameDept ? -1 : 1;
+
+          const leftStage = getCanonicalStageRank(left.canonical.career_stage);
+          const rightStage = getCanonicalStageRank(right.canonical.career_stage);
+          if (leftStage !== rightStage) return rightStage - leftStage;
+
+          if (left.canonical.authority_level !== right.canonical.authority_level) {
+            return right.canonical.authority_level - left.canonical.authority_level;
+          }
+
+          return String(left.agent.name ?? "").localeCompare(String(right.agent.name ?? ""));
+        })[0]?.agent ?? null
+    );
+  }
+
+  function findCanonicalTeamLeader(deptId: string | null, candidateAgentIds?: string[] | null): AgentRow | null {
+    const scopedIds = Array.isArray(candidateAgentIds)
+      ? [...new Set(candidateAgentIds.map((id) => String(id || "").trim()).filter(Boolean))]
+      : null;
+    if (Array.isArray(scopedIds) && scopedIds.length === 0) return null;
+
+    const placeholders = Array.isArray(scopedIds) ? scopedIds.map(() => "?").join(", ") : "";
+    const scopedClause = Array.isArray(scopedIds) ? `AND id IN (${placeholders})` : "";
+    const leaders = db
+      .prepare(
+        `
+        SELECT *
+        FROM agents
+        WHERE role = 'team_leader'
+          AND status != 'offline'
+          ${scopedClause}
+      `,
+      )
+      .all(...(scopedIds ?? [])) as unknown as AgentRow[];
+    if (leaders.length <= 0) return null;
+
+    const normalizedDeptId = String(deptId ?? "").trim().toLowerCase();
+    if (!normalizedDeptId || normalizedDeptId === "planning") {
+      return pickCanonicalMeetingChair(leaders);
+    }
+
+    const targetFamily = deriveFamilyFromDepartment(normalizedDeptId);
+
+    const statusRank = (status: string | null | undefined): number => {
+      if (status === "idle") return 0;
+      if (status === "break") return 1;
+      if (status === "working") return 2;
+      return 3;
+    };
+
+    return (
+      leaders
+        .map((leader) => ({
+          leader,
+          canonical: resolveCanonicalIdentity(leader),
+          sameDept: (leader.department_id ?? null) === normalizedDeptId,
+        }))
+        .sort((left, right) => {
+          const leftFamily = left.canonical.family === targetFamily ? 0 : 1;
+          const rightFamily = right.canonical.family === targetFamily ? 0 : 1;
+          if (leftFamily !== rightFamily) return leftFamily - rightFamily;
+
+          if (left.canonical.authority_level !== right.canonical.authority_level) {
+            return right.canonical.authority_level - left.canonical.authority_level;
+          }
+
+          const leftStage = getCanonicalStageRank(left.canonical.career_stage);
+          const rightStage = getCanonicalStageRank(right.canonical.career_stage);
+          if (leftStage !== rightStage) return rightStage - leftStage;
+
+          if (left.sameDept !== right.sameDept) return left.sameDept ? -1 : 1;
+
+          const leftStatus = statusRank(left.leader.status);
+          const rightStatus = statusRank(right.leader.status);
+          if (leftStatus !== rightStatus) return leftStatus - rightStatus;
+
+          return Number(left.leader.created_at ?? 0) - Number(right.leader.created_at ?? 0);
+        })[0]?.leader ?? null
     );
   }
 
@@ -783,8 +809,8 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     sendAgentMessage,
     appendTaskLog,
     finishReview,
-    findTeamLeader,
-    findBestSubordinate,
+    findTeamLeader: findCanonicalTeamLeader,
+    findBestSubordinate: findCanonicalBestSubordinate,
     nowMs,
     broadcast,
     handleTaskRunComplete,
@@ -812,8 +838,8 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     l,
     pickL,
     sendAgentMessage,
-    findBestSubordinate,
-    findTeamLeader,
+    findBestSubordinate: findCanonicalBestSubordinate,
+    findTeamLeader: findCanonicalTeamLeader,
     getDeptName,
     getDeptRoleConstraint,
     maybeNotifyAllSubtasksComplete,
@@ -840,7 +866,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     getDeptName,
     getRoleLabel,
     detectTargetDepartments,
-    findBestSubordinate,
+    findBestSubordinate: findCanonicalBestSubordinate,
     normalizeTextField,
     resolveProjectFromOptions,
     buildRoundGoal,
@@ -909,7 +935,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     detectTargetDepartments,
     detectMentions,
     handleMentionDelegation,
-    findTeamLeader,
+    findTeamLeader: findCanonicalTeamLeader,
     getDeptName,
     getDeptRoleConstraint,
     formatTaskSubtaskProgressSummary,

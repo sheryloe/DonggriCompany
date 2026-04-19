@@ -546,6 +546,7 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
       provider,
       cliAccountPoolId: cliAccountPoolId ?? null,
       platform: process.platform,
+      selectionSeed: taskId,
       policy:
         runtimeKind === "async_session"
           ? {

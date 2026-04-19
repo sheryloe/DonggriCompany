@@ -6,6 +6,13 @@ import path from "node:path";
 import { getAssignedAgentIdsByProjectIds } from "../shared/project-assignments.ts";
 import { createProjectRouteHelpers } from "./projects/helpers.ts";
 import { DEFAULT_WORKFLOW_PACK_KEY, isWorkflowPackKey } from "../../workflow/packs/definitions.ts";
+import { getCanonicalSnapshot } from "../../company/canonical-policy.ts";
+import {
+  applyProjectArtifactPatch,
+  ensureProjectArtifacts,
+  inspectProjectArtifacts,
+  syncProjectArtifactProjection,
+} from "../../company/project-artifacts.ts";
 
 type FirstQueryValue = (value: unknown) => string | undefined;
 type NormalizeTextField = (value: unknown) => string | null;
@@ -261,6 +268,22 @@ export function registerProjectRoutes({
       });
     }
     const agentIds = validatedAgentIds.agentIds;
+    let artifactState;
+    try {
+      artifactState = ensureProjectArtifacts({
+        projectPath,
+        projectName: name,
+        coreGoal,
+        packProfile: defaultPackKey,
+        snapshotHash: getCanonicalSnapshot().policy.hash,
+        policyVersion: getCanonicalSnapshot().policy.version,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        error: "project_artifact_bootstrap_failed",
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     const id = randomUUID();
     const t = nowMs();
@@ -282,6 +305,10 @@ export function registerProjectRoutes({
       }
     });
 
+    if (artifactState) {
+      syncProjectArtifactProjection(db, { ...artifactState, projectId: id }, id);
+    }
+
     const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
     const assignedAgentIds = (
       db.prepare("SELECT agent_id FROM project_agents WHERE project_id = ?").all(id) as Array<{ agent_id: string }>
@@ -291,7 +318,15 @@ export function registerProjectRoutes({
 
   app.patch("/api/projects/:id", (req, res) => {
     const id = String(req.params.id);
-    const existing = db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
+    const existing = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as
+      | {
+          id: string;
+          name: string;
+          project_path: string;
+          core_goal: string;
+          default_pack_key?: string | null;
+        }
+      | undefined;
     if (!existing) return res.status(404).json({ error: "not_found" });
 
     const body = req.body ?? {};
@@ -384,6 +419,35 @@ export function registerProjectRoutes({
 
     if (updates.length <= 1 && !hasAgentIdsUpdate) {
       return res.status(400).json({ error: "no_fields" });
+    }
+
+    if (updates.length > 1) {
+      const nextProjectName = ("name" in body ? normalizeTextField(body.name) : existing.name) ?? existing.name;
+      const nextProjectPath =
+        ("project_path" in body ? normalizeProjectPathInput(body.project_path) : existing.project_path) ??
+        existing.project_path;
+      const nextCoreGoal =
+        ("core_goal" in body ? normalizeTextField(body.core_goal) : existing.core_goal) ?? existing.core_goal;
+      const nextPackKey =
+        ("default_pack_key" in body
+          ? normalizeTextField(body.default_pack_key)
+          : normalizeTextField(existing.default_pack_key)) ?? DEFAULT_WORKFLOW_PACK_KEY;
+      try {
+        const artifactState = ensureProjectArtifacts({
+          projectPath: nextProjectPath,
+          projectName: nextProjectName,
+          coreGoal: nextCoreGoal,
+          packProfile: nextPackKey,
+          snapshotHash: getCanonicalSnapshot().policy.hash,
+          policyVersion: getCanonicalSnapshot().policy.version,
+        });
+        syncProjectArtifactProjection(db, { ...artifactState, projectId: id }, id);
+      } catch (error) {
+        return res.status(500).json({
+          error: "project_artifact_bootstrap_failed",
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     runInTransaction(() => {
@@ -502,5 +566,94 @@ export function registerProjectRoutes({
       reports,
       decision_events: decisionEvents,
     });
+  });
+
+  app.get("/api/projects/:id/artifact-state", (req, res) => {
+    const id = String(req.params.id);
+    const project = db.prepare("SELECT id, project_path FROM projects WHERE id = ?").get(id) as
+      | { id: string; project_path: string }
+      | undefined;
+    if (!project) return res.status(404).json({ error: "not_found" });
+
+    return res.json({
+      state: inspectProjectArtifacts({
+        projectId: project.id,
+        projectPath: project.project_path,
+      }),
+    });
+  });
+
+  app.post("/api/projects/:id/artifact-bootstrap", (req, res) => {
+    const id = String(req.params.id);
+    const project = db
+      .prepare("SELECT id, name, project_path, core_goal, default_pack_key FROM projects WHERE id = ?")
+      .get(id) as
+      | { id: string; name: string; project_path: string; core_goal: string; default_pack_key?: string | null }
+      | undefined;
+    if (!project) return res.status(404).json({ error: "not_found" });
+
+    try {
+      const state = ensureProjectArtifacts({
+        projectPath: project.project_path,
+        projectName: project.name,
+        coreGoal: project.core_goal,
+        packProfile: normalizeTextField(project.default_pack_key) ?? DEFAULT_WORKFLOW_PACK_KEY,
+        snapshotHash: getCanonicalSnapshot().policy.hash,
+        policyVersion: getCanonicalSnapshot().policy.version,
+      });
+      syncProjectArtifactProjection(db, { ...state, projectId: project.id }, project.id);
+      return res.json({ ok: true, state });
+    } catch (error) {
+      return res.status(500).json({
+        error: "project_artifact_bootstrap_failed",
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.post("/api/projects/:id/artifact-apply", (req, res) => {
+    const id = String(req.params.id);
+    const project = db
+      .prepare("SELECT id, name, project_path, core_goal, default_pack_key FROM projects WHERE id = ?")
+      .get(id) as
+      | { id: string; name: string; project_path: string; core_goal: string; default_pack_key?: string | null }
+      | undefined;
+    if (!project) return res.status(404).json({ error: "not_found" });
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const taskPatch = body.task && typeof body.task === "object" ? (body.task as Record<string, unknown>) : null;
+    try {
+      const state = applyProjectArtifactPatch({
+        projectId: project.id,
+        projectPath: project.project_path,
+        actor:
+          (typeof body.actor === "string" && body.actor.trim()) ||
+          "api.project.artifact-apply",
+        note: typeof body.note === "string" ? body.note : null,
+        packProfile:
+          (typeof body.packProfile === "string" && body.packProfile.trim()) ||
+          normalizeTextField(project.default_pack_key) ||
+          DEFAULT_WORKFLOW_PACK_KEY,
+        policyVersion:
+          (typeof body.policyVersion === "string" && body.policyVersion.trim()) ||
+          getCanonicalSnapshot().policy.version,
+        task: taskPatch
+          ? {
+              id: typeof taskPatch.id === "string" ? taskPatch.id : null,
+              title: typeof taskPatch.title === "string" ? taskPatch.title : null,
+              status: typeof taskPatch.status === "string" ? taskPatch.status : null,
+              priority: Number.isFinite(Number(taskPatch.priority)) ? Number(taskPatch.priority) : null,
+              taskType: typeof taskPatch.taskType === "string" ? taskPatch.taskType : null,
+            }
+          : null,
+      });
+      syncProjectArtifactProjection(db, state, project.id);
+      return res.json({ ok: true, state });
+    } catch (error) {
+      return res.status(500).json({
+        error: "project_artifact_patch_failed",
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
   });
 }

@@ -136,7 +136,7 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
         | undefined;
       if (!rootTask) return;
 
-      const planningLeader = findTeamLeader("planning") || findTeamLeader(rootTask.department_id ?? "");
+      const planningLeader = findTeamLeader(null) || findTeamLeader(rootTask.department_id ?? "");
       if (!planningLeader) return;
 
       const relatedTasks = db

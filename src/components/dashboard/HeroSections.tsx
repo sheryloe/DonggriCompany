@@ -61,17 +61,17 @@ export function DashboardHeroHeader({
           </div>
           <p className="text-xs" style={{ color: "var(--th-text-muted)" }}>
             {t({
-              ko: "에이전트들이 실시간으로 미션을 수행 중입니다",
-              en: "Agents are executing missions in real time",
-              ja: "エージェントがリアルタイムでミッションを実行中です",
-              zh: "代理正在实时执行任务",
+              ko: "에이전트들이 실시간으로 미션을 수행 중입니다.",
+              en: "Agents are executing missions in real time.",
+              ja: "エージェントがリアルタイムでミッションを実行中です。",
+              zh: "代理正在实时执行任务。",
             })}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-500/[0.06] px-4 py-2">
-            <span className="text-xs text-cyan-400/60">⏰</span>
+            <span className="text-xs text-cyan-400/60">🕒</span>
             <span className="dashboard-time-display font-mono text-xl font-bold tracking-tight">{time}</span>
           </div>
           <div className="hidden flex-col gap-1 sm:flex">
@@ -83,8 +83,8 @@ export function DashboardHeroHeader({
             </span>
           </div>
           {reviewQueue > 0 && (
-            <span className="flex items-center gap-1.5 rounded-lg border border-orange-400/30 bg-orange-500/15 px-3 py-1.5 text-xs font-bold text-orange-300 animate-neon-pulse-orange">
-              🔔 {t({ ko: "대기", en: "Queued", ja: "待機", zh: "待处理" })} {numberFormatter.format(reviewQueue)}
+            <span className="flex animate-neon-pulse-orange items-center gap-1.5 rounded-lg border border-orange-400/30 bg-orange-500/15 px-3 py-1.5 text-xs font-bold text-orange-300">
+              ⏳ {t({ ko: "대기", en: "Queued", ja: "待機", zh: "排队" })} {numberFormatter.format(reviewQueue)}
               {t({ ko: "건", en: "", ja: "件", zh: "项" })}
             </span>
           )}
@@ -106,10 +106,7 @@ export function DashboardHeroHeader({
           >
             <span aria-hidden="true">🚀</span>
             <span>{primaryCtaLabel}</span>
-            <span
-              className="text-xs text-white/80 transition-transform duration-200 group-hover:translate-x-0.5"
-              aria-hidden="true"
-            >
+            <span className="text-xs text-white/80 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
               →
             </span>
           </button>
@@ -134,7 +131,7 @@ export function DashboardHudStats({ hudStats, numberFormatter }: DashboardHudSta
           style={{ borderColor: `${stat.color}25` }}
         >
           <div
-            className="absolute top-0 left-0 right-0 h-[2px] opacity-60"
+            className="absolute left-0 right-0 top-0 h-[2px] opacity-60"
             style={{ background: `linear-gradient(90deg, transparent, ${stat.color}, transparent)` }}
           />
           <div className="relative flex items-center justify-between">
@@ -142,10 +139,7 @@ export function DashboardHudStats({ hudStats, numberFormatter }: DashboardHudSta
               <p className="text-[9px] font-bold uppercase tracking-[0.15em]" style={{ color: "var(--th-text-muted)" }}>
                 {stat.label}
               </p>
-              <p
-                className="mt-1 text-3xl font-black tracking-tight"
-                style={{ color: stat.color, textShadow: `0 0 20px ${stat.color}40` }}
-              >
+              <p className="mt-1 text-3xl font-black tracking-tight" style={{ color: stat.color, textShadow: `0 0 20px ${stat.color}40` }}>
                 {typeof stat.value === "number" ? numberFormatter.format(stat.value) : stat.value}
               </p>
               <p className="mt-0.5 text-[10px]" style={{ color: "var(--th-text-muted)" }}>
@@ -153,7 +147,7 @@ export function DashboardHudStats({ hudStats, numberFormatter }: DashboardHudSta
               </p>
             </div>
             <span
-              className="text-3xl opacity-20 transition-all duration-300 group-hover:opacity-40 group-hover:scale-110"
+              className="text-3xl opacity-20 transition-all duration-300 group-hover:scale-110 group-hover:opacity-40"
               style={{ filter: `drop-shadow(0 0 8px ${stat.color}40)` }}
             >
               {stat.icon}
@@ -190,22 +184,19 @@ export function DashboardRankingBoard({
 
       <div className="relative mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span
-            className="text-2xl animate-crown-wiggle"
-            style={{ display: "inline-block", filter: "drop-shadow(0 0 8px rgba(255,215,0,0.5))" }}
-          >
-            🏆
+          <span className="animate-crown-wiggle text-2xl" style={{ display: "inline-block", filter: "drop-shadow(0 0 8px rgba(255,215,0,0.5))" }}>
+            👑
           </span>
           <div>
             <h2 className="dashboard-ranking-gradient text-lg font-black uppercase tracking-wider">
-              {t({ ko: "랭킹 보드", en: "RANKING BOARD", ja: "ランキングボード", zh: "排行榜" })}
+              {t({ ko: "랭킹 보드", en: "RANKING BOARD", ja: "ランキングボード", zh: "排名面板" })}
             </h2>
             <p className="text-[10px]" style={{ color: "var(--th-text-muted)" }}>
               {t({
                 ko: "XP 기준 에이전트 순위",
                 en: "Agent ranking by XP",
                 ja: "XP 基準のエージェント順位",
-                zh: "按 XP 排名",
+                zh: "按 XP 的代理排名",
               })}
             </p>
           </div>
@@ -216,27 +207,9 @@ export function DashboardRankingBoard({
       </div>
 
       {topAgents.length === 0 ? (
-        <div
-          className="flex min-h-[200px] flex-col items-center justify-center gap-3 text-sm"
-          style={{ color: "var(--th-text-muted)" }}
-        >
-          <span className="text-4xl opacity-30">⚔️</span>
-          <p>
-            {t({
-              ko: "등록된 에이전트가 없습니다",
-              en: "No agents registered",
-              ja: "登録されたエージェントがいません",
-              zh: "暂无已注册代理",
-            })}
-          </p>
-          <p className="text-[10px]">
-            {t({
-              ko: "에이전트를 추가하고 미션을 시작하세요",
-              en: "Add agents and start missions",
-              ja: "エージェントを追加してミッションを開始しましょう",
-              zh: "添加代理并开始任务",
-            })}
-          </p>
+        <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 text-sm" style={{ color: "var(--th-text-muted)" }}>
+          <span className="text-4xl opacity-30">📭</span>
+          <p>{t({ ko: "등록된 에이전트가 없습니다.", en: "No agents registered.", ja: "登録されたエージェントがありません。", zh: "暂无已注册代理。" })}</p>
         </div>
       ) : (
         <div className="relative space-y-5">
@@ -251,28 +224,10 @@ export function DashboardRankingBoard({
                 const podiumHeight = isFirst ? "h-24" : rank === 2 ? "h-16" : "h-12";
 
                 return (
-                  <div
-                    key={agent.id}
-                    className={`flex flex-col items-center gap-2 ${isFirst ? "animate-rank-float" : ""}`}
-                  >
-                    {rank === 1 && (
-                      <span
-                        className="text-2xl animate-crown-wiggle"
-                        style={{ display: "inline-block", filter: "drop-shadow(0 0 12px rgba(255,215,0,0.6))" }}
-                      >
-                        🥇
-                      </span>
-                    )}
-                    {rank === 2 && (
-                      <span className="text-lg" style={{ filter: "drop-shadow(0 0 6px rgba(192,192,192,0.5))" }}>
-                        🥈
-                      </span>
-                    )}
-                    {rank === 3 && (
-                      <span className="text-lg" style={{ filter: "drop-shadow(0 0 6px rgba(205,127,50,0.5))" }}>
-                        🥉
-                      </span>
-                    )}
+                  <div key={agent.id} className={`flex flex-col items-center gap-2 ${isFirst ? "animate-rank-float" : ""}`}>
+                    {rank === 1 && <span className="text-2xl">🥇</span>}
+                    {rank === 2 && <span className="text-lg">🥈</span>}
+                    {rank === 3 && <span className="text-lg">🥉</span>}
 
                     <div
                       className="relative overflow-hidden rounded-2xl transition-transform duration-300 hover:scale-105"
@@ -284,25 +239,19 @@ export function DashboardRankingBoard({
                       <AgentAvatar agent={agentMap.get(agent.id)} agents={agents} size={avatarSize} rounded="2xl" />
                     </div>
 
-                    <span
-                      className={`max-w-[80px] truncate text-center font-bold ${isFirst ? "text-sm" : "text-xs"}`}
-                      style={{ color: tier.color, textShadow: isFirst ? `0 0 8px ${tier.glow}` : "none" }}
-                    >
+                    <span className={`max-w-[80px] truncate text-center font-bold ${isFirst ? "text-sm" : "text-xs"}`} style={{ color: tier.color }}>
                       {agent.name}
                     </span>
 
                     <div className="flex flex-col items-center gap-1">
-                      <span
-                        className="font-mono text-xs font-bold"
-                        style={{ color: tier.color, textShadow: `0 0 6px ${tier.glow}` }}
-                      >
+                      <span className="font-mono text-xs font-bold" style={{ color: tier.color }}>
                         {numberFormatter.format(agent.xp)} XP
                       </span>
                       <RankBadge xp={agent.xp} size="sm" />
                     </div>
 
                     <div
-                      className={`${podiumHeight} flex w-20 items-center justify-center rounded-t-xl sm:w-24 animate-podium-rise`}
+                      className={`${podiumHeight} animate-podium-rise flex w-20 items-center justify-center rounded-t-xl sm:w-24`}
                       style={{
                         background: `linear-gradient(to bottom, ${tier.color}30, ${tier.color}10)`,
                         border: `1px solid ${tier.color}40`,
@@ -328,16 +277,13 @@ export function DashboardRankingBoard({
                 return (
                   <div
                     key={agent.id}
-                    className="group flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-all duration-200 hover:bg-white/[0.05] hover:translate-x-1"
+                    className="group flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition-all duration-200 hover:translate-x-1 hover:bg-white/[0.05]"
                     style={{ borderLeftWidth: "3px", borderLeftColor: `${tier.color}60` }}
                   >
                     <span className="w-8 text-center font-mono text-sm font-black" style={{ color: `${tier.color}80` }}>
                       #{rank}
                     </span>
-                    <div
-                      className="flex-shrink-0 overflow-hidden rounded-xl"
-                      style={{ border: `1px solid ${tier.color}40` }}
-                    >
+                    <div className="flex-shrink-0 overflow-hidden rounded-xl" style={{ border: `1px solid ${tier.color}40` }}>
                       <AgentAvatar agent={agentMap.get(agent.id)} agents={agents} size={36} rounded="xl" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -345,7 +291,7 @@ export function DashboardRankingBoard({
                         {agent.name}
                       </p>
                       <p className="text-[10px]" style={{ color: "var(--th-text-muted)" }}>
-                        {agent.department || t({ ko: "미지정", en: "Unassigned", ja: "未指定", zh: "未指定" })}
+                        {agent.department || t({ ko: "미배정", en: "Unassigned", ja: "未割当", zh: "未分配" })}
                       </p>
                     </div>
                     <div className="hidden w-28 sm:block">
@@ -362,49 +308,6 @@ export function DashboardRankingBoard({
               })}
             </div>
           )}
-
-          {topAgents.length === 1 &&
-            (() => {
-              const agent = topAgents[0];
-              const tier = getRankTier(agent.xp);
-              return (
-                <div
-                  className="flex items-center gap-4 rounded-xl p-4"
-                  style={{
-                    background: `linear-gradient(135deg, ${tier.color}15, transparent)`,
-                    border: `1px solid ${tier.color}30`,
-                    boxShadow: `0 0 20px ${tier.glow}`,
-                  }}
-                >
-                  <span className="text-2xl animate-crown-wiggle" style={{ display: "inline-block" }}>
-                    🥇
-                  </span>
-                  <div
-                    className="overflow-hidden rounded-2xl"
-                    style={{ border: `2px solid ${tier.color}60`, boxShadow: `0 0 15px ${tier.glow}` }}
-                  >
-                    <AgentAvatar agent={agentMap.get(agent.id)} agents={agents} size={52} rounded="2xl" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-base font-black" style={{ color: tier.color }}>
-                      {agent.name}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--th-text-muted)" }}>
-                      {agent.department || t({ ko: "미지정", en: "Unassigned", ja: "未指定", zh: "未指定" })}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className="font-mono text-lg font-black"
-                      style={{ color: tier.color, textShadow: `0 0 10px ${tier.glow}` }}
-                    >
-                      {numberFormatter.format(agent.xp)} XP
-                    </p>
-                    <RankBadge xp={agent.xp} size="md" />
-                  </div>
-                </div>
-              );
-            })()}
         </div>
       )}
     </div>

@@ -75,6 +75,7 @@ export interface StoredMessage {
   content: string;
   message_type: string;
   task_id: string | null;
+  project_id: string | null;
   idempotency_key: string | null;
   created_at: number;
 }

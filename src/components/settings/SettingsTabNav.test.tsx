@@ -11,6 +11,7 @@ describe("SettingsTabNav", () => {
     expect(screen.getByRole("button", { name: "OAuth 연동" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "API 연동" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "워크플로 팩" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "정책 인스펙터" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "채널 메시지" })).toBeInTheDocument();
   });
 });

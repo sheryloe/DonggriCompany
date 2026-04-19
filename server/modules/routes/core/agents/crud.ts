@@ -22,6 +22,7 @@ import {
 } from "../../../workflow/agents/agent-profile.ts";
 import { parseAgentRunModePayload, resolveAgentRunMode } from "../../../workflow/agents/run-mode.ts";
 import { archiveAgentGuideFile, upsertAgentGuideFile } from "./agent-guide-files.ts";
+import { resolveCanonicalIdentity } from "../../../company/canonical-identity.ts";
 
 export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   const {
@@ -36,46 +37,24 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     meetingTaskIdByAgent,
     meetingReviewDecisionByAgent,
   } = ctx;
-  const hasAgentWorkflowPackColumn = (() => {
+  const agentTableColumns = (() => {
     try {
       const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
-      return cols.some((col) => String(col.name ?? "").trim() === "workflow_pack_key");
+      return new Set(cols.map((col) => String(col.name ?? "").trim()).filter(Boolean));
     } catch {
-      return false;
+      return new Set<string>();
     }
   })();
-  const hasAgentCliAccountPoolColumn = (() => {
-    try {
-      const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
-      return cols.some((col) => String(col.name ?? "").trim() === "cli_account_pool_id");
-    } catch {
-      return false;
-    }
-  })();
-  const hasAgentWorkflowProfileColumn = (() => {
-    try {
-      const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
-      return cols.some((col) => String(col.name ?? "").trim() === "workflow_profile");
-    } catch {
-      return false;
-    }
-  })();
-  const hasAgentRunModeColumn = (() => {
-    try {
-      const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
-      return cols.some((col) => String(col.name ?? "").trim() === "run_mode");
-    } catch {
-      return false;
-    }
-  })();
-  const hasAgentProfileJsonColumn = (() => {
-    try {
-      const cols = db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: unknown }>;
-      return cols.some((col) => String(col.name ?? "").trim() === "agent_profile_json");
-    } catch {
-      return false;
-    }
-  })();
+  const hasAgentWorkflowPackColumn = agentTableColumns.has("workflow_pack_key");
+  const hasAgentCliAccountPoolColumn = agentTableColumns.has("cli_account_pool_id");
+  const hasAgentWorkflowProfileColumn = agentTableColumns.has("workflow_profile");
+  const hasAgentRunModeColumn = agentTableColumns.has("run_mode");
+  const hasAgentProfileJsonColumn = agentTableColumns.has("agent_profile_json");
+  const hasAgentFamilyColumn = agentTableColumns.has("family");
+  const hasAgentCareerStageColumn = agentTableColumns.has("career_stage");
+  const hasAgentSpecializationKeyColumn = agentTableColumns.has("specialization_key");
+  const hasAgentAuthorityLevelColumn = agentTableColumns.has("authority_level");
+  const hasAgentExecutionCapabilityProfileColumn = agentTableColumns.has("execution_capability_profile");
   const hasCliAccountPoolsTable = (() => {
     try {
       const row = db
@@ -142,6 +121,28 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     return "__invalid__";
   }
 
+  function resolveCompatibilityRoleFromCanonical(params: {
+    career_stage?: unknown;
+    authority_level?: unknown;
+  }): "team_leader" | "senior" | "junior" {
+    const stage = typeof params.career_stage === "string" ? params.career_stage.trim() : "";
+    if (stage === "team-lead") return "team_leader";
+    if (stage === "senior" || stage === "advancement-2" || stage === "pro-senior" || stage === "advancement-3") {
+      return "senior";
+    }
+
+    const authority =
+      typeof params.authority_level === "number"
+        ? params.authority_level
+        : typeof params.authority_level === "string"
+          ? Number.parseInt(params.authority_level.trim(), 10)
+          : Number.NaN;
+
+    if (Number.isFinite(authority) && authority >= 3) return "team_leader";
+    if (Number.isFinite(authority) && authority >= 2) return "senior";
+    return "junior";
+  }
+
   function normalizeCliAccountPoolId(value: unknown): string | null | "__invalid__" {
     if (value === null || value === "" || typeof value === "undefined") return null;
     if (typeof value !== "string") return "__invalid__";
@@ -180,8 +181,24 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   function normalizeAgentRecord(record: unknown): unknown {
     if (!record || typeof record !== "object") return record;
     const row = record as Record<string, unknown>;
+    const canonicalIdentity = resolveCanonicalIdentity({
+      department_id: row.department_id,
+      role: row.role,
+      family: hasAgentFamilyColumn ? row.family : null,
+      career_stage: hasAgentCareerStageColumn ? row.career_stage : null,
+      specialization_key: hasAgentSpecializationKeyColumn ? row.specialization_key : null,
+      authority_level: hasAgentAuthorityLevelColumn ? row.authority_level : null,
+      execution_capability_profile: hasAgentExecutionCapabilityProfileColumn
+        ? row.execution_capability_profile
+        : null,
+      workflow_profile: row.workflow_profile,
+    });
+    if (canonicalIdentity.canonical_identity_source === "derived" && row.id) {
+      console.info("[agents] canonical_identity_backfilled_runtime", { agentId: String(row.id) });
+    }
     return {
       ...row,
+      ...canonicalIdentity,
       run_mode: resolveAgentRunMode({
         runMode: row.run_mode,
         cliProvider: row.cli_provider,
@@ -217,34 +234,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   }
 
   function readNonDevelopmentProfileAgentIds(): Set<string> {
-    const out = new Set<string>();
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'officePackProfiles' LIMIT 1").get() as
-      | { value?: unknown }
-      | undefined;
-    if (!row) return out;
-
-    let root: unknown = row.value;
-    if (typeof root === "string") {
-      try {
-        root = JSON.parse(root);
-      } catch {
-        return out;
-      }
-    }
-    if (!root || typeof root !== "object" || Array.isArray(root)) return out;
-
-    for (const [packKey, packProfileRaw] of Object.entries(root as Record<string, unknown>)) {
-      if (!isWorkflowPackKey(packKey) || packKey === DEFAULT_WORKFLOW_PACK_KEY) continue;
-      if (!packProfileRaw || typeof packProfileRaw !== "object" || Array.isArray(packProfileRaw)) continue;
-      const packProfile = packProfileRaw as Record<string, unknown>;
-      if (!Array.isArray(packProfile.agents)) continue;
-      for (const rawAgent of packProfile.agents) {
-        if (!rawAgent || typeof rawAgent !== "object" || Array.isArray(rawAgent)) continue;
-        const agentId = normalizeText((rawAgent as Record<string, unknown>).id);
-        if (agentId) out.add(agentId);
-      }
-    }
-    return out;
+    return new Set<string>();
   }
 
   function resolvePlanningLeaderScopeAgentIds(packKey: WorkflowPackKey): string[] {
@@ -283,54 +273,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     enabled: boolean;
     scopeAgentIds: string[];
   }): void {
-    const { packKey, targetAgentId, enabled, scopeAgentIds } = params;
-    if (packKey === DEFAULT_WORKFLOW_PACK_KEY) return;
-
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'officePackProfiles' LIMIT 1").get() as
-      | { value?: unknown }
-      | undefined;
-    if (!row) return;
-
-    let root: unknown = row.value;
-    if (typeof root === "string") {
-      try {
-        root = JSON.parse(root);
-      } catch {
-        return;
-      }
-    }
-    if (!root || typeof root !== "object" || Array.isArray(root)) return;
-
-    const rootObject = root as Record<string, unknown>;
-    const packProfileRaw = rootObject[packKey];
-    if (!packProfileRaw || typeof packProfileRaw !== "object" || Array.isArray(packProfileRaw)) return;
-    const packProfile = packProfileRaw as Record<string, unknown>;
-    if (!Array.isArray(packProfile.agents)) return;
-
-    const scopeSet = new Set(scopeAgentIds.map((id) => normalizeText(id)).filter((id) => id.length > 0));
-    let changed = false;
-    const nextAgents = packProfile.agents.map((entry) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
-      const agent = entry as Record<string, unknown>;
-      const agentId = normalizeText(agent.id);
-      if (!agentId) return entry;
-
-      const inScope = scopeSet.size > 0 ? scopeSet.has(agentId) : true;
-      if (agentId !== targetAgentId && (!enabled || !inScope)) return entry;
-
-      const current = Number(agent.acts_as_planning_leader ?? 0) > 0 ? 1 : 0;
-      const next = agentId === targetAgentId ? (enabled ? 1 : 0) : 0;
-      if (current === next) return entry;
-      changed = true;
-      return { ...agent, acts_as_planning_leader: next };
-    });
-
-    if (!changed) return;
-    rootObject[packKey] = { ...packProfile, agents: nextAgents };
-    const serialized = JSON.stringify(rootObject);
-    db.prepare(
-      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-    ).run("officePackProfiles", serialized);
+    void params;
   }
 
   app.get("/api/agents", (req, res) => {
@@ -453,17 +396,34 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   app.post("/api/agents", (req, res) => {
     try {
       const body = (req.body ?? {}) as Record<string, unknown>;
+      const warnings: string[] = [];
       const name = typeof body.name === "string" ? body.name.trim() : "";
       const name_ko = typeof body.name_ko === "string" ? body.name_ko.trim() : "";
       const name_ja = typeof body.name_ja === "string" ? body.name_ja.trim() : "";
       const name_zh = typeof body.name_zh === "string" ? body.name_zh.trim() : "";
       if (!name) return res.status(400).json({ error: "name_required" });
-      const requestedPackKey = parseWorkflowPackKey(body.workflow_pack_key);
-      if (body.workflow_pack_key !== undefined && body.workflow_pack_key !== null && !requestedPackKey) {
-        return res.status(400).json({ error: "invalid_workflow_pack_key" });
-      }
       const activePackKey = readActiveOfficeWorkflowPackKey();
-      const workflowPackKey = requestedPackKey ?? activePackKey;
+      const workflowPackKey = activePackKey;
+      if ("role" in body) {
+        warnings.push("role_ignored_compatibility_only");
+        delete body.role;
+      }
+      if ("workflow_role" in body) {
+        warnings.push("workflow_role_ignored_compatibility_only");
+        delete body.workflow_role;
+      }
+      if ("workflow_pack_key" in body) {
+        warnings.push("workflow_pack_key_ignored_projection_only");
+        delete body.workflow_pack_key;
+      }
+      if ("acts_as_planning_leader" in body) {
+        warnings.push("acts_as_planning_leader_ignored_canonical_authority_only");
+        delete body.acts_as_planning_leader;
+      }
+      if ("force_planning_leader_override" in body) {
+        warnings.push("force_planning_leader_override_ignored");
+        delete body.force_planning_leader_override;
+      }
 
       if (body.department_id !== undefined && body.department_id !== null && typeof body.department_id !== "string") {
         return res.status(400).json({ error: "invalid_department_id" });
@@ -474,9 +434,6 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         if (!deptExists) return res.status(400).json({ error: "department_not_found" });
       }
 
-      const parsedRole = normalizeIncomingRole(body.role, "junior");
-      if (parsedRole === "__invalid__") return res.status(400).json({ error: "invalid_role" });
-      const role = parsedRole;
       const cli_provider =
         typeof body.cli_provider === "string" &&
         ["claude", "codex", "gemini", "jules", "opencode", "kimi", "copilot", "antigravity", "api"].includes(
@@ -555,89 +512,92 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       if (!hasAgentProfileJsonColumn && "agent_profile" in body) {
         return res.status(400).json({ error: "agent_profile_not_supported" });
       }
-      const parsedAgentProfile = parseAgentProfilePayload(body.agent_profile, role);
+      const parsedAgentProfile = parseAgentProfilePayload(body.agent_profile, "junior");
       const profileOverride =
         typeof parsedAgentProfile.profile?.custom_prompt_override === "string"
           ? parsedAgentProfile.profile.custom_prompt_override.trim() || null
           : null;
       const effectivePersonality = "agent_profile" in body ? profileOverride : personality;
       const agentProfileJson = hasAgentProfileJsonColumn ? parsedAgentProfile.json : null;
+      if ("family" in body && body.family !== null && typeof body.family !== "string") {
+        return res.status(400).json({ error: "invalid_family" });
+      }
+      if ("career_stage" in body && body.career_stage !== null && typeof body.career_stage !== "string") {
+        return res.status(400).json({ error: "invalid_career_stage" });
+      }
+      if ("specialization_key" in body && body.specialization_key !== null && typeof body.specialization_key !== "string") {
+        return res.status(400).json({ error: "invalid_specialization_key" });
+      }
+      if (
+        "execution_capability_profile" in body &&
+        body.execution_capability_profile !== null &&
+        typeof body.execution_capability_profile !== "string"
+      ) {
+        return res.status(400).json({ error: "invalid_execution_capability_profile" });
+      }
+      const authorityLevelInput =
+        typeof body.authority_level === "number" ||
+        typeof body.authority_level === "string" ||
+        body.authority_level === null
+          ? body.authority_level
+          : undefined;
+      if ("authority_level" in body && authorityLevelInput === undefined) {
+        return res.status(400).json({ error: "invalid_authority_level" });
+      }
+      const canonicalIdentity = resolveCanonicalIdentity({
+        department_id,
+        role: "junior",
+        family: body.family,
+        career_stage: body.career_stage,
+        specialization_key: body.specialization_key,
+        authority_level: authorityLevelInput,
+        execution_capability_profile: body.execution_capability_profile,
+        workflow_profile: parsedWorkflowProfile ?? body.workflow_profile,
+      });
+      const role = resolveCompatibilityRoleFromCanonical({
+        career_stage: canonicalIdentity.career_stage,
+        authority_level: canonicalIdentity.authority_level,
+      });
 
       const id = randomUUID();
       try {
-        if (hasAgentWorkflowPackColumn && hasAgentCliAccountPoolColumn) {
-          db.prepare(
-            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key, role, cli_provider, cli_account_pool_id, avatar_emoji, sprite_number, personality)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          ).run(
-            id,
-            name,
-            name_ko,
-            name_ja,
-            name_zh,
-            department_id,
-            workflowPackKey,
-            role,
-            cli_provider,
-            cli_account_pool_id,
-            avatar_emoji,
-            sprite_number,
-            effectivePersonality,
-          );
-        } else if (hasAgentWorkflowPackColumn) {
-          db.prepare(
-            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key, role, cli_provider, avatar_emoji, sprite_number, personality)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          ).run(
-            id,
-            name,
-            name_ko,
-            name_ja,
-            name_zh,
-            department_id,
-            workflowPackKey,
-            role,
-            cli_provider,
-            avatar_emoji,
-            sprite_number,
-            effectivePersonality,
-          );
-        } else if (hasAgentCliAccountPoolColumn) {
-          db.prepare(
-            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, role, cli_provider, cli_account_pool_id, avatar_emoji, sprite_number, personality)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          ).run(
-            id,
-            name,
-            name_ko,
-            name_ja,
-            name_zh,
-            department_id,
-            role,
-            cli_provider,
-            cli_account_pool_id,
-            avatar_emoji,
-            sprite_number,
-            effectivePersonality,
-          );
-        } else {
-          db.prepare(
-            `INSERT INTO agents (id, name, name_ko, name_ja, name_zh, department_id, role, cli_provider, avatar_emoji, sprite_number, personality)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          ).run(
-            id,
-            name,
-            name_ko,
-            name_ja,
-            name_zh,
-            department_id,
-            role,
-            cli_provider,
-            avatar_emoji,
-            sprite_number,
-            effectivePersonality,
-          );
+        const insertFields = ["id", "name", "name_ko", "name_ja", "name_zh", "department_id"];
+        const insertValues: unknown[] = [id, name, name_ko, name_ja, name_zh, department_id];
+        if (hasAgentWorkflowPackColumn) {
+          insertFields.push("workflow_pack_key");
+          insertValues.push(workflowPackKey);
         }
+        insertFields.push("role", "cli_provider");
+        insertValues.push(role, cli_provider);
+        if (hasAgentCliAccountPoolColumn) {
+          insertFields.push("cli_account_pool_id");
+          insertValues.push(cli_account_pool_id);
+        }
+        if (hasAgentFamilyColumn) {
+          insertFields.push("family");
+          insertValues.push(canonicalIdentity.family);
+        }
+        if (hasAgentCareerStageColumn) {
+          insertFields.push("career_stage");
+          insertValues.push(canonicalIdentity.career_stage);
+        }
+        if (hasAgentSpecializationKeyColumn) {
+          insertFields.push("specialization_key");
+          insertValues.push(canonicalIdentity.specialization_key);
+        }
+        if (hasAgentAuthorityLevelColumn) {
+          insertFields.push("authority_level");
+          insertValues.push(canonicalIdentity.authority_level);
+        }
+        if (hasAgentExecutionCapabilityProfileColumn) {
+          insertFields.push("execution_capability_profile");
+          insertValues.push(canonicalIdentity.execution_capability_profile);
+        }
+        insertFields.push("avatar_emoji", "sprite_number", "personality");
+        insertValues.push(avatar_emoji, sprite_number, effectivePersonality);
+        db.prepare(
+          `INSERT INTO agents (${insertFields.join(", ")}) VALUES (${insertFields.map(() => "?").join(", ")})`,
+        ).run(...(insertValues as SQLInputValue[]));
         if (hasAgentWorkflowProfileColumn && workflowProfileJson) {
           db.prepare("UPDATE agents SET workflow_profile = ? WHERE id = ?").run(workflowProfileJson, id);
         }
@@ -652,6 +612,10 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         if (hasAgentRunModeColumn) {
           db.prepare("UPDATE agents SET run_mode = ? WHERE id = ?").run(runMode, id);
         }
+        console.info("[agents] canonical_identity_persisted", {
+          agentId: id,
+          source: canonicalIdentity.canonical_identity_source,
+        });
       } catch (err: any) {
         const msg = String(err?.message ?? err);
         if (msg.includes("FOREIGN KEY constraint failed")) {
@@ -706,7 +670,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       }
       const normalizedCreated = normalizeAgentRecord(created);
       broadcast("agent_created", normalizedCreated);
-      res.status(201).json({ ok: true, agent: normalizedCreated });
+      res.status(201).json({ ok: true, agent: normalizedCreated, warnings });
     } catch (err) {
       console.error("[agents] POST failed:", err);
       res.status(500).json({ error: "internal_error" });
@@ -751,7 +715,8 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     const existing = db.prepare("SELECT * FROM agents WHERE id = ?").get(id) as Record<string, unknown> | undefined;
     if (!existing) return res.status(404).json({ error: "not_found" });
 
-    const body = (req.body ?? {}) as Record<string, unknown>;
+    const body = { ...((req.body ?? {}) as Record<string, unknown>) };
+    const warnings: string[] = [];
     const nextProviderRaw = ("cli_provider" in body ? body.cli_provider : existing.cli_provider) as
       | string
       | null
@@ -891,25 +856,24 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     }
 
     if ("acts_as_planning_leader" in body) {
-      const raw = body.acts_as_planning_leader;
-      if (raw === true || raw === 1 || raw === "1") {
-        body.acts_as_planning_leader = 1;
-      } else if (raw === false || raw === 0 || raw === "0" || raw === null || raw === "" || raw === undefined) {
-        body.acts_as_planning_leader = 0;
-      } else {
-        return res.status(400).json({ error: "invalid_acts_as_planning_leader" });
-      }
+      warnings.push("acts_as_planning_leader_ignored_canonical_authority_only");
+      delete body.acts_as_planning_leader;
+    }
+    if ("workflow_role" in body) {
+      warnings.push("workflow_role_ignored_compatibility_only");
+      delete body.workflow_role;
     }
 
-    const requestedPackKey = parseWorkflowPackKey(body.workflow_pack_key);
     if ("workflow_pack_key" in body) {
-      if (!requestedPackKey) {
-        return res.status(400).json({ error: "invalid_workflow_pack_key" });
-      }
-      body.workflow_pack_key = requestedPackKey;
+      warnings.push("workflow_pack_key_ignored_projection_only");
+      delete body.workflow_pack_key;
+    }
+    if ("force_planning_leader_override" in body) {
+      warnings.push("force_planning_leader_override_ignored");
+      delete body.force_planning_leader_override;
     }
     const existingPackKey = hasAgentWorkflowPackColumn ? parseWorkflowPackKey(existing.workflow_pack_key) : null;
-    const officePackKey = requestedPackKey ?? existingPackKey ?? readActiveOfficeWorkflowPackKey();
+    const officePackKey = existingPackKey ?? readActiveOfficeWorkflowPackKey();
 
     if ("department_id" in body) {
       if (body.department_id === "" || body.department_id === undefined) {
@@ -929,22 +893,60 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     }
 
     if ("role" in body) {
-      const normalizedRole = normalizeIncomingRole(body.role, "junior");
-      if (normalizedRole === "__invalid__") {
-        return res.status(400).json({ error: "invalid_role" });
-      }
-      body.role = normalizedRole;
+      warnings.push("role_ignored_compatibility_only");
+      delete body.role;
     }
 
+    if ("family" in body && body.family !== null && typeof body.family !== "string") {
+      return res.status(400).json({ error: "invalid_family" });
+    }
+    if ("career_stage" in body && body.career_stage !== null && typeof body.career_stage !== "string") {
+      return res.status(400).json({ error: "invalid_career_stage" });
+    }
+    if ("specialization_key" in body) {
+      if (body.specialization_key === "" || body.specialization_key === undefined) {
+        body.specialization_key = null;
+      } else if (body.specialization_key !== null && typeof body.specialization_key !== "string") {
+        return res.status(400).json({ error: "invalid_specialization_key" });
+      } else if (typeof body.specialization_key === "string") {
+        body.specialization_key = body.specialization_key.trim() || null;
+      }
+    }
+    if ("execution_capability_profile" in body) {
+      if (body.execution_capability_profile === "" || body.execution_capability_profile === undefined) {
+        body.execution_capability_profile = null;
+      } else if (body.execution_capability_profile !== null && typeof body.execution_capability_profile !== "string") {
+        return res.status(400).json({ error: "invalid_execution_capability_profile" });
+      } else if (typeof body.execution_capability_profile === "string") {
+        body.execution_capability_profile = body.execution_capability_profile.trim() || null;
+      }
+    }
+    if ("authority_level" in body) {
+      if (body.authority_level === "" || body.authority_level === undefined || body.authority_level === null) {
+        body.authority_level = null;
+      } else if (typeof body.authority_level === "number" && Number.isFinite(body.authority_level)) {
+        body.authority_level = Math.max(0, Math.trunc(body.authority_level));
+      } else if (typeof body.authority_level === "string" && body.authority_level.trim()) {
+        const parsedAuthorityLevel = Number.parseInt(body.authority_level.trim(), 10);
+        if (!Number.isFinite(parsedAuthorityLevel)) {
+          return res.status(400).json({ error: "invalid_authority_level" });
+        }
+        body.authority_level = Math.max(0, parsedAuthorityLevel);
+      } else {
+        return res.status(400).json({ error: "invalid_authority_level" });
+      }
+    }
+
+    let parsedWorkflowProfileForCanonical: ReturnType<typeof parseWorkflowProfilePayload> | null = null;
     if ("workflow_profile" in body) {
       if (!hasAgentWorkflowProfileColumn) {
         return res.status(400).json({ error: "workflow_profile_not_supported" });
       }
-      const parsedWorkflowProfile = parseWorkflowProfilePayload(body.workflow_profile);
-      if (parsedWorkflowProfile === "__invalid__") {
+      parsedWorkflowProfileForCanonical = parseWorkflowProfilePayload(body.workflow_profile);
+      if (parsedWorkflowProfileForCanonical === "__invalid__") {
         return res.status(400).json({ error: "invalid_workflow_profile" });
       }
-      body.workflow_profile = serializeWorkflowProfile(parsedWorkflowProfile);
+      body.workflow_profile = serializeWorkflowProfile(parsedWorkflowProfileForCanonical);
     }
 
     if ("agent_profile" in body) {
@@ -957,13 +959,49 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       delete body.agent_profile;
     }
 
+    const canonicalIdentity = resolveCanonicalIdentity({
+      department_id: "department_id" in body ? body.department_id : existing.department_id,
+      role: "role" in body ? body.role : existing.role,
+      family: "family" in body ? body.family : hasAgentFamilyColumn ? existing.family : null,
+      career_stage:
+        "career_stage" in body ? body.career_stage : hasAgentCareerStageColumn ? existing.career_stage : null,
+      specialization_key:
+        "specialization_key" in body
+          ? body.specialization_key
+          : hasAgentSpecializationKeyColumn
+            ? existing.specialization_key
+            : null,
+      authority_level:
+        "authority_level" in body ? body.authority_level : hasAgentAuthorityLevelColumn ? existing.authority_level : null,
+      execution_capability_profile:
+        "execution_capability_profile" in body
+          ? body.execution_capability_profile
+          : hasAgentExecutionCapabilityProfileColumn
+            ? existing.execution_capability_profile
+            : null,
+      workflow_profile:
+        "workflow_profile" in body
+          ? parsedWorkflowProfileForCanonical ?? body.workflow_profile
+          : existing.workflow_profile,
+    });
+    if (hasAgentFamilyColumn) body.family = canonicalIdentity.family;
+    if (hasAgentCareerStageColumn) body.career_stage = canonicalIdentity.career_stage;
+    if (hasAgentSpecializationKeyColumn) body.specialization_key = canonicalIdentity.specialization_key;
+    if (hasAgentAuthorityLevelColumn) body.authority_level = canonicalIdentity.authority_level;
+    if (hasAgentExecutionCapabilityProfileColumn) {
+      body.execution_capability_profile = canonicalIdentity.execution_capability_profile;
+    }
+    body.role = resolveCompatibilityRoleFromCanonical({
+      career_stage: canonicalIdentity.career_stage,
+      authority_level: canonicalIdentity.authority_level,
+    });
+
     const allowedFields = [
       "name",
       "name_ko",
       "name_ja",
       "name_zh",
       "department_id",
-      ...(hasAgentWorkflowPackColumn ? (["workflow_pack_key"] as const) : []),
       "role",
       "cli_provider",
       "oauth_account_id",
@@ -975,78 +1013,17 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       ...(hasAgentCliAccountPoolColumn ? (["cli_account_pool_id"] as const) : []),
       ...(hasAgentWorkflowProfileColumn ? (["workflow_profile"] as const) : []),
       ...(hasAgentProfileJsonColumn ? (["agent_profile_json"] as const) : []),
+      ...(hasAgentFamilyColumn ? (["family"] as const) : []),
+      ...(hasAgentCareerStageColumn ? (["career_stage"] as const) : []),
+      ...(hasAgentSpecializationKeyColumn ? (["specialization_key"] as const) : []),
+      ...(hasAgentAuthorityLevelColumn ? (["authority_level"] as const) : []),
+      ...(hasAgentExecutionCapabilityProfileColumn ? (["execution_capability_profile"] as const) : []),
       "avatar_emoji",
       "sprite_number",
       "personality",
       "status",
       "current_task_id",
-      "acts_as_planning_leader",
     ];
-    const forcePlanningLeadOverride =
-      body.force_planning_leader_override === true ||
-      body.force_planning_leader_override === 1 ||
-      body.force_planning_leader_override === "1";
-    const requestedPlanningLead = Number(body.acts_as_planning_leader ?? existing.acts_as_planning_leader ?? 0) === 1;
-    let scopedAgentIds: string[] = [];
-
-    if ("acts_as_planning_leader" in body && requestedPlanningLead) {
-      try {
-        scopedAgentIds = resolvePlanningLeaderScopeAgentIds(officePackKey);
-        const conflictLeader = (() => {
-          if (scopedAgentIds.length > 0) {
-            const placeholders = scopedAgentIds.map(() => "?").join(", ");
-            return db
-              .prepare(
-                `
-                  SELECT id, name, name_ko
-                  FROM agents
-                  WHERE id IN (${placeholders})
-                    AND role = 'team_leader'
-                    AND COALESCE(acts_as_planning_leader, 0) = 1
-                    AND id != ?
-                  ORDER BY created_at ASC
-                  LIMIT 1
-                `,
-              )
-              .get(...([...scopedAgentIds, id] as SQLInputValue[])) as
-              | { id?: unknown; name?: unknown; name_ko?: unknown }
-              | undefined;
-          }
-          return db
-            .prepare(
-              `
-                SELECT id, name, name_ko
-                FROM agents
-                WHERE role = 'team_leader'
-                  AND COALESCE(acts_as_planning_leader, 0) = 1
-                  AND id != ?
-                ORDER BY created_at ASC
-                LIMIT 1
-              `,
-            )
-            .get(id) as { id?: unknown; name?: unknown; name_ko?: unknown } | undefined;
-        })();
-
-        if (conflictLeader && !forcePlanningLeadOverride) {
-          return res.status(409).json({
-            error: "planning_leader_exists",
-            pack_key: officePackKey,
-            existing_leader: {
-              id: normalizeText(conflictLeader.id),
-              name: normalizeText(conflictLeader.name),
-              name_ko: normalizeText(conflictLeader.name_ko),
-            },
-          });
-        }
-      } catch (err: any) {
-        const message = String(err?.message ?? err);
-        if (message.includes("no such column: acts_as_planning_leader")) {
-          return res.status(400).json({ error: "planning_leader_flag_not_available" });
-        }
-        console.error("[agents] planning leader conflict check failed:", err);
-        return res.status(500).json({ error: "internal_error" });
-      }
-    }
 
     const updates: string[] = [];
     const params: unknown[] = [];
@@ -1064,52 +1041,15 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
 
     try {
       runInTransaction(() => {
-        if ("acts_as_planning_leader" in body && requestedPlanningLead) {
-          if (scopedAgentIds.length <= 0) {
-            scopedAgentIds = resolvePlanningLeaderScopeAgentIds(officePackKey);
-          }
-          if (scopedAgentIds.length > 0) {
-            const placeholders = scopedAgentIds.map(() => "?").join(", ");
-            db.prepare(
-              `
-                UPDATE agents
-                SET acts_as_planning_leader = 0
-                WHERE id IN (${placeholders})
-                  AND id != ?
-                  AND COALESCE(acts_as_planning_leader, 0) = 1
-              `,
-            ).run(...([...scopedAgentIds, id] as SQLInputValue[]));
-          } else {
-            db.prepare(
-              `
-                UPDATE agents
-                SET acts_as_planning_leader = 0
-                WHERE id != ?
-                  AND role = 'team_leader'
-                  AND COALESCE(acts_as_planning_leader, 0) = 1
-              `,
-            ).run(id);
-          }
-        }
-
         params.push(id);
         db.prepare(`UPDATE agents SET ${updates.join(", ")} WHERE id = ?`).run(...(params as SQLInputValue[]));
-
-        if ("acts_as_planning_leader" in body) {
-          syncPlanningLeadFlagToPackProfile({
-            packKey: officePackKey,
-            targetAgentId: id,
-            enabled: requestedPlanningLead,
-            scopeAgentIds: scopedAgentIds,
-          });
-        }
+        console.info("[agents] canonical_identity_persisted", {
+          agentId: id,
+          source: canonicalIdentity.canonical_identity_source,
+        });
       });
     } catch (err: any) {
-      const message = String(err?.message ?? err);
-      if (message.includes("no such column: acts_as_planning_leader")) {
-        return res.status(400).json({ error: "planning_leader_flag_not_available" });
-      }
-      console.error("[agents] planning leader update failed:", err);
+      console.error("[agents] canonical update failed:", err);
       return res.status(500).json({ error: "internal_error" });
     }
 
@@ -1129,6 +1069,6 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
     }
     const normalizedUpdated = normalizeAgentRecord(updated);
     broadcast("agent_status", normalizedUpdated);
-    res.json({ ok: true, agent: normalizedUpdated });
+    res.json({ ok: true, agent: normalizedUpdated, warnings });
   });
 }

@@ -15,6 +15,10 @@ const TAB_ITEMS: Array<{ key: SettingsTab; label: (t: TFunction) => string }> = 
     key: "workflow-packs",
     label: (t) => t({ ko: "워크플로 팩", en: "Workflow Packs", ja: "Workflow Packs", zh: "Workflow Packs" }),
   },
+  {
+    key: "canonical",
+    label: (t) => t({ ko: "정책 인스펙터", en: "Policy Inspector", ja: "Policy Inspector", zh: "Policy Inspector" }),
+  },
   { key: "gateway", label: (t) => t({ ko: "채널 메시지", en: "Channel", ja: "チャネルメッセージ", zh: "频道消息" }) },
 ];
 

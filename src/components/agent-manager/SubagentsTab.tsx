@@ -61,7 +61,6 @@ export default function SubagentsTab({
 }: {
   tr: Translator;
   locale: string;
-  isKo: boolean;
   departments: Department[];
   deptTab: string;
   setDeptTab: (deptId: string) => void;

@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import {
   discoverVideoArtifact,
@@ -54,6 +54,44 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
     hasVisibleDiffSummary,
   } = deps;
 
+  function parseWorkflowMeta(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw !== "string") return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function mergeWorkflowMeta(taskId: string, mutate: (meta: Record<string, unknown>) => void): void {
+    const row = db.prepare("SELECT workflow_meta_json FROM tasks WHERE id = ?").get(taskId) as
+      | { workflow_meta_json: string | null }
+      | undefined;
+    const current = row ? parseWorkflowMeta(row.workflow_meta_json) : {};
+    const next = { ...current };
+    mutate(next);
+    db.prepare("UPDATE tasks SET workflow_meta_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(next), nowMs(), taskId);
+  }
+
+  function setReviewConsentMetaForRunComplete(taskId: string): void {
+    const enteredReviewAt = nowMs();
+    mergeWorkflowMeta(taskId, (meta) => {
+      const existing = meta.review_consent;
+      const current = existing && typeof existing === "object" ? (existing as Record<string, unknown>) : {};
+      meta.review_consent = {
+        ...current,
+        started_by: "run_complete",
+        entered_review_at: enteredReviewAt,
+        stage: "awaiting_review",
+        state: "awaiting_review",
+        blocked: false,
+        blocked_by: [],
+      };
+    });
+  }
+
   function handleTaskRunComplete(taskId: string, exitCode: number): void {
     activeProcesses.delete(taskId);
     stopProgressTimer(taskId);
@@ -94,7 +132,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
       return;
     }
 
-    // Clean up Codex thread→subtask mappings for this task's subtasks
+    // Clean up Codex thread?뭩ubtask mappings for this task's subtasks
     for (const [tid, itemId] of codexThreadToSubtask) {
       const row = db.prepare("SELECT id FROM subtasks WHERE cli_tool_use_id = ? AND task_id = ?").get(itemId, taskId);
       if (row) codexThreadToSubtask.delete(tid);
@@ -219,6 +257,33 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         projectCandidates,
       };
     };
+    const failVideoFinalArtifactGate = (artifactProbe: ReturnType<typeof probeVideoArtifact>) => {
+      finalExitCode = 87;
+      appendTaskLog(
+        taskId,
+        "system",
+        `Video artifact gate failed: [VIDEO_FINAL_RENDER] output missing/empty. checked=${artifactProbe.projectCandidates.join(", ")}`,
+      );
+      if (!task) return;
+      notifyCeo(
+        pickL(
+          l(
+            [
+              `'${task.title}'의 최종 렌더 결과물이 확인되지 않아 실행을 실패 처리했습니다. Remotion으로 출력 파일을 생성한 뒤 다시 실행해 주세요.`,
+            ],
+            [
+              `Marked '${task.title}' as failed because final render output is missing/empty. Generate the file with Remotion and retry.`,
+            ],
+            [
+              `'${task.title}' の最終レンダー出力が見つからないため、実行を失敗として処理しました。Remotion で出力ファイルを生成して再実行してください。`,
+            ],
+            [`'${task.title}' 未检测到最终渲染产物，已将本次执行标记为失败。请使用 Remotion 生成输出文件后重试。`],
+          ),
+          resolveLang(task.description ?? task.title),
+        ),
+        taskId,
+      );
+    };
     if (finalExitCode !== 0 && isVideoFinalRenderTask) {
       const remotionGate = evaluateRemotionOnlyGateFromLogFiles({ logsDir, taskIds: [taskId] });
       const artifactProbe = probeVideoArtifact();
@@ -252,6 +317,12 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
           "system",
           `Video render engine gate passed: Remotion evidence detected (${remotionGate.remotionEvidenceTaskIds.join(", ")})`,
         );
+      }
+    }
+    if (finalExitCode === 0 && isVideoFinalRenderTask) {
+      const artifactProbe = probeVideoArtifact();
+      if (!artifactProbe.videoArtifactReady) {
+        failVideoFinalArtifactGate(artifactProbe);
       }
     }
 
@@ -360,16 +431,16 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
               pickL(
                 l(
                   [
-                    `'${task.title}' 는 문서화/협업 정리가 남아 있어 영상 품질 게이트를 Review 단계에서 이어서 확인합니다. (미완료 subtask ${openSubtasks}건, 협업 task ${openChildTasks}건)`,
+                    `'${task.title}'에 문서/협업 작업이 남아 있어 영상 품질 게이트를 Review 단계에서 이어서 확인합니다. (미완료 subtask ${openSubtasks}건, 협업 task ${openChildTasks}건)`,
                   ],
                   [
                     `'${task.title}' still has documentation/collaboration work pending, so video quality gating will continue in Review stage. (open subtasks: ${openSubtasks}, open collaboration tasks: ${openChildTasks})`,
                   ],
                   [
-                    `'${task.title}' は文書化/協業の整理が残っているため、動画品質ゲートは Review 段階で継続確認します。（未完了 subtask: ${openSubtasks}件、協業 task: ${openChildTasks}件）`,
+                    `'${task.title}' は文書/協업作業が残っているため、動画品質ゲートを Review 段階で継続確認します。(未完了 subtask ${openSubtasks} 件、協업 task ${openChildTasks} 件)`,
                   ],
                   [
-                    `'${task.title}' 仍有文档与协作收口工作，视频质量门禁将转入 Review 阶段继续检查。（未完成 subtask：${openSubtasks}，协作 task：${openChildTasks}）`,
+                    `'${task.title}' 仍有文档/协作任务未完成，因此视频质量门禁将在 Review 阶段继续确认。（未完成 subtask ${openSubtasks} 个，协作 task ${openChildTasks} 个）`,
                   ],
                 ),
                 resolveLang(task.description ?? task.title),
@@ -383,30 +454,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
           const artifactProbe = probeVideoArtifact();
           if (!artifactProbe.videoArtifactReady) {
             if (isVideoFinalRenderTask) {
-              finalExitCode = 87;
-              appendTaskLog(
-                taskId,
-                "system",
-                `Video artifact gate failed: [VIDEO_FINAL_RENDER] output missing/empty. checked=${artifactProbe.projectCandidates.join(", ")}`,
-              );
-              notifyCeo(
-                pickL(
-                  l(
-                    [
-                      `'${task.title}' 의 최종 렌더 산출물이 확인되지 않아 실행을 실패 처리했습니다. Remotion으로 출력 파일을 생성한 뒤 다시 실행해 주세요.`,
-                    ],
-                    [
-                      `Marked '${task.title}' as failed because final render output is missing/empty. Generate the file with Remotion and retry.`,
-                    ],
-                    [
-                      `'${task.title}' の最終レンダー成果物が未確認のため失敗処理しました。Remotion で出力を生成後に再実行してください。`,
-                    ],
-                    [`'${task.title}' 最终渲染产物缺失/为空，已判定本次执行失败。请用 Remotion 重新生成后再执行。`],
-                  ),
-                  resolveLang(task.description ?? task.title),
-                ),
-                taskId,
-              );
+              failVideoFinalArtifactGate(artifactProbe);
             } else {
               appendTaskLog(
                 taskId,
@@ -417,16 +465,16 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
                 pickL(
                   l(
                     [
-                      `'${task.title}' 영상 산출물이 아직 확인되지 않았습니다. 검토 단계에서 \`${artifactProbe.videoArtifactSpec.relativePath}\` (또는 legacy \`${artifactProbe.videoArtifactSpec.legacyRelativePath}\`) 확인 후 승인해야 합니다.`,
+                      `'${task.title}'의 영상 결과물이 아직 확인되지 않았습니다. 검토 단계에서 \`${artifactProbe.videoArtifactSpec.relativePath}\` (또는 legacy \`${artifactProbe.videoArtifactSpec.legacyRelativePath}\`) 확인 후 승인해야 합니다.`,
                     ],
                     [
                       `Video artifact for '${task.title}' is not verified yet. In review stage, approval requires \`${artifactProbe.videoArtifactSpec.relativePath}\` (or legacy \`${artifactProbe.videoArtifactSpec.legacyRelativePath}\`).`,
                     ],
                     [
-                      `'${task.title}' の動画成果物はまだ未確認です。レビュー段階で \`${artifactProbe.videoArtifactSpec.relativePath}\`（または legacy \`${artifactProbe.videoArtifactSpec.legacyRelativePath}\`）確認後に承認してください。`,
+                      `'${task.title}' の動画成果物は未確認です。レビュー段階で \`${artifactProbe.videoArtifactSpec.relativePath}\`（または legacy \`${artifactProbe.videoArtifactSpec.legacyRelativePath}\`）を確認してから承認してください。`,
                     ],
                     [
-                      `任务 '${task.title}' 的视频产物尚未验证。请在 Review 阶段确认 \`${artifactProbe.videoArtifactSpec.relativePath}\`（或兼容路径 \`${artifactProbe.videoArtifactSpec.legacyRelativePath}\`）后再审批。`,
+                      `任务 '${task.title}' 的视频产物尚未验证。请在 Review 阶段确认 \`${artifactProbe.videoArtifactSpec.relativePath}\`（或 legacy \`${artifactProbe.videoArtifactSpec.legacyRelativePath}\`）后再批准。`,
                     ],
                   ),
                   resolveLang(task.description ?? task.title),
@@ -449,7 +497,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
             source_task_id: task.source_task_id,
             assigned_agent_id: task.assigned_agent_id,
           },
-          "Status → done (report design checkpoint completed; review meeting skipped)",
+          "Status done (report design checkpoint completed; review meeting skipped)",
         );
         if (parentTaskId) {
           resumeReportAfterDesignCheckpoint(parentTaskId, taskId);
@@ -490,7 +538,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
             source_task_id: task.source_task_id,
             assigned_agent_id: task.assigned_agent_id,
           },
-          "Status → done (report workflow: final PPT regenerated; second design confirmation skipped)",
+          "Status done (report workflow: final PPT regenerated; second design confirmation skipped)",
         );
         return;
       }
@@ -505,17 +553,18 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
             source_task_id: task.source_task_id,
             assigned_agent_id: task.assigned_agent_id,
           },
-          "Status → done (report workflow: review meeting skipped for documentation/report task)",
+          "Status done (report workflow: review meeting skipped for documentation/report task)",
         );
         return;
       }
     }
 
     if (finalExitCode === 0) {
-      // ── SUCCESS: Move to 'review' for team leader check ──
+      setReviewConsentMetaForRunComplete(taskId);
+      // ?? SUCCESS: Move to 'review' for team leader check ??
       db.prepare("UPDATE tasks SET status = 'review', updated_at = ? WHERE id = ?").run(t, taskId);
 
-      appendTaskLog(taskId, "system", "Status → review (team leader review pending)");
+      appendTaskLog(taskId, "system", "Status -> review (team leader review pending)");
 
       const updatedTask = db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId);
       broadcast("task_update", updatedTask);
@@ -529,21 +578,21 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         appendTaskLog(
           taskId,
           "system",
-          "Status → review (delegated collaboration task waiting for parent consolidation)",
+          "Status -> review (delegated collaboration task waiting for parent consolidation)",
         );
         notifyCeo(
           pickL(
             l(
               [
-                `'${task.title}' 협업 하위 태스크가 Review 대기 상태로 전환되었습니다. 상위 업무의 전체 취합 회의에서 일괄 검토/머지합니다.`,
+                `'${task.title}' 협업 하위 태스크가 Review 대기 상태로 전환되었습니다. 상위 태스크의 단일 취합 검토 회의에서 최종 반영됩니다.`,
               ],
               [
                 `'${task.title}' collaboration child task is now waiting in Review. It will be consolidated in the parent task's single review/merge meeting.`,
               ],
               [
-                `'${task.title}' の協業子タスクはReview待機に入りました。上位タスクの一括レビュー/マージ会議で統合処理します。`,
+                `'${task.title}' の協업子タスクは Review 待機に入りました。親タスクの単一レビュー/マージ会議で最終反映されます。`,
               ],
-              [`'${task.title}' 协作子任务已进入 Review 等待。将在上级任务的一次性评审/合并会议中统一处理。`],
+              [`'${task.title}' 的协作子任务已进入 Review 等待状态，将在父任务的单次评审/合并会议中统一处理。`],
             ),
             sourceLang,
           ),
@@ -572,13 +621,13 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         const leader = findTeamLeader(task.department_id);
         const leaderName = leader
           ? getAgentDisplayName(leader, lang)
-          : pickL(l(["팀장"], ["Team Lead"], ["チームリーダー"], ["组长"]), lang);
+          : pickL(l(["팀장"], ["Team Lead"], ["チームリード"], ["组长"]), lang);
         notifyCeo(
           pickL(
             l(
               [`${leaderName}이(가) '${task.title}' 결과를 검토 중입니다.`],
               [`${leaderName} is reviewing the result for '${task.title}'.`],
-              [`${leaderName}が '${task.title}' の成果をレビュー中です。`],
+              [`${leaderName} が '${task.title}' の結果をレビュー中です。`],
               [`${leaderName} 正在审核 '${task.title}' 的结果。`],
             ),
             lang,
@@ -592,7 +641,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         if (!task) return;
         const leader = findTeamLeader(task.department_id);
         if (!leader) {
-          // No team leader — auto-approve
+          // No team leader -> auto-approve
           finishReview(taskId, task.title);
           return;
         }
@@ -626,29 +675,29 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         let reportContent = reportBody
           ? pickL(
               l(
-                [`대표님, '${task.title}' 업무 완료 보고드립니다.\n\n📋 결과:\n${reportBody}`],
-                [`CEO, reporting completion for '${task.title}'.\n\n📋 Result:\n${reportBody}`],
-                [`CEO、'${task.title}' の完了をご報告します。\n\n📋 結果:\n${reportBody}`],
-                [`CEO，汇报 '${task.title}' 已完成。\n\n📋 结果:\n${reportBody}`],
+                [`CEO님, '${task.title}' 작업 완료 보고드립니다.\n\n결과 요약:\n${reportBody}`],
+                [`CEO, reporting completion for '${task.title}'.\n\nResult Summary:\n${reportBody}`],
+                [`CEO、'${task.title}' の完了を報告します。\n\n結果サマリ:\n${reportBody}`],
+                [`CEO，现报告 '${task.title}' 已完成。\n\n结果摘要:\n${reportBody}`],
               ),
               reportLang,
             )
           : pickL(
               l(
-                [`대표님, '${task.title}' 업무 완료 보고드립니다. 작업이 성공적으로 마무리되었습니다.`],
+                [`CEO님, '${task.title}' 작업 완료 보고드립니다. 작업이 성공적으로 마무리되었습니다.`],
                 [`CEO, reporting completion for '${task.title}'. The work has been finished successfully.`],
-                [`CEO、'${task.title}' の完了をご報告します。作業は正常に完了しました。`],
-                [`CEO，汇报 '${task.title}' 已完成。任务已成功结束。`],
+                [`CEO、'${task.title}' の完了を報告します。作業は正常に完了しました。`],
+                [`CEO，现报告 '${task.title}' 已完成，任务已成功结束。`],
               ),
               reportLang,
             );
 
         const subtaskProgressLabel = pickL(
           l(
-            ["📌 보완/협업 진행 요약"],
-            ["📌 Remediation/Collaboration Progress"],
-            ["📌 補完/協業 進捗サマリー"],
-            ["📌 整改/协作进度摘要"],
+            ["보완/협업 진행 요약"],
+            ["Remediation/Collaboration Progress"],
+            ["修正/協업進捗サマリ"],
+            ["修复/协作进度摘要"],
           ),
           reportLang,
         );
@@ -660,10 +709,10 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         if (hasVisibleDiffSummary(diffSummary)) {
           reportContent += pickL(
             l(
-              [`\n\n📝 변경사항 (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
-              [`\n\n📝 Changes (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
-              [`\n\n📝 変更点 (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
-              [`\n\n📝 变更内容 (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
+              [`\n\n변경 사항 (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
+              [`\n\nChanges (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
+              [`\n\n変更内容 (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
+              [`\n\n变更内容 (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
             ),
             reportLang,
           );
@@ -671,13 +720,13 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
 
         sendAgentMessage(leader, reportContent, "report", "all", null, taskId);
 
-        // After another 2-3s: team leader approves → move to done
+      // After another 2-3s: team leader approves - move to done
         setTimeout(() => {
           finishReview(taskId, task.title);
         }, 2500);
       }, 2500);
     } else {
-      // ── FAILURE: Reset to inbox, team leader reports failure ──
+      // ?? FAILURE: Reset to inbox, team leader reports failure ??
       db.prepare("UPDATE tasks SET status = 'inbox', updated_at = ? WHERE id = ?").run(t, taskId);
 
       if (task?.source_task_id) {
@@ -687,7 +736,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
       const updatedTask = db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId);
       broadcast("task_update", updatedTask);
 
-      // Clean up worktree on failure — failed work shouldn't persist
+      // Clean up worktree on failure - failed work shouldn't persist
       const failWtInfo = taskWorktrees.get(taskId);
       if (failWtInfo) {
         cleanupWorktree(failWtInfo.projectPath, taskId);
@@ -716,16 +765,16 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
               ? pickL(
                   l(
                     [
-                      `대표님, '${task.title}' 작업에 문제가 발생했습니다 (종료코드: ${finalExitCode}).\n\n❌ 오류 내용:\n${errorBody}\n\n재배정하거나 업무 내용을 수정한 후 다시 시도해주세요.`,
+                      `CEO님, '${task.title}' 작업 중 문제가 발생했습니다 (종료코드: ${finalExitCode}).\n\n오류 내용:\n${errorBody}\n\n에이전트를 재배정하거나 작업 내용을 수정한 뒤 다시 시도해 주세요.`,
                     ],
                     [
-                      `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}).\n\n❌ Error:\n${errorBody}\n\nPlease reassign the agent or revise the task, then try again.`,
+                      `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}).\n\nError:\n${errorBody}\n\nPlease reassign the agent or revise the task, then try again.`,
                     ],
                     [
-                      `CEO、'${task.title}' の処理中に問題が発生しました (終了コード: ${finalExitCode})。\n\n❌ エラー内容:\n${errorBody}\n\n担当再割り当てまたはタスク内容を修正して再試行してください。`,
+                      `CEO、'${task.title}' の実行中に問題が発生しました (終了コード: ${finalExitCode})。\n\nエラー内容:\n${errorBody}\n\n担当エージェントの再割り当て、またはタスク内容修正後に再実行してください。`,
                     ],
                     [
-                      `CEO，'${task.title}' 执行时发生问题（退出码：${finalExitCode}）。\n\n❌ 错误内容:\n${errorBody}\n\n请重新分配代理或修改任务后重试。`,
+                      `CEO，'${task.title}' 执行过程中发生问题（退出码: ${finalExitCode}）。\n\n错误信息:\n${errorBody}\n\n请重新分配代理或调整任务后再试。`,
                     ],
                   ),
                   failLang,
@@ -733,16 +782,16 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
               : pickL(
                   l(
                     [
-                      `대표님, '${task.title}' 작업에 문제가 발생했습니다 (종료코드: ${finalExitCode}). 에이전트를 재배정하거나 업무 내용을 수정한 후 다시 시도해주세요.`,
+                      `CEO님, '${task.title}' 작업 중 문제가 발생했습니다 (종료코드: ${finalExitCode}). 에이전트를 재배정하거나 작업 내용을 수정한 뒤 다시 시도해 주세요.`,
                     ],
                     [
                       `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}). Please reassign the agent or revise the task, then try again.`,
                     ],
                     [
-                      `CEO、'${task.title}' の処理中に問題が発生しました (終了コード: ${finalExitCode})。担当再割り当てまたはタスク内容を修正して再試行してください。`,
+                      `CEO、'${task.title}' の実行中に問題が発生しました (終了コード: ${finalExitCode})。担当エージェントの再割り当て、またはタスク内容修正後に再実行してください。`,
                     ],
                     [
-                      `CEO，'${task.title}' 执行时发生问题（退出码：${finalExitCode}）。请重新分配代理或修改任务后重试。`,
+                      `CEO，'${task.title}' 执行过程中发生问题（退出码: ${finalExitCode}）。请重新分配代理或调整任务后再试。`,
                     ],
                   ),
                   failLang,
@@ -757,8 +806,8 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
             l(
               [`'${task.title}' 작업 실패 (exit code: ${finalExitCode}).`],
               [`Task '${task.title}' failed (exit code: ${finalExitCode}).`],
-              [`'${task.title}' のタスクが失敗しました (exit code: ${finalExitCode})。`],
-              [`任务 '${task.title}' 失败（exit code: ${finalExitCode}）。`],
+              [`'${task.title}' の実行に失敗しました (exit code: ${finalExitCode}).`],
+              [`任务 '${task.title}' 执行失败 (exit code: ${finalExitCode}).`],
             ),
             failLang,
           ),

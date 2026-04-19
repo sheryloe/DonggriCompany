@@ -16,11 +16,13 @@ import type {
 export async function getMessages(params: {
   receiver_type?: ReceiverType;
   receiver_id?: string;
+  project_id?: string;
   limit?: number;
 }): Promise<Message[]> {
   const sp = new URLSearchParams();
   if (params.receiver_type) sp.set("receiver_type", params.receiver_type);
   if (params.receiver_id) sp.set("receiver_id", params.receiver_id);
+  if (params.project_id) sp.set("project_id", params.project_id);
   if (params.limit) sp.set("limit", String(params.limit));
   const q = sp.toString();
   const j = await request<{ messages: Message[] }>(`/api/messages${q ? "?" + q : ""}`);

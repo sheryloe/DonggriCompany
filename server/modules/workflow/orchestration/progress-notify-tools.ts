@@ -53,16 +53,22 @@ export function createProgressNotifyTools(deps: CreateProgressNotifyToolsDeps) {
   function notifyCeo(content: string, taskId: string | null = null, messageType: string = "status_update"): void {
     const msgId = randomUUID();
     const t = nowMs();
+    const projectId =
+      taskId != null
+        ? ((db.prepare("SELECT project_id FROM tasks WHERE id = ?").get(taskId) as { project_id?: string | null } | undefined)
+            ?.project_id ?? null)
+        : null;
     db.prepare(
-      `INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, created_at)
-   VALUES (?, 'system', NULL, 'all', NULL, ?, ?, ?, ?)`,
-    ).run(msgId, content, messageType, taskId, t);
+      `INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, project_id, created_at)
+   VALUES (?, 'system', NULL, 'all', NULL, ?, ?, ?, ?, ?)`,
+    ).run(msgId, content, messageType, taskId, projectId, t);
     broadcast("new_message", {
       id: msgId,
       sender_type: "system",
       content,
       message_type: messageType,
       task_id: taskId,
+      project_id: projectId,
       created_at: t,
     });
   }

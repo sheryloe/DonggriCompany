@@ -5,6 +5,7 @@ import type { AgentRow, OneShotRunOptions, OneShotRunResult } from "./conversati
 import { resolveCliAccountPoolEnv } from "../agents/cli-account-pool-env.ts";
 import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../agents/provider-policy-resolver.ts";
+import { previewCanonicalRouting } from "../../company/canonical-policy.ts";
 
 type CreateOneShotRunnerDeps = {
   db: any;
@@ -222,6 +223,7 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
           provider,
           cliAccountPoolId: julesOneShotFallback ? null : ((agent as any).cli_account_pool_id ?? null),
           platform: process.platform,
+          selectionSeed: runId,
         });
         if (!poolEnv.ok) {
           if (julesOneShotFallback) {
@@ -229,9 +231,16 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
           }
           throw new Error(`cli account pool error: ${poolEnv.reason}`);
         }
+        const canonicalExecutionPolicy = previewCanonicalRouting({
+          text: prompt,
+          projectPath,
+          providerModelConfig: getProviderModelConfig(),
+          defaultProvider: provider,
+        });
         const executionPolicy = resolveProviderExecutionPolicy({
           provider,
           providerModelConfig: getProviderModelConfig(),
+          canonicalOverride: canonicalExecutionPolicy,
         });
         const model = executionPolicy.model;
         const reasoningLevel = executionPolicy.reasoningLevel;

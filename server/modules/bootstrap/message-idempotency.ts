@@ -24,6 +24,7 @@ export type StoredMessage = {
   content: string;
   message_type: string;
   task_id: string | null;
+  project_id: string | null;
   idempotency_key: string | null;
   created_at: number;
 };
@@ -36,6 +37,7 @@ export type MessageInsertInput = {
   content: string;
   messageType: string;
   taskId?: string | null;
+  projectId?: string | null;
   idempotencyKey?: string | null;
 };
 
@@ -56,7 +58,12 @@ export class StorageBusyError extends Error {
   }
 }
 
-function isSameMessagePayload(existing: StoredMessage, input: MessageInsertInput, taskId: string | null): boolean {
+function isSameMessagePayload(
+  existing: StoredMessage,
+  input: MessageInsertInput,
+  taskId: string | null,
+  projectId: string | null,
+): boolean {
   return (
     existing.sender_type === input.senderType &&
     existing.sender_id === input.senderId &&
@@ -64,7 +71,8 @@ function isSameMessagePayload(existing: StoredMessage, input: MessageInsertInput
     existing.receiver_id === input.receiverId &&
     existing.content === input.content &&
     existing.message_type === input.messageType &&
-    existing.task_id === taskId
+    existing.task_id === taskId &&
+    existing.project_id === projectId
   );
 }
 
@@ -106,6 +114,7 @@ function findMessageByIdempotencyKey(db: DbLike, idempotencyKey: string): Stored
     .prepare(
       `
     SELECT id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, idempotency_key, created_at
+      , project_id
     FROM messages
     WHERE idempotency_key = ?
     LIMIT 1
@@ -182,10 +191,11 @@ export function createMessageIdempotencyTools(deps: MessageIdempotencyDeps) {
   function insertMessageWithIdempotencyOnce(input: MessageInsertInput): { message: StoredMessage; created: boolean } {
     const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
     const taskId = input.taskId ?? null;
+    const projectId = input.projectId ?? null;
     if (idempotencyKey) {
       const existing = findMessageByIdempotencyKey(db, idempotencyKey);
       if (existing) {
-        if (!isSameMessagePayload(existing, input, taskId)) {
+        if (!isSameMessagePayload(existing, input, taskId, projectId)) {
           throw new IdempotencyConflictError(idempotencyKey);
         }
         return { message: existing, created: false };
@@ -199,9 +209,9 @@ export function createMessageIdempotencyTools(deps: MessageIdempotencyDeps) {
         `
       INSERT INTO messages (
         id, sender_type, sender_id, receiver_type, receiver_id,
-        content, message_type, task_id, idempotency_key, created_at
+        content, message_type, task_id, project_id, idempotency_key, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       ).run(
         id,
@@ -212,6 +222,7 @@ export function createMessageIdempotencyTools(deps: MessageIdempotencyDeps) {
         input.content,
         input.messageType,
         taskId,
+        projectId,
         idempotencyKey,
         createdAt,
       );
@@ -219,7 +230,7 @@ export function createMessageIdempotencyTools(deps: MessageIdempotencyDeps) {
       if (idempotencyKey && isIdempotencyUniqueViolation(err)) {
         const existing = findMessageByIdempotencyKey(db, idempotencyKey);
         if (existing) {
-          if (!isSameMessagePayload(existing, input, taskId)) {
+          if (!isSameMessagePayload(existing, input, taskId, projectId)) {
             throw new IdempotencyConflictError(idempotencyKey);
           }
           return { message: existing, created: false };
@@ -238,6 +249,7 @@ export function createMessageIdempotencyTools(deps: MessageIdempotencyDeps) {
         content: input.content,
         message_type: input.messageType,
         task_id: taskId,
+        project_id: projectId,
         idempotency_key: idempotencyKey,
         created_at: createdAt,
       },

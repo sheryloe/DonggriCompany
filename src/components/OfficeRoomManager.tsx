@@ -1,9 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
 
-/* ================================================================== */
-/*  Types                                                               */
-/* ================================================================== */
-
 type DeptTheme = { floor1: number; floor2: number; wall: number; accent: number };
 
 export interface OfficeRoomManagerProps {
@@ -14,10 +10,6 @@ export interface OfficeRoomManagerProps {
   onClose: () => void;
   language: "ko" | "en" | "ja" | "zh";
 }
-
-/* ================================================================== */
-/*  Constants                                                           */
-/* ================================================================== */
 
 const DEFAULT_THEMES: Record<string, DeptTheme> = {
   dev: { floor1: 0xd8e8f5, floor2: 0xcce1f2, wall: 0x6c96b7, accent: 0x5a9fd4 },
@@ -33,21 +25,19 @@ const DEFAULT_THEMES: Record<string, DeptTheme> = {
 const DEFAULT_TONE = 50;
 
 const labels = {
-  title: { ko: "사무실 관리", en: "Office Manager", ja: "オフィス管理", zh: "办公室管理" },
-  accent: { ko: "메인 색상", en: "Main Color", ja: "メインカラー", zh: "主色调" },
+  title: { ko: "오피스 관리", en: "Office Manager", ja: "オフィス管理", zh: "办公室管理" },
+  accent: { ko: "메인 색상", en: "Main Color", ja: "メインカラー", zh: "主色" },
   tone: { ko: "톤 (밝기)", en: "Tone (Brightness)", ja: "トーン（明るさ）", zh: "色调（亮度）" },
   reset: { ko: "초기화", en: "Reset", ja: "リセット", zh: "重置" },
-  resetAll: { ko: "전체 초기화", en: "Reset All", ja: "全てリセット", zh: "全部重置" },
+  resetAll: { ko: "전체 초기화", en: "Reset All", ja: "全体リセット", zh: "全部重置" },
   close: { ko: "닫기", en: "Close", ja: "閉じる", zh: "关闭" },
   presets: { ko: "프리셋", en: "Presets", ja: "プリセット", zh: "预设" },
+  light: { ko: "밝음", en: "Light", ja: "明", zh: "亮" },
+  dark: { ko: "어두움", en: "Dark", ja: "暗", zh: "暗" },
 };
 
-/* ================================================================== */
-/*  Color helpers                                                       */
-/* ================================================================== */
-
 function numToHex(n: number): string {
-  return "#" + n.toString(16).padStart(6, "0");
+  return `#${n.toString(16).padStart(6, "0")}`;
 }
 
 function hexToNum(h: string): number {
@@ -56,12 +46,12 @@ function hexToNum(h: string): number {
 
 function blendColor(from: number, to: number, t: number): number {
   const c = Math.max(0, Math.min(1, t));
-  const fr = (from >> 16) & 0xff,
-    fg = (from >> 8) & 0xff,
-    fb = from & 0xff;
-  const tr = (to >> 16) & 0xff,
-    tg = (to >> 8) & 0xff,
-    tb = to & 0xff;
+  const fr = (from >> 16) & 0xff;
+  const fg = (from >> 8) & 0xff;
+  const fb = from & 0xff;
+  const tr = (to >> 16) & 0xff;
+  const tg = (to >> 8) & 0xff;
+  const tb = to & 0xff;
   return (
     (Math.round(fr + (tr - fr) * c) << 16) | (Math.round(fg + (tg - fg) * c) << 8) | Math.round(fb + (tb - fb) * c)
   );
@@ -69,38 +59,28 @@ function blendColor(from: number, to: number, t: number): number {
 
 const TONE_PRESET_STEPS = [15, 25, 35, 45, 55, 65, 75, 85] as const;
 
-function generateTonePresets(accent: number): Array<{ tone: number; swatch: number }> {
-  return TONE_PRESET_STEPS.map((tone) => ({
-    tone,
-    swatch: deriveTheme(accent, tone).wall,
-  }));
-}
-
 function deriveTheme(accent: number, tone: number): DeptTheme {
   const t = tone / 100;
   return {
     accent,
-    floor1: blendColor(accent, 0xffffff, 0.85 - t * 0.004 * 100),
-    floor2: blendColor(accent, 0xffffff, 0.78 - t * 0.004 * 100),
-    wall: blendColor(accent, 0x888888, 0.3 + t * 0.004 * 100),
+    floor1: blendColor(accent, 0xffffff, 0.85 - t * 0.4),
+    floor2: blendColor(accent, 0xffffff, 0.78 - t * 0.4),
+    wall: blendColor(accent, 0x888888, 0.3 + t * 0.4),
   };
 }
 
-/* Reverse-infer a tone value from an existing theme (best-effort, default 50) */
-function inferTone(theme: DeptTheme): number {
-  // We try to infer from floor1 blend ratio: floor1 = blend(accent, white, 0.85 - tone*0.4)
-  // ratio r = (0.85 - tone*0.4) => tone = (0.85 - r) / 0.4
-  const ar = (theme.accent >> 16) & 0xff;
-  const af = (theme.floor1 >> 16) & 0xff;
-  if (ar === 0xff) return DEFAULT_TONE; // avoid degenerate
-  const r = (af - ar) / (0xff - ar);
-  const tone = Math.round(((0.85 - r) / 0.4) * 100);
-  return Math.max(0, Math.min(100, isNaN(tone) ? DEFAULT_TONE : tone));
+function generateTonePresets(accent: number): Array<{ tone: number; swatch: number }> {
+  return TONE_PRESET_STEPS.map((tone) => ({ tone, swatch: deriveTheme(accent, tone).wall }));
 }
 
-/* ================================================================== */
-/*  Per-department state                                                */
-/* ================================================================== */
+function inferTone(theme: DeptTheme): number {
+  const ar = (theme.accent >> 16) & 0xff;
+  const af = (theme.floor1 >> 16) & 0xff;
+  if (ar === 0xff) return DEFAULT_TONE;
+  const r = (af - ar) / (0xff - ar);
+  const tone = Math.round(((0.85 - r) / 0.4) * 100);
+  return Math.max(0, Math.min(100, Number.isNaN(tone) ? DEFAULT_TONE : tone));
+}
 
 interface DeptState {
   accent: number;
@@ -113,10 +93,6 @@ function initDeptState(deptId: string, customThemes: Record<string, DeptTheme>):
   return { accent: theme.accent, tone: inferTone(theme) };
 }
 
-/* ================================================================== */
-/*  Sub-component: DeptCard                                             */
-/* ================================================================== */
-
 interface DeptCardProps {
   deptId: string;
   deptName: string;
@@ -128,22 +104,12 @@ interface DeptCardProps {
   onReset: () => void;
 }
 
-function DeptCard({
-  deptId,
-  deptName,
-  state,
-  language,
-  onActivate,
-  onAccentChange,
-  onToneChange,
-  onReset,
-}: DeptCardProps) {
+function DeptCard({ deptName, state, language, onActivate, onAccentChange, onToneChange, onReset }: DeptCardProps) {
   const theme = deriveTheme(state.accent, state.tone);
   const presets = generateTonePresets(state.accent);
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 space-y-3">
-      {/* Header row */}
+    <div className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-100">{deptName}</span>
         <button
@@ -151,24 +117,22 @@ function DeptCard({
             onActivate();
             onReset();
           }}
-          className="text-xs text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-slate-600 hover:border-slate-400 transition-colors"
+          className="rounded border border-slate-600 px-2 py-0.5 text-xs text-slate-400 transition-colors hover:border-slate-400 hover:text-slate-200"
         >
           {labels.reset[language]}
         </button>
       </div>
 
-      {/* Preview swatch */}
-      <div className="flex gap-1 h-6 rounded overflow-hidden border border-slate-600">
+      <div className="flex h-6 gap-1 overflow-hidden rounded border border-slate-600">
         <div className="flex-1" style={{ backgroundColor: numToHex(theme.floor1) }} />
         <div className="flex-1" style={{ backgroundColor: numToHex(theme.floor2) }} />
         <div className="flex-1" style={{ backgroundColor: numToHex(theme.wall) }} />
         <div className="w-6 flex-none" style={{ backgroundColor: numToHex(theme.accent) }} />
       </div>
 
-      {/* Preset palette */}
       <div className="space-y-1">
         <span className="text-xs text-slate-400">{labels.presets[language]}</span>
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="flex flex-wrap gap-1.5">
           {presets.map((preset) => (
             <button
               key={preset.tone}
@@ -177,68 +141,62 @@ function DeptCard({
                 onToneChange(preset.tone);
               }}
               title={`Tone ${preset.tone}`}
-              className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none"
+              className="h-5 w-5 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none"
               style={{
                 backgroundColor: numToHex(preset.swatch),
-                borderColor: Math.abs(state.tone - preset.tone) <= 2 ? "#fff" : "transparent",
+                borderColor: Math.abs(state.tone - preset.tone) <= 2 ? "#ffffff" : "transparent",
               }}
             />
           ))}
         </div>
       </div>
 
-      {/* Accent color picker */}
       <div className="flex items-center gap-3">
-        <label className="text-xs text-slate-400 w-20 shrink-0">{labels.accent[language]}</label>
+        <label className="w-20 shrink-0 text-xs text-slate-400">{labels.accent[language]}</label>
         <input
           type="color"
           value={numToHex(state.accent)}
-          onChange={(e) => {
+          onChange={(event) => {
             onActivate();
-            onAccentChange(hexToNum(e.target.value));
+            onAccentChange(hexToNum(event.target.value));
           }}
-          onInput={(e) => {
+          onInput={(event) => {
             onActivate();
-            onAccentChange(hexToNum((e.target as HTMLInputElement).value));
+            onAccentChange(hexToNum((event.target as HTMLInputElement).value));
           }}
-          className="w-8 h-8 rounded cursor-pointer border border-slate-600 bg-transparent p-0"
+          className="h-8 w-8 cursor-pointer rounded border border-slate-600 bg-transparent p-0"
         />
-        <span className="text-xs text-slate-500 font-mono">{numToHex(state.accent)}</span>
+        <span className="font-mono text-xs text-slate-500">{numToHex(state.accent)}</span>
       </div>
 
-      {/* Tone slider */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
           <label className="text-xs text-slate-400">{labels.tone[language]}</label>
           <span className="text-xs text-slate-500">{state.tone}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Light</span>
+          <span className="text-xs text-slate-500">{labels.light[language]}</span>
           <input
             type="range"
             min={0}
             max={100}
             value={state.tone}
-            onChange={(e) => {
+            onChange={(event) => {
               onActivate();
-              onToneChange(Number(e.target.value));
+              onToneChange(Number(event.target.value));
             }}
-            onInput={(e) => {
+            onInput={(event) => {
               onActivate();
-              onToneChange(Number((e.target as HTMLInputElement).value));
+              onToneChange(Number((event.target as HTMLInputElement).value));
             }}
-            className="flex-1 accent-slate-400 h-1.5 cursor-pointer"
+            className="h-1.5 flex-1 cursor-pointer accent-slate-400"
           />
-          <span className="text-xs text-slate-500">Dark</span>
+          <span className="text-xs text-slate-500">{labels.dark[language]}</span>
         </div>
       </div>
     </div>
   );
 }
-
-/* ================================================================== */
-/*  Main component                                                      */
-/* ================================================================== */
 
 export default function OfficeRoomManager({
   departments,
@@ -249,18 +207,16 @@ export default function OfficeRoomManager({
   language,
 }: OfficeRoomManagerProps) {
   const [deptStates, setDeptStates] = useState<Record<string, DeptState>>(() => {
-    const result: Record<string, DeptState> = {};
-    for (const dept of departments) {
-      result[dept.id] = initDeptState(dept.id, customThemes);
-    }
-    return result;
+    const next: Record<string, DeptState> = {};
+    for (const dept of departments) next[dept.id] = initDeptState(dept.id, customThemes);
+    return next;
   });
 
   const buildAndEmit = useCallback(
     (next: Record<string, DeptState>) => {
       const themes: Record<string, DeptTheme> = {};
-      for (const [id, s] of Object.entries(next)) {
-        themes[id] = deriveTheme(s.accent, s.tone);
+      for (const [id, state] of Object.entries(next)) {
+        themes[id] = deriveTheme(state.accent, state.tone);
       }
       onThemeChange(themes);
     },
@@ -282,11 +238,11 @@ export default function OfficeRoomManager({
     (deptId: string) => {
       const def = DEFAULT_THEMES[deptId];
       if (!def) return;
-      const next: DeptState = { accent: def.accent, tone: inferTone(def) };
+      const nextState: DeptState = { accent: def.accent, tone: inferTone(def) };
       setDeptStates((prev) => {
-        const updated = { ...prev, [deptId]: next };
-        buildAndEmit(updated);
-        return updated;
+        const next = { ...prev, [deptId]: nextState };
+        buildAndEmit(next);
+        return next;
       });
     },
     [buildAndEmit],
@@ -312,32 +268,32 @@ export default function OfficeRoomManager({
   useEffect(() => () => onActiveDeptChange?.(null), [onActiveDeptChange]);
 
   return (
-    /* Overlay */
     <div
       className="fixed inset-0 z-50 flex items-stretch justify-end"
-      style={{ backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)", backgroundColor: "rgba(0,0,0,0.5)" }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+      style={{
+        backdropFilter: "blur(2px)",
+        WebkitBackdropFilter: "blur(2px)",
+        backgroundColor: "rgba(0,0,0,0.5)",
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
       }}
     >
-      {/* Panel */}
-      <div className="w-full md:max-w-md bg-slate-900 flex flex-col h-full shadow-2xl border-l border-slate-700">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700 shrink-0">
+      <div className="flex h-full w-full flex-col border-l border-slate-700 bg-slate-900 shadow-2xl md:max-w-md">
+        <div className="shrink-0 border-b border-slate-700 px-5 py-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-100">{labels.title[language]}</h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-100 transition-colors w-8 h-8 flex items-center justify-center rounded hover:bg-slate-700"
+            className="flex h-8 w-8 items-center justify-center rounded transition-colors text-slate-400 hover:bg-slate-700 hover:text-slate-100"
             aria-label={labels.close[language]}
           >
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
               <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
             </svg>
           </button>
         </div>
 
-        {/* Scrollable dept list */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {departments.map((dept) => {
             const state = deptStates[dept.id] ?? { accent: 0x5a9fd4, tone: DEFAULT_TONE };
             return (
@@ -356,17 +312,16 @@ export default function OfficeRoomManager({
           })}
         </div>
 
-        {/* Footer */}
-        <div className="px-4 py-4 border-t border-slate-700 shrink-0 flex gap-2">
+        <div className="shrink-0 border-t border-slate-700 px-4 py-4 flex gap-2">
           <button
             onClick={resetAll}
-            className="flex-1 py-2 rounded-md text-sm font-medium bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+            className="flex-1 rounded-md bg-slate-700 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600"
           >
             {labels.resetAll[language]}
           </button>
           <button
             onClick={onClose}
-            className="flex-1 py-2 rounded-md text-sm font-medium bg-slate-600 text-slate-100 hover:bg-slate-500 transition-colors"
+            className="flex-1 rounded-md bg-slate-600 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-500"
           >
             {labels.close[language]}
           </button>

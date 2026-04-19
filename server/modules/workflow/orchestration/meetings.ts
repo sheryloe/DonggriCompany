@@ -20,7 +20,6 @@ export function initializeWorkflowMeetingTools(ctx: RuntimeContext): any {
   const appendTaskLog = __ctx.appendTaskLog;
   const detectTargetDepartments =
     typeof __ctx.detectTargetDepartments === "function" ? __ctx.detectTargetDepartments : (_text: string) => [];
-  const findTeamLeader = __ctx.findTeamLeader;
   const getAgentDisplayName = __ctx.getAgentDisplayName;
   const getDeptName = __ctx.getDeptName;
   const getRoleLabel = __ctx.getRoleLabel;
@@ -57,7 +56,6 @@ export function initializeWorkflowMeetingTools(ctx: RuntimeContext): any {
   const { getLeadersByDepartmentIds, getAllActiveTeamLeaders, getTaskRelatedDepartmentIds, getTaskReviewLeaders } =
     createMeetingLeaderSelectionTools({
       db,
-      findTeamLeader,
       detectTargetDepartments,
     });
 

@@ -1,5 +1,5 @@
-import type { DatabaseSync } from "node:sqlite";
-import { DEFAULT_WORKFLOW_PACK_KEY, WORKFLOW_PACK_KEYS, isWorkflowPackKey } from "../../workflow/packs/definitions.ts";
+﻿import type { DatabaseSync } from "node:sqlite";
+import { DEFAULT_WORKFLOW_PACK_KEY, WORKFLOW_PACK_KEYS } from "../../workflow/packs/definitions.ts";
 
 type DbLike = Pick<DatabaseSync, "exec" | "prepare">;
 
@@ -99,6 +99,21 @@ export function applyTaskSchemaMigrations(db: DbLike): void {
     /* already exists */
   }
   try {
+    db.exec("ALTER TABLE projects ADD COLUMN canonical_pack_profile TEXT NOT NULL DEFAULT 'development'");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE projects ADD COLUMN artifact_root_mode TEXT NOT NULL DEFAULT 'project_root'");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE projects ADD COLUMN artifact_projection_version TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
     db.exec(`
     CREATE TABLE IF NOT EXISTS project_agents (
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -127,9 +142,120 @@ export function applyTaskSchemaMigrations(db: DbLike): void {
     /* already exists */
   }
   try {
+    db.exec("ALTER TABLE tasks ADD COLUMN policy_version TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE tasks ADD COLUMN resolved_execution_policy_json TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE tasks ADD COLUMN required_artifacts_json TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE tasks ADD COLUMN approval_gate_state_json TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE meeting_minutes ADD COLUMN policy_version TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE meeting_minutes ADD COLUMN policy_snapshot_hash TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
     db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_workflow_pack ON tasks(workflow_pack_key, updated_at DESC)");
   } catch {
     /* already exists */
+  }
+  try {
+    db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_policy_version ON tasks(policy_version, updated_at DESC)");
+  } catch {
+    /* already exists */
+  }
+
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN family TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN career_stage TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN specialization_key TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN authority_level INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE agents ADD COLUMN execution_capability_profile TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_agents_canonical_identity ON agents(family, career_stage, specialization_key, authority_level, created_at)",
+    );
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_projects_canonical_pack ON projects(canonical_pack_profile, artifact_projection_version, updated_at DESC)",
+    );
+  } catch {
+    /* already exists */
+  }
+
+  try {
+    db.exec(`
+      UPDATE projects
+      SET canonical_pack_profile = COALESCE(NULLIF(canonical_pack_profile, ''), NULLIF(default_pack_key, ''), 'development'),
+          artifact_root_mode = COALESCE(NULLIF(artifact_root_mode, ''), 'project_root')
+    `);
+  } catch {
+    /* best effort */
+  }
+  try {
+    db.exec(`
+      UPDATE agents
+      SET family = COALESCE(NULLIF(family, ''), CASE
+            WHEN department_id = 'planning' THEN 'orchestrator'
+            WHEN department_id = 'design' THEN 'frontend'
+            WHEN department_id = 'qa' THEN 'qa'
+            WHEN department_id = 'devsecops' THEN 'reviewer'
+            WHEN department_id = 'operations' THEN 'memory-manager'
+            ELSE 'backend'
+          END),
+          career_stage = COALESCE(NULLIF(career_stage, ''), CASE
+            WHEN role = 'team_leader' THEN 'team-lead'
+            WHEN role = 'senior' THEN 'senior'
+            ELSE 'junior'
+          END),
+          authority_level = COALESCE(authority_level, CASE
+            WHEN role = 'team_leader' THEN 3
+            WHEN role = 'senior' THEN 2
+            ELSE 1
+          END),
+          execution_capability_profile = COALESCE(NULLIF(execution_capability_profile, ''), workflow_profile)
+    `);
+  } catch {
+    /* best effort */
   }
 
   ensureOfficePackScopedDepartmentSchema(db);
@@ -139,23 +265,6 @@ export function applyTaskSchemaMigrations(db: DbLike): void {
   migrateLegacyTasksStatusSchema(db);
   repairLegacyTaskForeignKeys(db);
   ensureMessagesIdempotencySchema(db);
-}
-
-function safeJsonParse(raw: string): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function asObject(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function normalizeText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function ensureOfficePackScopedDepartmentSchema(db: DbLike): void {
@@ -219,102 +328,7 @@ function ensureOfficePackScopedDepartmentSchema(db: DbLike): void {
     }
   }
 
-  const profileRow = db.prepare("SELECT value FROM settings WHERE key = 'officePackProfiles' LIMIT 1").get() as
-    | { value?: unknown }
-    | undefined;
-  if (!profileRow) return;
-
-  let parsedRoot: unknown = profileRow.value;
-  if (typeof parsedRoot === "string") {
-    parsedRoot = safeJsonParse(parsedRoot);
-  }
-  const root = asObject(parsedRoot);
-  if (!root) return;
-
-  const upsertPackDepartment = db.prepare(
-    `
-      INSERT INTO office_pack_departments (
-        workflow_pack_key, department_id, name, name_ko, name_ja, name_zh,
-        icon, color, description, prompt, sort_order, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(workflow_pack_key, department_id) DO UPDATE SET
-        name = excluded.name,
-        name_ko = excluded.name_ko,
-        name_ja = excluded.name_ja,
-        name_zh = excluded.name_zh,
-        icon = excluded.icon,
-        color = excluded.color,
-        description = excluded.description,
-        prompt = excluded.prompt,
-        sort_order = excluded.sort_order
-    `,
-  );
-  const updateAgentPack = db.prepare("UPDATE agents SET workflow_pack_key = ? WHERE id = ?");
-
-  const now = Date.now();
-  for (const [rawPackKey, rawProfile] of Object.entries(root)) {
-    const packKey = normalizeText(rawPackKey);
-    if (!isWorkflowPackKey(packKey) || packKey === DEFAULT_WORKFLOW_PACK_KEY) continue;
-    const profile = asObject(rawProfile);
-    if (!profile) continue;
-
-    if (Array.isArray(profile.departments)) {
-      for (const rawDepartment of profile.departments) {
-        const department = asObject(rawDepartment);
-        if (!department) continue;
-        const departmentId = normalizeText(department.id);
-        if (!departmentId) continue;
-
-        const name = normalizeText(department.name) || departmentId;
-        const nameKo = normalizeText(department.name_ko) || name;
-        const nameJa = normalizeText(department.name_ja);
-        const nameZh = normalizeText(department.name_zh);
-        const icon = normalizeText(department.icon) || "🏢";
-        const color = normalizeText(department.color) || "#64748b";
-        const description = normalizeText(department.description) || null;
-        const prompt = normalizeText(department.prompt) || null;
-        const sortOrderRaw = Number(department.sort_order);
-        const sortOrder = Number.isFinite(sortOrderRaw) ? Math.max(0, Math.trunc(sortOrderRaw)) : 99;
-        const createdAtRaw = Number(department.created_at);
-        const createdAt = Number.isFinite(createdAtRaw) ? Math.max(0, Math.trunc(createdAtRaw)) : now;
-
-        try {
-          upsertPackDepartment.run(
-            packKey,
-            departmentId,
-            name,
-            nameKo,
-            nameJa,
-            nameZh,
-            icon,
-            color,
-            description,
-            prompt,
-            sortOrder,
-            createdAt,
-          );
-        } catch {
-          // ignore malformed profile rows
-        }
-      }
-    }
-
-    if (Array.isArray(profile.agents)) {
-      for (const rawAgent of profile.agents) {
-        const agent = asObject(rawAgent);
-        if (!agent) continue;
-        const agentId = normalizeText(agent.id);
-        if (!agentId) continue;
-        try {
-          updateAgentPack.run(packKey, agentId);
-        } catch {
-          // ignore missing agents
-        }
-      }
-    }
-  }
 }
-
 function ensureConversationProjectContextSchema(db: DbLike): void {
   try {
     db.exec(`
@@ -743,3 +757,4 @@ function ensureMessagesIdempotencySchema(db: DbLike): void {
     WHERE idempotency_key IS NOT NULL
   `);
 }
+

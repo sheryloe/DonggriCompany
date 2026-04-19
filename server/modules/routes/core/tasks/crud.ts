@@ -10,6 +10,8 @@ import {
   isWorkflowPackKey,
   type WorkflowPackKey,
 } from "../../../workflow/packs/definitions.ts";
+import { getCanonicalSnapshotByVersion, previewCanonicalRouting } from "../../../company/canonical-policy.ts";
+import { applyProjectArtifactPatch, syncProjectArtifactProjection } from "../../../company/project-artifacts.ts";
 import { classifyWorkflowPackText } from "../../../workflow/packs/text-routing.ts";
 import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack-resolver.ts";
 import { normalizeSubtaskTitleForDisplay } from "../../../workflow/subtasks/title-normalizer.ts";
@@ -87,20 +89,148 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
   }
 
   function markOfficePackHydrated(packKey: WorkflowPackKey): void {
-    if (packKey === DEFAULT_WORKFLOW_PACK_KEY) return;
+    void packKey;
+  }
+
+  function hasColumn(table: string, column: string): boolean {
     try {
-      const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get("officePackHydratedPacks") as
-        | { value?: unknown }
-        | undefined;
-      const hydrated = parseHydratedPackList(row?.value);
-      if (hydrated.has(packKey)) return;
-      hydrated.add(packKey);
-      db.prepare(
-        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-      ).run("officePackHydratedPacks", JSON.stringify([...hydrated].sort()));
+      const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name?: unknown }>;
+      return columns.some((item) => String(item.name ?? "").trim() === column);
     } catch {
-      // best-effort metadata update only
+      return false;
     }
+  }
+
+  const hasTaskPolicyVersionColumn = hasColumn("tasks", "policy_version");
+  const hasTaskResolvedPolicyColumn = hasColumn("tasks", "resolved_execution_policy_json");
+  const hasTaskRequiredArtifactsColumn = hasColumn("tasks", "required_artifacts_json");
+  const hasTaskApprovalGateStateColumn = hasColumn("tasks", "approval_gate_state_json");
+
+  function buildCanonicalTaskFields(params: {
+    title: string;
+    description: string;
+    projectPath: string | null;
+    workflowPackKey: WorkflowPackKey;
+  }) {
+    const policy = previewCanonicalRouting({
+      text: `${params.title}\n${params.description}`.trim(),
+      projectPath: params.projectPath,
+      workflowPackKey: params.workflowPackKey,
+    });
+    return {
+      policy,
+      requiredArtifactsJson: JSON.stringify(policy.requiredArtifacts),
+      approvalGateStateJson: JSON.stringify({
+        gates: policy.approvalGates,
+        blocked: policy.approvalGates.includes("artifact-health-block"),
+        updatedAt: isoNowFromMs(nowMs()),
+      }),
+      resolvedPolicyJson: JSON.stringify(policy),
+    };
+  }
+
+  function isoNowFromMs(timestamp: number): string {
+    return new Date(timestamp).toISOString();
+  }
+
+  function updateTaskCanonicalProjection(taskId: string, policyFields: ReturnType<typeof buildCanonicalTaskFields>): void {
+    const updates: string[] = [];
+    const params: SQLInputValue[] = [];
+    if (hasTaskPolicyVersionColumn) {
+      updates.push("policy_version = ?");
+      params.push(policyFields.policy.policyVersion);
+    }
+    if (hasTaskResolvedPolicyColumn) {
+      updates.push("resolved_execution_policy_json = ?");
+      params.push(policyFields.resolvedPolicyJson);
+    }
+    if (hasTaskRequiredArtifactsColumn) {
+      updates.push("required_artifacts_json = ?");
+      params.push(policyFields.requiredArtifactsJson);
+    }
+    if (hasTaskApprovalGateStateColumn) {
+      updates.push("approval_gate_state_json = ?");
+      params.push(policyFields.approvalGateStateJson);
+    }
+    if (updates.length === 0) return;
+    params.push(taskId);
+    db.prepare(`UPDATE tasks SET ${updates.join(", ")} WHERE id = ?`).run(...params);
+  }
+
+  function bindLegacyTaskPolicyVersion(taskRow: Record<string, unknown>, reason: string): ReturnType<typeof buildCanonicalTaskFields> {
+    const taskId = String(taskRow.id ?? "");
+    const policyFields = buildCanonicalTaskFields({
+      title: normalizeTextField(taskRow.title) ?? "",
+      description: normalizeTextField(taskRow.description) ?? "",
+      projectPath: normalizeProjectPathInput(taskRow.project_path),
+      workflowPackKey: (normalizeTextField(taskRow.workflow_pack_key) as WorkflowPackKey | null) ?? DEFAULT_WORKFLOW_PACK_KEY,
+    });
+    updateTaskCanonicalProjection(taskId, policyFields);
+    appendTaskLog(
+      taskId,
+      "system",
+      `policy_snapshot_missing_on_legacy_row (${reason}) -> bound ${policyFields.policy.policyVersion}`,
+    );
+    console.info("[tasks] policy_snapshot_bound_to_task", {
+      taskId,
+      policyVersion: policyFields.policy.policyVersion,
+      reason,
+    });
+    return policyFields;
+  }
+
+  function normalizeTaskPolicySnapshotState(taskRow: Record<string, unknown>, reason: string): Record<string, unknown> {
+    let normalizedTask = { ...taskRow };
+    let policyVersion = hasTaskPolicyVersionColumn ? normalizeTextField(normalizedTask.policy_version) : null;
+
+    if (hasTaskPolicyVersionColumn && !policyVersion) {
+      const bound = bindLegacyTaskPolicyVersion(normalizedTask, reason);
+      normalizedTask = {
+        ...normalizedTask,
+        policy_version: bound.policy.policyVersion,
+        resolved_execution_policy_json: bound.resolvedPolicyJson,
+        required_artifacts_json: bound.requiredArtifactsJson,
+        approval_gate_state_json: bound.approvalGateStateJson,
+      };
+      policyVersion = bound.policy.policyVersion;
+    }
+
+    if (!policyVersion) {
+      return {
+        ...normalizedTask,
+        policy_snapshot_found: false,
+        policy_snapshot_missing: false,
+      };
+    }
+
+    const snapshot = getCanonicalSnapshotByVersion(policyVersion);
+    if (!snapshot) {
+      appendTaskLog(String(taskRow.id ?? ""), "system", `policy_snapshot_lookup_failed (${policyVersion})`);
+      console.warn("[tasks] policy_snapshot_lookup_failed", { taskId: String(taskRow.id ?? ""), policyVersion });
+    }
+    return {
+      ...normalizedTask,
+      policy_snapshot_found: Boolean(snapshot),
+      policy_snapshot_missing: !snapshot,
+    };
+  }
+
+  function readProjectContextByTaskFields(projectId: string | null, projectPath: string | null): {
+    projectId: string | null;
+    projectPath: string | null;
+  } {
+    if (projectId) {
+      const row = db.prepare("SELECT id, project_path FROM projects WHERE id = ?").get(projectId) as
+        | { id: string; project_path: string | null }
+        | undefined;
+      if (row) {
+        return {
+          projectId: row.id,
+          projectPath: normalizeTextField(row.project_path) ?? projectPath,
+        };
+      }
+    }
+    return { projectId, projectPath };
   }
 
   app.get("/api/tasks", (req, res) => {
@@ -224,7 +354,14 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
         .all(...(params as SQLInputValue[]));
     }
 
-    res.json({ tasks });
+    const normalizedTasks = Array.isArray(tasks)
+      ? tasks.map((task) =>
+          task && typeof task === "object"
+            ? normalizeTaskPolicySnapshotState(task as Record<string, unknown>, "api.tasks.list")
+            : task,
+        )
+      : tasks;
+    res.json({ tasks: normalizedTasks });
   });
 
   app.post("/api/tasks", (req, res) => {
@@ -275,17 +412,32 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       explicitPackKey: explicitPackKey ?? autoRoutedPackKey,
       projectId: resolvedProjectId,
     });
+    const canonicalTaskFields = buildCanonicalTaskFields({
+      title,
+      description: descriptionText,
+      projectPath: resolvedProjectPath,
+      workflowPackKey: resolvedWorkflowPackKey,
+    });
 
-    db.prepare(
-      `
-    INSERT INTO tasks (
-      id, title, description, department_id, assigned_agent_id, project_id,
-      status, priority, task_type, workflow_pack_key, workflow_meta_json, output_format,
-      project_path, base_branch, created_at, updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `,
-    ).run(
+    const insertColumns = [
+      "id",
+      "title",
+      "description",
+      "department_id",
+      "assigned_agent_id",
+      "project_id",
+      "status",
+      "priority",
+      "task_type",
+      "workflow_pack_key",
+      "workflow_meta_json",
+      "output_format",
+      "project_path",
+      "base_branch",
+      "created_at",
+      "updated_at",
+    ];
+    const insertValues: SQLInputValue[] = [
       id,
       title,
       (body as any).description ?? null,
@@ -306,7 +458,30 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       (body as any).base_branch ?? null,
       t,
       t,
-    );
+    ];
+    if (hasTaskPolicyVersionColumn) {
+      insertColumns.push("policy_version");
+      insertValues.push(canonicalTaskFields.policy.policyVersion);
+    }
+    if (hasTaskResolvedPolicyColumn) {
+      insertColumns.push("resolved_execution_policy_json");
+      insertValues.push(canonicalTaskFields.resolvedPolicyJson);
+    }
+    if (hasTaskRequiredArtifactsColumn) {
+      insertColumns.push("required_artifacts_json");
+      insertValues.push(canonicalTaskFields.requiredArtifactsJson);
+    }
+    if (hasTaskApprovalGateStateColumn) {
+      insertColumns.push("approval_gate_state_json");
+      insertValues.push(canonicalTaskFields.approvalGateStateJson);
+    }
+
+    db.prepare(
+      `
+    INSERT INTO tasks (${insertColumns.join(", ")})
+    VALUES (${insertColumns.map(() => "?").join(", ")})
+  `,
+    ).run(...insertValues);
     if (autoRoutedPackKey && resolvedWorkflowPackKey === autoRoutedPackKey) {
       markOfficePackHydrated(autoRoutedPackKey);
     }
@@ -327,11 +502,37 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
 
     if (resolvedProjectId) {
       db.prepare("UPDATE projects SET last_used_at = ?, updated_at = ? WHERE id = ?").run(t, t, resolvedProjectId);
+      if (resolvedProjectPath) {
+        try {
+          const artifactState = applyProjectArtifactPatch({
+            projectId: resolvedProjectId,
+            projectPath: resolvedProjectPath,
+            actor: "api.tasks.create",
+            packProfile: resolvedWorkflowPackKey,
+            policyVersion: canonicalTaskFields.policy.policyVersion,
+            note: `Task created: ${title}`,
+            task: {
+              id,
+              title,
+              status: String((body as any).status ?? "inbox"),
+              priority: Number((body as any).priority ?? 0),
+              taskType: typeof (body as any).task_type === "string" ? (body as any).task_type : "general",
+            },
+          });
+          syncProjectArtifactProjection(db, artifactState, resolvedProjectId);
+        } catch {
+          // best-effort canonical artifact sync only
+        }
+      }
     }
 
     appendTaskLog(id, "system", `Task created: ${title}`);
 
-    const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
+    const taskRow = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
+    const task =
+      taskRow && typeof taskRow === "object"
+        ? normalizeTaskPolicySnapshotState(taskRow as Record<string, unknown>, "api.tasks.create")
+        : taskRow;
     broadcast("task_update", task);
     res.json({ id, task });
   });
@@ -436,7 +637,12 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
         };
       });
 
-    res.json({ task, logs, subtasks });
+    const normalizedTask =
+      task && typeof task === "object"
+        ? normalizeTaskPolicySnapshotState(task as Record<string, unknown>, "api.tasks.detail")
+        : task;
+
+    res.json({ task: normalizedTask, logs, subtasks });
   });
 
   app.get("/api/tasks/:id/meeting-minutes", (req, res) => {
@@ -578,9 +784,59 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
 
     appendTaskLog(id, "system", `Task updated: ${Object.keys(body as object).join(", ")}`);
 
-    const updated = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
-    broadcast("task_update", updated);
-    res.json({ ok: true, task: updated });
+    let updated = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (updated) {
+      const updatedProjectContext = readProjectContextByTaskFields(
+        normalizeTextField(updated.project_id),
+        normalizeProjectPathInput(updated.project_path),
+      );
+      const updatedWorkflowPackKey =
+        (normalizeTextField(updated.workflow_pack_key) as WorkflowPackKey | null) ?? DEFAULT_WORKFLOW_PACK_KEY;
+      const canonicalTaskFields =
+        hasTaskPolicyVersionColumn && normalizeTextField(updated.policy_version)
+          ? null
+          : buildCanonicalTaskFields({
+              title: normalizeTextField(updated.title) ?? "",
+              description: normalizeTextField(updated.description) ?? "",
+              projectPath: updatedProjectContext.projectPath,
+              workflowPackKey: updatedWorkflowPackKey,
+            });
+      if (canonicalTaskFields) {
+        updateTaskCanonicalProjection(id, canonicalTaskFields);
+        appendTaskLog(id, "system", `policy_snapshot_bound_to_task (${canonicalTaskFields.policy.policyVersion})`);
+      }
+      updated = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+
+      if (updatedProjectContext.projectId && updatedProjectContext.projectPath) {
+        try {
+          const effectivePolicyVersion = normalizeTextField(updated?.policy_version) ?? canonicalTaskFields?.policy.policyVersion ?? "";
+          const artifactState = applyProjectArtifactPatch({
+            projectId: updatedProjectContext.projectId,
+            projectPath: updatedProjectContext.projectPath,
+            actor: "api.tasks.patch",
+            packProfile: updatedWorkflowPackKey,
+            policyVersion: effectivePolicyVersion,
+            note: `Task updated fields: ${Object.keys(body as object).join(", ")}`,
+            task: {
+              id,
+              title: normalizeTextField(updated?.title) ?? null,
+              status: normalizeTextField(updated?.status) ?? null,
+              priority: Number.isFinite(Number(updated?.priority)) ? Number(updated?.priority) : null,
+              taskType: normalizeTextField(updated?.task_type) ?? null,
+            },
+          });
+          syncProjectArtifactProjection(db, artifactState, updatedProjectContext.projectId);
+        } catch {
+          // best-effort canonical artifact sync only
+        }
+      }
+    }
+    const normalizedUpdated =
+      updated && typeof updated === "object"
+        ? normalizeTaskPolicySnapshotState(updated as Record<string, unknown>, "api.tasks.patch")
+        : updated;
+    broadcast("task_update", normalizedUpdated);
+    res.json({ ok: true, task: normalizedUpdated });
   });
 
   app.post("/api/tasks/bulk-hide", (req, res) => {

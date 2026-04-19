@@ -3,6 +3,7 @@ import type { CliAccountPoolView, OAuthStatus } from "../api";
 import * as api from "../api";
 import { getRoleDisplayLabel } from "../app/canonical-display";
 import { localeName, useI18n } from "../i18n";
+import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../i18n/canonical-label-registry";
 import type { Agent, Department, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
 import AgentAvatar from "./AgentAvatar";
 import AgentDetailTabContent from "./agent-detail/AgentDetailTabContent";
@@ -34,7 +35,7 @@ export default function AgentDetail({
   tasks,
   subAgents,
   subtasks,
-  activeOfficeWorkflowPack,
+  activeOfficeWorkflowPack: _activeOfficeWorkflowPack,
   onClose,
   onChat,
   onAssignTask,
@@ -46,8 +47,6 @@ export default function AgentDetail({
   const [editingCli, setEditingCli] = useState(false);
   const [selectedCli, setSelectedCli] = useState(agent.cli_provider);
   const [selectedOAuthAccountId, setSelectedOAuthAccountId] = useState(agent.oauth_account_id ?? "");
-  const [selectedApiProviderId, setSelectedApiProviderId] = useState(agent.api_provider_id ?? "");
-  const [selectedApiModel, setSelectedApiModel] = useState(agent.api_model ?? "");
   const [selectedCliAccountPoolId, setSelectedCliAccountPoolId] = useState(agent.cli_account_pool_id ?? "");
   const [cliAccountPools, setCliAccountPools] = useState<CliAccountPoolView[]>([]);
   const [cliAccountPoolsLoading, setCliAccountPoolsLoading] = useState(false);
@@ -55,8 +54,6 @@ export default function AgentDetail({
   const [oauthStatus, setOauthStatus] = useState<OAuthStatus | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const [savingPlanningLead, setSavingPlanningLead] = useState(false);
-  const [actsAsPlanningLead, setActsAsPlanningLead] = useState(Number(agent.acts_as_planning_leader ?? 0) === 1);
 
   const agentTasks = tasks.filter((task) => task.assigned_agent_id === agent.id);
   const agentSubAgents = subAgents.filter((subAgent) => subAgent.parentAgentId === agent.id);
@@ -73,7 +70,6 @@ export default function AgentDetail({
   const oauthProviderKey =
     selectedCli === "copilot" ? "github-copilot" : selectedCli === "antigravity" ? "antigravity" : null;
   const requiresOAuthAccount = selectedCli === "copilot" || selectedCli === "antigravity";
-  const requiresApiProvider = selectedCli === "api";
   const requiresCliPool = CLI_POOL_PROVIDERS.includes(selectedCli);
 
   const activeOAuthAccounts = useMemo(() => {
@@ -87,10 +83,20 @@ export default function AgentDetail({
     () => cliAccountPools.filter((pool) => pool.provider === selectedCli),
     [cliAccountPools, selectedCli],
   );
+  const canonicalSummary = useMemo(() => {
+    const summaryParts: string[] = [];
+    summaryParts.push(
+      department
+        ? localeName(language, department)
+        : t({ ko: "미지정 부서", en: "Unassigned", ja: "Unassigned", zh: "Unassigned" }),
+    );
+    if (agent.family) summaryParts.push(getCanonicalFamilyLabel(agent.family, language));
+    if (agent.career_stage) summaryParts.push(getCanonicalStageLabel(agent.career_stage, language));
+    if (!agent.family && !agent.career_stage) summaryParts.push(getRoleDisplayLabel(agent.role, language));
+    return summaryParts.join(" · ");
+  }, [agent.career_stage, agent.family, agent.role, department, language, t]);
   const canSaveCli =
-    (!requiresOAuthAccount || Boolean(selectedOAuthAccountId)) &&
-    (!requiresCliPool || Boolean(selectedCliAccountPoolId)) &&
-    (!requiresApiProvider || (Boolean(selectedApiProviderId) && Boolean(selectedApiModel)));
+    (!requiresOAuthAccount || Boolean(selectedOAuthAccountId)) && (!requiresCliPool || Boolean(selectedCliAccountPoolId));
 
   const cliSummaryText = useMemo(() => {
     const providerLabel = CLI_LABELS[agent.cli_provider] ?? agent.cli_provider;
@@ -106,10 +112,7 @@ export default function AgentDetail({
   useEffect(() => {
     setSelectedCli(agent.cli_provider);
     setSelectedOAuthAccountId(agent.oauth_account_id ?? "");
-    setSelectedApiProviderId(agent.api_provider_id ?? "");
-    setSelectedApiModel(agent.api_model ?? "");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
-    setActsAsPlanningLead(Number(agent.acts_as_planning_leader ?? 0) === 1);
   }, [agent]);
 
   useEffect(() => {
@@ -168,8 +171,6 @@ export default function AgentDetail({
       await api.updateAgent(agent.id, {
         cli_provider: selectedCli,
         oauth_account_id: requiresOAuthAccount ? selectedOAuthAccountId || null : null,
-        api_provider_id: requiresApiProvider ? selectedApiProviderId || null : null,
-        api_model: requiresApiProvider ? selectedApiModel || null : null,
         cli_model: null,
         cli_reasoning_level: null,
         run_mode: "standard",
@@ -187,11 +188,8 @@ export default function AgentDetail({
   }, [
     agent.id,
     onAgentUpdated,
-    requiresApiProvider,
     requiresCliPool,
     requiresOAuthAccount,
-    selectedApiModel,
-    selectedApiProviderId,
     selectedCli,
     selectedCliAccountPoolId,
     selectedCliAccountPools,
@@ -202,39 +200,15 @@ export default function AgentDetail({
     setEditingCli(false);
     setSelectedCli(agent.cli_provider);
     setSelectedOAuthAccountId(agent.oauth_account_id ?? "");
-    setSelectedApiProviderId(agent.api_provider_id ?? "");
-    setSelectedApiModel(agent.api_model ?? "");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
-  }, [agent.api_model, agent.api_provider_id, agent.cli_account_pool_id, agent.cli_provider, agent.oauth_account_id]);
-
-  const handlePlanningLeadToggle = useCallback(
-    async (nextChecked: boolean) => {
-      if (agent.role !== "team_leader" || savingPlanningLead) return;
-      const previous = actsAsPlanningLead;
-      setActsAsPlanningLead(nextChecked);
-      setSavingPlanningLead(true);
-      try {
-        await api.updateAgent(agent.id, {
-          acts_as_planning_leader: nextChecked ? 1 : 0,
-          workflow_pack_key: activeOfficeWorkflowPack,
-        });
-        onAgentUpdated?.();
-      } catch (error) {
-        console.error("Failed to update planning lead:", error);
-        setActsAsPlanningLead(previous);
-      } finally {
-        setSavingPlanningLead(false);
-      }
-    },
-    [activeOfficeWorkflowPack, actsAsPlanningLead, agent.id, agent.role, onAgentUpdated, savingPlanningLead],
-  );
+  }, [agent.cli_account_pool_id, agent.cli_provider, agent.oauth_account_id]);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(event) => event.target === event.currentTarget && onClose()}
     >
-      <div className="w-[min(960px,94vw)] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+      <div className="w-[min(1280px,96vw)] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
         <div
           className="relative border-b border-slate-700 px-6 py-5"
           style={{ background: department ? `linear-gradient(135deg, ${department.color}22, transparent)` : undefined }}
@@ -265,33 +239,7 @@ export default function AgentDetail({
                   {statusLabel(statusCfg.label, t)}
                 </span>
               </div>
-              <div className="mt-0.5 text-sm text-slate-400">
-                {department
-                  ? localeName(language, department)
-                  : t({ ko: "미지정 부서", en: "Unassigned", ja: "Unassigned", zh: "Unassigned" })}{" "}
-                · {getRoleDisplayLabel(agent.role, language)}
-              </div>
-              {agent.role === "team_leader" && (
-                <label className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={actsAsPlanningLead}
-                    disabled={savingPlanningLead}
-                    onChange={(event) => {
-                      void handlePlanningLeadToggle(event.target.checked);
-                    }}
-                    className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500/50 disabled:opacity-60"
-                  />
-                  <span>
-                    {t({
-                      ko: "기획 리드로 사용",
-                      en: "Use as planning lead",
-                      ja: "Use as planning lead",
-                      zh: "Use as planning lead",
-                    })}
-                  </span>
-                </label>
-              )}
+              <div className="mt-0.5 text-sm text-slate-400">{canonicalSummary}</div>
               <div className="mt-1 text-xs text-slate-500">
                 {editingCli ? (
                   <div className="space-y-2 rounded-lg border border-slate-700/70 bg-slate-800/60 p-3">
@@ -383,22 +331,6 @@ export default function AgentDetail({
                             ))}
                           </select>
                         ))}
-                      {requiresApiProvider && (
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={selectedApiProviderId}
-                            onChange={(event) => setSelectedApiProviderId(event.target.value)}
-                            placeholder="api_provider_id"
-                            className="w-[150px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
-                          />
-                          <input
-                            value={selectedApiModel}
-                            onChange={(event) => setSelectedApiModel(event.target.value)}
-                            placeholder="api_model"
-                            className="w-[150px] rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
-                          />
-                        </div>
-                      )}
                       <button
                         disabled={savingCli || !canSaveCli}
                         onClick={() => {
@@ -442,6 +374,44 @@ export default function AgentDetail({
               />
             </div>
             <span className="text-[10px] text-slate-500">{agent.stats_xp} XP</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
+            <div className="rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-1.5 text-slate-200">
+              <div className="text-[10px] text-slate-400">
+                {t({ ko: "직급", en: "Role", ja: "Role", zh: "Role" })}
+              </div>
+              <div className="mt-0.5 font-semibold">{getRoleDisplayLabel(agent.role, language)}</div>
+            </div>
+            <div className="rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-1.5 text-slate-200">
+              <div className="text-[10px] text-slate-400">
+                {t({ ko: "부서", en: "Department", ja: "Department", zh: "Department" })}
+              </div>
+              <div className="mt-0.5 font-semibold">
+                {department ? localeName(language, department) : t({ ko: "미지정", en: "Unassigned", ja: "Unassigned", zh: "Unassigned" })}
+              </div>
+            </div>
+            <div className="rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-1.5 text-slate-200">
+              <div className="text-[10px] text-slate-400">
+                {t({ ko: "능력군", en: "Family", ja: "Family", zh: "Family" })}
+              </div>
+              <div className="mt-0.5 font-semibold">
+                {agent.family ? getCanonicalFamilyLabel(agent.family, language) : "-"}
+              </div>
+            </div>
+            <div className="rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-1.5 text-slate-200">
+              <div className="text-[10px] text-slate-400">
+                {t({ ko: "커리어 단계", en: "Stage", ja: "Stage", zh: "Stage" })}
+              </div>
+              <div className="mt-0.5 font-semibold">
+                {agent.career_stage ? getCanonicalStageLabel(agent.career_stage, language) : "-"}
+              </div>
+            </div>
+            <div className="rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-1.5 text-slate-200">
+              <div className="text-[10px] text-slate-400">
+                {t({ ko: "권한", en: "Authority", ja: "Authority", zh: "Authority" })}
+              </div>
+              <div className="mt-0.5 font-semibold">A{agent.authority_level ?? 0}</div>
+            </div>
           </div>
         </div>
 

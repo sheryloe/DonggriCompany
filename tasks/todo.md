@@ -102,3 +102,67 @@
 - [x] Identify current Vite bundle warning source
 - [x] Split heavy app views into lazy-loaded chunks
 - [x] Re-run `pnpm build` and confirm warning removal
+
+## Canonical company foundation batch (2026-04-15)
+
+- [x] Add canonical company compiler/cache from `restructing` + `docs/agents`
+- [x] Add specialization family mapping layer and canonical catalog projection
+- [x] Bootstrap project-root PM artifacts and artifact state APIs
+- [x] Add canonical policy / routing preview / reload routes
+- [x] Wire canonical preview into main execution policy resolution path
+- [x] Add read-only canonical inspector tab in Settings
+- [x] Run full `pnpm test` and `pnpm build`
+
+## Canonical redesign batch 2 (2026-04-15)
+
+- [x] Add compiler strict-mode validation and remove fallback family resolution
+- [x] Compile canonical pack profiles from `restructing` and downgrade seed packs to projection
+- [x] Upgrade PM artifact manifest/schema to v2 with structured validation
+- [x] Add artifact patch writer and task/project projection sync hooks
+- [x] Extend DB schema for canonical agent/project/task identity fields
+- [x] Add backfill-safe writes for new canonical fields in create/update routes
+- [x] Run targeted api/web tests and full `pnpm build`
+
+## Canonical redesign step 11 (2026-04-15)
+
+- [x] Add canonical identity adapter for legacy agent rows
+- [x] Make agent CRUD return and persist canonical identity fields first
+- [x] Align shared web types and agent API payloads with canonical identity
+- [x] Show resolved canonical identity in agent manager UI without breaking locale display
+- [x] Run targeted agent CRUD/web tests and full `pnpm build`
+
+## Canonical redesign step 12 (2026-04-15)
+
+- [x] Add canonical snapshot archive and current-version pointer
+- [x] Keep task `policy_version` pinned after creation and compat-bind legacy rows once
+- [x] Pin execution sessions to task snapshot version/hash and reuse pinned policy
+- [x] Store meeting policy version/hash on creation
+- [x] Run targeted canonical/task/session tests and full `pnpm build`
+
+## Canonical redesign steps 13-20 (2026-04-15)
+
+- [x] Replace heuristic routing/provider resolution with canonical precedence engine
+- [x] Swap meeting authority and delegation to family-first canonical rules
+- [x] Cut legacy role / workflow role controls from CRUD and hybrid UI surfaces
+- [x] Convert workflow pack and office pack flows to projection-only read models
+- [x] Add regression coverage for routing, authority, delegation, UI, and pack cutover
+- [x] Run full `pnpm test` and `pnpm build`
+
+## Canonical redesign steps 13-20 verification (2026-04-15)
+
+- API
+  - `corepack pnpm test:api -- server/modules/workflow/agents/provider-policy-resolver.test.ts server/modules/routes/core/tasks/crud.workflow-pack-filter.test.ts server/modules/routes/core/agents/crud.seed-filter.test.ts server/modules/routes/collab/office-pack-agent-hydration.test.ts server/modules/workflow/orchestration/meetings/leader-selection.test.ts`
+  - `corepack pnpm test:api -- server/modules/routes/collab/language-policy.test.ts server/modules/routes/collab/coordination/cross-dept-cooperation.test.ts`
+  - `corepack pnpm test:api -- server/modules/workflow/orchestration/meetings/review-consensus.test.ts`
+  - `corepack pnpm test:api -- server/modules/company/canonical-policy.test.ts server/modules/routes/ops/settings-stats.seed-init.test.ts server/modules/routes/core/tasks/execution-run-auto-assign.test.ts server/modules/routes/ops/messages/directive-leader-scope.test.ts`
+  - result: targeted canonical routing/authority/delegation tests passed
+
+- Web
+  - `corepack pnpm test:web -- src/components/settings/ApiAssignModal.test.tsx src/components/settings/WorkflowPacksTab.test.tsx src/components/settings/CanonicalInspectorTab.test.tsx src/components/AgentManager.agent-profile.test.tsx src/components/agent-manager/AgentFormModal.test.tsx`
+  - `corepack pnpm test:web -- src/components/settings/CanonicalInspectorTab.test.tsx src/components/settings/WorkflowPacksTab.test.tsx src/components/settings/useApiProvidersState.test.tsx src/components/agent-manager/AgentFormModal.test.tsx src/components/AgentManager.agent-profile.test.tsx src/app/office-workflow-pack.test.ts`
+  - result: localized UI / inspector / projection-only tests passed
+
+- Full regression
+  - `corepack pnpm test`
+  - `corepack pnpm build`
+  - result: full regression and production build passed

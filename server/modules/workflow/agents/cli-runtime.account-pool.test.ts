@@ -221,7 +221,7 @@ describe("spawnCliAgent codex cli account pool", () => {
     expect(logText).toContain("selected_by=auto");
   });
 
-  it("fails when multiple connected pools exist and no explicit selection is provided", async () => {
+  it("auto-selects one connected pool when multiple pools exist and no explicit selection is provided", async () => {
     const harness = createHarness();
     cleanups.push(() => harness.close());
 
@@ -236,11 +236,13 @@ describe("spawnCliAgent codex cli account pool", () => {
     insertPool.run(randomUUID(), "codex-a", "Codex A", profileA);
     insertPool.run(randomUUID(), "codex-b", "Codex B", profileB);
 
+    const scriptPath = path.join(harness.logsDir, "print-selected-home.js");
+    fs.writeFileSync(scriptPath, "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);", "utf8");
     const taskLogs: string[] = [];
     const runtime = createCliRuntimeTools({
       db: harness.db as any,
       logsDir: harness.logsDir,
-      buildAgentArgs: () => ["node", "-e", "process.stdout.write('should-not-run')"],
+      buildAgentArgs: () => ["node", scriptPath],
       clearCliOutputDedup: () => {},
       normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
       shouldSkipDuplicateCliOutput: () => false,
@@ -267,9 +269,12 @@ describe("spawnCliAgent codex cli account pool", () => {
     await waitForClose(child);
     const logText = fs.readFileSync(logPath, "utf8");
 
-    expect(logText).toContain("RUN FAILED (cli account pool)");
-    expect(logText).toContain("multiple_pools_require_explicit_selection");
-    expect(taskLogs.some((entry) => entry.includes("multiple_pools_require_explicit_selection"))).toBe(true);
+    expect(logText).toContain("ENV_HOME=");
+    const envHome = logText.match(/ENV_HOME=([^\n\r]*)/i)?.[1] ?? "";
+    expect([profileA, profileB]).toContain(envHome);
+    expect(logText).toContain("selected_by=auto");
+    expect(logText).not.toContain("RUN FAILED (cli account pool)");
+    expect(taskLogs.some((entry) => entry.includes("RUN FAILED (cli account pool)"))).toBe(false);
   });
 
   it("fails when jules pool is not explicitly selected", async () => {

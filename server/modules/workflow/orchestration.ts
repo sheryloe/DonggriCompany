@@ -297,6 +297,9 @@ export function initializeWorkflowPartC(ctx: RuntimeContext): WorkflowOrchestrat
     provider: string;
     openedAt: number;
     lastTouchedAt: number;
+    policyVersion: string;
+    policySnapshotHash: string | null;
+    policyResolutionJson: string;
   }
 
   const taskExecutionSessions = new Map<string, TaskExecutionSessionState>();
@@ -576,6 +579,7 @@ export function initializeWorkflowPartC(ctx: RuntimeContext): WorkflowOrchestrat
     pickL,
     l,
     db,
+    getProviderModelConfig,
     finishReview: (...args: any[]) => (finishReview as any)(...args),
     randomDelay,
     startPlannedApprovalMeeting: (...args: any[]) => (startPlannedApprovalMeeting as any)(...args),

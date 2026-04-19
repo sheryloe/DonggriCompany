@@ -102,18 +102,22 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
         requires_jules_action: number | null;
       }>,
     ): ReviewRoundReviewerVerdict[] =>
-      rows.map((row) => ({
-        agent_id: row.agent_id ?? null,
-        agent_name: row.agent_name ?? null,
-        agent_name_ko: row.agent_name_ko ?? row.agent_name ?? null,
-        lens: row.lens ?? null,
-        final_verdict:
-          row.final_verdict === "approved" || row.final_verdict === "hold" || row.final_verdict === "rejected"
-            ? row.final_verdict
-            : "hold",
-        confidence: Number.isFinite(Number(row.confidence ?? NaN)) ? Number(row.confidence) : 0.5,
-        requires_jules_action: Number(row.requires_jules_action ?? 0) === 1,
-      }));
+      rows.map((row) => {
+        const requiresFollowUp = Number(row.requires_jules_action ?? 0) === 1;
+        return {
+          agent_id: row.agent_id ?? null,
+          agent_name: row.agent_name ?? null,
+          agent_name_ko: row.agent_name_ko ?? row.agent_name ?? null,
+          lens: row.lens ?? null,
+          final_verdict:
+            row.final_verdict === "approved" || row.final_verdict === "hold" || row.final_verdict === "rejected"
+              ? row.final_verdict
+              : "hold",
+          confidence: Number.isFinite(Number(row.confidence ?? NaN)) ? Number(row.confidence) : 0.5,
+          requires_follow_up: requiresFollowUp,
+          requires_jules_action: requiresFollowUp,
+        };
+      });
 
     try {
       const rows = db
@@ -182,8 +186,7 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
   }
 
   function getBlockerCount(verdicts: ReviewRoundReviewerVerdict[]): number {
-    return verdicts.filter((verdict) => verdict.final_verdict !== "approved" || verdict.requires_jules_action === true)
-      .length;
+    return verdicts.filter((verdict) => verdict.final_verdict !== "approved" || verdict.requires_follow_up).length;
   }
 
   function getPreviousRoundBlockerCount(taskId: string, reviewRound: number): number | null {
@@ -208,8 +211,8 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
     let blockers = 0;
     for (const row of rows) {
       const isApproved = String(row.final_verdict ?? "").toLowerCase() === "approved";
-      const requiresAction = Number(row.requires_jules_action ?? 0) === 1;
-      if (!isApproved || requiresAction) blockers += 1;
+      const requiresFollowUp = Number(row.requires_jules_action ?? 0) === 1;
+      if (!isApproved || requiresFollowUp) blockers += 1;
     }
     return blockers;
   }
@@ -336,10 +339,10 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
 
       const summary = t(
         lang,
-        `리뷰 라운드 ${row.meeting_round}에서 blocker ${blockerCount}건이 감지되었습니다.\n작업: '${taskTitle}'\n${projectName ? `프로젝트: '${projectName}'\n` : ""}Jules 반영 방식을 선택하세요. 전체 반영 / 선택 반영 / 최종판정으로 진행.`,
-        `Review round ${row.meeting_round} detected ${blockerCount} blocker(s).\nTask: '${taskTitle}'\n${projectName ? `Project: '${projectName}'\n` : ""}Choose how Jules should handle feedback: apply all, apply selected, or proceed to final verdict.`,
-        `レビューラウンド ${row.meeting_round} で blocker ${blockerCount} 件を検出しました。\nタスク: '${taskTitle}'\n${projectName ? `プロジェクト: '${projectName}'\n` : ""}Jules の反映方法を選択してください。すべて反映 / 選択反映 / 最終判定へ進行。`,
-        `评审轮次 ${row.meeting_round} 检测到 ${blockerCount} 个 blocker。\n任务: '${taskTitle}'\n${projectName ? `项目: '${projectName}'\n` : ""}请选择 Jules 的处理方式：全部采纳 / 选择采纳 / 进入最终判定。`,
+        `리뷰 라운드 ${row.meeting_round}에서 blocker ${blockerCount}건이 감지되었습니다.\n작업: '${taskTitle}'\n${projectName ? `프로젝트: '${projectName}'\n` : ""}피드백 처리 방식을 선택하세요. 전체 반영 / 선택 반영 / 최종판정으로 진행.`,
+        `Review round ${row.meeting_round} detected ${blockerCount} blocker(s).\nTask: '${taskTitle}'\n${projectName ? `Project: '${projectName}'\n` : ""}Choose feedback handling mode: apply all, apply selected, or proceed to final verdict.`,
+        `レビューラウンド ${row.meeting_round} で blocker ${blockerCount} 件を検出しました。\nタスク: '${taskTitle}'\n${projectName ? `プロジェクト: '${projectName}'\n` : ""}フィードバック処理方式を選択してください。すべて反映 / 選択反映 / 最終判定へ進行。`,
+        `评审轮次 ${row.meeting_round} 检测到 ${blockerCount} 个 blocker。\n任务: '${taskTitle}'\n${projectName ? `项目: '${projectName}'\n` : ""}请选择反馈处理方式：全部采纳 / 选择采纳 / 进入最终判定。`,
       );
 
       const snapshotHash = buildReviewRoundSnapshotHash(row.meeting_id, row.meeting_round, optionNotes);
@@ -382,8 +385,8 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
             lang,
             "기획팀 요약 지연 - 기본 옵션으로 진행",
             "Planning summary delayed - baseline options enabled",
-            "企画要約が遅延中 - 基本オプションで進行",
-            "规划摘要延迟 - 按默认选项继续",
+            "企画要約遅延 - 基本オプションで進行",
+            "规划摘要延迟 - 使用基线选项继续",
           )
         : t(lang, "기획팀 요약 완료", "Planning summary ready", "企画要約完了", "规划摘要已完成");
       const plannerSummary = useCollectingFallback
@@ -414,6 +417,7 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
         reviewer_verdicts: reviewerVerdicts,
         blocker_count: blockerCount,
         blocker_delta: blockerDelta,
+        review_action_applied: null,
         jules_applied: null,
         option_notes: optionNotes,
         options,

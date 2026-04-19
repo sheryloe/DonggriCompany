@@ -1,5 +1,6 @@
-import { resolveConstrainedAgentScopeForTask } from "../../../routes/core/tasks/execution-run-auto-assign.ts";
+﻿import { resolveConstrainedAgentScopeForTask } from "../../../routes/core/tasks/execution-run-auto-assign.ts";
 import { isPrimaryAuthorProfile, resolveAgentWorkflowProfile } from "../../agents/workflow-profile.ts";
+import { getCanonicalStageRank, resolveCanonicalIdentity } from "../../../company/canonical-identity.ts";
 
 interface AgentRow {
   id: string;
@@ -28,12 +29,11 @@ interface AgentRow {
 
 type LeaderSelectionDeps = {
   db: any;
-  findTeamLeader: (departmentId: string, candidateAgentIds?: string[] | null) => AgentRow | null;
   detectTargetDepartments: (text: string) => string[];
 };
 
 export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
-  const { db, findTeamLeader, detectTargetDepartments } = deps;
+  const { db, detectTargetDepartments } = deps;
   let cachedTaskColumns: Set<string> | null = null;
 
   function getTaskColumns(): Set<string> {
@@ -44,14 +44,49 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
   }
 
   function getLeadersByDepartmentIds(deptIds: string[], candidateAgentIds?: string[] | null): AgentRow[] {
-    const out: AgentRow[] = [];
+    const filteredDeptIds = deptIds.filter((deptId) => Boolean(deptId));
+    if (filteredDeptIds.length <= 0) return [];
     const seen = new Set<string>();
-    for (const deptId of deptIds) {
-      if (!deptId) continue;
-      const leader = findTeamLeader(deptId, candidateAgentIds);
-      if (!leader || seen.has(leader.id)) continue;
-      out.push(leader);
-      seen.add(leader.id);
+    const out: AgentRow[] = [];
+
+    const scopedIds = Array.isArray(candidateAgentIds)
+      ? [...new Set(candidateAgentIds.map((id) => String(id || "").trim()).filter(Boolean))]
+      : null;
+    if (Array.isArray(scopedIds) && scopedIds.length <= 0) return [];
+
+    const scopeClause = Array.isArray(scopedIds) ? `AND a.id IN (${scopedIds.map(() => "?").join(",")})` : "";
+    const candidates = db
+      .prepare(
+        `
+        SELECT a.*
+        FROM agents a
+        WHERE a.role = 'team_leader'
+          AND a.status != 'offline'
+          AND a.department_id IN (${filteredDeptIds.map(() => "?").join(",")})
+          ${scopeClause}
+        ORDER BY a.department_id ASC, a.name ASC
+        `,
+      )
+      .all(...filteredDeptIds, ...(scopedIds ?? [])) as unknown as AgentRow[];
+
+    const departmentLeaders = new Map<string, AgentRow[]>();
+    for (const row of candidates) {
+      const deptId = String(row.department_id ?? "").trim();
+      if (!deptId || !filteredDeptIds.includes(deptId)) continue;
+      const list = departmentLeaders.get(deptId);
+      if ((list?.length ?? 0) > 0) continue;
+      if (list) {
+        list.push(row);
+      } else {
+        departmentLeaders.set(deptId, [row]);
+      }
+    }
+
+    for (const deptId of filteredDeptIds) {
+      const picked = departmentLeaders.get(deptId)?.[0];
+      if (!picked || seen.has(picked.id)) continue;
+      out.push(picked);
+      seen.add(picked.id);
     }
     return out;
   }
@@ -77,6 +112,34 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
       .all(...(scopedIds ?? [])) as unknown as AgentRow[];
   }
 
+  function pickCanonicalPlanningChair(candidateAgentIds?: string[] | null): AgentRow | null {
+    const leaders = getAllActiveTeamLeaders(candidateAgentIds);
+    if (leaders.length <= 0) return null;
+
+    return (
+      leaders
+        .map((leader) => ({
+          leader,
+          canonical: resolveCanonicalIdentity(leader),
+        }))
+        .sort((left, right) => {
+          const leftFamilyRank = left.canonical.family === "orchestrator" ? 0 : 1;
+          const rightFamilyRank = right.canonical.family === "orchestrator" ? 0 : 1;
+          if (leftFamilyRank !== rightFamilyRank) return leftFamilyRank - rightFamilyRank;
+
+          const leftStageRank = getCanonicalStageRank(left.canonical.career_stage);
+          const rightStageRank = getCanonicalStageRank(right.canonical.career_stage);
+          if (leftStageRank !== rightStageRank) return rightStageRank - leftStageRank;
+
+          if (left.canonical.authority_level !== right.canonical.authority_level) {
+            return right.canonical.authority_level - left.canonical.authority_level;
+          }
+
+          return String(left.leader.name ?? "").localeCompare(String(right.leader.name ?? ""));
+        })[0]?.leader ?? null
+    );
+  }
+
   function listScopedActiveAgents(candidateAgentIds?: string[] | null): AgentRow[] {
     if (Array.isArray(candidateAgentIds) && candidateAgentIds.length <= 0) return [];
     const scopedIds = Array.isArray(candidateAgentIds)
@@ -91,10 +154,36 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
     FROM agents a
     WHERE a.status != 'offline'
       ${scopeClause}
-    ORDER BY CASE WHEN LOWER(COALESCE(a.cli_provider, '')) = 'jules' THEN 0 ELSE 1 END, a.created_at ASC, a.name ASC
+    ORDER BY a.created_at ASC, a.name ASC
   `,
       )
       .all(...(scopedIds ?? [])) as AgentRow[];
+  }
+
+  function inferPackScopedAgentIds(workflowPackKey: string | null | undefined): string[] | null {
+    const packKey = String(workflowPackKey ?? "").trim();
+    if (!packKey || packKey === "development") return null;
+
+    try {
+      const agentColumns = new Set(
+        (db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: string }>).map((row) => String(row.name ?? "")),
+      );
+      if (agentColumns.has("workflow_pack_key")) {
+        const byPackColumn = db
+          .prepare("SELECT id FROM agents WHERE workflow_pack_key = ?")
+          .all(packKey) as Array<{ id?: string }>;
+        const ids = byPackColumn.map((row) => String(row.id ?? "").trim()).filter(Boolean);
+        if (ids.length > 0) return ids;
+      }
+    } catch {
+      // ignore legacy schema gaps
+    }
+
+    const bySeedPrefix = db
+      .prepare("SELECT id FROM agents WHERE id LIKE ?")
+      .all(`${packKey}-%`) as Array<{ id?: string }>;
+    const ids = bySeedPrefix.map((row) => String(row.id ?? "").trim()).filter(Boolean);
+    return ids.length > 0 ? ids : null;
   }
 
   function getPrimaryAuthorAndReviewers(
@@ -112,6 +201,7 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
     if (activeAgents.length <= 0) return { primaryAuthor: null, reviewers: [] };
 
     const profileById = new Map<string, ReturnType<typeof resolveAgentWorkflowProfile>>();
+    const canonicalById = new Map<string, ReturnType<typeof resolveCanonicalIdentity>>();
     for (const agent of activeAgents) {
       profileById.set(
         agent.id,
@@ -122,36 +212,23 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
           departmentId: agent.department_id,
         }),
       );
+      canonicalById.set(agent.id, resolveCanonicalIdentity(agent));
     }
 
     const assignedPrimary =
       activeAgents.find((agent) => {
         if (agent.id !== taskMeta.assigned_agent_id) return false;
         const profile = profileById.get(agent.id);
-        return (
-          isPrimaryAuthorProfile(profile) ||
-          String(agent.cli_provider ?? "")
-            .trim()
-            .toLowerCase() === "jules" ||
-          String(agent.name ?? "")
-            .trim()
-            .toLowerCase() === "jules"
-        );
+        const canonical = canonicalById.get(agent.id);
+        return isPrimaryAuthorProfile(profile) || canonical?.family === "backend" || canonical?.family === "frontend";
       }) ?? null;
 
     const discoveredPrimary =
       assignedPrimary ??
       activeAgents.find((agent) => {
         const profile = profileById.get(agent.id);
-        return (
-          isPrimaryAuthorProfile(profile) &&
-          (String(agent.cli_provider ?? "")
-            .trim()
-            .toLowerCase() === "jules" ||
-            String(agent.name ?? "")
-              .trim()
-              .toLowerCase() === "jules")
-        );
+        const canonical = canonicalById.get(agent.id);
+        return isPrimaryAuthorProfile(profile) || canonical?.family === "backend" || canonical?.family === "frontend";
       }) ??
       null;
 
@@ -162,6 +239,13 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
       .filter((agent) => agent.id !== primaryId)
       .filter((agent) => {
         const profile = profileById.get(agent.id);
+        const canonical = canonicalById.get(agent.id);
+        const stageRank = getCanonicalStageRank(canonical?.career_stage);
+        if (canonical?.family === "reviewer" && stageRank >= getCanonicalStageRank("senior")) return true;
+        if (canonical?.family === "qa" && stageRank >= getCanonicalStageRank("senior")) return true;
+        if ((canonical?.family === "documenter" || canonical?.family === "product-manager") && stageRank >= getCanonicalStageRank("senior")) {
+          return true;
+        }
         return profile?.role === "reviewer";
       })
       .slice(0, 3);
@@ -241,23 +325,32 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
           assigned_agent_id: taskMetaRaw.assigned_agent_id ?? null,
         }
       : undefined;
-    const constrainedAgentIds = resolveConstrainedAgentScopeForTask(db as any, {
+    const resolvedConstrainedAgentIds = resolveConstrainedAgentScopeForTask(db as any, {
       project_id: taskMeta?.project_id ?? null,
       workflow_pack_key: taskMeta?.workflow_pack_key ?? null,
       department_id: taskMeta?.department_id ?? fallbackDeptId ?? null,
     });
-    const packScopedAgentIds = resolveConstrainedAgentScopeForTask(db as any, {
+    const resolvedPackScopedAgentIds = resolveConstrainedAgentScopeForTask(db as any, {
       project_id: null,
       workflow_pack_key: taskMeta?.workflow_pack_key ?? null,
       department_id: taskMeta?.department_id ?? fallbackDeptId ?? null,
     });
+    const inferredPackAgentIds = inferPackScopedAgentIds(taskMeta?.workflow_pack_key ?? null);
+    const constrainedAgentIds =
+      Array.isArray(resolvedConstrainedAgentIds) && resolvedConstrainedAgentIds.length > 0
+        ? resolvedConstrainedAgentIds
+        : inferredPackAgentIds;
+    const packScopedAgentIds =
+      Array.isArray(resolvedPackScopedAgentIds) && resolvedPackScopedAgentIds.length > 0
+        ? resolvedPackScopedAgentIds
+        : inferredPackAgentIds;
 
     const { reviewers: avatarReviewers } = getPrimaryAuthorAndReviewers(taskMeta, constrainedAgentIds);
     if (avatarReviewers.length > 0) {
       return avatarReviewers;
     }
 
-    // 프로젝트 manual 모드 확인 — 지정 직원의 부서 팀장만 참석
+    // In manual assignment mode, include only leaders from explicitly assigned departments.
     if (taskMeta?.project_id) {
       const proj = db.prepare("SELECT assignment_mode FROM projects WHERE id = ?").get(taskMeta.project_id) as
         | { assignment_mode: string }
@@ -275,27 +368,25 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
         const leaders = getLeadersByDepartmentIds(desiredDeptIds, constrainedAgentIds);
         const seen = new Set(leaders.map((l) => l.id));
 
-        // manual 스코프로 찾지 못한 관련부서 팀장은 팩 스코프로 한 번 더 시도한다.
-        for (const deptId of relatedDeptIds) {
-          const hasDeptLeader = leaders.some((leader) => leader.department_id === deptId);
-          if (hasDeptLeader) continue;
-          const fallbackLeader = findTeamLeader(deptId, packScopedAgentIds);
-          if (!fallbackLeader || seen.has(fallbackLeader.id)) continue;
-          leaders.push(fallbackLeader);
-          seen.add(fallbackLeader.id);
-        }
+          for (const deptId of relatedDeptIds) {
+            const hasDeptLeader = leaders.some((leader) => leader.department_id === deptId);
+            if (hasDeptLeader) continue;
+           const fallbackLeader = getLeadersByDepartmentIds([deptId], packScopedAgentIds)[0];
+           if (!fallbackLeader || seen.has(fallbackLeader.id)) continue;
+           leaders.push(fallbackLeader);
+           seen.add(fallbackLeader.id);
+          }
 
         if (includePlanning) {
-          // 기획팀장은 항상 포함
           const planningLeader =
-            findTeamLeader("planning", constrainedAgentIds) ?? findTeamLeader("planning", packScopedAgentIds);
+            pickCanonicalPlanningChair(constrainedAgentIds) ?? pickCanonicalPlanningChair(packScopedAgentIds);
           if (planningLeader && !seen.has(planningLeader.id)) {
             leaders.unshift(planningLeader);
             seen.add(planningLeader.id);
           }
         }
 
-        // manual 모드에서도 관련부서를 감지하지 못했거나 소수일 때는 팩 범위 팀장으로 보강한다.
+        // In manual mode, if related leaders are insufficient, widen within scoped leader candidates.
         if (fallbackAll && leaders.length < minLeaders) {
           const fallbackScope =
             Array.isArray(packScopedAgentIds) && packScopedAgentIds.length > 0
@@ -316,7 +407,7 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
 
     const seen = new Set(leaders.map((l) => l.id));
     if (includePlanning) {
-      const planningLeader = findTeamLeader("planning", constrainedAgentIds);
+      const planningLeader = pickCanonicalPlanningChair(constrainedAgentIds);
       if (planningLeader && !seen.has(planningLeader.id)) {
         leaders.unshift(planningLeader);
         seen.add(planningLeader.id);
@@ -343,3 +434,4 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
     getTaskReviewLeaders,
   };
 }
+

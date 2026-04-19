@@ -8,9 +8,7 @@ export function useNow(localeTag: string, t: TFunction) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setNow(new Date());
-    }, 30000);
+    const timer = window.setInterval(() => setNow(new Date()), 30000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -32,8 +30,8 @@ export function useNow(localeTag: string, t: TFunction) {
     hour < 12
       ? t({ ko: "오전 브리핑", en: "Morning Briefing", ja: "午前ブリーフィング", zh: "上午简报" })
       : hour < 18
-        ? t({ ko: "오후 운영 점검", en: "Afternoon Ops Check", ja: "午後運用点検", zh: "下午运行检查" })
-        : t({ ko: "저녁 마감 점검", en: "Evening Wrap-up", ja: "夜間締め点検", zh: "晚间收尾检查" });
+        ? t({ ko: "오후 운영 점검", en: "Afternoon Ops Check", ja: "午後運用チェック", zh: "下午运营检查" })
+        : t({ ko: "일일 마감 점검", en: "Evening Wrap-up", ja: "終業チェック", zh: "晚间收尾检查" });
 
   return { date, time, briefing };
 }
@@ -51,18 +49,18 @@ export function timeAgo(timestamp: number, localeTag: string): string {
 }
 
 export const RANK_TIERS = [
-  { name: "BRONZE", nameKo: "브론즈", minXp: 0, color: "#CD7F32", glow: "rgba(205,127,50,0.35)", icon: "⚔️" },
-  { name: "SILVER", nameKo: "실버", minXp: 100, color: "#C0C0C0", glow: "rgba(192,192,192,0.35)", icon: "🛡️" },
-  { name: "GOLD", nameKo: "골드", minXp: 500, color: "#FFD700", glow: "rgba(255,215,0,0.35)", icon: "⭐" },
+  { name: "BRONZE", nameKo: "브론즈", minXp: 0, color: "#CD7F32", glow: "rgba(205,127,50,0.35)", icon: "🥉" },
+  { name: "SILVER", nameKo: "실버", minXp: 100, color: "#C0C0C0", glow: "rgba(192,192,192,0.35)", icon: "🥈" },
+  { name: "GOLD", nameKo: "골드", minXp: 500, color: "#FFD700", glow: "rgba(255,215,0,0.35)", icon: "🥇" },
   {
     name: "PLATINUM",
     nameKo: "플래티넘",
     minXp: 2000,
     color: "#00c8b4",
     glow: "rgba(0,200,180,0.35)",
-    icon: "💎",
+    icon: "💠",
   },
-  { name: "DIAMOND", nameKo: "다이아", minXp: 5000, color: "#7df9ff", glow: "rgba(125,249,255,0.35)", icon: "💠" },
+  { name: "DIAMOND", nameKo: "다이아", minXp: 5000, color: "#7df9ff", glow: "rgba(125,249,255,0.35)", icon: "💎" },
   { name: "MASTER", nameKo: "마스터", minXp: 15000, color: "#c45ff6", glow: "rgba(196,95,246,0.35)", icon: "👑" },
 ];
 
@@ -84,7 +82,7 @@ export const STATUS_LABELS: Record<string, { color: string; dot: string }> = {
 };
 
 export const STATUS_LEFT_BORDER: Record<string, string> = {
-  inbox: "border-l-slate-400",
+  inbox: "border-l-slate-500",
   planned: "border-l-blue-400",
   in_progress: "border-l-amber-400",
   review: "border-l-violet-400",
@@ -96,19 +94,19 @@ export const STATUS_LEFT_BORDER: Record<string, string> = {
 export function taskStatusLabel(status: string, t: TFunction) {
   switch (status) {
     case "inbox":
-      return t({ ko: "수신함", en: "Inbox", ja: "受信箱", zh: "收件箱" });
+      return t({ ko: "대기", en: "Inbox", ja: "Inbox", zh: "收件箱" });
     case "planned":
-      return t({ ko: "계획됨", en: "Planned", ja: "計画済み", zh: "已计划" });
+      return t({ ko: "계획", en: "Planned", ja: "Planned", zh: "已计划" });
     case "in_progress":
-      return t({ ko: "진행 중", en: "In Progress", ja: "進行中", zh: "进行中" });
+      return t({ ko: "진행 중", en: "In Progress", ja: "In Progress", zh: "进行中" });
     case "review":
-      return t({ ko: "검토 중", en: "Review", ja: "レビュー", zh: "审核" });
+      return t({ ko: "리뷰", en: "Review", ja: "Review", zh: "评审" });
     case "done":
-      return t({ ko: "완료", en: "Done", ja: "完了", zh: "完成" });
+      return t({ ko: "완료", en: "Done", ja: "Done", zh: "完成" });
     case "pending":
-      return t({ ko: "보류", en: "Pending", ja: "保留", zh: "待处理" });
+      return t({ ko: "보류", en: "Pending", ja: "Pending", zh: "待定" });
     case "cancelled":
-      return t({ ko: "취소됨", en: "Cancelled", ja: "キャンセル", zh: "已取消" });
+      return t({ ko: "취소됨", en: "Cancelled", ja: "Cancelled", zh: "已取消" });
     default:
       return status;
   }
@@ -148,6 +146,7 @@ export function RankBadge({ xp, size = "md" }: { xp: number; size?: "sm" | "md" 
     md: "px-2 py-0.5 text-[10px] gap-1",
     lg: "px-3 py-1 text-xs gap-1",
   };
+
   return (
     <span
       className={`inline-flex items-center rounded-md font-black uppercase tracking-wider ${sizeClasses[size]}`}

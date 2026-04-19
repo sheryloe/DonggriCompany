@@ -172,6 +172,7 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
           id: string;
           assigned_agent_id: string | null;
           title: string;
+          project_id?: string | null;
         }
       | undefined;
     if (!task) return res.status(404).json({ error: "not_found" });
@@ -208,9 +209,9 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
 
     const msgId = randomUUID();
     db.prepare(
-      `INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, created_at)
-     VALUES (?, 'ceo', NULL, 'agent', ?, ?, 'task_assign', ?, ?)`,
-    ).run(msgId, agentId, `New task assigned: ${task.title}`, id, t);
+      `INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, project_id, created_at)
+     VALUES (?, 'ceo', NULL, 'agent', ?, ?, 'task_assign', ?, ?, ?)`,
+    ).run(msgId, agentId, `New task assigned: ${task.title}`, id, task.project_id ?? null, t);
 
     const updatedTask = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
     const updatedAgent = db.prepare("SELECT * FROM agents WHERE id = ?").get(agentId);
@@ -225,6 +226,7 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
       content: `New task assigned: ${task.title}`,
       message_type: "task_assign",
       task_id: id,
+      project_id: task.project_id ?? null,
       created_at: t,
     });
 

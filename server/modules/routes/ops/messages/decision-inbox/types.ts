@@ -15,6 +15,7 @@ export type ReviewRoundReviewerVerdict = {
   lens: string | null;
   final_verdict: "approved" | "hold" | "rejected";
   confidence: number;
+  requires_follow_up: boolean;
   requires_jules_action: boolean;
 };
 
@@ -37,6 +38,7 @@ export interface DecisionInboxRouteItem {
   reviewer_verdicts?: ReviewRoundReviewerVerdict[];
   blocker_count?: number;
   blocker_delta?: number | null;
+  review_action_applied?: boolean | null;
   jules_applied?: boolean | null;
   option_notes?: string[];
   options: DecisionOption[];
@@ -148,7 +150,7 @@ export type AgentOneShotResult = {
   text?: string | null;
 } & Record<string, unknown>;
 
-export type FindTeamLeader = (departmentKey: string) => AgentRow | undefined;
+export type FindTeamLeader = (departmentKey: string | null, candidateAgentIds?: string[] | null) => AgentRow | undefined;
 export type RunAgentOneShot = (
   agent: AgentRow,
   prompt: string,

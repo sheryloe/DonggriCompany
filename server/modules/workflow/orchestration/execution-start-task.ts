@@ -1,4 +1,4 @@
-import path from "node:path";
+﻿import path from "node:path";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import { getDepartmentPromptForPack } from "../packs/department-scope.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../core/video-skill-bootstrap.ts";
@@ -7,8 +7,8 @@ import { resolveVideoArtifactSpecForTask } from "../packs/video-artifact.ts";
 import { buildAgentPromptProfileBlock } from "../agents/agent-profile.ts";
 import { resolveProviderExecutionPolicy } from "../agents/provider-policy-resolver.ts";
 import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
-import { resolveConstrainedAgentScopeForTask } from "../../routes/core/tasks/execution-run-auto-assign.ts";
-import { isPrimaryAuthorProfile, resolveAgentWorkflowProfile } from "../agents/workflow-profile.ts";
+import { previewCanonicalRouting } from "../../company/canonical-policy.ts";
+import { buildCanonicalCapabilityLabel } from "../../company/canonical-display.ts";
 import {
   buildInterruptPromptBlock,
   consumeInterruptPrompts,
@@ -87,116 +87,6 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     let execAgent = requestedAgent;
     let effectiveDeptId = deptId;
     let effectiveDeptName = deptName;
-    try {
-      const taskMeta = db
-        .prepare("SELECT source_task_id, project_id, workflow_pack_key, department_id, title FROM tasks WHERE id = ?")
-        .get(taskId) as
-        | {
-            source_task_id: string | null;
-            project_id: string | null;
-            workflow_pack_key: string | null;
-            department_id: string | null;
-            title: string;
-          }
-        | undefined;
-      if (taskMeta && !taskMeta.source_task_id) {
-        const constrainedAgentIds = resolveConstrainedAgentScopeForTask(db as any, {
-          project_id: taskMeta.project_id,
-          workflow_pack_key: taskMeta.workflow_pack_key,
-          department_id: taskMeta.department_id ?? effectiveDeptId ?? null,
-        });
-        const scopedIds = Array.isArray(constrainedAgentIds)
-          ? [...new Set(constrainedAgentIds.map((id) => String(id ?? "").trim()).filter(Boolean))]
-          : null;
-        if (!Array.isArray(scopedIds) || scopedIds.length > 0) {
-          const scopeClause = Array.isArray(scopedIds) ? `AND a.id IN (${scopedIds.map(() => "?").join(", ")})` : "";
-          const candidates = db
-            .prepare(
-              `
-                SELECT a.*
-                FROM agents a
-                WHERE a.status != 'offline'
-                  ${scopeClause}
-                ORDER BY
-                  CASE WHEN LOWER(COALESCE(a.cli_provider, '')) = 'jules' THEN 0 ELSE 1 END,
-                  CASE WHEN LOWER(COALESCE(a.name, '')) = 'jules' THEN 0 ELSE 1 END,
-                  a.created_at ASC
-              `,
-            )
-            .all(...(scopedIds ?? [])) as Array<Record<string, unknown>>;
-          const preferred = candidates.find((candidate) => {
-            const profile = resolveAgentWorkflowProfile({
-              workflowProfileRaw: candidate.workflow_profile ?? null,
-              agentName: candidate.name,
-              cliProvider: candidate.cli_provider,
-              departmentId: candidate.department_id,
-            });
-            return isPrimaryAuthorProfile(profile);
-          });
-          if (preferred && preferred.id) {
-            const preferredId = String(preferred.id);
-            const preferredBusy =
-              String(preferred.status ?? "").toLowerCase() === "working" &&
-              String(preferred.current_task_id ?? "").trim() &&
-              String(preferred.current_task_id ?? "").trim() !== taskId;
-            if (preferredBusy) {
-              const taskLang = resolveLang(taskMeta.title ?? "");
-              db.prepare("UPDATE tasks SET assigned_agent_id = ?, updated_at = ? WHERE id = ?").run(
-                preferredId,
-                nowMs(),
-                taskId,
-              );
-              appendTaskLog(
-                taskId,
-                "system",
-                `Primary-author gate: ${String(preferred.name ?? preferredId)} is busy on ${String(preferred.current_task_id ?? "")}; execution deferred`,
-              );
-              notifyCeo(
-                pickL(
-                  l(
-                    [
-                      `[PRIMARY AUTHOR] '${taskMeta.title}' 작업은 Jules(primary_author) 우선 정책에 따라 대기합니다. Jules가 다른 작업(${String(preferred.current_task_id ?? "")})을 수행 중입니다.`,
-                    ],
-                    [
-                      `[PRIMARY AUTHOR] '${taskMeta.title}' is waiting due to primary-author policy. Jules is busy on another task (${String(preferred.current_task_id ?? "")}).`,
-                    ],
-                    [
-                      `[PRIMARY AUTHOR] '${taskMeta.title}' は primary_author ポリシーにより待機中です。Jules が別タスク (${String(preferred.current_task_id ?? "")}) を実行中です。`,
-                    ],
-                    [
-                      `[PRIMARY AUTHOR] '${taskMeta.title}' 因 primary_author 策略进入等待。Jules 正在处理其他任务 (${String(preferred.current_task_id ?? "")})。`,
-                    ],
-                  ),
-                  taskLang,
-                ),
-                taskId,
-              );
-              return;
-            }
-            if (preferredId !== String(execAgent.id)) {
-              execAgent = preferred;
-              effectiveDeptId = (preferred.department_id as string | null) ?? effectiveDeptId ?? null;
-              if (effectiveDeptId) {
-                const deptRow = db.prepare("SELECT name FROM departments WHERE id = ? LIMIT 1").get(effectiveDeptId) as
-                  | { name?: string | null }
-                  | undefined;
-                effectiveDeptName = String(deptRow?.name ?? effectiveDeptName ?? "Unassigned");
-              }
-              appendTaskLog(
-                taskId,
-                "system",
-                `Primary-author override: ${requestedAgent.name ?? requestedAgent.id} -> ${String(preferred.name ?? preferred.id)}`,
-              );
-            }
-            db.prepare(
-              "UPDATE tasks SET assigned_agent_id = ?, department_id = COALESCE(department_id, ?), updated_at = ? WHERE id = ?",
-            ).run(preferredId, effectiveDeptId, nowMs(), taskId);
-          }
-        }
-      }
-    } catch (err: any) {
-      appendTaskLog(taskId, "system", `Primary-author override skipped (${String(err?.message ?? err)})`);
-    }
     if (
       String(execAgent.status ?? "").toLowerCase() === "working" &&
       String(execAgent.current_task_id ?? "").trim() &&
@@ -286,7 +176,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
           taskLang === "ko"
             ? l(
                 [
-                  `[WORKTREE REQUIRED] '${taskData.title}' 실행이 차단되었습니다. 격리 worktree 생성에 실패해 프로젝트 루트를 보호하기 위해 실행을 중단했습니다.`,
+                  `[WORKTREE REQUIRED] '${taskData.title}' 실행이 차단되었습니다. 격리 worktree 생성에 실패하여 프로젝트 루트 보호를 위해 실행을 중단했습니다.`, 
                 ],
                 [
                   `[WORKTREE REQUIRED] Blocked execution for '${taskData.title}'. Isolated worktree creation failed, so run was aborted to protect the project root.`,
@@ -300,7 +190,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
               )
             : l(
                 [
-                  `[WORKTREE REQUIRED] '${taskData.title}' ?ㅽ뻾??李⑤떒?덉뒿?덈떎. 寃⑸━ worktree ?앹꽦???ㅽ뙣???꾨줈?앺듃 猷⑦듃 ?ㅼ뿼??諛⑹??섍린 ?꾪빐 以묐떒?섏뿀?듬땲??`,
+                  `[WORKTREE REQUIRED] '${taskData.title}' 실행이 차단되었습니다. 격리 worktree 생성에 실패하여 프로젝트 루트 보호를 위해 실행을 중단했습니다.`, 
                 ],
                 [
                   `[WORKTREE REQUIRED] Blocked execution for '${taskData.title}'. Isolated worktree creation failed, so run was aborted to protect the project root.`,
@@ -321,13 +211,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     const agentCwd = worktreePath;
     appendTaskLog(taskId, "system", `Git worktree created: ${worktreePath} (branch: climpire/${taskId.slice(0, 8)})`);
     const logFilePath = path.join(logsDir, `${taskId}.log`);
-    const roleLabels: Record<string, string> = {
-      team_leader: "Team Leader",
-      senior: "Senior",
-      junior: "Junior",
-      intern: "Intern",
-    };
-    const roleLabel = roleLabels[execAgent.role] ?? execAgent.role;
+    const capabilityLabel = buildCanonicalCapabilityLabel(execAgent, taskLang);
     const deptConstraint = effectiveDeptId ? getDeptRoleConstraint(effectiveDeptId, effectiveDeptName) : "";
     const deptPromptRaw = effectiveDeptId
       ? getDepartmentPromptForPack(db as any, taskData.workflow_pack_key, effectiveDeptId)
@@ -345,7 +229,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
           taskLang === "ko"
             ? l(
                 [
-                  "이어달리기 실행: 인수인계를 유지하고, 인사말이나 착수 멘트는 생략한 뒤, 남은 리뷰 항목부터 바로 처리하세요.",
+                  "연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요.", 
                 ],
                 [
                   "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
@@ -359,7 +243,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
               )
             : l(
                 [
-                  "?곗냽 ?ㅽ뻾: ?뚯쑀 而⑦뀓?ㅽ듃瑜??좎??섍퀬 ?몄궗/李⑹닔 硫섑듃 ?놁씠 誘명빐寃?寃????ぉ??利됱떆 諛섏쁺?섏꽭??",
+                  "연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요.", 
                 ],
                 [
                   "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
@@ -376,13 +260,13 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       : pickL(
           taskLang === "ko"
             ? l(
-                ["긴 서두 없이 바로 실행하고, 메시지는 간결하게 유지하세요."],
+                ["서두 설명 없이 바로 실행하고, 메시지는 간결하게 유지하세요."], 
                 ["Execute directly without long preamble and keep messages concise."],
                 ["Execute directly without long preamble and keep messages concise."],
                 ["Execute directly without long preamble and keep messages concise."],
               )
             : l(
-                ["湲??쒕줎 ?놁씠 諛붾줈 ?ㅽ뻾?섍퀬, 硫붿떆吏??媛꾧껐?섍쾶 ?좎??섏꽭??"],
+                ["서두 설명 없이 바로 실행하고, 메시지는 간결하게 유지하세요."], 
                 ["Execute directly without long preamble and keep messages concise."],
                 ["Execute directly without long preamble and keep messages concise."],
                 ["Execute directly without long preamble and keep messages concise."],
@@ -392,7 +276,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     const runInstruction = pickL(
       taskLang === "ko"
         ? l(
-            ["위 작업을 빠짐없이 완료하세요. 필요하면 위의 이어달리기 브리프와 대화 문맥을 활용하세요."],
+            ["위 작업을 누락 없이 완료하세요. 필요하면 위의 연속 실행 브리프와 대화 컨텍스트를 활용하세요."], 
             [
               "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
             ],
@@ -404,7 +288,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
             ],
           )
         : l(
-            ["???묒뾽??異⑸텇???꾩닔?섏꽭?? ?꾩슂 ???곗냽 ?ㅽ뻾 ?붿빟怨????留λ씫??李멸퀬?섏꽭??"],
+            ["위 작업을 누락 없이 완료하세요. 필요하면 위의 연속 실행 브리프와 대화 컨텍스트를 활용하세요."], 
             [
               "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
             ],
@@ -419,6 +303,17 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     );
     const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(provider);
     const agentProfileBlock = buildAgentPromptProfileBlock(execAgent);
+    const canonicalExecutionPolicy =
+      typeof executionSession.policyResolutionJson === "string" && executionSession.policyResolutionJson.trim()
+        ? (JSON.parse(executionSession.policyResolutionJson) as ReturnType<typeof previewCanonicalRouting>)
+        : previewCanonicalRouting({
+            text: [taskData.title, taskData.description ?? ""].filter(Boolean).join("\n"),
+            projectPath: taskData.project_path,
+            workflowPackKey: taskData.workflow_pack_key,
+            providerModelConfig: getProviderModelConfig(),
+            defaultProvider: provider,
+            policyVersion: executionSession.policyVersion,
+          });
     const spawnPrompt = buildTaskExecutionPrompt(
       [
         availableSkillsPromptBlock,
@@ -428,10 +323,11 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         `[Task] ${taskData.title}`,
         taskData.description ? `\n${taskData.description}` : "",
         workflowPackGuidance ? `\n[Workflow Pack Execution Rules]\n${workflowPackGuidance}` : "",
+        `\n[Canonical Policy]\nversion=${canonicalExecutionPolicy.policyVersion}\nfamily=${canonicalExecutionPolicy.family}\nstage=${canonicalExecutionPolicy.stage}\ntier=${canonicalExecutionPolicy.tier}\nspecialization=${canonicalExecutionPolicy.specialization ?? "none"}`,
         continuationCtx,
         conversationCtx,
         `\n---`,
-        `Agent: ${execAgent.name} (${roleLabel}, ${effectiveDeptName})`,
+        `Agent: ${execAgent.name} (${capabilityLabel}, ${effectiveDeptName})`,
         agentProfileBlock,
         deptConstraint,
         deptPromptBlock,
@@ -491,6 +387,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       const executionPolicy = resolveProviderExecutionPolicy({
         provider,
         providerModelConfig: getProviderModelConfig(),
+        canonicalOverride: canonicalExecutionPolicy,
       });
       const child = spawnCliAgent(
         taskId,
@@ -510,15 +407,15 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     const worktreeNote = pickL(
       taskLang === "ko"
         ? l(
-            [` (격리 브랜치: climpire/${taskId.slice(0, 8)})`],
+            [` (격리 브랜치: climpire/${taskId.slice(0, 8)})`], 
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
           )
         : l(
-            [` (寃⑸━ 釉뚮옖移? climpire/${taskId.slice(0, 8)})`],
+            [` (격리 브랜치: climpire/${taskId.slice(0, 8)})`], 
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
-            [` (?녽썴?뽧꺀?녈긽: climpire/${taskId.slice(0, 8)})`],
+            [` (分離ブランチ: climpire/${taskId.slice(0, 8)})`], 
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
           ),
       taskLang,
@@ -527,16 +424,16 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       pickL(
         taskLang === "ko"
           ? l(
-              [`${execName}이(가) '${taskData.title}' 작업을 시작했습니다.${worktreeNote}`],
+              [`${execName}가 '${taskData.title}' 작업을 시작했습니다.${worktreeNote}`], 
               [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
               [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
               [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
             )
           : l(
-              [`${execName}媛 '${taskData.title}' ?묒뾽???쒖옉?덉뒿?덈떎.${worktreeNote}`],
+              [`${execName}가 '${taskData.title}' 작업을 시작했습니다.${worktreeNote}`], 
               [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
-              [`${execName}??'${taskData.title}' ??퐳璵?굮?뗥쭓?쀣겲?쀣걼??{worktreeNote}`],
-              [`${execName} 藥꿨?冶뗥쨪??'${taskData.title}'??{worktreeNote}`],
+              [`${execName} が '${taskData.title}' の作業を開始しました。${worktreeNote}`], 
+              [`${execName} 已开始处理 '${taskData.title}'。${worktreeNote}`], 
             ),
         taskLang,
       ),

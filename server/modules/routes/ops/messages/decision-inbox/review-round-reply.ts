@@ -72,9 +72,9 @@ function collectRoundFeedbackNotes(
   };
   for (const row of rows) {
     const verdict = String(row.final_verdict ?? "").toLowerCase();
-    const requiresAction = Number(row.requires_jules_action ?? 0) === 1;
+    const requiresFollowUp = Number(row.requires_jules_action ?? 0) === 1;
     const blockingItems = parseBlockingItems(row.blocking_items_json);
-    const hasBlocker = verdict !== "approved" || requiresAction || blockingItems.length > 0;
+    const hasBlocker = verdict !== "approved" || requiresFollowUp || blockingItems.length > 0;
     if (!hasBlocker) continue;
     for (const item of blockingItems) push(item);
     push(row.pass2);
@@ -226,7 +226,7 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
           l(
             [`리뷰 라운드 ${reviewRound} 의사결정: 최종판정으로 진행`],
             [`Review round ${reviewRound} decision: proceed to final verdict`],
-            [`レビューラウンド${reviewRound} 意思決定: 最終判定へ進行`],
+            [`レビューラウンド ${reviewRound} 意思決定: 最終判定へ進行`],
             [`评审轮次 ${reviewRound} 决策：进入最终判定`],
           ),
           lang,
@@ -251,6 +251,7 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
       action: "proceed_final_verdict",
       task_id: taskId,
       review_round: reviewRound,
+      review_action_applied: false,
       jules_applied: false,
     });
     return true;
@@ -310,15 +311,15 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
       summary: pickL(
         l(
           [
-            `리뷰 라운드 ${reviewRound} 의사결정: Jules 반영(${selectedAction === "apply_all_feedback" ? "전체" : "선택"})`,
+            `리뷰 라운드 ${reviewRound} 의사결정: ${selectedAction === "apply_all_feedback" ? "전체 피드백 반영" : "선택 피드백 반영"}`,
           ],
           [
-            `Review round ${reviewRound} decision: Jules applies ${selectedAction === "apply_all_feedback" ? "all" : "selected"} feedback`,
+            `Review round ${reviewRound} decision: ${selectedAction === "apply_all_feedback" ? "apply all feedback" : "apply selected feedback"}`,
           ],
           [
-            `レビューラウンド${reviewRound} 意思決定: Jules が${selectedAction === "apply_all_feedback" ? "全体" : "選択"}反映`,
+            `レビューラウンド ${reviewRound} 意思決定: ${selectedAction === "apply_all_feedback" ? "全フィードバック反映" : "選択フィードバック反映"}`,
           ],
-          [`评审轮次 ${reviewRound} 决策：Jules ${selectedAction === "apply_all_feedback" ? "全部" : "选择"}采纳`],
+          [`评审轮次 ${reviewRound} 决策：${selectedAction === "apply_all_feedback" ? "全部反馈采纳" : "选择反馈采纳"}`],
         ),
         lang,
       ),
@@ -347,6 +348,7 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
     revision_subtask_count: subtaskCount,
     supplement_round_started: supplement.started,
     supplement_round_reason: supplement.reason,
+    review_action_applied: true,
     jules_applied: true,
   });
   return true;

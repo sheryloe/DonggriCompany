@@ -308,8 +308,9 @@ async function forwardTelegramUpdate(params: {
   source: string;
   allowedChatIds: Set<string>;
   fetchImpl: typeof fetch;
+  token: string;
 }): Promise<"forwarded" | "skipped"> {
-  const { update, source, allowedChatIds, fetchImpl } = params;
+  const { update, source, allowedChatIds, fetchImpl, token } = params;
   const message = extractMessage(update);
   if (!message) return "skipped";
 
@@ -350,6 +351,23 @@ async function forwardTelegramUpdate(params: {
   if (!inboxRes.ok) {
     const detail = await inboxRes.text().catch(() => "");
     throw new Error(`inbox forward failed (${inboxRes.status})${detail ? `: ${detail}` : ""}`);
+  }
+
+  // CEO Notification Auto-Reply Logic for Directives and Tasks
+  if (text.startsWith('$') || text.startsWith('#')) {
+    const replyStr = text.startsWith('$') 
+      ? "✅ CEO 지시 수신 완료. 기획팀장(PM)에게 업무를 이관 및 회의 소집 대기 중입니다."
+      : "✅ 태스크 등록 완료. 에이전트 인박스로 이관되었습니다.";
+    
+    await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        reply_to_message_id: message.message_id,
+        text: replyStr
+      })
+    }).catch(console.error);
   }
 
   return "forwarded";
@@ -434,6 +452,7 @@ export async function pollTelegramReceiverOnce(options: {
         source: route.source,
         allowedChatIds: route.allowedChatIds,
         fetchImpl,
+        token: route.token,
       });
       if (result === "forwarded") {
         forwardedAny = true;

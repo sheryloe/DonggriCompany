@@ -63,8 +63,8 @@ interface ProjectEditorPanelProps {
   manualSelectionStats: ProjectManualSelectionStats;
   selectedAgentIds: Set<string>;
   setSelectedAgentIds: Dispatch<SetStateAction<Set<string>>>;
-  staffingPolicyJson: string;
-  setStaffingPolicyJson: Dispatch<SetStateAction<string>>;
+  staffingPolicyJson?: string;
+  setStaffingPolicyJson?: Dispatch<SetStateAction<string>>;
   agentFilterDept: string;
   setAgentFilterDept: Dispatch<SetStateAction<string>>;
   agents: Agent[];
@@ -128,8 +128,8 @@ export default function ProjectEditorPanel({
   manualSelectionStats,
   selectedAgentIds,
   setSelectedAgentIds,
-  staffingPolicyJson,
-  setStaffingPolicyJson,
+  staffingPolicyJson = "",
+  setStaffingPolicyJson = () => {},
   agentFilterDept,
   setAgentFilterDept,
   agents,

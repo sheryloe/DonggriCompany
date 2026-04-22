@@ -60,17 +60,18 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
     return `${text.slice(0, maxChars).trimEnd()}...`;
   }
 
-  function buildFallbackPlanningArchive(
+  function buildFallbackArchive(
     rootTask: Record<string, unknown>,
     entries: Array<Record<string, unknown>>,
     lang: string,
+    deptName: string,
   ): string {
     const header = pickL(
       l(
-        [`# ${rootTask.title ?? "프로젝트"} 최종 취합 보고서`],
-        [`# Final Consolidated Report: ${rootTask.title ?? "Project"}`],
-        [`# 最終統合レポート: ${rootTask.title ?? "プロジェクト"}`],
-        [`# 最终汇总报告：${rootTask.title ?? "项目"}`],
+        [`# ${rootTask.title ?? "프로젝트"} [${deptName}] 최종 취합 보고서`],
+        [`# Final Consolidated Report (${deptName}): ${rootTask.title ?? "Project"}`],
+        [`# 最終統合レポート (${deptName}): ${rootTask.title ?? "プロジェクト"}`],
+        [`# [${deptName}] 最终汇总报告：${rootTask.title ?? "项目"}`],
       ),
       lang,
     );
@@ -82,12 +83,12 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
       summaryTitle,
       pickL(
         l(
-          ["프로젝트 완료 기준으로 팀별 결과를 취합했습니다. 아래 섹션에서 팀별 최신 보고/결과 스니펫을 확인하세요."],
+          [`${deptName} 부서의 업무 완료 기준으로 결과를 취합했습니다. 아래 섹션에서 개별 리포트 스니펫을 확인하세요.`],
           [
-            "Compiled team outputs at project completion. See the sections below for latest team report/result snippets.",
+            `Compiled ${deptName} outputs at task completion. See the sections below for latest report/result snippets.`,
           ],
-          ["プロジェクト完了時点でチーム成果を統合しました。以下で各チームの最新報告/結果要約を確認してください。"],
-          ["已在项目完成时汇总各团队产出。请在下方查看各团队最新报告/结果摘要。"],
+          [`${deptName} 部署の業務完了時点で成果を統合しました。以下で各担当の最新報告/結果要約を確認してください。`],
+          [`已按 ${deptName} 部门的业务完成情况汇总产出。请在下方查看各成员最新报告/结果摘要。`],
         ),
         lang,
       ),
@@ -114,7 +115,11 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
     return lines.join("\n").trim();
   }
 
-  async function archivePlanningConsolidatedReport(rootTaskId: string): Promise<void> {
+  /**
+   * Generates and archives a consolidated report for a root task (or parent task with children).
+   * Renamed and generalized from archivePlanningConsolidatedReport for all departments.
+   */
+  async function archiveConsolidatedDepartmentReport(rootTaskId: string): Promise<void> {
     try {
       const rootTask = db
         .prepare(
@@ -136,8 +141,10 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
         | undefined;
       if (!rootTask) return;
 
-      const planningLeader = findTeamLeader(null) || findTeamLeader(rootTask.department_id ?? "");
-      if (!planningLeader) return;
+      const deptId = rootTask.department_id;
+      const deptName = getDeptName(deptId, "en") || "General";
+      const leader = findTeamLeader(deptId);
+      if (!leader) return;
 
       const relatedTasks = db
         .prepare(
@@ -211,37 +218,38 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
         .join("\n\n");
 
       const consolidationPrompt = [
-        `You are the planning lead (${planningLeader.name}).`,
+        `You are the ${deptName} lead (${leader.name}).`,
         `Create one final consolidated markdown report for the CEO in language: ${lang}.`,
         "Requirements:",
-        "- Must be concrete, not generic.",
-        "- Include: Executive Summary, Team-by-team Consolidation, Evidence & Logs, Risks, Final Approval Note.",
-        "- Mention all participating teams/tasks from the source.",
-        "- Output only markdown.",
+        "- Must be professional, concrete, and department-specific.",
+        "- Include: Executive Summary, Detailed Consolidation of sub-tasks, Key Achievements, Risks/Issues, and Next Steps.",
+        "- Mention all participating agents and their specific contributions.",
+        "- Output only clean markdown.",
         `Project title: ${rootTask.title}`,
         `Project root task id: ${rootTaskId}`,
         "",
-        "Source material:",
+        "Source material (Reports & Result Snippets):",
         evidenceBlock,
       ].join("\n");
 
       let summaryMarkdown = "";
       try {
-        const run = await runAgentOneShot(planningLeader, consolidationPrompt, {
+        const run = await runAgentOneShot(leader, consolidationPrompt, {
           projectPath,
-          timeoutMs: 45_000,
+          timeoutMs: 60_000,
           noTools: true,
         });
         summaryMarkdown = cleanArchiveText(
-          normalizeConversationReply(run.text || "", 12_000, { maxSentences: 0 }).trim(),
+          normalizeConversationReply(run.text || "", 15_000, { maxSentences: 0 }).trim(),
         );
       } catch {
         summaryMarkdown = "";
       }
 
       if (!summaryMarkdown || summaryMarkdown.length < 240) {
-        summaryMarkdown = buildFallbackPlanningArchive(rootTask as Record<string, unknown>, entries, lang);
+        summaryMarkdown = buildFallbackArchive(rootTask as Record<string, unknown>, entries, lang, deptName);
       }
+
       const evidenceHeader = pickL(
         l(
           ["## 취합 근거 스냅샷"],
@@ -253,23 +261,7 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
       );
       const hasEvidenceHeader = summaryMarkdown.includes(evidenceHeader);
       if (!hasEvidenceHeader) {
-        const evidenceLines = entries
-          .map((entry, idx) => {
-            const dept = String(entry.dept_name || entry.department_id || "-");
-            const agent = String(entry.agent_name || "-");
-            const latestReport = cleanArchiveText(entry.latest_report ?? "");
-            const resultSnippet = cleanArchiveText(entry.result_snippet ?? "");
-            return [
-              `### ${idx + 1}. ${entry.title ?? "Task"}`,
-              `- Department: ${dept}`,
-              `- Agent: ${agent}`,
-              `- Status: ${entry.status || "-"}`,
-              `- Latest report: ${latestReport || "-"}`,
-              `- Result snippet: ${resultSnippet || "-"}`,
-            ].join("\n");
-          })
-          .join("\n\n");
-        summaryMarkdown = `${summaryMarkdown}\n\n${evidenceHeader}\n\n${evidenceLines}`.trim();
+        summaryMarkdown = `${summaryMarkdown}\n\n${evidenceHeader}\n\n${evidenceBlock}`.trim();
       }
 
       const t = nowMs();
@@ -290,23 +282,25 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
       source_snapshot_json = excluded.source_snapshot_json,
       updated_at = excluded.updated_at
   `,
-      ).run(randomUUID(), rootTaskId, planningLeader.id, summaryMarkdown, snapshot, t, t);
+      ).run(randomUUID(), rootTaskId, leader.id, summaryMarkdown, snapshot, t, t);
 
       appendTaskLog(
         rootTaskId,
         "system",
-        `Planning consolidated archive updated (${planningLeader.name}, chars=${summaryMarkdown.length})`,
+        `Consolidated department archive updated by ${leader.name} (${deptName}, chars=${summaryMarkdown.length})`,
       );
+
+      const leaderDisplayName = getAgentDisplayName(leader, lang);
       sendAgentMessage(
-        planningLeader,
+        leader,
         pickL(
           l(
-            ["대표님, 기획팀장 최종 취합본을 생성해 아카이빙했습니다. 보고서 팝업에서 확인하실 수 있습니다."],
+            [`대표님, ${deptName} 팀장으로서 최종 취합본을 생성해 아카이빙했습니다. 보고서 팝업에서 확인하실 수 있습니다.`],
             [
-              "CEO, the planning lead consolidated final report has been generated and archived. You can review it from the report popup.",
+              `CEO, as the ${deptName} lead, I have generated and archived the consolidated final report. You can review it from the report popup.`,
             ],
-            ["CEO、企画リード最終統合レポートを生成し、アーカイブしました。レポートポップアップから確認できます。"],
-            ["CEO，规划负责人最终汇总报告已生成并归档，可在报告弹窗中查看。"],
+            [`CEO、${deptName} リードとして最終統合レポートを生成し、アーカイブしました。レポートポップアップから確認できます。`],
+            [`CEO，作为 ${deptName} 负责人，我已生成并归档最终汇总报告，可在报告弹窗中查看。`],
           ),
           lang,
         ),
@@ -317,14 +311,16 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
       );
       broadcast("task_report", { task: { id: rootTaskId } });
     } catch (err) {
-      console.error("[Claw-Empire] planning archive generation error:", err);
+      console.error("[Claw-Empire] consolidated archive generation error:", err);
     }
   }
 
   return {
     cleanArchiveText,
     clipArchiveText,
-    buildFallbackPlanningArchive,
-    archivePlanningConsolidatedReport,
+    buildFallbackArchive,
+    archiveConsolidatedDepartmentReport,
+    // Keep legacy name for a moment to avoid breaking transitive calls before they are updated
+    archivePlanningConsolidatedReport: archiveConsolidatedDepartmentReport,
   };
 }

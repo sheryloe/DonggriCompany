@@ -24,7 +24,7 @@ interface UseProjectSaveHandlerParams {
   name: string;
   coreGoal: string;
   selectedAgentIds: Set<string>;
-  staffingPolicyJson: string;
+  staffingPolicyJson?: string;
   githubAutoCreateEnabled: boolean;
   githubRepoName: string;
   githubRepoPrivate: boolean;
@@ -58,7 +58,7 @@ export function useProjectSaveHandler({
   name,
   coreGoal,
   selectedAgentIds,
-  staffingPolicyJson,
+  staffingPolicyJson = "",
   githubAutoCreateEnabled,
   githubRepoName,
   githubRepoPrivate,

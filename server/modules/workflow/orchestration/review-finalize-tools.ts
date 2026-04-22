@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 import {
   discoverVideoArtifact,
@@ -40,6 +40,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
     formatTaskSubtaskProgressSummary,
     reviewRoundState,
     reviewInFlight,
+    archiveConsolidatedDepartmentReport: rawArchiveConsolidatedDepartmentReport,
     archivePlanningConsolidatedReport,
     crossDeptNextCallbacks,
     recoverCrossDeptQueueAfterMissingCallback,
@@ -47,6 +48,10 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
     startReviewConsensusMeeting,
     processSubtaskDelegations,
   } = deps;
+  const archiveConsolidatedDepartmentReport =
+    typeof rawArchiveConsolidatedDepartmentReport === "function"
+      ? rawArchiveConsolidatedDepartmentReport
+      : archivePlanningConsolidatedReport;
 
   const taskHasCompletedAt = (() => {
     try {
@@ -152,32 +157,60 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
         );
         broadcast("subtask_update", db.prepare("SELECT * FROM subtasks WHERE id = ?").get(sub.id));
       }
-      appendTaskLog(taskId, "system", `Delegated subtask sync: marked ${linked.length} linked subtask(s) as done`);
+
+      const subtaskCount = linked.length;
+      appendTaskLog(taskId, "system", `Delegated subtask sync: marked ${subtaskCount} linked subtask(s) as done`);
 
       for (const parentTaskId of touchedParents) {
-        const parent = db.prepare("SELECT id, title, status FROM tasks WHERE id = ?").get(parentTaskId) as
+        const parent = db.prepare("SELECT id, title, status, assigned_agent_id FROM tasks WHERE id = ?").get(parentTaskId) as
           | {
               id: string;
               title: string;
               status: string;
+              assigned_agent_id: string;
             }
           | undefined;
         if (!parent) continue;
-        const remaining = db
-          .prepare("SELECT COUNT(*) AS cnt FROM subtasks WHERE task_id = ? AND status NOT IN ('done', 'cancelled')")
-          .get(parentTaskId) as { cnt: number } | undefined;
-        if ((remaining?.cnt ?? 0) === 0 && parent.status === "review") {
+
+        const progress = db
+          .prepare(`
+            SELECT
+              COUNT(*) AS total,
+              SUM(CASE WHEN status = 'done' OR status = 'cancelled' THEN 1 ELSE 0 END) AS done_cnt
+            FROM subtasks
+            WHERE task_id = ?
+          `)
+          .get(parentTaskId) as { total: number; done_cnt: number };
+
+        const leader = db.prepare("SELECT * FROM agents WHERE id = ?").get(parent.assigned_agent_id);
+        if (leader) {
+          const lang = getPreferredLanguage();
+          const percent = Math.round((progress.done_cnt / (progress.total || 1)) * 100);
+          const relayMsg = pickL(
+            l(
+              [`[상태 중계] '${parent.title}' 공정률 ${percent}% 달성 (${progress.done_cnt}/${progress.total} 완료).`],
+              [`[Status Relay] '${parent.title}' progress reached ${percent}% (${progress.done_cnt}/${progress.total} done).`],
+              [`[進捗中継] '${parent.title}' 進捗率 ${percent}% 達成 (${progress.done_cnt}/${progress.total} 完了)。`],
+              [`[状态中继] '${parent.title}' 进度达成 ${percent}% (${progress.done_cnt}/${progress.total} 已完成)。`]
+            ),
+            lang
+          );
+          // Relay to messenger via notifyCeo (which handles Telegram routing)
+          notifyCeo(relayMsg, parentTaskId);
+        }
+
+        if (progress.done_cnt === progress.total && parent.status === "review") {
           appendTaskLog(
             parentTaskId,
             "system",
-            "All delegated subtasks completed after resume; retrying review completion",
+            "All delegated subtasks completed; initiating autonomous consolidation and review finalization",
           );
           const yolo = readYoloModeEnabled(db);
           setTimeout(
             () =>
               finishReview(parentTaskId, parent.title, {
                 bypassProjectDecisionGate: yolo,
-                trigger: "delegated_subtask_completion",
+                trigger: "delegated_subtask_completion_consolidation",
               }),
             1200,
           );
@@ -494,7 +527,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
                 `'${taskTitle}' approval/merge is on hold because \`${videoArtifactSpec.relativePath}\` is not verified. Verify rendered output first, then approve again.`,
               ],
               [
-                `'${taskTitle}' は \`${videoArtifactSpec.relativePath}\` が未確認のため、承認/マージを保留しました。レンダー結果を確認して再承認してください。`,
+                `'${taskTitle}' approval/merge is on hold because \`${videoArtifactSpec.relativePath}\` is not verified. Verify rendered output first, then approve again.`,
               ],
               [
                 `'${taskTitle}' 的视频产物（\`${videoArtifactSpec.relativePath}\`）未验证，已暂缓批准/合并。请确认渲染结果后再次批准。`,
@@ -573,7 +606,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
                 `'${taskTitle}' approval/merge is on hold because Remotion render evidence was not verified. Re-render [VIDEO_FINAL_RENDER] with Remotion, then approve again.`,
               ],
               [
-                `'${taskTitle}' は Remotion レンダー実行証跡が未確認のため承認/マージを保留しました。[VIDEO_FINAL_RENDER] を Remotion で再レンダーして再承認してください。`,
+                `'${taskTitle}' approval/merge is on hold because Remotion render evidence was not verified. Re-render [VIDEO_FINAL_RENDER] with Remotion, then approve again.`,
               ],
               [
                 `'${taskTitle}' 因未验证到 Remotion 渲染证据，已暂缓批准/合并。请使用 Remotion 重新渲染 [VIDEO_FINAL_RENDER] 后再批准。`,
@@ -625,7 +658,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
           mergeNote = githubRepo
             ? pickL(
                 l(
-                  [" (dev 蹂묓빀 + PR ?앹꽦)"],
+                  [" (dev 병합 + PR 생성)"],
                   [" (merged to dev + PR)"],
                   [" (dev マージ + PR 作成)"],
                   [" (合并到 dev + PR)"],
@@ -645,7 +678,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
           const conflictFiles = mergeResult.conflicts?.length
             ? pickL(
                 l(
-                  [`\n異⑸룎 ?뚯씪: ${mergeResult.conflicts.join(", ")}`],
+                  [`\n충돌 파일: ${mergeResult.conflicts.join(", ")}`],
                   [`\nConflicting files: ${mergeResult.conflicts.join(", ")}`],
                   [`\n競合ファイル: ${mergeResult.conflicts.join(", ")}`],
                   [`\n冲突文件: ${mergeResult.conflicts.join(", ")}`],
@@ -663,7 +696,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
                   `${conflictLeaderName}: Merge conflict while merging '${taskTitle}'. Manual resolution is required.${conflictFiles}\nBranch: ${wtInfo.branchName}`,
                 ],
                 [
-                  `${conflictLeaderName}: '${taskTitle}' のマージ中に競合が発生しました。手動解決が必要です。${conflictFiles}\nブランチ: ${wtInfo.branchName}`,
+                  `${conflictLeaderName}: Merge conflict while merging '${taskTitle}'. Manual resolution is required.${conflictFiles}\nBranch: ${wtInfo.branchName}`,
                 ],
                 [
                   `${conflictLeaderName}: '${taskTitle}' 合并时发生冲突，需要人工解决。${conflictFiles}\n分支: ${wtInfo.branchName}`,
@@ -731,14 +764,14 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
         : pickL(l(["팀장"], ["Team Lead"], ["チームリード"], ["组长"]), lang);
       const subtaskProgressSummary = formatTaskSubtaskProgressSummary(taskId, lang);
       const progressSuffix = subtaskProgressSummary
-        ? `\n${pickL(l(["보완/협업 완료 현황"], ["Remediation/Collaboration completion"], ["修正/協업完了状況"], ["修复/协作完成情况"]), lang)}\n${subtaskProgressSummary}`
+        ? `\n${pickL(l(["보완/협업 완료 현황"], ["Remediation/Collaboration completion"], ["Remediation/Collaboration completion"], ["修复/协作完成情况"]), lang)}\n${subtaskProgressSummary}`
         : "";
       notifyCeo(
         pickL(
           l(
             [`${leaderName}: '${taskTitle}' 최종 승인 완료 보고드립니다.${mergeNote}${progressSuffix}`],
             [`${leaderName}: Final approval completed for '${taskTitle}'.${mergeNote}${progressSuffix}`],
-            [`${leaderName}: '${taskTitle}' の最終承認完了を報告します。${mergeNote}${progressSuffix}`],
+            [`${leaderName}: Final approval completed for '${taskTitle}'.${mergeNote}${progressSuffix}`],
             [`${leaderName}: '${taskTitle}' 最终批准已完成。${mergeNote}${progressSuffix}`],
           ),
           lang,
@@ -764,8 +797,8 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
             finishReview(child.id, child.title);
           }
         }
-        // Generate and archive one consolidated project report via planning leader model.
-        void archivePlanningConsolidatedReport(taskId);
+        // Generate and archive one consolidated project report via department leader model.
+        void archiveConsolidatedDepartmentReport(taskId);
       }
 
       const nextCallback = crossDeptNextCallbacks.get(taskId);

@@ -440,16 +440,21 @@ export function initializeWorkflowPartC(ctx: RuntimeContext): WorkflowOrchestrat
     return planningArchiveTools.clipArchiveText(value, maxChars);
   }
 
-  function buildFallbackPlanningArchive(
+  function buildFallbackArchive(
     rootTask: Record<string, unknown>,
     entries: Array<Record<string, unknown>>,
     lang: string,
+    deptName: string,
   ): string {
-    return planningArchiveTools.buildFallbackPlanningArchive(rootTask, entries, lang);
+    return planningArchiveTools.buildFallbackArchive(rootTask, entries, lang, deptName);
+  }
+
+  async function archiveConsolidatedDepartmentReport(rootTaskId: string): Promise<void> {
+    await planningArchiveTools.archiveConsolidatedDepartmentReport(rootTaskId);
   }
 
   async function archivePlanningConsolidatedReport(rootTaskId: string): Promise<void> {
-    await planningArchiveTools.archivePlanningConsolidatedReport(rootTaskId);
+    await archiveConsolidatedDepartmentReport(rootTaskId);
   }
 
   const { startTaskExecutionForAgent } = createExecutionStartTaskTools({
@@ -697,6 +702,7 @@ export function initializeWorkflowPartC(ctx: RuntimeContext): WorkflowOrchestrat
     formatTaskSubtaskProgressSummary,
     reviewRoundState,
     reviewInFlight,
+    archiveConsolidatedDepartmentReport,
     archivePlanningConsolidatedReport,
     crossDeptNextCallbacks,
     recoverCrossDeptQueueAfterMissingCallback,

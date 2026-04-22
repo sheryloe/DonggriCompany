@@ -846,7 +846,13 @@ export function registerDirectiveAndInboxRoutes(
        const targetAgent = db.prepare("SELECT id FROM agents WHERE name LIKE ? OR department_id LIKE ? COLLATE NOCASE LIMIT 1").get(`%${assigneeName}%`, `%${assigneeName}%`) as { id: string } | undefined;
        if (targetAgent) {
           routedAgent = targetAgent;
-          sessionRoute = { agentId: targetAgent.id, channel: "cli", sessionId: "delegated", targetId: "delegated" };
+          sessionRoute = {
+            agentId: targetAgent.id,
+            channel: "telegram",
+            sessionId: "delegated",
+            sessionName: "Agent Delegation",
+            targetId: "delegated",
+          };
        }
     }
     const shouldRouteToSessionAgent = Boolean(sessionRoute && routedAgent);

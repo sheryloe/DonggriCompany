@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CliModelInfo, CliStatusMap, CompanySettings } from "../types";
+import type { CliModelInfo, CliStatusMap, CompanySettings, Department } from "../types";
 import * as api from "../api";
 import type {
   DeviceCodeStart,

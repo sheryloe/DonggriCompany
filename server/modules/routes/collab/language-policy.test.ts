@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+﻿import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
 import { initializeCollabLanguagePolicy } from "./language-policy.ts";
@@ -23,7 +23,7 @@ function setupDb(): DatabaseSync {
 }
 
 describe("language-policy detectTargetDepartments", () => {
-  it("오피스팩 커스텀 부서명(로컬라이즈드 이름)으로 관련 부서를 감지한다", () => {
+  it("한글 부서명/별칭으로 대상 부서를 감지한다", () => {
     const db = setupDb();
     try {
       db.prepare("INSERT INTO settings (key, value) VALUES ('language', '\"ko\"')").run();
@@ -33,17 +33,17 @@ describe("language-policy detectTargetDepartments", () => {
         "planning",
         "Pre-production",
         "프리프로덕션팀",
-        "プリプロ班",
-        "前期策划组",
+        "Planning Team",
+        "Planning Team",
         "dev",
         "Scene Engine",
-        "씬 엔진팀",
-        "シーン設計",
-        "场景引擎组",
+        "씬엔진팀",
+        "Development Team",
+        "Development Team",
       );
 
       const { detectTargetDepartments } = initializeCollabLanguagePolicy({ db });
-      const found = detectTargetDepartments("프리프로덕션팀과 씬 엔진팀이 함께 콘티를 준비해줘");
+      const found = detectTargetDepartments("프리프로덕션팀과 씬엔진팀이 콘티를 준비해주세요");
 
       expect(found).toContain("planning");
       expect(found).toContain("dev");
@@ -52,7 +52,7 @@ describe("language-policy detectTargetDepartments", () => {
     }
   });
 
-  it("팀/부서 접미어 없이도 부서명을 감지한다", () => {
+  it("팀/부서 접미사 없이도 부서명을 감지한다", () => {
     const db = setupDb();
     try {
       db.prepare("INSERT INTO settings (key, value) VALUES ('language', '\"ko\"')").run();
@@ -60,12 +60,12 @@ describe("language-policy detectTargetDepartments", () => {
         "planning",
         "Pre-production",
         "프리프로덕션팀",
-        "プリプロ班",
-        "前期策划组",
+        "Planning Team",
+        "Planning Team",
       );
 
       const { detectTargetDepartments } = initializeCollabLanguagePolicy({ db });
-      const found = detectTargetDepartments("프리프로덕션 이슈를 먼저 검토해줘");
+      const found = detectTargetDepartments("프리프로덕션 일정부터 먼저 검토해주세요");
 
       expect(found).toContain("planning");
     } finally {

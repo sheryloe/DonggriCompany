@@ -1,4 +1,4 @@
-import type { RuntimeContext, RouteCollabExports } from "../../types/runtime-context.ts";
+﻿import type { RuntimeContext, RouteCollabExports } from "../../types/runtime-context.ts";
 import type { Lang } from "../../types/lang.ts";
 import { randomUUID } from "node:crypto";
 import { sendMessengerMessage, sendMessengerSessionMessage, type MessengerChannel } from "../../gateway/client.ts";
@@ -15,6 +15,7 @@ import { createTaskDelegationHandler } from "./collab/task-delegation.ts";
 import { deriveFamilyFromDepartment, getCanonicalStageRank, resolveCanonicalIdentity } from "../company/canonical-identity.ts";
 import { pickCanonicalMeetingChair } from "../company/canonical-authority.ts";
 import { getDepartmentForPack, readActiveOfficeWorkflowPackKey } from "../workflow/packs/department-scope.ts";
+import { getDepartmentResponsibilityText, mapLegacyDepartmentId } from "../bootstrap/schema/organization-manifest.ts";
 
 export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
   const __ctx: RuntimeContext = ctx;
@@ -245,36 +246,33 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
 
   function extractTaskTitleFromReportText(content: string, requestLine: string): string {
     const source = requestLine || content;
-    const quoted =
-      source.match(/['"]([^'"]{2,220})['"]/) ??
-      source.match(/「([^」]{2,220})」/) ??
-      source.match(/『([^』]{2,220})』/);
+    const quoted = source.match(/['"]([^'"]{2,220})['"]/) ?? source.match(/\[([^\]]{2,220})\]/);
     const picked = quoted?.[1] ?? "";
     return truncateMessengerText(normalizeMessengerTextLine(picked), 90);
   }
 
   function buildMessengerReportIdentityIntro(agent: AgentRow, content: string, requestLine: string): string {
     const hasKorean = /[가-힣]/.test(content);
-    const hasJapanese = /[ぁ-んァ-ン一-龯]/.test(content);
+    const hasJapanese = /[\u3040-\u30ff]/.test(content);
     const hasChinese = /[\u4e00-\u9fff]/.test(content) && !hasJapanese;
     const displayName = normalizeMessengerTextLine(agent.name_ko || agent.name || "Agent");
-    const avatar = normalizeMessengerTextLine(agent.avatar_emoji || "🤖");
+    const avatar = normalizeMessengerTextLine(agent.avatar_emoji || "BOT");
     const taskTitle = extractTaskTitleFromReportText(content, requestLine);
 
     if (hasKorean) {
       return taskTitle
-        ? `${avatar} ${displayName} 보고: '${taskTitle}' 완료 결과를 전달드려요.`
-        : `${avatar} ${displayName} 보고: 완료 결과를 전달드려요.`;
+        ? `${avatar} ${displayName} 보고: '${taskTitle}' 완료 결과를 전달합니다.`
+        : `${avatar} ${displayName} 보고: 완료 결과를 전달합니다.`;
     }
     if (hasJapanese) {
       return taskTitle
-        ? `${avatar} ${displayName} から報告: '${taskTitle}' の完了結果を共有します。`
-        : `${avatar} ${displayName} から報告: 完了結果を共有します。`;
+        ? `${avatar} ${displayName} report: sharing completion result for '${taskTitle}'.`
+        : `${avatar} ${displayName} report: sharing completion result.`;
     }
     if (hasChinese) {
       return taskTitle
-        ? `${avatar} ${displayName} 汇报：'${taskTitle}' 已完成，现发送结果。`
-        : `${avatar} ${displayName} 汇报：任务已完成，现发送结果。`;
+        ? `${avatar} ${displayName} report: sharing completion result for '${taskTitle}'.`
+        : `${avatar} ${displayName} report: sharing completion result.`;
     }
     return taskTitle
       ? `${avatar} ${displayName} report: sharing completion result for '${taskTitle}'.`
@@ -285,7 +283,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     const shouldSummarize =
       /\|\s*#\s*\|/i.test(content) ||
       /\|\s*1\s*\|/.test(content) ||
-      /📋\s*(결과|Result|結果|结果)\s*:/i.test(content) ||
+      /(결과|result)\s*:/i.test(content) ||
       content.length >= 900;
     if (!shouldSummarize) return content;
 
@@ -294,12 +292,12 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
 
     const requestLine =
       plainLines.find((line) =>
-        /(업무 완료 보고드립니다|reporting completion|完了をご報告します|汇报.+已完成)/i.test(line),
+        /(업무 완료 보고|reporting completion|completion result)/i.test(line),
       ) ?? "";
     const identityIntro = buildMessengerReportIdentityIntro(agent, content, requestLine);
     const progressLine =
       plainLines.find((line) =>
-        /(?:전체|total)\s*:\s*\d+\s*\/\s*\d+|(?:완료율|completion|progress|진행)\s*[:：]?\s*(?:\d+\s*%|\d+\s*\/\s*\d+)/i.test(
+        /(?:전체|total)\s*:\s*\d+\s*\/\s*\d+|(?:완료|completion|progress|진행)\s*[:：]?\s*(?:\d+\s*%|\d+\s*\/\s*\d+)/i.test(
           line,
         ),
       ) ?? "";
@@ -327,16 +325,16 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       const rawLine = rawLines[i] ?? "";
       const plain = plainLines[i] ?? "";
       if (!inResultSection) {
-        if (/📋\s*(결과|Result|結果|结果)\s*:?/i.test(rawLine) || /^(결과|result|結果|结果)\s*:?$/i.test(plain)) {
+        if (/(결과|result)\s*:?/i.test(rawLine) || /^(결과|result)\s*:?$/i.test(plain)) {
           inResultSection = true;
         }
         continue;
       }
       if (!plain || plain === "...") continue;
-      if (/^[📌📝]/u.test(rawLine.trim())) break;
-      if (/(보완\/협업 진행 요약|Remediation\/Collaboration Progress|変更点|변경사항|Changes)/i.test(plain)) break;
+      if (/^[#\-*]/u.test(rawLine.trim())) break;
+      if (/(보완\/협업 진행 요약|Remediation\/Collaboration Progress|Changes)/i.test(plain)) break;
       if (rawLine.trim().startsWith("|")) continue;
-      const cleaned = plain.replace(/^[-•]\s*/, "").trim();
+      const cleaned = plain.replace(/^[-•*\s]+/, "").trim();
       if (!cleaned) continue;
       resultItems.push(truncateMessengerText(cleaned, 150));
       if (resultItems.length >= 3) break;
@@ -478,7 +476,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       project_id: persistedProjectId,
       created_at: t,
       sender_name: agent.name,
-      sender_avatar: agent.avatar_emoji ?? "🤖",
+      sender_avatar: agent.avatar_emoji ?? "?쨼",
     });
 
     if (shouldRelayTaskBroadcastToMessenger(messageType, receiverType, persistedTaskId)) {
@@ -532,19 +530,19 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
 
   const { normalizeTextField, resolveProjectFromOptions, buildRoundGoal } = initializeProjectResolution({ db });
 
-  /** Detect @mentions in messages — returns department IDs and agent IDs */
+  /** Detect @mentions in messages ??returns department IDs and agent IDs */
   function detectMentions(message: string): { deptIds: string[]; agentIds: string[] } {
     const deptIds: string[] = [];
     const agentIds: string[] = [];
 
-    // Match @부서이름 patterns (both with and without 팀 suffix)
+    // Match @遺?쒖씠由?patterns (both with and without ? suffix)
     const depts = db.prepare("SELECT id, name, name_ko FROM departments").all() as {
       id: string;
       name: string;
       name_ko: string;
     }[];
     for (const dept of depts) {
-      const nameKo = dept.name_ko.replace("팀", "");
+      const nameKo = dept.name_ko.replace("?", "");
       if (
         message.includes(`@${dept.name_ko}`) ||
         message.includes(`@${nameKo}`) ||
@@ -555,7 +553,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       }
     }
 
-    // Match @에이전트이름 patterns
+    // Match @?먯씠?꾪듃?대쫫 patterns
     const agents = db.prepare("SELECT id, name, name_ko FROM agents").all() as {
       id: string;
       name: string;
@@ -576,22 +574,21 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     if (!crossLeader) return;
     const crossDeptName = getDeptName(targetDeptId);
     const crossLeaderName = lang === "ko" ? crossLeader.name_ko || crossLeader.name : crossLeader.name;
-    const originLeaderName = lang === "ko" ? originLeader.name_ko || originLeader.name : originLeader.name;
     const taskTitle = ceoMessage.length > 60 ? ceoMessage.slice(0, 57) + "..." : ceoMessage;
 
     // Origin team leader sends mention request to target team leader
     const mentionReq = pickL(
       l(
         [
-          `${crossLeaderName}님! 대표님 지시입니다: "${taskTitle}" — ${crossDeptName}에서 처리 부탁드립니다! 🏷️`,
-          `${crossLeaderName}님, 대표님이 직접 요청하셨습니다. "${taskTitle}" 건, ${crossDeptName} 담당으로 진행해주세요!`,
+          `${crossLeaderName} 팀에서 '${taskTitle}' 업무를 맡아 주세요. 대상 부서는 ${crossDeptName}입니다.`,
+          `${crossLeaderName}, '${taskTitle}' 건을 ${crossDeptName} 부서 기준으로 진행해 주세요.`,
         ],
         [
-          `${crossLeaderName}! CEO directive for ${crossDeptName}: "${taskTitle}" — please handle this! 🏷️`,
+          `${crossLeaderName}, CEO directive for ${crossDeptName}: "${taskTitle}". Please handle this.`,
           `${crossLeaderName}, CEO requested this for your team: "${taskTitle}"`,
         ],
-        [`${crossLeaderName}さん！CEO指示です："${taskTitle}" — ${crossDeptName}で対応お願いします！🏷️`],
-        [`${crossLeaderName}，CEO指示："${taskTitle}" — 请${crossDeptName}处理！🏷️`],
+        [`${crossLeaderName}, CEO requested this for your team: "${taskTitle}"`],
+        [`${crossLeaderName}, CEO requested this for your team: "${taskTitle}"`],
       ),
       lang,
     );
@@ -949,3 +946,4 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     resetDirectChatState,
   };
 }
+

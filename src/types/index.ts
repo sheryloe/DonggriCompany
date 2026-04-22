@@ -243,6 +243,36 @@ export interface Task {
 
 export type AssignmentMode = "auto" | "manual";
 
+export interface ProjectStaffingPolicyDepartmentOverride {
+  enabled?: boolean;
+  preferred_families?: string[];
+  preferred_specializations?: string[];
+  candidate_agent_ids?: string[];
+  capacity_weight?: number;
+}
+
+export interface ProjectStaffingPolicyTaskTypeOverride {
+  preferred_departments?: string[];
+}
+
+export interface ProjectStaffingPolicyApprovalProfile {
+  require_qa?: boolean;
+  require_security?: boolean;
+  require_docs?: boolean;
+  extra_blocking_families?: string[];
+}
+
+export interface ProjectStaffingPolicy {
+  version: number;
+  mode: "overlay";
+  active_departments: string[];
+  department_overrides: Record<string, ProjectStaffingPolicyDepartmentOverride>;
+  task_type_overrides: Record<string, ProjectStaffingPolicyTaskTypeOverride>;
+  approval_profile: ProjectStaffingPolicyApprovalProfile;
+  updated_by?: string | null;
+  updated_at?: number | null;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -252,6 +282,7 @@ export interface Project {
   canonical_pack_profile?: WorkflowPackKey | string;
   artifact_root_mode?: string | null;
   artifact_projection_version?: string | null;
+  staffing_policy_json?: ProjectStaffingPolicy | string | null;
   assignment_mode: AssignmentMode;
   assigned_agent_ids?: string[];
   last_used_at: number | null;
@@ -529,7 +560,7 @@ export const DEFAULT_SETTINGS: CompanySettings = {
   oauthAutoSwap: true,
   theme: "dark",
   language: "en",
-  defaultProvider: "claude",
+  defaultProvider: "codex",
   officeWorkflowPack: "development",
   providerModelConfig: {
     claude: { model: "claude-opus-4-6", subModel: "claude-sonnet-4-6" },

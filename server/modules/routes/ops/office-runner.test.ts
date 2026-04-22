@@ -1,10 +1,11 @@
 import express from "express";
 import request from "supertest";
 import { DatabaseSync } from "node:sqlite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import { applyOAuthRunnerIsolationSchema } from "../../bootstrap/schema/oauth-runner-isolation.ts";
 import { registerOfficeRunnerRoutes } from "./office-runner.ts";
+import { CliAccountGateService } from "../../services/cli-account-gate-service.ts";
 
 describe("office runner routes", () => {
   let db: DatabaseSync;
@@ -16,6 +17,7 @@ describe("office runner routes", () => {
 
   afterEach(() => {
     db.close();
+    vi.restoreAllMocks();
   });
 
   async function createApp() {
@@ -98,5 +100,48 @@ describe("office runner routes", () => {
 
     expect(response.status).toBe(412);
     expect(response.body.error).toBe("cli_not_connected");
+  });
+
+  it("syncs codex pools from the dedicated route", async () => {
+    vi.spyOn(CliAccountGateService.prototype, "syncCodexPoolsFromMultiAuth").mockReturnValue({
+      pools: [
+        {
+          id: "codex-main",
+          provider: "codex",
+          accountPoolId: "codex-main",
+          label: "Codex Main",
+          profileHome: "/app/.office-accounts/codex/codex-main",
+          status: "connected",
+          lastVerifiedAt: Date.now(),
+          lastError: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ],
+      accounts: [
+        {
+          index: 0,
+          poolId: "codex-main",
+          label: "Codex Main",
+          isCurrent: true,
+          availability: "ready",
+          riskScore: 0,
+          waitMs: 0,
+          usageSummary: "5h 99% left",
+          lastUsedAt: 1710000000000,
+          expiresAt: 1711000000000,
+          source: "auth_report",
+        },
+      ],
+    });
+
+    const { app } = await createApp();
+    const response = await request(app).post("/api/office/cli-accounts/codex/sync").send({ live: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.ok).toBe(true);
+    expect(Array.isArray(response.body.pools)).toBe(true);
+    expect(Array.isArray(response.body.accounts)).toBe(true);
+    expect(response.body.accounts[0]?.source).toBe("auth_report");
   });
 });

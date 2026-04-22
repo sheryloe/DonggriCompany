@@ -1,3 +1,8 @@
+import {
+  deriveCanonicalFamilyFromDepartment,
+  mapLegacyDepartmentId,
+} from "../bootstrap/schema/organization-manifest.ts";
+
 export type CanonicalAgentFamily =
   | "architect"
   | "backend"
@@ -49,9 +54,7 @@ function normalizeText(value: unknown): string | null {
 }
 
 function normalizeAuthorityLevel(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.max(0, Math.trunc(value));
-  }
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.trunc(value));
   if (typeof value === "string" && value.trim()) {
     const parsed = Number.parseInt(value.trim(), 10);
     return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
@@ -69,32 +72,22 @@ const CANONICAL_STAGE_RANK: Record<CanonicalCareerStage, number> = {
   "team-lead": 7,
 };
 
-export function deriveFamilyFromDepartment(departmentId: string | null): CanonicalAgentFamily {
-  switch ((departmentId ?? "").toLowerCase()) {
-    case "planning":
-      return "orchestrator";
-    case "design":
-      return "frontend";
-    case "qa":
-      return "qa";
-    case "devsecops":
-      return "reviewer";
-    case "operations":
-      return "memory-manager";
-    default:
-      return "backend";
-  }
-}
-
-function deriveCareerStageFromFamily(family: CanonicalAgentFamily): CanonicalCareerStage {
-  if (family === "orchestrator") return "team-lead";
-  if (family === "reviewer" || family === "qa") return "senior";
-  return "junior";
-}
-
 export function getCanonicalStageRank(stage: CanonicalCareerStage | null | undefined): number {
   if (!stage) return 0;
   return CANONICAL_STAGE_RANK[stage] ?? 0;
+}
+
+export function deriveFamilyFromDepartment(
+  departmentId: string | null,
+  specializationKey?: string | null,
+): CanonicalAgentFamily {
+  return deriveCanonicalFamilyFromDepartment(departmentId, specializationKey) as CanonicalAgentFamily;
+}
+
+function deriveCareerStageFromRole(role: string | null): CanonicalCareerStage {
+  if (role === "team_leader") return "team-lead";
+  if (role === "senior") return "senior";
+  return "junior";
 }
 
 function readWorkflowCapabilityProfile(value: unknown): string | null {
@@ -111,36 +104,35 @@ function readWorkflowCapabilityProfile(value: unknown): string | null {
     }
   }
   if (typeof value === "object" && !Array.isArray(value)) {
-    const role = normalizeText((value as { role?: unknown }).role);
-    return role;
+    return normalizeText((value as { role?: unknown }).role);
   }
   return null;
 }
 
 export function resolveCanonicalIdentity(input: ResolveCanonicalIdentityInput): CanonicalIdentity {
-  const departmentId = normalizeText(input.department_id);
-  const derivedFamily = deriveFamilyFromDepartment(departmentId);
-  const derivedCareerStage = deriveCareerStageFromFamily(derivedFamily);
+  const departmentId = mapLegacyDepartmentId(normalizeText(input.department_id));
+  const specializationKey = normalizeText(input.specialization_key);
+  const derivedFamily = deriveFamilyFromDepartment(departmentId, specializationKey);
+  const derivedCareerStage = deriveCareerStageFromRole(normalizeText(input.role));
   const derivedAuthority = CANONICAL_STAGE_RANK[derivedCareerStage] ?? 1;
   const derivedExecutionCapability = readWorkflowCapabilityProfile(input.workflow_profile);
 
   const storedFamily = normalizeText(input.family) as CanonicalAgentFamily | null;
   const storedCareerStage = normalizeText(input.career_stage) as CanonicalCareerStage | null;
-  const storedSpecialization = normalizeText(input.specialization_key);
   const storedAuthorityLevel = normalizeAuthorityLevel(input.authority_level);
   const storedExecutionCapability = normalizeText(input.execution_capability_profile);
 
   const hasStoredCanonical =
     storedFamily !== null ||
     storedCareerStage !== null ||
-    storedSpecialization !== null ||
+    specializationKey !== null ||
     storedAuthorityLevel !== null ||
     storedExecutionCapability !== null;
 
   return {
     family: storedFamily ?? derivedFamily,
     career_stage: storedCareerStage ?? derivedCareerStage,
-    specialization_key: storedSpecialization ?? null,
+    specialization_key: specializationKey ?? null,
     authority_level: storedAuthorityLevel ?? derivedAuthority,
     execution_capability_profile: storedExecutionCapability ?? derivedExecutionCapability ?? null,
     canonical_identity_source: hasStoredCanonical ? "stored" : "derived",

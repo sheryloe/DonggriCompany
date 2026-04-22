@@ -200,6 +200,7 @@ export interface CreateProjectWithGitHubAutomationInput {
   createPathIfMissing?: boolean;
   assignmentMode?: AssignmentMode;
   agentIds?: string[];
+  staffingPolicyJson?: string;
   github: {
     enabled: boolean;
     repoName: string;
@@ -224,6 +225,7 @@ export async function createProjectWithGitHubAutomation(
       create_path_if_missing: input.createPathIfMissing,
       assignment_mode: input.assignmentMode,
       agent_ids: input.assignmentMode === "manual" ? (input.agentIds ?? []) : [],
+      staffing_policy_json: input.staffingPolicyJson ? JSON.parse(input.staffingPolicyJson) : undefined,
     });
     return {
       project,
@@ -286,6 +288,7 @@ export async function createProjectWithGitHubAutomation(
       create_path_if_missing: input.createPathIfMissing,
       assignment_mode: input.assignmentMode,
       agent_ids: input.assignmentMode === "manual" ? (input.agentIds ?? []) : [],
+      staffing_policy_json: input.staffingPolicyJson ? JSON.parse(input.staffingPolicyJson) : undefined,
       github_repo: remoteRepo.full_name,
     });
 

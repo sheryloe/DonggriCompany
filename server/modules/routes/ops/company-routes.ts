@@ -7,7 +7,11 @@ import {
   previewCanonicalRouting,
   reloadCanonicalSnapshot,
 } from "../../company/canonical-policy.ts";
-import { resolveCanonicalIdentity } from "../../company/canonical-identity.ts";
+import {
+  applyCanonicalResetOrganization,
+  previewCanonicalResetOrganization,
+} from "../../bootstrap/schema/organization-reset.ts";
+import { resolveProjectRoutingConstraint } from "../shared/project-staffing-policy.ts";
 
 type RegisterCompanyRoutesDeps = Pick<RuntimeContext, "app" | "db">;
 
@@ -29,6 +33,28 @@ function readStringSetting(db: RegisterCompanyRoutesDeps["db"], key: string, fal
 }
 
 export function registerCompanyRoutes({ app, db }: RegisterCompanyRoutesDeps): void {
+  app.post("/api/ops/canonical-reset-organization", (req, res) => {
+    const body = (req.body as { mode?: string; target_seed_version?: string } | undefined) ?? {};
+    const mode = String(body.mode ?? "preview").trim().toLowerCase();
+    const targetSeedVersion = String(body.target_seed_version ?? "").trim();
+    if (targetSeedVersion && targetSeedVersion !== "org-v2") {
+      return res.status(400).json({ error: "unsupported_seed_version", target_seed_version: targetSeedVersion });
+    }
+    if (mode !== "preview" && mode !== "apply") {
+      return res.status(400).json({ error: "invalid_mode" });
+    }
+    try {
+      const result =
+        mode === "apply" ? applyCanonicalResetOrganization(db) : previewCanonicalResetOrganization(db);
+      return res.json(result);
+    } catch (error) {
+      return res.status(500).json({
+        error: "canonical_reset_failed",
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   app.get("/api/company/canonical-policy", (_req, res) => {
     const snapshot = getCanonicalSnapshot();
     res.json({
@@ -84,29 +110,7 @@ export function registerCompanyRoutes({ app, db }: RegisterCompanyRoutesDeps): v
         ? (db.prepare("SELECT project_path FROM projects WHERE id = ? LIMIT 1").get(projectId) as { project_path?: string } | undefined)
             ?.project_path ?? ""
         : "");
-    let allowlistFamilies: string[] = [];
-    if (projectId) {
-      try {
-        const project = db
-          .prepare("SELECT assignment_mode FROM projects WHERE id = ? LIMIT 1")
-          .get(projectId) as { assignment_mode?: string } | undefined;
-        if (String(project?.assignment_mode ?? "").trim() === "manual") {
-          const projectAgents = db
-            .prepare(
-              `
-              SELECT a.department_id, a.role, a.family, a.career_stage, a.specialization_key, a.authority_level, a.execution_capability_profile, a.workflow_profile
-              FROM project_agents pa
-              JOIN agents a ON a.id = pa.agent_id
-              WHERE pa.project_id = ?
-            `,
-            )
-            .all(projectId) as Array<Record<string, unknown>>;
-          allowlistFamilies = [...new Set(projectAgents.map((agent) => resolveCanonicalIdentity(agent).family))];
-        }
-      } catch {
-        allowlistFamilies = [];
-      }
-    }
+    const projectConstraint = resolveProjectRoutingConstraint(db, projectId || null);
 
     const resolved = previewCanonicalRouting({
       text,
@@ -114,7 +118,10 @@ export function registerCompanyRoutes({ app, db }: RegisterCompanyRoutesDeps): v
       workflowPackKey: workflowPackKey || null,
       providerModelConfig,
       defaultProvider,
-      projectConstraint: allowlistFamilies.length > 0 ? { allowlistFamilies: allowlistFamilies as any } : null,
+      projectConstraint:
+        projectConstraint && projectConstraint.allowlistFamilies.length > 0
+          ? { allowlistFamilies: projectConstraint.allowlistFamilies as any }
+          : null,
     });
     return res.json({
       policy: resolved,

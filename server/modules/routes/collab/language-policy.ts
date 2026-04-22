@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+﻿import type { DatabaseSync } from "node:sqlite";
 import { isLang, type Lang } from "../../../types/lang.ts";
 
 export type L10n = Record<Lang, string[]>;
@@ -15,26 +15,52 @@ interface LanguagePolicyDeps {
 }
 
 const ROLE_LABEL_L10N: Record<string, Record<Lang, string>> = {
-  team_leader: { ko: "팀 리드", en: "Team Lead", ja: "チームリード", zh: "团队负责人" },
-  "team-lead": { ko: "팀 리드", en: "Team Lead", ja: "チームリード", zh: "团队负责人" },
-  senior: { ko: "시니어", en: "Senior", ja: "シニア", zh: "高级" },
-  junior: { ko: "주니어", en: "Junior", ja: "ジュニア", zh: "初级" },
-  intern: { ko: "인턴", en: "Intern", ja: "インターン", zh: "实习" },
-  orchestrator: { ko: "오케스트레이터", en: "Orchestrator", ja: "オーケストレーター", zh: "协调者" },
-  reviewer: { ko: "리뷰어", en: "Reviewer", ja: "レビュアー", zh: "审阅者" },
-  backend: { ko: "백엔드", en: "Backend", ja: "バックエンド", zh: "后端" },
-  frontend: { ko: "프론트엔드", en: "Frontend", ja: "フロントエンド", zh: "前端" },
-  qa: { ko: "품질 검증", en: "QA", ja: "品質検証", zh: "质量验证" },
-  "memory-manager": { ko: "메모리 매니저", en: "Memory Manager", ja: "メモリーマネージャー", zh: "记忆管理者" },
-  "product-manager": { ko: "프로덕트 매니저", en: "Product Manager", ja: "プロダクトマネージャー", zh: "产品经理" },
+  team_leader: { ko: "팀 리드", en: "Team Lead", ja: "Team Lead", zh: "Team Lead" },
+  "team-lead": { ko: "팀 리드", en: "Team Lead", ja: "Team Lead", zh: "Team Lead" },
+  senior: { ko: "시니어", en: "Senior", ja: "Senior", zh: "Senior" },
+  junior: { ko: "주니어", en: "Junior", ja: "Junior", zh: "Junior" },
+  intern: { ko: "인턴", en: "Intern", ja: "Intern", zh: "Intern" },
+  orchestrator: { ko: "오케스트레이터", en: "Orchestrator", ja: "Orchestrator", zh: "Orchestrator" },
+  reviewer: { ko: "리뷰어", en: "Reviewer", ja: "Reviewer", zh: "Reviewer" },
+  backend: { ko: "백엔드", en: "Backend", ja: "Backend", zh: "Backend" },
+  frontend: { ko: "프런트엔드", en: "Frontend", ja: "Frontend", zh: "Frontend" },
+  qa: { ko: "QA", en: "QA", ja: "QA", zh: "QA" },
+  "memory-manager": { ko: "메모리 매니저", en: "Memory Manager", ja: "Memory Manager", zh: "Memory Manager" },
+  "product-manager": {
+    ko: "프로덕트 매니저",
+    en: "Product Manager",
+    ja: "Product Manager",
+    zh: "Product Manager",
+  },
 };
 
 const DEPT_KEYWORDS: Record<string, string[]> = {
-  dev: ["개발", "구현", "backend", "server", "api", "bug", "build", "refactor", "code", "scene engine"],
-  design: ["디자인", "ui", "ux", "layout", "mockup", "screen", "visual", "스토리보드"],
+  development: ["개발", "구현", "backend", "frontend", "server", "api", "bug", "build", "refactor", "code"],
+  "ui-ux": ["디자인", "ui", "ux", "layout", "mockup", "screen", "visual", "스토리보드"],
+  "planning-architecture": [
+    "기획",
+    "plan",
+    "planning",
+    "architecture",
+    "spec",
+    "requirement",
+    "roadmap",
+    "report",
+    "pre-production",
+    "프리프로덕션",
+  ],
+  management: ["운영", "deploy", "deployment", "infra", "monitor", "runtime", "ops"],
+  pmo: ["pmo", "마일스톤", "일정", "분배", "rebalance", "portfolio", "timeline"],
+  qa: ["qa", "test", "testing", "validation", "regression", "quality", "리뷰", "검증"],
+  "cicd-repo": ["cicd", "ci/cd", "repo", "repository", "merge", "pr", "branch", "release", "github"],
+  bloggent: ["blog", "bloggent", "article", "seo", "editorial", "콘텐츠", "블로그"],
+  "api-research": ["research", "source", "docs", "citation", "api", "free token", "검색", "리서치"],
+  "security-approval": ["security", "approval", "auth", "permission", "vulnerability", "compliance", "보안"],
+  "knowledge-docs": ["docs", "documentation", "status", "kanban", "gantt", "decision", "문서", "상태"],
+  dev: ["개발", "구현", "backend", "server", "api", "bug", "build", "refactor", "code"],
+  design: ["디자인", "ui", "ux", "layout", "mockup", "screen", "visual"],
   planning: ["기획", "plan", "planning", "spec", "requirement", "roadmap", "report", "pre-production", "프리프로덕션"],
   operations: ["운영", "deploy", "deployment", "infra", "monitor", "runtime", "ops"],
-  qa: ["qa", "test", "testing", "validation", "regression", "quality", "리뷰", "검증"],
   devsecops: ["security", "devsecops", "auth", "permission", "vulnerability", "compliance", "보안"],
 };
 
@@ -145,22 +171,22 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
     const defaults: Record<Lang, string[]> = {
       ko: ["작업 진행 중", "진행 상황 정리 중", "결과 검증 중"],
       en: ["working through tasks", "organizing progress", "verifying outcomes"],
-      ja: ["作業を進行中", "進捗を整理中", "結果を検証中"],
-      zh: ["正在推进任务", "正在整理进度", "正在验证结果"],
+      ja: ["working through tasks", "organizing progress", "verifying outcomes"],
+      zh: ["working through tasks", "organizing progress", "verifying outcomes"],
     };
 
     const named: Record<string, Record<Lang, string[]>> = {
       Aria: {
         ko: ["리뷰 기준 점검 중", "리팩터링 방향 정리 중", "변경 영향 확인 중"],
         en: ["reviewing code quality", "planning a refactor", "checking change impact"],
-        ja: ["コード品質をレビュー中", "リファクタリング方針を整理中", "変更影響を確認中"],
-        zh: ["正在审查代码质量", "正在规划重构方向", "正在检查变更影响"],
+        ja: ["reviewing code quality", "planning a refactor", "checking change impact"],
+        zh: ["reviewing code quality", "planning a refactor", "checking change impact"],
       },
       Bolt: {
         ko: ["API 작업 중", "구현 마무리 중", "성능 병목 확인 중"],
         en: ["working on APIs", "shipping implementation", "checking performance bottlenecks"],
-        ja: ["API 作業中", "実装の仕上げ中", "性能ボトルネック確認中"],
-        zh: ["正在处理 API", "正在收尾实现", "正在检查性能瓶颈"],
+        ja: ["working on APIs", "shipping implementation", "checking performance bottlenecks"],
+        zh: ["working on APIs", "shipping implementation", "checking performance bottlenecks"],
       },
     };
 
@@ -179,18 +205,12 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
       greeting: isKo
         ? /(안녕|반가|좋은\s*(아침|오후|저녁|밤))/i.test(msg)
         : /(hello|hi|hey|good\s*(morning|afternoon|evening))/i.test(normalized),
-      presence: isKo
-        ? /(있어|자리|응답|보여|어디)/i.test(msg)
-        : /(are you there|available|around|present)/i.test(normalized),
+      presence: isKo ? /(있어|자리|응답|보여|어디)/i.test(msg) : /(are you there|available|around|present)/i.test(normalized),
       whatDoing: isKo
         ? /(뭐\s*해|무엇\s*하고|진행\s*중|바빠)/i.test(msg)
         : /(what are you doing|working on|busy|what'?s up)/i.test(normalized),
-      report: isKo
-        ? /(상황|보고|진행|어떻게)/i.test(msg)
-        : /(report|status|progress|how is it going)/i.test(normalized),
-      complaint: isKo
-        ? /(왜\s*이렇게\s*느려|응답\s*없|문제)/i.test(msg)
-        : /(why so slow|late|no response|problem)/i.test(normalized),
+      report: isKo ? /(상황|보고|진행|어떻게)/i.test(msg) : /(report|status|progress|how is it going)/i.test(normalized),
+      complaint: isKo ? /(왜\s*이렇게\s*느려|응답\s*없|문제)/i.test(msg) : /(why so slow|late|no response|problem)/i.test(normalized),
       canDo: isKo ? /(할\s*수\s*있어|가능해)/i.test(msg) : /(can you do|possible|available to handle)/i.test(normalized),
     };
   }
@@ -198,7 +218,7 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
   function analyzeDirectivePolicy(message: string): DirectivePolicy {
     const normalized = normalizeForSearch(message);
     const hasTaskVerb =
-      /(fix|build|implement|write|create|update|design|analyze|research|review|ship|배포|구현|수정|작성|분석|리뷰|조사|개발|테스트|설계)/i.test(
+      /(fix|build|implement|write|create|update|design|analyze|research|review|ship|배포|구현|수정|작성|분석|기획|개발|테스트)/i.test(
         normalized,
       );
     const lightweight =

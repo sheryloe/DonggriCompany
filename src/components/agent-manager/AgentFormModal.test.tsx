@@ -41,13 +41,23 @@ function buildForm(overrides: Partial<FormData> = {}): FormData {
   };
 }
 
-function ModalHarness({ initialForm = buildForm(), currentXp = 0 }: { initialForm?: FormData; currentXp?: number }) {
+function ModalHarness({
+  initialForm = buildForm(),
+  currentXp = 0,
+  locale = "en",
+}: {
+  initialForm?: FormData;
+  currentXp?: number;
+  locale?: "ko" | "en";
+}) {
   const [form, setForm] = useState<FormData>(initialForm);
+  const tr: (ko: string, en: string, ja?: string, zh?: string) => string =
+    locale === "ko" ? (ko) => ko : (_ko, en, ja = en, zh = en) => en ?? ja ?? zh;
 
   return (
     <AgentFormModal
-      locale="en"
-      tr={(_ko, en, ja = en, zh = en) => en ?? ja ?? zh}
+      locale={locale}
+      tr={tr}
       form={form}
       setForm={setForm}
       cliAccountPools={[]}
@@ -69,6 +79,20 @@ function getPreviewTextarea(): HTMLTextAreaElement {
 }
 
 describe("AgentFormModal canonical cutover", () => {
+  it("localizes canonical and compatibility labels in Korean mode", async () => {
+    render(<ModalHarness locale="ko" />);
+
+    expect(screen.getByText("표준 정체성")).toBeInTheDocument();
+    expect(screen.getByText("레거시 호환 정보")).toBeInTheDocument();
+    expect(screen.getByLabelText("능력군")).toBeInTheDocument();
+    expect(screen.getByLabelText("경력 단계")).toBeInTheDocument();
+    expect(screen.getByLabelText("권한 레벨")).toBeInTheDocument();
+    expect(screen.getAllByText(/저장됨|파생됨/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/해석된 정체성:/)).toHaveTextContent("백엔드 / 주니어");
+    expect(screen.getByText("정책 메모")).toBeInTheDocument();
+    expect(getPreviewTextarea().value).toContain("워크플로우 역할: 리뷰어");
+  });
+
   it("shows canonical identity controls and compatibility mirrors", async () => {
     render(<ModalHarness />);
 

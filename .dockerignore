@@ -4,6 +4,7 @@
 # Local/runtime artifacts
 .git
 .gitignore
+.github
 .climpire
 .climpire-worktrees
 .local
@@ -15,6 +16,15 @@ playwright-report
 reports
 test-results
 tests
+
+# Dev-only assets not copied by Dockerfile
+deploy
+extensions
+Sample_Img
+slides
+
+# Large local model/image assets. Keep Docker image on app runtime files only.
+tools/ollama-image-local
 
 # Build/test caches
 dist

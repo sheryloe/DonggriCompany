@@ -24,6 +24,7 @@ interface UseProjectSaveHandlerParams {
   name: string;
   coreGoal: string;
   selectedAgentIds: Set<string>;
+  staffingPolicyJson: string;
   githubAutoCreateEnabled: boolean;
   githubRepoName: string;
   githubRepoPrivate: boolean;
@@ -57,6 +58,7 @@ export function useProjectSaveHandler({
   name,
   coreGoal,
   selectedAgentIds,
+  staffingPolicyJson,
   githubAutoCreateEnabled,
   githubRepoName,
   githubRepoPrivate,
@@ -190,6 +192,7 @@ export function useProjectSaveHandler({
             create_path_if_missing: createPathIfMissing,
             assignment_mode: assignmentMode,
             agent_ids: assignmentMode === "manual" ? Array.from(selectedAgentIds) : [],
+            staffing_policy_json: staffingPolicyJson.trim() ? JSON.parse(staffingPolicyJson.trim()) : undefined,
           });
           setSelectedProjectId(updated.id);
         } else {
@@ -200,6 +203,7 @@ export function useProjectSaveHandler({
             createPathIfMissing,
             assignmentMode,
             agentIds: assignmentMode === "manual" ? Array.from(selectedAgentIds) : [],
+            staffingPolicyJson: staffingPolicyJson.trim(),
             github: {
               enabled: githubAutoCreateEnabled,
               repoName: githubRepoName.trim(),
@@ -331,6 +335,7 @@ export function useProjectSaveHandler({
       saving,
       search,
       selectedAgentIds,
+      staffingPolicyJson,
       setEditingProjectId,
       setIsCreating,
       setManualAssignmentWarning,

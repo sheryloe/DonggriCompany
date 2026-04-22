@@ -39,14 +39,39 @@ export interface ResolvedCanonicalIdentity {
   canonical_identity_source: CanonicalIdentitySource;
 }
 
-function deriveFamily(departmentId: string): CanonicalAgentFamily {
-  switch (departmentId.trim().toLowerCase()) {
-    case "planning":
-      return "orchestrator";
-    case "design":
+function deriveFamily(
+  departmentId: string,
+  specializationKey: string,
+): CanonicalAgentFamily {
+  const normalizedDepartmentId = departmentId.trim().toLowerCase();
+  const normalizedSpecialization = specializationKey.trim().toLowerCase();
+  switch (normalizedDepartmentId) {
+    case "development":
+      return normalizedSpecialization.startsWith("frontend.") ? "frontend" : "backend";
+    case "planning-architecture":
+      return normalizedSpecialization.startsWith("system.") ? "architect" : "product-manager";
+    case "ui-ux":
       return "frontend";
+    case "cicd-repo":
+      return normalizedSpecialization.startsWith("github.") ? "backend" : "orchestrator";
+    case "management":
+      return "memory-manager";
+    case "pmo":
+      return "orchestrator";
     case "qa":
       return "qa";
+    case "bloggent":
+      return normalizedSpecialization.startsWith("content.") ? "researcher" : "documenter";
+    case "api-research":
+      return normalizedSpecialization.startsWith("citation.") ? "documenter" : "researcher";
+    case "security-approval":
+      return normalizedSpecialization.startsWith("policy.") ? "qa" : "reviewer";
+    case "knowledge-docs":
+      return normalizedSpecialization.startsWith("decision.") ? "memory-manager" : "documenter";
+    case "planning":
+      return "product-manager";
+    case "design":
+      return "frontend";
     case "devsecops":
       return "reviewer";
     case "operations":
@@ -62,9 +87,9 @@ function deriveCareerStage(role: FormData["role"] | Agent["role"]): CanonicalCar
   return "junior";
 }
 
-function deriveAuthorityLevel(role: FormData["role"] | Agent["role"]): number {
-  if (role === "team_leader") return 3;
-  if (role === "senior") return 2;
+function deriveAuthorityLevel(stage: CanonicalCareerStage): number {
+  if (stage === "team-lead") return 7;
+  if (stage === "senior") return 3;
   return 1;
 }
 
@@ -73,16 +98,16 @@ function readExecutionCapabilityProfile(value: string): string {
 }
 
 export function resolveCanonicalIdentityFromForm(form: FormData): ResolvedCanonicalIdentity {
-  const derivedFamily = deriveFamily(form.department_id);
+  const storedSpecializationKey = form.specialization_key.trim();
+  const derivedFamily = deriveFamily(form.department_id, storedSpecializationKey);
   const derivedCareerStage = deriveCareerStage(form.role);
-  const derivedAuthorityLevel = deriveAuthorityLevel(form.role);
+  const derivedAuthorityLevel = deriveAuthorityLevel(derivedCareerStage);
   const derivedExecutionCapabilityProfile = readExecutionCapabilityProfile(form.execution_capability_profile) || "reviewer";
   const storedFamily = CANONICAL_FAMILY_OPTIONS.includes(form.family) ? form.family : null;
   const storedCareerStage = CANONICAL_STAGE_OPTIONS.includes(form.career_stage) ? form.career_stage : null;
   const storedAuthorityLevel =
     Number.isFinite(form.authority_level) && form.authority_level > 0 ? Math.trunc(form.authority_level) : null;
   const storedExecutionCapabilityProfile = readExecutionCapabilityProfile(form.execution_capability_profile);
-  const storedSpecializationKey = form.specialization_key.trim();
   const hasStoredCanonical =
     Boolean(storedFamily) ||
     Boolean(storedCareerStage) ||

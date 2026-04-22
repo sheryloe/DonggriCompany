@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { checkProjectPath, createProject, createPrnDraft, getProjects, isApiRequestError } from "../api";
+import { checkProjectPath, createPrnDraft, getProjects, isApiRequestError } from "../api";
 import { useI18n } from "../i18n";
 import type { Agent, Message, Project, PrnDraftResponse } from "../types";
 import { buildSpriteMap } from "./AgentAvatar";
@@ -22,6 +22,13 @@ import {
 import PrnDraftModal from "./chat-panel/PrnDraftModal";
 import ProjectFlowDialog from "./chat-panel/ProjectFlowDialog";
 import { useDecisionReplyHandlers } from "./chat-panel/useDecisionReply";
+import GitHubConnectionDialog from "./project-creation/GitHubConnectionDialog";
+import {
+  createProjectWithGitHubAutomation,
+  isGitHubProjectCreateError,
+  type GitHubGateReason,
+} from "./project-creation/github-project-flow";
+import { useGitHubProjectScaffold } from "./project-creation/useGitHubProjectScaffold";
 import { usePathHelperMessages } from "./taskboard/create-modal/usePathHelperMessages";
 import { useProjectPickerState } from "./taskboard/create-modal/useProjectPickerState";
 
@@ -189,6 +196,7 @@ export function ChatPanel({
   const [projectFlowSkipMeeting, setProjectFlowSkipMeeting] = useState(false);
   const [newProjectGoal, setNewProjectGoal] = useState("");
   const [projectSaving, setProjectSaving] = useState(false);
+  const [githubConnectionReason, setGithubConnectionReason] = useState<GitHubGateReason | null>(null);
   const [decisionReplyKey, setDecisionReplyKey] = useState<string | null>(null);
   const [prnModalOpen, setPrnModalOpen] = useState(false);
   const [prnDraftLoading, setPrnDraftLoading] = useState(false);
@@ -250,6 +258,25 @@ export function ChatPanel({
     handleSelectPathSuggestion,
     loadManualPathEntries,
   } = projectPicker;
+  const githubAutoCreateAvailable = true;
+  const {
+    githubAutoCreateEnabled,
+    setGitHubAutoCreateEnabled,
+    githubRepoName,
+    setGitHubRepoName,
+    githubRepoPrivate,
+    setGitHubRepoPrivate,
+    defaultProjectRoot,
+    defaultProjectRootLoading,
+    projectPathCustomized,
+    setProjectPathCustomized,
+    regenerateProjectPath,
+    resetGitHubProjectScaffold,
+  } = useGitHubProjectScaffold({
+    active: projectFlowOpen && createNewProjectMode,
+    projectName: projectQuery,
+    onProjectPathChange: setNewProjectPath,
+  });
   const selectedAgentId = selectedAgent?.id ?? null;
   const currentConversationId = selectedAgentId ?? GLOBAL_PROJECT_CONTEXT_KEY;
   const currentConversationContext = conversationContexts[currentConversationId] ?? null;
@@ -393,6 +420,7 @@ export function ChatPanel({
     setProjectFlowFeedback(null);
     setProjectFlowSkipMeeting(false);
     setProjectSaving(false);
+    setGithubConnectionReason(null);
     setProjectId("");
     setProjectQuery("");
     setCreateNewProjectMode(false);
@@ -401,8 +429,10 @@ export function ChatPanel({
     setMissingPathPrompt(null);
     setPathSuggestionsOpen(false);
     setManualPathPickerOpen(false);
+    resetGitHubProjectScaffold();
     selectProject(null);
   }, [
+    resetGitHubProjectScaffold,
     selectProject,
     setCreateNewProjectMode,
     setManualPathPickerOpen,
@@ -716,25 +746,129 @@ export function ChatPanel({
     updateConversationContext,
   ]);
 
+  const handleProjectFlowEnableCreateNewProject = useCallback(() => {
+    resetGitHubProjectScaffold();
+    handleEnableCreateNewProject();
+  }, [handleEnableCreateNewProject, resetGitHubProjectScaffold]);
+
+  const handleProjectFlowCancelCreateNewProject = useCallback(() => {
+    selectProject(null);
+    setProjectId("");
+    setCreateNewProjectMode(false);
+    setProjectFlowFeedback(null);
+    setGithubConnectionReason(null);
+    resetGitHubProjectScaffold();
+  }, [resetGitHubProjectScaffold, selectProject, setCreateNewProjectMode, setProjectId]);
+
+  const handleProjectFlowPathChange = useCallback(
+    (value: string) => {
+      if (githubAutoCreateEnabled) setProjectPathCustomized(true);
+      handleNewProjectPathChange(value);
+    },
+    [githubAutoCreateEnabled, handleNewProjectPathChange, setProjectPathCustomized],
+  );
+
+  const handleProjectFlowPathSuggestion = useCallback(
+    (path: string) => {
+      if (githubAutoCreateEnabled) setProjectPathCustomized(true);
+      handleSelectPathSuggestion(path);
+    },
+    [githubAutoCreateEnabled, handleSelectPathSuggestion, setProjectPathCustomized],
+  );
+
+  const handleProjectFlowManualPathEntry = useCallback(
+    (path: string) => {
+      if (githubAutoCreateEnabled) setProjectPathCustomized(true);
+      setNewProjectPath(path);
+      setProjectFlowFeedback(null);
+      setManualPathPickerOpen(false);
+    },
+    [githubAutoCreateEnabled, setManualPathPickerOpen, setNewProjectPath, setProjectPathCustomized],
+  );
+
+  const handleResetAutoProjectPath = useCallback(() => {
+    setProjectPathCustomized(false);
+    regenerateProjectPath();
+    setProjectFlowFeedback(null);
+  }, [regenerateProjectPath, setProjectPathCustomized]);
+
   const handleCreateProject = useCallback(async () => {
     const goal = newProjectGoal.trim();
+    const repoName = githubRepoName.trim();
     if (!projectQuery.trim() || !newProjectPath.trim() || !goal || projectSaving) return;
+    if (githubAutoCreateEnabled && !repoName) return;
     setProjectSaving(true);
     try {
-      const created = await createProject({
+      const createdResult = await createProjectWithGitHubAutomation({
         name: projectQuery.trim(),
-        project_path: newProjectPath.trim(),
-        core_goal: goal,
-        create_path_if_missing: true,
+        projectPath: newProjectPath.trim(),
+        coreGoal: goal,
+        createPathIfMissing: true,
+        github: {
+          enabled: githubAutoCreateEnabled,
+          repoName,
+          private: githubRepoPrivate,
+        },
       });
+      const created = createdResult.project;
       setProjects((prev) => mergeProjectsById([created, ...prev]));
       selectProject(created);
       setProjectId(created.id);
       setProjectQuery(created.name);
+      setNewProjectPath(createdResult.projectPath);
       setCreateNewProjectMode(false);
+      setGithubConnectionReason(null);
       setProjectFlowFeedback(null);
     } catch (error) {
       console.error("Failed to create project:", error);
+      if (isGitHubProjectCreateError(error)) {
+        if (error.code === "github_connection_required" && error.gateReason) {
+          setGithubConnectionReason(error.gateReason);
+          setProjectFlowFeedback({
+            tone: "info",
+            message: tr(
+              "GitHub 연결 또는 저장소 권한이 필요합니다.",
+              "GitHub connection or repository permission is required.",
+            ),
+          });
+          return;
+        }
+        if (error.code === "github_repo_created_but_local_setup_failed") {
+          const detail =
+            error.causeDetail instanceof Error
+              ? error.causeDetail.message
+              : typeof error.causeDetail === "string"
+                ? error.causeDetail
+                : "";
+          const suffix = [error.remoteRepoFullName, detail].filter(Boolean).join(" ");
+          setProjectFlowFeedback({
+            tone: "error",
+            message: tr(
+              `저장소는 생성됐지만 로컬 준비에 실패했습니다.${suffix ? ` ${suffix}` : ""}`,
+              `Repository was created, but local setup failed.${suffix ? ` ${suffix}` : ""}`,
+            ),
+          });
+          return;
+        }
+      }
+      if (isApiRequestError(error) && error.code === "github_not_connected") {
+        setGithubConnectionReason("not_connected");
+        setProjectFlowFeedback({
+          tone: "info",
+          message: tr("GitHub 연결이 필요합니다.", "GitHub connection is required."),
+        });
+        return;
+      }
+      if (isApiRequestError(error) && (error.code === "invalid_repo_name" || error.code === "repo_name_conflict")) {
+        setProjectFlowFeedback({
+          tone: "error",
+          message: tr(
+            "저장소 이름을 확인하세요. 소문자, 숫자, 점, 밑줄, 하이픈만 사용할 수 있습니다.",
+            "Check the repository name. Use lowercase letters, numbers, dots, underscores, or hyphens.",
+          ),
+        });
+        return;
+      }
       if (isApiRequestError(error) && error.code === "project_path_conflict") {
         const details =
           (error.details as {
@@ -807,7 +941,11 @@ export function ChatPanel({
     setProjectId,
     setProjectQuery,
     setProjects,
+    githubAutoCreateEnabled,
+    githubRepoName,
+    githubRepoPrivate,
     tr,
+    setNewProjectPath,
   ]);
 
   const handleSend = useCallback(async () => {
@@ -918,7 +1056,10 @@ export function ChatPanel({
   }, [mode, selectedAgent]);
 
   const canCreateProject =
-    Boolean(projectQuery.trim()) && Boolean(newProjectPath.trim()) && Boolean(newProjectGoal.trim());
+    Boolean(projectQuery.trim()) &&
+    Boolean(newProjectPath.trim()) &&
+    Boolean(newProjectGoal.trim()) &&
+    (!githubAutoCreateEnabled || Boolean(githubRepoName.trim()));
 
   const contextBarVisible = Boolean(currentProject || currentSkipMeeting);
 
@@ -1144,47 +1285,70 @@ export function ChatPanel({
         manualPathTruncated={manualPathTruncated}
         manualPathError={manualPathError}
         nativePathPicking={nativePathPicking}
+        githubAutoCreateAvailable={githubAutoCreateAvailable}
+        githubAutoCreateEnabled={githubAutoCreateEnabled}
+        githubRepoName={githubRepoName}
+        githubRepoPrivate={githubRepoPrivate}
+        defaultProjectRoot={defaultProjectRoot}
+        defaultProjectRootLoading={defaultProjectRootLoading}
+        projectPathCustomized={projectPathCustomized}
         canCreateProject={canCreateProject && !projectSaving}
         skipPlannedMeeting={projectFlowSkipMeeting}
         tr={tr}
         onClose={closeProjectFlow}
         onProjectQueryChange={handleProjectQueryChange}
         onSelectProject={selectProject}
-        onEnableCreateNewProject={handleEnableCreateNewProject}
-        onCancelCreateNewProject={() => {
-          selectProject(null);
-          setProjectId("");
-          setCreateNewProjectMode(false);
-          setProjectFlowFeedback(null);
-        }}
+        onEnableCreateNewProject={handleProjectFlowEnableCreateNewProject}
+        onCancelCreateNewProject={handleProjectFlowCancelCreateNewProject}
         onNewProjectNameChange={(value) => {
           selectProject(null);
           setProjectId("");
           setProjectQuery(value);
         }}
-        onNewProjectPathChange={handleNewProjectPathChange}
+        onNewProjectPathChange={handleProjectFlowPathChange}
         onNewProjectGoalChange={setNewProjectGoal}
         onTogglePathSuggestions={handleTogglePathSuggestions}
-        onSelectPathSuggestion={handleSelectPathSuggestion}
+        onSelectPathSuggestion={handleProjectFlowPathSuggestion}
         onOpenManualPathBrowser={handleOpenManualPathBrowser}
         onCloseManualPathBrowser={() => setManualPathPickerOpen(false)}
         onOpenManualPathParent={() => {
           if (manualPathParent) void loadManualPathEntries(manualPathParent);
         }}
-        onOpenManualPathEntry={(path) => {
-          setNewProjectPath(path);
-          setProjectFlowFeedback(null);
-          setManualPathPickerOpen(false);
-        }}
+        onOpenManualPathEntry={handleProjectFlowManualPathEntry}
         onPickNativePath={() => {
           void handlePickNativePath();
         }}
+        onGitHubAutoCreateEnabledChange={(enabled) => {
+          setGitHubAutoCreateEnabled(enabled);
+          setProjectFlowFeedback(null);
+          setGithubConnectionReason(null);
+        }}
+        onGitHubRepoNameChange={(value) => {
+          setGitHubRepoName(value);
+          setProjectFlowFeedback(null);
+        }}
+        onGitHubRepoPrivateChange={setGitHubRepoPrivate}
+        onEnableProjectPathCustomization={() => setProjectPathCustomized(true)}
+        onResetAutoProjectPath={handleResetAutoProjectPath}
         onCreateProject={() => {
           void handleCreateProject();
         }}
         onConfirm={handleConfirmProject}
         onToggleSkipPlannedMeeting={() => setProjectFlowSkipMeeting((prev) => !prev)}
       />
+
+      {githubConnectionReason ? (
+        <GitHubConnectionDialog
+          reason={githubConnectionReason}
+          zIndexClass="z-[90]"
+          onConnected={() => {
+            setGithubConnectionReason(null);
+            setProjectFlowFeedback(null);
+            void handleCreateProject();
+          }}
+          onCancel={() => setGithubConnectionReason(null)}
+        />
+      ) : null}
 
       <PrnDraftModal
         open={prnModalOpen}

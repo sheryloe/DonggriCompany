@@ -32,6 +32,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./data/office-accounts:/app/.office-accounts
+      - ${USERPROFILE}/.codex/multi-auth:/home/app/.codex/multi-auth:ro
     working_dir: /app
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7777/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]

@@ -63,6 +63,8 @@ interface ProjectEditorPanelProps {
   manualSelectionStats: ProjectManualSelectionStats;
   selectedAgentIds: Set<string>;
   setSelectedAgentIds: Dispatch<SetStateAction<Set<string>>>;
+  staffingPolicyJson: string;
+  setStaffingPolicyJson: Dispatch<SetStateAction<string>>;
   agentFilterDept: string;
   setAgentFilterDept: Dispatch<SetStateAction<string>>;
   agents: Agent[];
@@ -126,6 +128,8 @@ export default function ProjectEditorPanel({
   manualSelectionStats,
   selectedAgentIds,
   setSelectedAgentIds,
+  staffingPolicyJson,
+  setStaffingPolicyJson,
   agentFilterDept,
   setAgentFilterDept,
   agents,
@@ -566,6 +570,33 @@ export default function ProjectEditorPanel({
           detail={detail}
           selectedProject={selectedProject}
         />
+      </div>
+
+      <div className="rounded-xl border border-slate-700/80 bg-slate-900/60 p-3 mt-4">
+        <label className="block">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-200">
+              {t({ ko: "Staffing Overlay (JSON)", en: "Staffing Overlay (JSON)", ja: "Staffing Overlay (JSON)", zh: "Staffing Overlay (JSON)" })}
+            </p>
+            {(() => {
+              if (!staffingPolicyJson.trim()) return null;
+              try {
+                JSON.parse(staffingPolicyJson);
+                return <span className="text-[10px] text-emerald-400">Valid JSON</span>;
+              } catch (e) {
+                return <span className="text-[10px] text-rose-400">Invalid JSON Format</span>;
+              }
+            })()}
+          </div>
+          <textarea
+            rows={6}
+            value={staffingPolicyJson}
+            onChange={(e) => setStaffingPolicyJson(e.target.value)}
+            disabled={!isCreating && !editingProjectId}
+            placeholder='{ "department_overrides": {}, "task_type_overrides": {}, "approval_profile": { "thresholds": {} } }'
+            className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-[11px] text-slate-300 outline-none focus:border-blue-500 disabled:opacity-50"
+          />
+        </label>
       </div>
 
       <div className="flex flex-wrap gap-2 pt-1">

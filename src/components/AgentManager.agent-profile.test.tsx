@@ -94,7 +94,7 @@ describe("AgentManager legacy agent profile fallback", () => {
     const user = userEvent.setup();
 
     render(
-      <I18nProvider language="en">
+      <I18nProvider language="ko">
         <AgentManager
           agents={[LEGACY_AGENT]}
           departments={[DEPARTMENT]}
@@ -108,12 +108,12 @@ describe("AgentManager legacy agent profile fallback", () => {
     await user.click(screen.getByRole("button", { name: "Edit Legacy Agent" }));
 
     await waitFor(() => {
-      expect(getPreviewTextarea().value).toContain("Role template: Junior");
-      expect(getPreviewTextarea().value).toContain("Applied growth tier: 2/5");
-      expect(getPreviewTextarea().value).toContain("Final override: Legacy override");
-      expect(screen.getByText("Resolved Canonical Identity")).toBeInTheDocument();
-      expect(screen.getByText("backend")).toBeInTheDocument();
-      expect(screen.getAllByText("junior").length).toBeGreaterThan(0);
+      expect(getPreviewTextarea().value).toContain("역할 템플릿: 주니어");
+      expect(getPreviewTextarea().value).toContain("적용 성장 티어: 2/5");
+      expect(getPreviewTextarea().value).toContain("최종 수동 지시: Legacy override");
+      expect(screen.getByText("해석된 표준 정체성")).toBeInTheDocument();
+      expect(screen.getAllByText(/백엔드|리뷰어/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/주니어/).length).toBeGreaterThan(0);
     });
   });
 });

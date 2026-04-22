@@ -1,4 +1,4 @@
-﻿import type { SettingsTab, TFunction } from "./types";
+import type { SettingsTab, TFunction } from "./types";
 
 interface SettingsTabNavProps {
   tab: SettingsTab;
@@ -19,6 +19,7 @@ const TAB_ITEMS: Array<{ key: SettingsTab; label: (t: TFunction) => string }> = 
     key: "canonical",
     label: (t) => t({ ko: "정책 인스펙터", en: "Policy Inspector", ja: "Policy Inspector", zh: "Policy Inspector" }),
   },
+  { key: "organization", label: (t) => t({ ko: "조직 기본값", en: "Organization Defaults", ja: "組織設定", zh: "组织默认设置" }) },
   { key: "gateway", label: (t) => t({ ko: "채널 메시지", en: "Channel", ja: "チャネルメッセージ", zh: "频道消息" }) },
 ];
 

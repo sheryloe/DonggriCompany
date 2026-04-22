@@ -15,6 +15,7 @@ RUN corepack enable
 RUN npm install -g \
   @anthropic-ai/claude-code \
   @openai/codex \
+  codex-multi-auth \
   @google/gemini-cli \
   @google/jules \
   opencode-ai
@@ -35,6 +36,8 @@ COPY scripts ./scripts
 COPY public ./public
 COPY assets ./assets
 COPY agents ./agents
+COPY docs ./docs
+COPY restructing ./restructing
 COPY templates ./templates
 COPY tools ./tools
 COPY AGENTS.md AgentSelectModels.md skills.md README.md README_ko.md README_jp.md README_zh.md SECURITY.md LICENSE ./

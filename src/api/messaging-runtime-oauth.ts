@@ -522,6 +522,25 @@ export interface CliAccountListResponse {
   pools: CliAccountPoolView[];
 }
 
+export interface CodexSyncedAccountView {
+  index: number;
+  poolId: string;
+  label: string;
+  isCurrent: boolean;
+  availability: string;
+  riskScore: number;
+  waitMs: number;
+  usageSummary: string | null;
+  lastUsedAt: number | null;
+  expiresAt: number | null;
+  source: "auth_report" | "storage_fallback";
+}
+
+export interface SyncCodexPoolsResponse {
+  pools: CliAccountPoolView[];
+  accounts: CodexSyncedAccountView[];
+}
+
 export interface OfficeRunnerStatusView {
   provider: string;
   accountPoolId: string;
@@ -610,6 +629,10 @@ export async function verifyCliAccountPool(
   return post<CliAccountVerifyResponse>(
     `/api/office/cli-accounts/${encodeURIComponent(provider)}/${encodeURIComponent(accountPoolId)}/verify`,
   );
+}
+
+export async function syncCodexPoolsFromMultiAuth(live = true): Promise<SyncCodexPoolsResponse> {
+  return post<SyncCodexPoolsResponse>("/api/office/cli-accounts/codex/sync", { live });
 }
 
 export async function getCliAccountLoginCommand(

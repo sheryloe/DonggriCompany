@@ -1,9 +1,10 @@
-﻿import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import {
   DEFAULT_WORKFLOW_PACK_KEY,
   isWorkflowPackKey,
   type WorkflowPackKey,
 } from "../../../workflow/packs/definitions.ts";
+import { resolveProjectRoutingConstraint } from "../../shared/project-staffing-policy.ts";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
 
@@ -32,6 +33,7 @@ type CandidateTaskShape = {
   workflow_pack_key?: string | null;
   department_id?: string | null;
   project_id?: string | null;
+  task_type?: string | null;
 };
 
 export type AutoAssignSelectionResult = {
@@ -40,54 +42,26 @@ export type AutoAssignSelectionResult = {
 };
 
 const PACK_DEPARTMENT_PRIORITIES: Record<WorkflowPackKey, string[]> = {
-  development: ["dev", "qa", "devsecops", "operations", "planning", "design"],
-  donggri: ["planning", "dev", "qa", "design", "operations", "devsecops"],
-  report: ["planning", "qa", "design", "dev", "operations", "devsecops"],
-  web_research_report: ["dev", "planning", "qa", "design", "operations", "devsecops"],
-  video_preprod: ["design", "planning", "dev", "operations", "qa", "devsecops"],
-  novel: ["design", "planning", "dev", "qa", "operations", "devsecops"],
-  roleplay: ["design", "planning", "qa", "dev", "operations", "devsecops"],
-};
-
-const VALID_AGENT_ROLES = new Set(["team_leader", "senior", "junior", "intern"]);
-const VALID_CLI_PROVIDERS = new Set([
-  "claude",
-  "codex",
-  "gemini",
-  "jules",
-  "opencode",
-  "kimi",
-  "copilot",
-  "antigravity",
-  "api",
-]);
-
-type OfficePackProfileAgent = {
-  id: string;
-  name: string;
-  name_ko: string;
-  name_ja: string;
-  name_zh: string;
-  department_id: string | null;
-  role: string;
-  cli_provider: string | null;
-  avatar_emoji: string;
-  personality: string | null;
-  created_at: number;
-};
-
-type OfficePackProfileDepartment = {
-  id: string;
-  name: string;
-  name_ko: string;
-  name_ja: string;
-  name_zh: string;
-  icon: string;
-  color: string;
-  description: string | null;
-  prompt: string | null;
-  sort_order: number;
-  created_at: number;
+  development: [
+    "development",
+    "dev",
+    "qa",
+    "security-approval",
+    "cicd-repo",
+    "devsecops",
+    "planning-architecture",
+    "planning",
+    "ui-ux",
+    "design",
+    "management",
+    "operations",
+  ],
+  donggri: ["planning-architecture", "planning", "development", "dev", "ui-ux", "design", "qa", "management"],
+  report: ["knowledge-docs", "planning-architecture", "planning", "qa", "development", "dev", "pmo", "management"],
+  web_research_report: ["api-research", "development", "dev", "planning-architecture", "planning", "qa", "knowledge-docs"],
+  video_preprod: ["ui-ux", "design", "planning-architecture", "planning", "development", "dev", "qa", "management"],
+  novel: ["bloggent", "ui-ux", "design", "planning-architecture", "planning", "knowledge-docs", "development", "dev"],
+  roleplay: ["bloggent", "ui-ux", "design", "planning-architecture", "planning", "knowledge-docs", "development", "dev"],
 };
 
 function normalizePackKey(raw: string | null | undefined): WorkflowPackKey {
@@ -95,153 +69,8 @@ function normalizePackKey(raw: string | null | undefined): WorkflowPackKey {
   return DEFAULT_WORKFLOW_PACK_KEY;
 }
 
-function safeJsonParse(raw: string): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
-function asObject(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
 function normalizeText(value: unknown): string {
   return String(value ?? "").trim();
-}
-
-function normalizeOptionalText(value: unknown): string | null {
-  const text = normalizeText(value);
-  return text.length > 0 ? text : null;
-}
-
-function normalizePositiveInt(value: unknown, fallback: number): number {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return fallback;
-  const i = Math.trunc(num);
-  return i >= 0 ? i : fallback;
-}
-
-function normalizeOfficePackProfileDepartment(raw: unknown): OfficePackProfileDepartment | null {
-  const obj = asObject(raw);
-  if (!obj) return null;
-  const id = normalizeText(obj.id);
-  if (!id) return null;
-  const now = Date.now();
-  return {
-    id,
-    name: normalizeText(obj.name) || id,
-    name_ko: normalizeText(obj.name_ko) || normalizeText(obj.name) || id,
-    name_ja: normalizeText(obj.name_ja),
-    name_zh: normalizeText(obj.name_zh),
-    icon: normalizeText(obj.icon) || "ORG",
-    color: normalizeText(obj.color) || "#64748b",
-    description: normalizeOptionalText(obj.description),
-    prompt: normalizeOptionalText(obj.prompt),
-    sort_order: normalizePositiveInt(obj.sort_order, 99),
-    created_at: normalizePositiveInt(obj.created_at, now),
-  };
-}
-
-function normalizeOfficePackProfileAgent(raw: unknown): OfficePackProfileAgent | null {
-  const obj = asObject(raw);
-  if (!obj) return null;
-  const id = normalizeText(obj.id);
-  if (!id) return null;
-
-  const roleRaw = normalizeText(obj.role).toLowerCase();
-  const role = VALID_AGENT_ROLES.has(roleRaw) ? roleRaw : "senior";
-
-  const cliProviderRaw = normalizeText(obj.cli_provider).toLowerCase();
-  const cli_provider = VALID_CLI_PROVIDERS.has(cliProviderRaw) ? cliProviderRaw : "codex";
-
-  const now = Date.now();
-  const name = normalizeText(obj.name) || id;
-  return {
-    id,
-    name,
-    name_ko: normalizeText(obj.name_ko) || name,
-    name_ja: normalizeText(obj.name_ja),
-    name_zh: normalizeText(obj.name_zh),
-    department_id: normalizeOptionalText(obj.department_id),
-    role,
-    cli_provider,
-    avatar_emoji: normalizeText(obj.avatar_emoji) || "BOT",
-    personality: normalizeOptionalText(obj.personality),
-    created_at: normalizePositiveInt(obj.created_at, now),
-  };
-}
-
-function loadOfficePackProfileFromSettings(
-  db: DbLike,
-  packKey: WorkflowPackKey,
-): { departments: OfficePackProfileDepartment[]; agents: OfficePackProfileAgent[] } | null {
-  void db;
-  void packKey;
-  return null;
-}
-
-function selectExistingAgentIds(db: DbLike, candidateIds: string[]): string[] {
-  if (candidateIds.length <= 0) return [];
-  const placeholders = candidateIds.map(() => "?").join(", ");
-  try {
-    const rows = db
-      .prepare(
-        `
-        SELECT id
-        FROM agents
-        WHERE id IN (${placeholders})
-      `,
-      )
-      .all(...(candidateIds as SQLInputValue[])) as Array<{ id?: unknown }>;
-    return rows.map((row) => normalizeText(row?.id)).filter((id): id is string => id.length > 0);
-  } catch {
-    return [];
-  }
-}
-
-function selectAgentIdsByDepartments(db: DbLike, departmentIds: string[]): string[] {
-  if (departmentIds.length <= 0) return [];
-  const placeholders = departmentIds.map(() => "?").join(", ");
-  try {
-    const rows = db
-      .prepare(
-        `
-        SELECT id
-        FROM agents
-        WHERE department_id IN (${placeholders})
-      `,
-      )
-      .all(...(departmentIds as SQLInputValue[])) as Array<{ id?: unknown }>;
-    return rows.map((row) => normalizeText(row?.id)).filter((id): id is string => id.length > 0);
-  } catch {
-    return [];
-  }
-}
-
-function loadPackProfileAgentScope(db: DbLike, packKey: WorkflowPackKey): string[] | null {
-  void db;
-  void packKey;
-  return null;
-}
-
-function buildPreferredDepartmentOrder(
-  packKey: WorkflowPackKey,
-  taskDepartmentId: string | null | undefined,
-): string[] {
-  const preferred = PACK_DEPARTMENT_PRIORITIES[packKey] ?? PACK_DEPARTMENT_PRIORITIES[DEFAULT_WORKFLOW_PACK_KEY];
-  const out: string[] = [];
-  const add = (value: string | null | undefined) => {
-    if (!value) return;
-    if (out.includes(value)) return;
-    out.push(value);
-  };
-
-  add(taskDepartmentId);
-  for (const deptId of preferred) add(deptId);
-  return out;
 }
 
 function loadManualProjectAgentScope(db: DbLike, projectId: string | null | undefined): string[] | null {
@@ -258,8 +87,8 @@ function loadManualProjectAgentScope(db: DbLike, projectId: string | null | unde
 
 function combineAgentScopes(primary: string[] | null, secondary: string[] | null): string[] | null {
   if (Array.isArray(primary) && Array.isArray(secondary)) {
-    const set = new Set(secondary);
-    return primary.filter((id) => set.has(id));
+    const secondarySet = new Set(secondary);
+    return primary.filter((id) => secondarySet.has(id));
   }
   if (Array.isArray(primary)) return primary;
   if (Array.isArray(secondary)) return secondary;
@@ -283,7 +112,6 @@ function loadActiveOAuthAccountIdsByProvider(db: DbLike): Map<string, Set<string
     }
     return out;
   } catch {
-    // Some tests or legacy databases may not have oauth_accounts yet.
     return null;
   }
 }
@@ -295,21 +123,37 @@ function isOAuthBackedProviderReady(
   const provider = normalizeText(agent.cli_provider).toLowerCase();
   const requiredOAuthProvider =
     provider === "copilot" ? "github" : provider === "antigravity" ? "google_antigravity" : null;
-  if (!requiredOAuthProvider) return true;
-  if (!activeOAuthByProvider) return true;
-
+  if (!requiredOAuthProvider || !activeOAuthByProvider) return true;
   const activeAccounts = activeOAuthByProvider.get(requiredOAuthProvider);
   if (!activeAccounts || activeAccounts.size <= 0) return false;
-
   const preferredAccountId = normalizeText(agent.oauth_account_id);
   if (preferredAccountId && !activeAccounts.has(preferredAccountId)) return false;
   return true;
+}
+
+function buildPreferredDepartmentOrder(
+  packKey: WorkflowPackKey,
+  taskDepartmentId: string | null | undefined,
+  projectPreferredDepartments: string[],
+): string[] {
+  const preferred = PACK_DEPARTMENT_PRIORITIES[packKey] ?? PACK_DEPARTMENT_PRIORITIES[DEFAULT_WORKFLOW_PACK_KEY];
+  const out: string[] = [];
+  const add = (value: string | null | undefined) => {
+    const normalized = normalizeText(value);
+    if (!normalized || out.includes(normalized)) return;
+    out.push(normalized);
+  };
+  add(taskDepartmentId);
+  for (const departmentId of projectPreferredDepartments) add(departmentId);
+  for (const departmentId of preferred) add(departmentId);
+  return out;
 }
 
 function selectCandidate(
   db: DbLike,
   preferredDeptIds: string[],
   constrainedAgentIds: string[] | null,
+  allowedDepartmentIds: string[],
 ): AutoAssignableAgent | null {
   if (Array.isArray(constrainedAgentIds) && constrainedAgentIds.length === 0) {
     return null;
@@ -322,9 +166,10 @@ function selectCandidate(
   ];
   const params: SQLInputValue[] = [];
 
-  if (preferredDeptIds.length > 0) {
-    conditions.push(`department_id IN (${preferredDeptIds.map(() => "?").join(", ")})`);
-    params.push(...preferredDeptIds);
+  const effectiveAllowedDepartmentIds = allowedDepartmentIds.length > 0 ? allowedDepartmentIds : preferredDeptIds;
+  if (effectiveAllowedDepartmentIds.length > 0) {
+    conditions.push(`department_id IN (${effectiveAllowedDepartmentIds.map(() => "?").join(", ")})`);
+    params.push(...effectiveAllowedDepartmentIds);
   }
 
   if (Array.isArray(constrainedAgentIds)) {
@@ -332,13 +177,12 @@ function selectCandidate(
     params.push(...constrainedAgentIds);
   }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows = db
     .prepare(
       `
       SELECT id, name, department_id, role, cli_provider, oauth_account_id, status, current_task_id, stats_tasks_done, created_at
       FROM agents
-      ${where}
+      WHERE ${conditions.join(" AND ")}
       ORDER BY created_at ASC
     `,
     )
@@ -358,13 +202,10 @@ function selectCandidate(
   runnableRows.sort((a, b) => {
     const byDept = deptRank(a.department_id) - deptRank(b.department_id);
     if (byDept !== 0) return byDept;
-
     const byStatus = statusRank(a.status) - statusRank(b.status);
     if (byStatus !== 0) return byStatus;
-
     const byTasksDone = (a.stats_tasks_done ?? 0) - (b.stats_tasks_done ?? 0);
     if (byTasksDone !== 0) return byTasksDone;
-
     return (a.created_at ?? 0) - (b.created_at ?? 0);
   });
 
@@ -372,10 +213,9 @@ function selectCandidate(
 }
 
 export function resolveConstrainedAgentScopeForTask(db: DbLike, task: CandidateTaskShape): string[] | null {
-  const packKey = normalizePackKey(task.workflow_pack_key);
-  const packScope = loadPackProfileAgentScope(db, packKey);
   const manualScope = loadManualProjectAgentScope(db, task.project_id);
-  return combineAgentScopes(packScope, manualScope);
+  const projectConstraint = resolveProjectRoutingConstraint(db, task.project_id ?? null, task.task_type ?? null);
+  return combineAgentScopes(projectConstraint?.candidateAgentIds ?? null, manualScope);
 }
 
 export function selectAutoAssignableAgentForTask(
@@ -383,18 +223,19 @@ export function selectAutoAssignableAgentForTask(
   task: CandidateTaskShape,
 ): AutoAssignSelectionResult | null {
   const packKey = normalizePackKey(task.workflow_pack_key);
-  const preferredDeptIds = buildPreferredDepartmentOrder(packKey, task.department_id);
+  const projectConstraint = resolveProjectRoutingConstraint(db, task.project_id ?? null, task.task_type ?? null);
+  const preferredDeptIds = buildPreferredDepartmentOrder(
+    packKey,
+    task.department_id,
+    projectConstraint?.preferredDepartmentIds ?? [],
+  );
   const constrainedAgentIds = resolveConstrainedAgentScopeForTask(db, task);
+  const allowedDepartmentIds = projectConstraint?.allowedDepartmentIds ?? [];
 
-  const preferredCandidate = selectCandidate(db, preferredDeptIds, constrainedAgentIds);
-  if (preferredCandidate) {
-    return { packKey, agent: preferredCandidate };
-  }
+  const preferredCandidate = selectCandidate(db, preferredDeptIds, constrainedAgentIds, allowedDepartmentIds);
+  if (preferredCandidate) return { packKey, agent: preferredCandidate };
 
-  const fallbackCandidate = selectCandidate(db, [], constrainedAgentIds);
+  const fallbackCandidate = selectCandidate(db, [], constrainedAgentIds, allowedDepartmentIds);
   if (!fallbackCandidate) return null;
-
   return { packKey, agent: fallbackCandidate };
 }
-
-

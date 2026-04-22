@@ -9,6 +9,8 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyBaseSchema } from "../../bootstrap/schema/base-schema.ts";
 
+const ORIGINAL_PROJECT_PATH_ALLOWED_ROOTS = process.env.PROJECT_PATH_ALLOWED_ROOTS;
+
 const childProcessMocks = vi.hoisted(() => ({
   spawn: vi.fn(),
   execFileSync: vi.fn(),
@@ -86,6 +88,11 @@ describe("github routes", () => {
   let tempDirs: string[] = [];
 
   beforeEach(() => {
+    if (ORIGINAL_PROJECT_PATH_ALLOWED_ROOTS === undefined) {
+      delete process.env.PROJECT_PATH_ALLOWED_ROOTS;
+    } else {
+      process.env.PROJECT_PATH_ALLOWED_ROOTS = ORIGINAL_PROJECT_PATH_ALLOWED_ROOTS;
+    }
     childProcessMocks.spawn.mockReset();
     childProcessMocks.execFileSync.mockReset();
     oauthHelperMocks.decryptSecret.mockClear();
@@ -101,6 +108,11 @@ describe("github routes", () => {
       }
     }
     tempDirs = [];
+    if (ORIGINAL_PROJECT_PATH_ALLOWED_ROOTS === undefined) {
+      delete process.env.PROJECT_PATH_ALLOWED_ROOTS;
+    } else {
+      process.env.PROJECT_PATH_ALLOWED_ROOTS = ORIGINAL_PROJECT_PATH_ALLOWED_ROOTS;
+    }
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -185,6 +197,24 @@ describe("github routes", () => {
 
       expect(response.status).toBe(401);
       expect(response.body.error).toBe("github_not_connected");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects invalid repository names before calling GitHub", async () => {
+    const { app, db } = await createHarness();
+    try {
+      insertActiveGitHubAccount(db);
+
+      const response = await request(app).post("/api/github/repos").send({
+        name: "../demo.git",
+        private: true,
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("invalid_repo_name");
+      expect(fetch).not.toHaveBeenCalled();
     } finally {
       db.close();
     }
@@ -277,6 +307,35 @@ describe("github routes", () => {
     }
   });
 
+  it("rejects clone targets outside PROJECT_PATH_ALLOWED_ROOTS", async () => {
+    const allowedRoot = fs.mkdtempSync(path.join(os.tmpdir(), "github-allowed-root-"));
+    const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), "github-outside-root-"));
+    tempDirs.push(allowedRoot, outsideRoot);
+    process.env.PROJECT_PATH_ALLOWED_ROOTS = allowedRoot;
+
+    const { app, db } = await createHarness();
+    try {
+      insertActiveGitHubAccount(db);
+      const targetPath = path.join(outsideRoot, "demo-repo");
+
+      const response = await request(app).post("/api/github/clone").send({
+        owner: "octocat",
+        repo: "demo-repo",
+        target_path: targetPath,
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toMatchObject({
+        error: "target_path_outside_allowed_roots",
+        allowed_roots: [allowedRoot],
+      });
+      expect(childProcessMocks.spawn).not.toHaveBeenCalled();
+      expect(fs.existsSync(targetPath)).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
   it("removes a cloned local path only when it is a git directory", async () => {
     const { app, db } = await createHarness();
     try {
@@ -297,6 +356,33 @@ describe("github routes", () => {
         target_path: cloneDir,
       });
       expect(fs.existsSync(cloneDir)).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects local cleanup targets outside PROJECT_PATH_ALLOWED_ROOTS", async () => {
+    const allowedRoot = fs.mkdtempSync(path.join(os.tmpdir(), "github-cleanup-allowed-"));
+    const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), "github-cleanup-outside-"));
+    tempDirs.push(allowedRoot, outsideRoot);
+    process.env.PROJECT_PATH_ALLOWED_ROOTS = allowedRoot;
+
+    const { app, db } = await createHarness();
+    try {
+      insertActiveGitHubAccount(db);
+      const cloneDir = path.join(outsideRoot, "demo-repo");
+      fs.mkdirSync(path.join(cloneDir, ".git"), { recursive: true });
+
+      const response = await request(app).delete("/api/github/local-path").send({
+        target_path: cloneDir,
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toMatchObject({
+        error: "target_path_outside_allowed_roots",
+        allowed_roots: [allowedRoot],
+      });
+      expect(fs.existsSync(cloneDir)).toBe(true);
     } finally {
       db.close();
     }

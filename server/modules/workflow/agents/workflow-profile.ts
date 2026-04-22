@@ -15,10 +15,20 @@ type ResolveAgentWorkflowProfileInput = {
 };
 
 const DEFAULT_REVIEW_LENSES_BY_DEPARTMENT: Record<string, string[]> = {
+  development: ["correctness", "architecture", "maintainability"],
+  "planning-architecture": ["scope", "risk", "priority"],
+  "ui-ux": ["ux", "consistency", "a11y"],
+  "cicd-repo": ["release", "security", "operability"],
+  management: ["operations", "monitoring", "traceability"],
+  pmo: ["scope", "priority", "timeline"],
+  qa: ["test_coverage", "regression", "reliability"],
+  bloggent: ["clarity", "seo", "storytelling"],
+  "api-research": ["research", "citation", "budget"],
+  "security-approval": ["security", "compliance", "approval"],
+  "knowledge-docs": ["documentation", "traceability", "governance"],
   planning: ["scope", "risk", "priority"],
   dev: ["correctness", "architecture", "maintainability"],
   design: ["ux", "consistency", "a11y"],
-  qa: ["test_coverage", "regression", "reliability"],
   devsecops: ["security", "compliance", "operability"],
   operations: ["deployability", "monitoring", "incident_readiness"],
 };

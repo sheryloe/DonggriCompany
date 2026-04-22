@@ -4,6 +4,7 @@ import type {
   ApiProviderOfficialPreset,
   CliAccountPoolView,
   CliAccountVerifyResponse,
+  SyncCodexPoolsResponse,
   ApiProviderType,
   DeviceCodeStart,
   OfficeExecutionProvider,
@@ -34,7 +35,7 @@ export type LocalizedMessages = {
 export type TFunction = (messages: LocalizedMessages) => string;
 
 export type LocalSettings = Omit<CompanySettings, "language"> & { language: Locale };
-export type SettingsTab = "general" | "cli" | "oauth" | "api" | "workflow-packs" | "canonical" | "gateway";
+export type SettingsTab = "general" | "cli" | "oauth" | "api" | "workflow-packs" | "canonical" | "gateway" | "organization";
 
 export type SetLocalSettings = Dispatch<SetStateAction<LocalSettings>>;
 
@@ -97,6 +98,7 @@ export interface CliSettingsTabProps {
   onUpdatePool: (provider: OfficeExecutionProvider, accountPoolId: string, patch: { label?: string }) => Promise<void>;
   onDeletePool: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<void>;
   onVerifyPool: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<CliAccountVerifyResponse>;
+  onSyncCodexPoolsFromMultiAuth?: (live?: boolean) => Promise<SyncCodexPoolsResponse>;
   onCopyLoginCommand: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<void>;
   onActivateRunner: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<void>;
   onDeactivateRunner: (provider: OfficeExecutionProvider, accountPoolId: string) => Promise<void>;

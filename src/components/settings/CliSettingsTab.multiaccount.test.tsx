@@ -296,4 +296,60 @@ describe("CliSettingsTab multi-account", () => {
     expect(onVerifyPool).toHaveBeenCalledWith("codex", "codex-backup");
     expect(onVerifyPool).toHaveBeenCalledTimes(2);
   });
+
+  it("renders localized codex card status labels in Korean mode", () => {
+    render(
+      <CliSettingsTab
+        t={(messages) => messages.ko}
+        cliStatus={null}
+        cliModels={null}
+        cliModelsLoading={false}
+        officeExecutionProviders={providers}
+        cliAccountPools={[
+          {
+            id: "codex-main",
+            provider: "codex",
+            accountPoolId: "codex-main",
+            label: "Codex Main",
+            profileHome: "/app/.office-accounts/codex/codex-main",
+            status: "connected",
+            lastVerifiedAt: Date.now(),
+            lastError: null,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ]}
+        officeRunners={[
+          {
+            provider: "codex",
+            accountPoolId: "codex-main",
+            runnerKey: "codex:codex-main",
+            containerName: "office-runner-codex-main",
+            status: "idle",
+            lastUsedAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        ]}
+        officeRunnerQueue={[]}
+        runnerMeta={{ maxActive: 5, idleTtlMs: 900000, dockerEnabled: false }}
+        cliAuthBusyKey={null}
+        selectedPoolByProvider={{ codex: "codex-main", gemini: "", claude: "", jules: "" }}
+        form={{ ...(DEFAULT_SETTINGS as LocalSettings), language: "ko" }}
+        setForm={vi.fn()}
+        persistSettings={vi.fn()}
+        onRefresh={vi.fn()}
+        onPoolSelect={vi.fn()}
+        onCreatePool={vi.fn(async () => undefined)}
+        onUpdatePool={vi.fn(async () => undefined)}
+        onDeletePool={vi.fn(async () => undefined)}
+        onVerifyPool={vi.fn(async () => createVerifyResponse("codex"))}
+        onCopyLoginCommand={vi.fn(async () => undefined)}
+        onActivateRunner={vi.fn(async () => undefined)}
+        onDeactivateRunner={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(screen.getAllByText("연결됨").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("대기").length).toBeGreaterThan(0);
+  });
 });

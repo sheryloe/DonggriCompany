@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CliModelInfo, CliStatusMap, CompanySettings } from "../types";
 import * as api from "../api";
 import type {
@@ -21,6 +21,7 @@ import OAuthSettingsTab from "./settings/OAuthSettingsTab";
 import CanonicalInspectorTab from "./settings/CanonicalInspectorTab";
 import SettingsTabNav from "./settings/SettingsTabNav";
 import WorkflowPacksTab from "./settings/WorkflowPacksTab";
+import OrganizationDefaultsTab from "./settings/OrganizationDefaultsTab";
 import type { AccountDraftMap, AccountDraftPatch, LocalSettings, SettingsTab } from "./settings/types";
 import { useApiProvidersState } from "./settings/useApiProvidersState";
 
@@ -34,6 +35,7 @@ type RunnerMeta = {
 
 interface SettingsPanelProps {
   settings: CompanySettings;
+  departments: Department[];
   cliStatus: CliStatusMap | null;
   onSave: (settings: CompanySettings) => void;
   onRefreshCli: () => void;
@@ -95,6 +97,7 @@ async function copyToClipboard(text: string): Promise<void> {
 
 export default function SettingsPanel({
   settings,
+  departments,
   cliStatus,
   onSave,
   onRefreshCli,
@@ -625,6 +628,21 @@ export default function SettingsPanel({
     [loadCliAccountLayer],
   );
 
+  const handleSyncCodexPoolsFromMultiAuth = useCallback(
+    async (live = true): Promise<api.SyncCodexPoolsResponse> => {
+      const busyKey = "codex:sync";
+      setCliAuthBusyKey(busyKey);
+      try {
+        const result = await api.syncCodexPoolsFromMultiAuth(live);
+        await loadCliAccountLayer();
+        return result;
+      } finally {
+        setCliAuthBusyKey(null);
+      }
+    },
+    [loadCliAccountLayer],
+  );
+
   const handleCopyLoginCommand = useCallback(
     async (provider: OfficeExecutionProvider, accountPoolId: string) => {
       const busyKey = `${provider}:${accountPoolId}:login`;
@@ -708,6 +726,7 @@ export default function SettingsPanel({
           onUpdatePool={handleUpdatePool}
           onDeletePool={handleDeletePool}
           onVerifyPool={handleVerifyPool}
+          onSyncCodexPoolsFromMultiAuth={handleSyncCodexPoolsFromMultiAuth}
           onCopyLoginCommand={handleCopyLoginCommand}
           onActivateRunner={handleActivateRunner}
           onDeactivateRunner={handleDeactivateRunner}
@@ -756,6 +775,10 @@ export default function SettingsPanel({
 
       {tab === "gateway" && (
         <GatewaySettingsTab t={t} form={form} setForm={setForm} persistSettings={persistSettings} />
+      )}
+
+      {tab === "organization" && (
+        <OrganizationDefaultsTab t={t} departments={departments} />
       )}
     </div>
   );

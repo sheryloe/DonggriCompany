@@ -166,3 +166,9 @@
   - `corepack pnpm test`
   - `corepack pnpm build`
   - result: full regression and production build passed
+
+## Session API auth integration batch (2026-04-22)
+
+- [ ] Inspect session-auth mutation bootstrap gap
+- [ ] Patch shared API client bootstrap/retry flow
+- [ ] Run targeted web verification and record results

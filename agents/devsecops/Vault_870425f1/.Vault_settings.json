@@ -1,0 +1,13 @@
+{
+  "agent_id": "870425f1-433b-49b8-9b2a-bc24e6ce64d1",
+  "agent_name": "Vault",
+  "role": "team_leader",
+  "department_id": "devsecops",
+  "workflow_profile": null,
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-21T22:22:12.455Z"
+}

@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS projects (
   core_goal TEXT NOT NULL,
   default_pack_key TEXT NOT NULL DEFAULT 'development',
   canonical_pack_profile TEXT NOT NULL DEFAULT 'development',
+  staffing_policy_json TEXT,
   artifact_root_mode TEXT NOT NULL DEFAULT 'project_root',
   artifact_projection_version TEXT,
   last_used_at INTEGER,
@@ -443,6 +444,7 @@ function ensureCanonicalCompatibilityColumns(db: DbLike): void {
     db,
     "ALTER TABLE projects ADD COLUMN canonical_pack_profile TEXT NOT NULL DEFAULT 'development';",
   );
+  execIgnoreDuplicateColumn(db, "ALTER TABLE projects ADD COLUMN staffing_policy_json TEXT;");
   execIgnoreDuplicateColumn(db, "ALTER TABLE projects ADD COLUMN artifact_projection_version TEXT;");
   execIgnoreDuplicateColumn(db, "ALTER TABLE messages ADD COLUMN project_id TEXT;");
 }

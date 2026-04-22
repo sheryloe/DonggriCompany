@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { getAssignedAgentIdsByProjectIds } from "../shared/project-assignments.ts";
+import { serializeProjectStaffingPolicy } from "../shared/project-staffing-policy.ts";
 import { createProjectRouteHelpers } from "./projects/helpers.ts";
 import { DEFAULT_WORKFLOW_PACK_KEY, isWorkflowPackKey } from "../../workflow/packs/definitions.ts";
 import { getCanonicalSnapshot } from "../../company/canonical-policy.ts";
@@ -13,6 +14,7 @@ import {
   inspectProjectArtifacts,
   syncProjectArtifactProjection,
 } from "../../company/project-artifacts.ts";
+import { isValidGitHubRepoFullName, normalizeGitHubRepoFullName } from "./github-validation.ts";
 
 type FirstQueryValue = (value: unknown) => string | undefined;
 type NormalizeTextField = (value: unknown) => string | null;
@@ -253,8 +255,12 @@ export function registerProjectRoutes({
       }
     }
 
-    const githubRepo = typeof body.github_repo === "string" ? body.github_repo.trim() || null : null;
+    const githubRepo = normalizeGitHubRepoFullName(body.github_repo);
+    if (githubRepo && !isValidGitHubRepoFullName(githubRepo)) {
+      return res.status(400).json({ error: "invalid_github_repo" });
+    }
     const assignmentMode = body.assignment_mode === "manual" ? "manual" : "auto";
+    const staffingPolicyJson = serializeProjectStaffingPolicy((body as Record<string, unknown>).staffing_policy_json);
     const requestedDefaultPackKey = normalizeTextField(body.default_pack_key);
     if (requestedDefaultPackKey && !isWorkflowPackKey(requestedDefaultPackKey)) {
       return res.status(400).json({ error: "invalid_default_pack_key" });
@@ -291,11 +297,11 @@ export function registerProjectRoutes({
       db.prepare(
         `
       INSERT INTO projects (
-        id, name, project_path, core_goal, default_pack_key, assignment_mode, last_used_at, created_at, updated_at, github_repo
+        id, name, project_path, core_goal, default_pack_key, assignment_mode, staffing_policy_json, last_used_at, created_at, updated_at, github_repo
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-      ).run(id, name, projectPath, coreGoal, defaultPackKey, assignmentMode, t, t, t, githubRepo);
+      ).run(id, name, projectPath, coreGoal, defaultPackKey, assignmentMode, staffingPolicyJson, t, t, t, githubRepo);
 
       if (assignmentMode === "manual" && agentIds.length > 0) {
         const insertPA = db.prepare("INSERT INTO project_agents (project_id, agent_id, created_at) VALUES (?, ?, ?)");
@@ -386,7 +392,10 @@ export function registerProjectRoutes({
       params.push(value);
     }
     if ("github_repo" in body) {
-      const value = typeof body.github_repo === "string" ? body.github_repo.trim() || null : null;
+      const value = normalizeGitHubRepoFullName(body.github_repo);
+      if (value && !isValidGitHubRepoFullName(value)) {
+        return res.status(400).json({ error: "invalid_github_repo" });
+      }
       updates.push("github_repo = ?");
       params.push(value);
     }
@@ -394,6 +403,10 @@ export function registerProjectRoutes({
       const value = body.assignment_mode === "manual" ? "manual" : "auto";
       updates.push("assignment_mode = ?");
       params.push(value);
+    }
+    if ("staffing_policy_json" in body) {
+      updates.push("staffing_policy_json = ?");
+      params.push(serializeProjectStaffingPolicy((body as Record<string, unknown>).staffing_policy_json));
     }
     if ("default_pack_key" in body) {
       const value = normalizeTextField(body.default_pack_key);

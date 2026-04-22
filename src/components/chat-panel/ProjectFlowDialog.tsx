@@ -33,6 +33,13 @@ interface ProjectFlowDialogProps {
   nativePathPicking: boolean;
   canCreateProject: boolean;
   skipPlannedMeeting: boolean;
+  githubAutoCreateAvailable: boolean;
+  githubAutoCreateEnabled: boolean;
+  githubRepoName: string;
+  githubRepoPrivate: boolean;
+  defaultProjectRoot: string;
+  defaultProjectRootLoading: boolean;
+  projectPathCustomized: boolean;
   tr: Tr;
   onClose: () => void;
   onProjectQueryChange: (value: string) => void;
@@ -52,9 +59,19 @@ interface ProjectFlowDialogProps {
   onCreateProject: () => void;
   onConfirm: () => void;
   onToggleSkipPlannedMeeting: () => void;
+  onGitHubAutoCreateEnabledChange: (enabled: boolean) => void;
+  onGitHubRepoNameChange: (value: string) => void;
+  onGitHubRepoPrivateChange: (value: boolean) => void;
+  onEnableProjectPathCustomization: () => void;
+  onResetAutoProjectPath: () => void;
 }
 
-function renderProjectCard(project: Project, selectedProject: Project | null, tr: Tr, onSelectProject: (project: Project) => void) {
+function renderProjectCard(
+  project: Project,
+  selectedProject: Project | null,
+  tr: Tr,
+  onSelectProject: (project: Project) => void,
+) {
   const isSelected = selectedProject?.id === project.id;
   return (
     <button
@@ -126,6 +143,13 @@ export default function ProjectFlowDialog({
   nativePathPicking,
   canCreateProject,
   skipPlannedMeeting,
+  githubAutoCreateAvailable,
+  githubAutoCreateEnabled,
+  githubRepoName,
+  githubRepoPrivate,
+  defaultProjectRoot,
+  defaultProjectRootLoading,
+  projectPathCustomized,
   tr,
   onClose,
   onProjectQueryChange,
@@ -145,12 +169,19 @@ export default function ProjectFlowDialog({
   onCreateProject,
   onConfirm,
   onToggleSkipPlannedMeeting,
+  onGitHubAutoCreateEnabledChange,
+  onGitHubRepoNameChange,
+  onGitHubRepoPrivateChange,
+  onEnableProjectPathCustomization,
+  onResetAutoProjectPath,
 }: ProjectFlowDialogProps) {
   if (!open) return null;
 
   const confirmLabel =
     pendingMode === "send" ? tr("선택 후 전송", "Select & Send") : tr("프로젝트 적용", "Apply Project");
   const hasRecentProjects = !createNewProjectMode && recentProjects.length > 0;
+  const githubAutoPathLocked = githubAutoCreateAvailable && githubAutoCreateEnabled && !projectPathCustomized;
+  const showPathTools = !githubAutoPathLocked;
 
   return (
     <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/80 p-4">
@@ -160,8 +191,8 @@ export default function ProjectFlowDialog({
             <h3 className="text-sm font-semibold text-white">{tr("프로젝트 선택", "Project Picker")}</h3>
             <p className="mt-1 text-xs text-slate-400">
               {tr(
-                "최근 프로젝트, 검색, 신규 생성, 선택 요약을 한 화면에서 처리합니다.",
-                "Use recent projects, search, creation, and selection summary in one view.",
+                "최근 프로젝트, 검색, 신규 생성, 저장소 생성 옵션을 한 화면에서 처리합니다.",
+                "Use recent projects, search, creation, and repository options in one view.",
               )}
             </p>
           </div>
@@ -207,10 +238,7 @@ export default function ProjectFlowDialog({
               </div>
               {!createNewProjectMode && (
                 <p className="text-[11px] text-slate-500">
-                  {tr(
-                    "검색어가 없으면 최근 사용 프로젝트를 먼저 보여줍니다.",
-                    "When the search box is empty, recent projects are shown first.",
-                  )}
+                  {tr("검색어가 없으면 최근 사용 프로젝트를 먼저 보여줍니다.", "Recent projects appear first when search is empty.")}
                 </p>
               )}
             </div>
@@ -257,10 +285,7 @@ export default function ProjectFlowDialog({
                 <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
                   {filteredProjects.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/60 px-4 py-6 text-center text-sm text-slate-400">
-                      {tr(
-                        "일치하는 프로젝트가 없습니다. 새 프로젝트로 생성할 수 있습니다.",
-                        "No matching project found. Create a new project instead.",
-                      )}
+                      {tr("일치하는 프로젝트가 없습니다. 새 프로젝트로 생성할 수 있습니다.", "No matching project found. Create a new project instead.")}
                     </div>
                   ) : (
                     filteredProjects.map((project) => renderProjectCard(project, selectedProject, tr, onSelectProject))
@@ -275,43 +300,163 @@ export default function ProjectFlowDialog({
                   {tr("새 프로젝트 생성", "Create New Project")}
                 </p>
                 <div className="mt-3 space-y-3">
+                  {githubAutoCreateAvailable && (
+                    <div className="space-y-3 rounded-xl border border-slate-700/80 bg-slate-900/70 p-3">
+                      <label className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-200">
+                            {tr("GitHub 저장소 자동 생성", "Auto-create GitHub repository")}
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            {tr(
+                              "프로젝트 생성과 함께 원격 저장소를 만들고 로컬 경로까지 준비합니다.",
+                              "Create a remote repository and prepare the local working path during project creation.",
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={githubAutoCreateEnabled}
+                          onClick={() => onGitHubAutoCreateEnabledChange(!githubAutoCreateEnabled)}
+                          className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
+                            githubAutoCreateEnabled ? "border-emerald-400 bg-emerald-500/90" : "border-slate-600 bg-slate-700"
+                          }`}
+                        >
+                          <span
+                            className={`mx-0.5 inline-block h-4 w-4 rounded-full bg-white transition ${
+                              githubAutoCreateEnabled ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </label>
+
+                      {githubAutoCreateEnabled && (
+                        <div className="space-y-3">
+                          <label className="block text-xs text-slate-400">
+                            {tr("저장소 이름", "Repository Name")}
+                            <input
+                              type="text"
+                              value={githubRepoName}
+                              onChange={(event) => onGitHubRepoNameChange(event.target.value)}
+                              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                            />
+                          </label>
+                          <div className="space-y-2">
+                            <p className="text-xs text-slate-400">{tr("공개 범위", "Visibility")}</p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onGitHubRepoPrivateChange(true)}
+                                className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                                  githubRepoPrivate
+                                    ? "border-blue-500 bg-blue-500/15 text-blue-100"
+                                    : "border-slate-700 bg-slate-900 text-slate-300"
+                                }`}
+                              >
+                                {tr("비공개", "Private")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onGitHubRepoPrivateChange(false)}
+                                className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                                  !githubRepoPrivate
+                                    ? "border-blue-500 bg-blue-500/15 text-blue-100"
+                                    : "border-slate-700 bg-slate-900 text-slate-300"
+                                }`}
+                              >
+                                {tr("공개", "Public")}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                              {tr("기본 프로젝트 루트", "Default project root")}
+                            </p>
+                            <p className="mt-1 break-all text-xs text-slate-300">
+                              {defaultProjectRootLoading
+                                ? tr("불러오는 중", "Loading")
+                                : defaultProjectRoot || tr("기본 루트를 확인할 수 없습니다.", "Default root is unavailable.")}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <label className="block text-xs text-slate-400">
-                    {tr("프로젝트 경로", "Project Path")}
+                    {githubAutoPathLocked ? tr("프로젝트 경로 (자동)", "Project Path (Auto)") : tr("프로젝트 경로", "Project Path")}
                     <input
                       type="text"
                       value={newProjectPath}
                       onChange={(event) => onNewProjectPathChange(event.target.value)}
                       placeholder={tr("절대 경로 입력", "Enter absolute path")}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500"
+                      readOnly={githubAutoPathLocked}
+                      className={`mt-1 w-full rounded-lg border border-slate-700 px-3 py-2 text-sm text-white outline-none transition focus:border-blue-500 ${
+                        githubAutoPathLocked ? "bg-slate-950/80 text-slate-300" : "bg-slate-900"
+                      }`}
                     />
                   </label>
 
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={onTogglePathSuggestions}
-                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                    >
-                      {tr("경로 추천", "Suggestions")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onOpenManualPathBrowser}
-                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                    >
-                      {tr("폴더 탐색", "Browse")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onPickNativePath}
-                      disabled={nativePathPicking}
-                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                    >
-                      {nativePathPicking ? tr("OS 선택 중", "Picking...") : tr("OS 폴더 선택", "OS Folder")}
-                    </button>
-                  </div>
+                  {githubAutoCreateEnabled && (
+                    <div className="flex justify-end gap-2">
+                      {projectPathCustomized ? (
+                        <button
+                          type="button"
+                          onClick={onResetAutoProjectPath}
+                          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                        >
+                          {tr("자동 경로 사용", "Use Auto Path")}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={onEnableProjectPathCustomization}
+                          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                        >
+                          {tr("경로 직접 수정", "Customize Path")}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
-                  {pathSuggestionsOpen && (
+                  {githubAutoPathLocked && (
+                    <p className="text-[11px] text-slate-400">
+                      {tr(
+                        "기본 루트와 저장소 이름으로 자동 생성된 경로입니다.",
+                        "This path is generated from the default root and repository name.",
+                      )}
+                    </p>
+                  )}
+
+                  {showPathTools && (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={onTogglePathSuggestions}
+                        className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                      >
+                        {tr("경로 추천", "Suggestions")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onOpenManualPathBrowser}
+                        className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                      >
+                        {tr("폴더 탐색", "Browse")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onPickNativePath}
+                        disabled={nativePathPicking}
+                        className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                      >
+                        {nativePathPicking ? tr("OS 선택 중", "Picking...") : tr("OS 폴더 선택", "OS Folder")}
+                      </button>
+                    </div>
+                  )}
+
+                  {showPathTools && pathSuggestionsOpen && (
                     <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-2">
                       <p className="mb-2 text-[11px] text-slate-500">
                         {pathSuggestionsLoading ? tr("추천 경로를 불러오는 중입니다.", "Loading suggestions...") : tr("추천 경로", "Suggested paths")}
@@ -372,7 +517,9 @@ export default function ProjectFlowDialog({
                     disabled={!canCreateProject}
                     className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-40"
                   >
-                    {tr("프로젝트 생성 후 선택", "Create & Select")}
+                    {githubAutoCreateEnabled
+                      ? tr("저장소와 프로젝트 생성", "Create Repository & Project")
+                      : tr("프로젝트 생성 후 선택", "Create & Select")}
                   </button>
                 </div>
               </div>

@@ -37,7 +37,7 @@ export default function GitHubConnectionDialog({
             onClick={onCancel}
             className="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-slate-800 hover:text-white"
           >
-            ×
+            {t({ ko: "닫기", en: "Close", ja: "Close", zh: "Close" })}
           </button>
         </div>
         <GitHubDeviceConnect reason={reason} onConnected={onConnected} onCancel={onCancel} />

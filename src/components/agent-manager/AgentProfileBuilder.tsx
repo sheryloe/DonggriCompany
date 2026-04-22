@@ -5,7 +5,9 @@
   getPromptStyleLabel,
   recommendGrowthTierFromXp,
 } from "../../agent-profile";
-import { getPromotionPolicyDisplayLabel } from "../../app/canonical-display";
+import { getPromotionPolicyDisplayLabel, getWorkflowRoleDisplayLabel } from "../../app/canonical-display";
+import type { UiLanguage } from "../../i18n";
+import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../../i18n/canonical-label-registry";
 import type {
   AgentCapabilityKey,
   AgentClassPath,
@@ -13,6 +15,7 @@ import type {
   AgentProfile,
   AgentPromptStyleKey,
   AgentPromotionPolicy,
+  AgentWorkflowRole,
 } from "../../types";
 import { resolveCanonicalIdentityFromForm } from "./canonical-identity";
 import type { FormData, Translator } from "./types";
@@ -50,6 +53,52 @@ function readPromotionPolicy(value: AgentProfile["promotion_policy"]): AgentProm
   };
 }
 
+function isKoLocale(locale: string): boolean {
+  return String(locale ?? "en").toLowerCase().startsWith("ko");
+}
+
+function formatTierLabel(value: number, locale: string): string {
+  return isKoLocale(locale) ? `티어 ${value}` : `Tier ${value}`;
+}
+
+function formatKeyWithDisplayLabel(label: string, raw: string | null | undefined, locale: string): string {
+  const value = String(raw ?? "").trim();
+  if (!isKoLocale(locale) || !value || value === label) return label || value || "-";
+  return `${label} (${value})`;
+}
+
+function getCanonicalSourceDisplayLabel(source: string | null | undefined, locale: string): string {
+  const normalized = String(source ?? "").trim().toLowerCase();
+  if (!normalized) return "-";
+  if (normalized === "stored") return isKoLocale(locale) ? "저장됨" : "stored";
+  if (normalized === "derived") return isKoLocale(locale) ? "파생됨" : "derived";
+  return normalized;
+}
+
+function getSpecializationDisplayLabel(value: string | null | undefined, locale: string): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "-";
+  if (!isKoLocale(locale)) return raw;
+  const normalized = raw.toLowerCase();
+  const labels: Record<string, string> = {
+    backend: "백엔드",
+    "frontend.react": "프런트엔드 React",
+    general: "일반",
+    orchestration: "오케스트레이션",
+    "prompt design": "프롬프트 설계",
+    prompting: "프롬프트 설계",
+    reviewer: "리뷰어",
+  };
+  if (labels[normalized]) return `${labels[normalized]} (${raw})`;
+  if (normalized.startsWith("backend")) return `백엔드 (${raw})`;
+  if (normalized.startsWith("frontend")) return `프런트엔드 (${raw})`;
+  return raw;
+}
+
+function isAgentWorkflowRole(value: string | null | undefined): value is AgentWorkflowRole {
+  return value === "primary_author" || value === "reviewer";
+}
+
 export default function AgentProfileBuilder({
   form,
   setForm,
@@ -67,6 +116,26 @@ export default function AgentProfileBuilder({
   const classPath = readClassPath(form.agent_profile.class_path);
   const promotionPolicy = readPromotionPolicy(form.agent_profile.promotion_policy);
   const canonicalIdentity = resolveCanonicalIdentityFromForm(form);
+  const uiLocale = locale as UiLanguage;
+  const canonicalFamilyDisplay = formatKeyWithDisplayLabel(
+    getCanonicalFamilyLabel(canonicalIdentity.family, uiLocale),
+    canonicalIdentity.family,
+    locale,
+  );
+  const canonicalStageDisplay = formatKeyWithDisplayLabel(
+    getCanonicalStageLabel(canonicalIdentity.career_stage, uiLocale),
+    canonicalIdentity.career_stage,
+    locale,
+  );
+  const canonicalSourceDisplay = getCanonicalSourceDisplayLabel(canonicalIdentity.canonical_identity_source, locale);
+  const specializationDisplay = getSpecializationDisplayLabel(canonicalIdentity.specialization_key, locale);
+  const capabilityProfileDisplay = formatKeyWithDisplayLabel(
+    isAgentWorkflowRole(canonicalIdentity.execution_capability_profile)
+      ? getWorkflowRoleDisplayLabel(canonicalIdentity.execution_capability_profile, locale)
+      : canonicalIdentity.execution_capability_profile,
+    canonicalIdentity.execution_capability_profile,
+    locale,
+  );
   const previewWorkflowRole: FormData["workflow_role"] = canonicalIdentity.execution_capability_profile
     .toLowerCase()
     .includes("author")
@@ -169,7 +238,7 @@ export default function AgentProfileBuilder({
             {tr("XP 기반 추천 티어", "Recommended Tier by XP", "XP ベース推奨ティア", "基于 XP 的推荐层级")}
           </div>
           <div className="font-semibold" style={{ color: "var(--th-text-heading)" }}>
-            {`Tier ${recommendedGrowthTier} · ${currentXp} XP`}
+            {`${formatTierLabel(recommendedGrowthTier, locale)} · ${currentXp} XP`}
           </div>
         </div>
       </div>
@@ -180,7 +249,7 @@ export default function AgentProfileBuilder({
             {tr("적용 성장 티어", "Applied Growth Tier", "適用成長ティア", "应用成长层级")}
           </label>
           <span className="text-xs font-semibold" style={{ color: "var(--th-text-heading)" }}>
-            {`Tier ${form.agent_profile.growth_tier} / 5`}
+            {`${formatTierLabel(form.agent_profile.growth_tier, locale)} / 5`}
           </span>
         </div>
         <input
@@ -194,7 +263,7 @@ export default function AgentProfileBuilder({
         />
         <div className="mt-1 flex items-center justify-between text-[11px]" style={{ color: "var(--th-text-muted)" }}>
           <span>
-            {tr("추천", "Recommended", "推奨", "推荐")} {`Tier ${recommendedGrowthTier}`}
+            {tr("추천", "Recommended", "推奨", "推荐")} {formatTierLabel(recommendedGrowthTier, locale)}
           </span>
           <span>{getLevelWord(form.agent_profile.growth_tier, locale)}</span>
         </div>
@@ -228,14 +297,19 @@ export default function AgentProfileBuilder({
         <div className="space-y-3">
           <div className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--th-input-border)" }}>
             <div className="text-sm font-semibold" style={{ color: "var(--th-text-heading)" }}>
-              {tr("Resolved Canonical Identity", "Resolved Canonical Identity", "Resolved Canonical Identity", "Resolved Canonical Identity")}
+              {tr("해석된 표준 정체성", "Resolved Canonical Identity", "Resolved Canonical Identity", "Resolved Canonical Identity")}
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
               {[
-                { label: tr("패밀리", "Family", "ファミリー", "家族"), value: canonicalIdentity.family },
-                { label: tr("커리어 단계", "Career Stage", "キャリア段階", "职业阶段"), value: canonicalIdentity.career_stage },
+                { label: tr("능력군", "Family", "ファミリー", "家族"), value: canonicalFamilyDisplay },
+                { label: tr("경력 단계", "Career Stage", "キャリア段階", "职业阶段"), value: canonicalStageDisplay },
                 { label: tr("권한 레벨", "Authority Level", "権限レベル", "权限等级"), value: String(canonicalIdentity.authority_level) },
-                { label: tr("소스", "Source", "ソース", "来源"), value: canonicalIdentity.canonical_identity_source },
+                { label: tr("소스", "Source", "ソース", "来源"), value: canonicalSourceDisplay },
+                { label: tr("전문화 키", "Specialization Key", "Specialization Key", "Specialization Key"), value: specializationDisplay },
+                {
+                  label: tr("실행 역량 프로필", "Execution Capability Profile", "Execution Capability Profile", "Execution Capability Profile"),
+                  value: capabilityProfileDisplay,
+                },
               ].map((item) => (
                 <div key={item.label} className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--th-input-border)" }}>
                   <div className="text-[11px] font-medium" style={{ color: "var(--th-text-muted)" }}>
@@ -251,7 +325,7 @@ export default function AgentProfileBuilder({
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label htmlFor="agent-profile-specialization-key" className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
-                  {tr("프로필 전문화 키", "Profile Specialization Key", "プロファイル専門化キー", "配置专门化键")}
+                  {tr("전문화 키", "Profile Specialization Key", "プロファイル専門化キー", "配置专门化键")}
                 </label>
                 <input
                   id="agent-profile-specialization-key"
@@ -269,12 +343,12 @@ export default function AgentProfileBuilder({
                     borderColor: "var(--th-input-border)",
                     color: "var(--th-text-primary)",
                   }}
-                  placeholder="frontend.react"
+                  placeholder={tr("예: frontend.react", "frontend.react", "frontend.react", "frontend.react")}
                 />
               </div>
               <div>
                 <label htmlFor="agent-profile-capability-profile" className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
-                  {tr("프로필 실행 역량 프로필", "Profile Execution Capability", "プロファイル実行能力", "配置执行能力")}
+                  {tr("실행 역량 프로필", "Profile Execution Capability", "プロファイル実行能力", "配置执行能力")}
                 </label>
                 <input
                   id="agent-profile-capability-profile"
@@ -292,7 +366,7 @@ export default function AgentProfileBuilder({
                     borderColor: "var(--th-input-border)",
                     color: "var(--th-text-primary)",
                   }}
-                  placeholder="reviewer"
+                  placeholder={tr("예: reviewer", "reviewer", "reviewer", "reviewer")}
                 />
               </div>
             </div>
@@ -371,7 +445,7 @@ export default function AgentProfileBuilder({
                 color: "var(--th-text-primary)",
               }}
               placeholder={tr(
-                "예: backend, orchestration, prompt design",
+                "예: 백엔드, 오케스트레이션, 프롬프트 설계",
                 "e.g. backend, orchestration, prompt design",
                 "例: backend, orchestration, prompt design",
                 "例如: backend, orchestration, prompt design",
@@ -381,7 +455,7 @@ export default function AgentProfileBuilder({
 
           <div>
             <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
-              {tr("Final Manual Override", "Final Manual Override", "Final Manual Override", "Final Manual Override")}
+              {tr("최종 수동 지시", "Final Manual Override", "Final Manual Override", "Final Manual Override")}
             </label>
             <textarea
               value={form.personality}
@@ -444,7 +518,11 @@ export default function AgentProfileBuilder({
               <div className="rounded-lg border px-3 py-2 text-xs" style={{ borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" }}>
                 <div>{tr("호환성 사유", "Compatibility reason", "互換理由", "兼容原因")}:</div>
                 <div className="mt-1" style={{ color: "var(--th-text-primary)" }}>
-                  {String(promotionPolicy.notes ?? "default_junior_to_senior")}
+                  {formatKeyWithDisplayLabel(
+                    getPromotionPolicyDisplayLabel(String(promotionPolicy.notes ?? "default_junior_to_senior"), locale),
+                    String(promotionPolicy.notes ?? "default_junior_to_senior"),
+                    locale,
+                  )}
                 </div>
               </div>
             </div>

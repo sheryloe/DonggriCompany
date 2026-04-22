@@ -1,4 +1,4 @@
-import type { Lang } from "../../../types/lang.ts";
+﻿import type { Lang } from "../../../types/lang.ts";
 import type { L10n } from "./language-policy.ts";
 
 interface MessageDeps {
@@ -43,7 +43,7 @@ export function buildLeaderAckMessage(params: LeaderAckParams): string {
   if (skipPlannedMeeting && isPlanningLead && crossDeptNames) {
     return pickL(
       l(
-        [`확인했습니다. 기획 회의는 생략하고 ${crossDeptNames} 선행 조율 후 ${subRole} ${subName}에게 바로 위임하겠습니다.`],
+        [`확인했습니다. 기획 회의를 생략하고 ${crossDeptNames} 선행 조율 후 ${subRole} ${subName}에게 바로 위임하겠습니다.`],
         [`Understood. I will skip the planning meeting, pre-coordinate with ${crossDeptNames}, and delegate to ${subRole} ${subName}.`],
       ),
       lang,
@@ -127,8 +127,8 @@ export function buildSelfExecutionMessage(params: SelfMessageParams): string {
     l(
       [
         skipPlannedMeeting
-          ? "확인했습니다. 적합한 담당자가 없어 제가 직접 처리하겠습니다."
-          : "확인했습니다. 팀장 회의 이후에도 적합한 담당자가 없어 제가 직접 처리하겠습니다.",
+          ? "확인했습니다. 적합한 하위 담당자가 없어 제가 직접 처리하겠습니다."
+          : "확인했습니다. 팀장 회의 후에도 적합한 하위 담당자가 없어 제가 직접 처리하겠습니다.",
       ],
       [
         skipPlannedMeeting
@@ -144,7 +144,7 @@ export function buildManualFallbackNotice(params: ManualFallbackNoticeParams): s
   const { l, pickL, lang, leaderName } = params;
   return pickL(
     l(
-      [`[CEO OFFICE] 적합한 하위 담당자가 없어 팀장 ${leaderName}가 직접 실행합니다.`],
+      [`[CEO OFFICE] 적합한 하위 담당자가 없어 팀장 ${leaderName}가 직접 수행합니다.`],
       [`[CEO OFFICE] No eligible subordinate was available, so team lead ${leaderName} will execute directly.`],
     ),
     lang,

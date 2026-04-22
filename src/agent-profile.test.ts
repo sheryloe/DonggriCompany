@@ -92,4 +92,34 @@ describe("agent-profile helpers", () => {
     expect(preview).toContain("Review depth: Force 2-pass");
     expect(preview).toContain("Final override: Always propose the cleanest implementation.");
   });
+
+  it("builds a Korean prompt preview with localized canonical display labels", () => {
+    const preview = buildAgentPromptPreview({
+      profile: {
+        ...createPresetAgentProfile("team_leader"),
+        specialties: ["backend", "orchestration"],
+        custom_prompt_override: "Pragmatic dev lead",
+        class_path: ["engineering", "backend", "platform"],
+        promotion_policy: {
+          auto_promote_at_xp: 300,
+          notes: "default_junior_to_senior",
+        },
+      },
+      workflowProfile: {
+        role: "reviewer",
+        review_lenses: ["general"],
+        two_pass_required: true,
+        max_review_rounds: null,
+      },
+      locale: "ko",
+    });
+
+    expect(preview).toContain("역할 템플릿: 팀 리드");
+    expect(preview).toContain("워크플로우 역할: 리뷰어");
+    expect(preview).toContain("클래스 경로: 엔지니어링 > 백엔드 > 플랫폼");
+    expect(preview).toContain("승급 정책: 300 XP 이상 자동 승급 주니어에서 시니어로 자동 승급");
+    expect(preview).toContain("전문 분야: 백엔드, 오케스트레이션");
+    expect(preview).toContain("리뷰 렌즈: 일반");
+    expect(preview).toContain("최종 수동 지시: Pragmatic dev lead");
+  });
 });

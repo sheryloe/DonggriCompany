@@ -20,6 +20,12 @@ const apiMocks = vi.hoisted(() => ({
   pickProjectPathNative: vi.fn(),
 }));
 
+const githubFlowMocks = vi.hoisted(() => ({
+  createProjectWithGitHubAutomation: vi.fn(),
+  isGitHubProjectCreateError: vi.fn(),
+  getDefaultProjectRoot: vi.fn(),
+}));
+
 vi.mock("../api", () => ({
   browseProjectPath: apiMocks.browseProjectPath,
   checkProjectPath: apiMocks.checkProjectPath,
@@ -29,6 +35,39 @@ vi.mock("../api", () => ({
   getProjects: apiMocks.getProjects,
   isApiRequestError: apiMocks.isApiRequestError,
   pickProjectPathNative: apiMocks.pickProjectPathNative,
+}));
+
+vi.mock("./project-creation/github-project-flow", () => ({
+  createProjectWithGitHubAutomation: githubFlowMocks.createProjectWithGitHubAutomation,
+  isGitHubProjectCreateError: githubFlowMocks.isGitHubProjectCreateError,
+  getDefaultProjectRoot: githubFlowMocks.getDefaultProjectRoot,
+  slugifyRepositoryName: (value: string) => {
+    const slug = value
+      .trim()
+      .toLowerCase()
+      .replace(/['"]/g, "")
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^[.-]+|[.-]+$/g, "")
+      .slice(0, 100);
+    return slug || "new-repo";
+  },
+  joinProjectPath: (root: string, leaf: string) => `${root.replace(/[\\/]+$/, "")}\\${leaf.replace(/^[\\/]+/, "")}`,
+}));
+
+vi.mock("./project-creation/GitHubConnectionDialog", () => ({
+  default: function MockGitHubConnectionDialog(props: { onConnected: () => void; onCancel: () => void }) {
+    return (
+      <div data-testid="github-connection-dialog">
+        <button type="button" onClick={props.onConnected}>
+          github-connected
+        </button>
+        <button type="button" onClick={props.onCancel}>
+          github-cancel
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock("./taskboard/create-modal/usePathHelperMessages", () => ({
@@ -180,8 +219,25 @@ vi.mock("./chat-panel/ProjectFlowDialog", () => ({
     recentProjects: Project[];
     filteredProjects: Project[];
     selectedProject: Project | null;
+    createNewProjectMode: boolean;
+    projectQuery: string;
+    newProjectPath: string;
+    newProjectGoal: string;
+    githubAutoCreateEnabled: boolean;
+    githubRepoName: string;
+    githubRepoPrivate: boolean;
+    canCreateProject: boolean;
     skipPlannedMeeting: boolean;
     onSelectProject: (project: Project | null) => void;
+    onEnableCreateNewProject: () => void;
+    onCancelCreateNewProject: () => void;
+    onNewProjectNameChange: (value: string) => void;
+    onNewProjectPathChange: (value: string) => void;
+    onNewProjectGoalChange: (value: string) => void;
+    onGitHubAutoCreateEnabledChange: (enabled: boolean) => void;
+    onGitHubRepoNameChange: (value: string) => void;
+    onGitHubRepoPrivateChange: (value: boolean) => void;
+    onCreateProject: () => void;
     onToggleSkipPlannedMeeting: () => void;
     onConfirm: () => void;
   }) {
@@ -190,6 +246,11 @@ vi.mock("./chat-panel/ProjectFlowDialog", () => ({
       <div data-testid="project-flow-dialog">
         <div data-testid="selected-project-id">{props.selectedProject?.id ?? ""}</div>
         <div data-testid="skip-meeting-state">{props.skipPlannedMeeting ? "skip" : "default"}</div>
+        <div data-testid="create-new-project-mode">{props.createNewProjectMode ? "create" : "select"}</div>
+        <div data-testid="github-create-state">
+          {props.githubAutoCreateEnabled ? "github-on" : "github-off"}:{props.githubRepoName}:
+          {props.githubRepoPrivate ? "private" : "public"}
+        </div>
         <div data-testid="recent-projects">
           {props.recentProjects.map((project) => (
             <button
@@ -211,6 +272,33 @@ vi.mock("./chat-panel/ProjectFlowDialog", () => ({
         </button>
         <button type="button" onClick={props.onToggleSkipPlannedMeeting}>
           toggle-skip-meeting
+        </button>
+        <button type="button" onClick={props.onEnableCreateNewProject}>
+          enable-create-new-project
+        </button>
+        <button type="button" onClick={() => props.onCancelCreateNewProject()}>
+          cancel-create-new-project
+        </button>
+        <button type="button" onClick={() => props.onNewProjectNameChange("New Repo Project")}>
+          set-project-name
+        </button>
+        <button type="button" onClick={() => props.onNewProjectPathChange("D:\\Projects\\new-repo-project")}>
+          set-project-path
+        </button>
+        <button type="button" onClick={() => props.onNewProjectGoalChange("Create a GitHub backed project")}>
+          set-project-goal
+        </button>
+        <button type="button" onClick={() => props.onGitHubAutoCreateEnabledChange(true)}>
+          enable-github-create
+        </button>
+        <button type="button" onClick={() => props.onGitHubRepoNameChange("new-repo-project")}>
+          set-github-repo-name
+        </button>
+        <button type="button" onClick={() => props.onGitHubRepoPrivateChange(false)}>
+          set-github-public
+        </button>
+        <button type="button" onClick={props.onCreateProject} disabled={!props.canCreateProject}>
+          create-project
         </button>
         <button type="button" onClick={props.onConfirm}>
           confirm-project
@@ -310,6 +398,13 @@ describe("ChatPanel directive project context", () => {
     });
     apiMocks.pickProjectPathNative.mockResolvedValue({ cancelled: true, path: null });
     apiMocks.createProject.mockResolvedValue(existingProject);
+    githubFlowMocks.getDefaultProjectRoot.mockResolvedValue("D:\\Projects");
+    githubFlowMocks.createProjectWithGitHubAutomation.mockResolvedValue({
+      project: existingProject,
+      remoteRepo: null,
+      projectPath: existingProject.project_path,
+    });
+    githubFlowMocks.isGitHubProjectCreateError.mockReturnValue(false);
     apiMocks.createPrnDraft.mockResolvedValue({
       sections: {
         background: "",
@@ -419,6 +514,76 @@ describe("ChatPanel directive project context", () => {
     });
 
     expect(screen.queryByTestId("project-flow-dialog")).not.toBeInTheDocument();
+  });
+
+  it("creates a GitHub-backed project from the project picker before sending a directive", async () => {
+    const githubProject: Project = {
+      ...existingProject,
+      id: "project-3",
+      name: "New Repo Project",
+      project_path: "D:\\Projects\\new-repo-project",
+      core_goal: "Create a GitHub backed project",
+    };
+    githubFlowMocks.createProjectWithGitHubAutomation.mockResolvedValue({
+      project: githubProject,
+      remoteRepo: {
+        id: 123,
+        name: "new-repo-project",
+        full_name: "octocat/new-repo-project",
+        html_url: "https://github.com/octocat/new-repo-project",
+        private: false,
+        default_branch: "main",
+      },
+      projectPath: "D:\\Projects\\new-repo-project",
+    });
+    const { onSendDirective } = renderChatPanel({});
+
+    fireEvent.change(screen.getByLabelText("chat-input"), { target: { value: "$create repo-backed project" } });
+    fireEvent.click(screen.getByRole("button", { name: "send" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("project-flow-dialog")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "enable-create-new-project" }));
+    fireEvent.click(screen.getByRole("button", { name: "set-project-name" }));
+    fireEvent.click(screen.getByRole("button", { name: "set-project-goal" }));
+    fireEvent.click(screen.getByRole("button", { name: "enable-github-create" }));
+    fireEvent.click(screen.getByRole("button", { name: "set-github-repo-name" }));
+    fireEvent.click(screen.getByRole("button", { name: "set-github-public" }));
+    fireEvent.click(screen.getByRole("button", { name: "set-project-path" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "create-project" })).not.toBeDisabled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "create-project" }));
+
+    await waitFor(() => {
+      expect(githubFlowMocks.createProjectWithGitHubAutomation).toHaveBeenCalledWith({
+        name: "New Repo Project",
+        projectPath: "D:\\Projects\\new-repo-project",
+        coreGoal: "Create a GitHub backed project",
+        createPathIfMissing: true,
+        github: {
+          enabled: true,
+          repoName: "new-repo-project",
+          private: false,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("selected-project-id")).toHaveTextContent("project-3");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "confirm-project" }));
+
+    await waitFor(() => {
+      expect(onSendDirective).toHaveBeenCalledWith("create repo-backed project", {
+        project_id: "project-3",
+        project_path: "D:\\Projects\\new-repo-project",
+        project_context: "Create a GitHub backed project",
+      });
+    });
   });
 
   it("forwards skipPlannedMeeting only when the meeting mode is toggled off", async () => {

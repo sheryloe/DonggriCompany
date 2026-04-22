@@ -1,5 +1,6 @@
 ﻿import type { DatabaseSync } from "node:sqlite";
 import { DEFAULT_WORKFLOW_PACK_KEY, WORKFLOW_PACK_KEYS } from "../../workflow/packs/definitions.ts";
+import { deriveCanonicalFamilyFromDepartment, mapLegacyDepartmentId } from "./organization-manifest.ts";
 
 type DbLike = Pick<DatabaseSync, "exec" | "prepare">;
 
@@ -100,6 +101,11 @@ export function applyTaskSchemaMigrations(db: DbLike): void {
   }
   try {
     db.exec("ALTER TABLE projects ADD COLUMN canonical_pack_profile TEXT NOT NULL DEFAULT 'development'");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE projects ADD COLUMN staffing_policy_json TEXT");
   } catch {
     /* already exists */
   }
@@ -234,26 +240,39 @@ export function applyTaskSchemaMigrations(db: DbLike): void {
   try {
     db.exec(`
       UPDATE agents
-      SET family = COALESCE(NULLIF(family, ''), CASE
-            WHEN department_id = 'planning' THEN 'orchestrator'
-            WHEN department_id = 'design' THEN 'frontend'
-            WHEN department_id = 'qa' THEN 'qa'
-            WHEN department_id = 'devsecops' THEN 'reviewer'
-            WHEN department_id = 'operations' THEN 'memory-manager'
-            ELSE 'backend'
-          END),
+      SET family = COALESCE(NULLIF(family, ''), 'backend'),
           career_stage = COALESCE(NULLIF(career_stage, ''), CASE
             WHEN role = 'team_leader' THEN 'team-lead'
             WHEN role = 'senior' THEN 'senior'
             ELSE 'junior'
           END),
-          authority_level = COALESCE(authority_level, CASE
-            WHEN role = 'team_leader' THEN 3
-            WHEN role = 'senior' THEN 2
+          authority_level = CASE
+            WHEN authority_level IS NULL OR authority_level <= 0 THEN CASE
+            WHEN role = 'team_leader' THEN 7
+            WHEN role = 'senior' THEN 3
             ELSE 1
-          END),
+          END
+            ELSE authority_level
+          END,
           execution_capability_profile = COALESCE(NULLIF(execution_capability_profile, ''), workflow_profile)
     `);
+  } catch {
+    /* best effort */
+  }
+  try {
+    const rows = db
+      .prepare("SELECT id, department_id, specialization_key FROM agents WHERE family IS NULL OR TRIM(COALESCE(family, '')) = ''")
+      .all() as Array<{ id: string; department_id?: string | null; specialization_key?: string | null }>;
+    const updateFamily = db.prepare("UPDATE agents SET family = ? WHERE id = ?");
+    for (const row of rows) {
+      updateFamily.run(
+        deriveCanonicalFamilyFromDepartment(
+          mapLegacyDepartmentId(row.department_id) ?? row.department_id ?? null,
+          row.specialization_key ?? null,
+        ),
+        row.id,
+      );
+    }
   } catch {
     /* best effort */
   }
@@ -757,4 +776,5 @@ function ensureMessagesIdempotencySchema(db: DbLike): void {
     WHERE idempotency_key IS NOT NULL
   `);
 }
+
 

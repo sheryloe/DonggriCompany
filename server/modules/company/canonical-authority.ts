@@ -1,4 +1,5 @@
 import { getCanonicalStageRank, resolveCanonicalIdentity } from "./canonical-identity.ts";
+import { mapLegacyDepartmentId } from "../bootstrap/schema/organization-manifest.ts";
 
 type CanonicalAuthorityAgent = {
   id: string;
@@ -10,6 +11,8 @@ type CanonicalAuthorityAgent = {
   family?: string | null;
   career_stage?: string | null;
   authority_level?: number | null;
+  specialization_key?: string | null;
+  execution_capability_profile?: string | null;
 };
 
 export interface CanonicalAuthorityContext {
@@ -47,45 +50,63 @@ function requiresArchitectureReview(context: CanonicalAuthorityContext): boolean
   );
 }
 
-function requiresQaQuorum(context: CanonicalAuthorityContext): boolean {
-  const text = buildTaskSignalText(context);
+function requiresReleaseQuorum(context: CanonicalAuthorityContext): boolean {
   return (
     context.phase === "review" &&
-    (context.workflowPackKey === "video_preprod" ||
-      includesPattern(text, /release|deploy|reliability|security|audit|compliance|incident|stability|ship/))
+    (includesPattern(buildTaskSignalText(context), /release|merge|deploy|ship|rollout|production/) ||
+      context.workflowPackKey === "video_preprod")
   );
 }
 
-function requiresDocumenterQuorum(context: CanonicalAuthorityContext): boolean {
-  const text = buildTaskSignalText(context);
+function requiresSecurityQuorum(context: CanonicalAuthorityContext): boolean {
   return (
     context.phase === "review" &&
-    (context.workflowPackKey === "report" ||
-      context.workflowPackKey === "web_research_report" ||
-      context.workflowPackKey === "novel" ||
-      context.workflowPackKey === "roleplay" ||
-      includesPattern(text, /report|documentation|document|brief|summary|research|proposal|script|external/))
+    includesPattern(buildTaskSignalText(context), /security|auth|permission|billing|compliance|audit/)
   );
+}
+
+function requiresDocsQuorum(context: CanonicalAuthorityContext): boolean {
+  return includesPattern(buildTaskSignalText(context), /report|documentation|document|brief|summary|governance|decision|status/) ||
+    context.workflowPackKey === "report" ||
+    context.workflowPackKey === "web_research_report" ||
+    context.workflowPackKey === "novel" ||
+    context.workflowPackKey === "roleplay";
 }
 
 function isSeniorPlus(stage: string | null | undefined): boolean {
   return getCanonicalStageRank(stage as any) >= getCanonicalStageRank("senior");
 }
 
+function isPmoChairCandidate(agent: CanonicalAuthorityAgent): boolean {
+  const canonical = resolveCanonicalIdentity(agent);
+  const departmentId = mapLegacyDepartmentId(agent.department_id);
+  return canonical.family === "orchestrator" && canonical.career_stage === "team-lead" && departmentId === "pmo";
+}
+
 function isChairCandidate(agent: CanonicalAuthorityAgent): boolean {
   const canonical = resolveCanonicalIdentity(agent);
-  return canonical.family === "orchestrator" && canonical.career_stage === "team-lead";
+  const rawDepartmentId = String(agent.department_id ?? "").trim();
+  return (
+    (canonical.family === "orchestrator" && canonical.career_stage === "team-lead") ||
+    (rawDepartmentId === "planning" && canonical.career_stage === "team-lead")
+  );
 }
 
 export function pickCanonicalMeetingChair<TAgent extends CanonicalAuthorityAgent>(leaders: TAgent[]): TAgent | null {
   if (leaders.length <= 0) return null;
+  const candidates = leaders.filter((leader) => isChairCandidate(leader));
+  if (candidates.length <= 0) return null;
   return (
-    [...leaders]
+    [...candidates]
       .map((leader) => ({
         leader,
         canonical: resolveCanonicalIdentity(leader),
       }))
       .sort((left, right) => {
+        const leftPmo = isPmoChairCandidate(left.leader) ? 0 : 1;
+        const rightPmo = isPmoChairCandidate(right.leader) ? 0 : 1;
+        if (leftPmo !== rightPmo) return leftPmo - rightPmo;
+
         const leftChair = isChairCandidate(left.leader) ? 0 : 1;
         const rightChair = isChairCandidate(right.leader) ? 0 : 1;
         if (leftChair !== rightChair) return leftChair - rightChair;
@@ -112,32 +133,32 @@ export function evaluateCanonicalMeetingAuthority<TAgent extends CanonicalAuthor
   context: CanonicalAuthorityContext,
 ): CanonicalAuthorityEvaluation<TAgent> {
   const chair = pickCanonicalMeetingChair(leaders);
-  const hasCanonicalChair = leaders.some((leader) => isChairCandidate(leader));
+  const hasPmoChair = leaders.some((leader) => isPmoChairCandidate(leader));
   const selectedBy: string[] = [];
   const blockedBy: string[] = [];
-
-  if (!chair || !hasCanonicalChair) {
-    blockedBy.push("missing_orchestrator_team_lead");
-  }
-  if (chair) {
-    const canonical = resolveCanonicalIdentity(chair);
-    selectedBy.push(`chair:${canonical.family}:${canonical.career_stage}:${canonical.authority_level}`);
-  }
-
   const enriched = leaders.map((leader) => ({
     leader,
     canonical: resolveCanonicalIdentity(leader),
+    department_id: mapLegacyDepartmentId(leader.department_id),
   }));
 
+  if (!chair) {
+    blockedBy.push("missing_orchestrator_team_lead");
+  } else {
+    const canonical = resolveCanonicalIdentity(chair);
+    selectedBy.push(`chair:${canonical.family}:${canonical.career_stage}:${canonical.authority_level}`);
+    if (hasPmoChair) selectedBy.push("chair_source:pmo");
+  }
+
+  const reviewer = enriched.find(
+    ({ canonical }) =>
+      isSeniorPlus(canonical.career_stage) &&
+      (canonical.family === "reviewer" ||
+        canonical.family === "qa" ||
+        canonical.family === "documenter" ||
+        canonical.family === "product-manager"),
+  );
   if (context.phase === "review") {
-    const reviewer = enriched.find(
-      ({ canonical }) =>
-        isSeniorPlus(canonical.career_stage) &&
-        (canonical.family === "reviewer" ||
-          canonical.family === "qa" ||
-          canonical.family === "documenter" ||
-          canonical.family === "product-manager"),
-    );
     if (!reviewer) blockedBy.push("missing_reviewer_senior");
     else selectedBy.push(`reviewer:${reviewer.canonical.family}:${reviewer.canonical.career_stage}`);
   }
@@ -155,25 +176,55 @@ export function evaluateCanonicalMeetingAuthority<TAgent extends CanonicalAuthor
     else selectedBy.push(`architecture:${architect.canonical.family}:${architect.canonical.career_stage}`);
   }
 
-  if (requiresQaQuorum(context)) {
-    const qa = enriched.find(({ canonical }) => canonical.family === "qa" && isSeniorPlus(canonical.career_stage));
-    if (!qa) blockedBy.push("missing_qa_senior");
-    else selectedBy.push(`qa:${qa.canonical.career_stage}`);
+  if (requiresReleaseQuorum(context)) {
+    const qaLeader = enriched.find(({ canonical, department_id }) => department_id === "qa" && isSeniorPlus(canonical.career_stage));
+    const hasReleaseDiscipline = enriched.some(({ department_id }) => department_id === "cicd-repo");
+    const releaseLeader = enriched.find(
+      ({ canonical, department_id }) =>
+        department_id === "cicd-repo" &&
+        (isSeniorPlus(canonical.career_stage) || canonical.career_stage === "team-lead"),
+    );
+    if (!qaLeader) {
+      blockedBy.push("missing_qa_senior");
+    } else if (hasReleaseDiscipline && !releaseLeader) {
+      blockedBy.push("release_quorum_not_met");
+    } else if (releaseLeader) {
+      selectedBy.push(`release_quorum:${qaLeader.canonical.career_stage}:${releaseLeader.canonical.career_stage}`);
+    } else {
+      selectedBy.push(`release_quorum:${qaLeader.canonical.career_stage}:legacy`);
+    }
   }
 
-  if (requiresDocumenterQuorum(context)) {
-    const documenter = enriched.find(
-      ({ canonical }) =>
-        isSeniorPlus(canonical.career_stage) &&
-        (canonical.family === "documenter" || canonical.family === "product-manager"),
+  if (requiresSecurityQuorum(context)) {
+    const qaLeader = enriched.find(({ canonical, department_id }) => department_id === "qa" && isSeniorPlus(canonical.career_stage));
+    const securityLeader = enriched.find(
+      ({ canonical, department_id }) =>
+        department_id === "security-approval" &&
+        (isSeniorPlus(canonical.career_stage) || canonical.career_stage === "team-lead"),
     );
-    if (!documenter) blockedBy.push("missing_documenter_or_product_manager_senior");
-    else selectedBy.push(`document:${documenter.canonical.family}:${documenter.canonical.career_stage}`);
+    if (!qaLeader || !securityLeader) blockedBy.push("security_quorum_not_met");
+    else selectedBy.push(`security_quorum:${qaLeader.canonical.career_stage}:${securityLeader.canonical.career_stage}`);
+  }
+
+  if (requiresDocsQuorum(context)) {
+    const docsLeader = enriched.find(
+      ({ canonical, department_id }) =>
+        department_id === "knowledge-docs" &&
+        (isSeniorPlus(canonical.career_stage) || canonical.career_stage === "team-lead"),
+    );
+    const pmoLeader = enriched.find(
+      ({ canonical, department_id }) =>
+        department_id === "pmo" &&
+        canonical.family === "orchestrator" &&
+        canonical.career_stage === "team-lead",
+    );
+    if (!docsLeader || !pmoLeader) blockedBy.push("docs_quorum_not_met");
+    else selectedBy.push(`docs_quorum:${docsLeader.canonical.career_stage}:${pmoLeader.canonical.career_stage}`);
   }
 
   return {
     chair,
     selectedBy,
-    blockedBy,
+    blockedBy: [...new Set(blockedBy)],
   };
 }

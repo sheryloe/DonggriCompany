@@ -330,22 +330,58 @@ export function resolveAgentProfileOverrideText(
   return custom || normalizeString(legacyPersonality);
 }
 
-function formatClassPath(value: AgentProfile["class_path"]): string {
+function localizeProfileToken(value: string, locale?: string): string {
+  const raw = normalizeString(value);
+  if (!raw || normalizeLocale(locale) !== "ko") return raw;
+  const normalized = raw.toLowerCase();
+  const labels: Record<string, string> = {
+    backend: "백엔드",
+    engineering: "엔지니어링",
+    frontend: "프런트엔드",
+    "frontend.react": "프런트엔드 React",
+    general: "일반",
+    orchestration: "오케스트레이션",
+    performance: "성능",
+    platform: "플랫폼",
+    "prompt design": "프롬프트 설계",
+    prompting: "프롬프트 설계",
+    security: "보안",
+  };
+  return labels[normalized] ?? raw;
+}
+
+function formatLocalizedList(values: string[], locale?: string): string {
+  return values.map((entry) => localizeProfileToken(entry, locale)).filter(Boolean).join(", ");
+}
+
+function formatClassPath(value: AgentProfile["class_path"], locale?: string): string {
   if (!value) return "";
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.join(" > ");
+  if (typeof value === "string") return localizeProfileToken(value, locale);
+  if (Array.isArray(value)) return value.map((entry) => localizeProfileToken(entry, locale)).join(" > ");
   const stage1 = normalizeString(value.stage1 ?? value.class_stage_1);
   const stage2 = normalizeString(value.stage2 ?? value.class_stage_2);
   const stage3 = normalizeString(value.stage3 ?? value.class_stage_3);
-  return [stage1, stage2, stage3].filter(Boolean).join(" > ");
+  return [stage1, stage2, stage3].filter(Boolean).map((entry) => localizeProfileToken(entry, locale)).join(" > ");
 }
 
-function formatPromotionPolicy(value: AgentProfile["promotion_policy"]): string {
+function formatPromotionPolicy(value: AgentProfile["promotion_policy"], locale?: string): string {
   if (!value) return "";
   if (typeof value === "string") return value;
   const xp = Number.isFinite(Number(value.auto_promote_at_xp)) ? Number(value.auto_promote_at_xp) : null;
   const manual = value.team_leader_manual ? "team_leader_manual" : "";
   const notes = normalizeString(value.notes);
+  if (normalizeLocale(locale) === "ko") {
+    const noteLabels: Record<string, string> = {
+      default_junior_to_senior: "주니어에서 시니어로 자동 승급",
+    };
+    return [
+      xp !== null ? `${xp} XP 이상 자동 승급` : "",
+      manual ? "팀 리드 수동 승인" : "",
+      noteLabels[notes] ?? notes,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
   return [xp !== null ? `@xp>=${xp}` : "", manual, notes].filter(Boolean).join(" ");
 }
 
@@ -367,10 +403,10 @@ export function buildAgentPromptPreview(params: {
     (key) =>
       `${STYLE_LABELS[lang][key]} ${LEVEL_WORDS[lang][normalized.prompt_style[key]]}(${normalized.prompt_style[key]})`,
   ).join(", ");
-  const reviewLenses = workflowProfile?.review_lenses?.join(", ") || "";
-  const specialties = normalized.specialties.join(", ");
-  const classPath = formatClassPath(normalized.class_path);
-  const promotionPolicy = formatPromotionPolicy(normalized.promotion_policy);
+  const reviewLenses = formatLocalizedList(workflowProfile?.review_lenses ?? [], locale);
+  const specialties = formatLocalizedList(normalized.specialties, locale);
+  const classPath = formatClassPath(normalized.class_path, locale);
+  const promotionPolicy = formatPromotionPolicy(normalized.promotion_policy, locale);
   const workflowRoleLabel = workflowProfile ? getWorkflowRoleDisplayLabel(workflowProfile.role, locale) : "";
   const reviewDepthLabel =
     workflowProfile?.two_pass_required === false
@@ -385,7 +421,7 @@ export function buildAgentPromptPreview(params: {
     return [
       `역할 템플릿: ${getRoleDisplayLabel(normalized.role_template, locale)}`,
       `적용 성장 티어: ${normalized.growth_tier}/5`,
-      workflowRoleLabel ? `2x 역할: ${workflowRoleLabel}` : "",
+      workflowRoleLabel ? `워크플로우 역할: ${workflowRoleLabel}` : "",
       classPath ? `클래스 경로: ${classPath}` : "",
       promotionPolicy ? `승급 정책: ${promotionPolicy}` : "",
       `역량 매트릭스: ${capabilitySummary}`,
@@ -396,7 +432,7 @@ export function buildAgentPromptPreview(params: {
       workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds
         ? `최대 리뷰 라운드: ${workflowProfile.max_review_rounds}`
         : "",
-      overrideText ? `최종 수동 보정: ${overrideText}` : "",
+      overrideText ? `최종 수동 지시: ${overrideText}` : "",
     ]
       .filter(Boolean)
       .join("\n");

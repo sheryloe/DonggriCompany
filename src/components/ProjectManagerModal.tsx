@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Agent, AssignmentMode, Department, Project } from "../types";
 import {
   deleteProject,
@@ -66,6 +66,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
 
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>("auto");
   const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(new Set());
+  const [staffingPolicyJson, setStaffingPolicyJson] = useState<string>("");
   const [agentFilterDept, setAgentFilterDept] = useState<string>("all");
   const [manualAssignmentWarning, setManualAssignmentWarning] = useState<ManualAssignmentWarning | null>(null);
 
@@ -85,10 +86,20 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     projectName: name,
     onProjectPathChange: setProjectPath,
   });
+  let isStaffingJsonValid = true;
+  if (staffingPolicyJson && staffingPolicyJson.trim()) {
+    try {
+      JSON.parse(staffingPolicyJson);
+    } catch {
+      isStaffingJsonValid = false;
+    }
+  }
+
   const canSave =
     !!name.trim() &&
     !!projectPath.trim() &&
     !!coreGoal.trim() &&
+    isStaffingJsonValid &&
     (!gitHubProjectScaffold.githubAutoCreateEnabled || !!gitHubProjectScaffold.githubRepoName.trim());
 
   const loadProjects = useCallback(
@@ -137,6 +148,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
           setCoreGoal(res.project.core_goal);
           setAssignmentMode(res.project.assignment_mode || "auto");
           setSelectedAgentIds(new Set(res.project.assigned_agent_ids || []));
+          setStaffingPolicyJson(res.project.staffing_policy_json ? JSON.stringify(res.project.staffing_policy_json, null, 2) : "");
         }
       })
       .catch((err) => {
@@ -228,6 +240,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     setCoreGoal("");
     setAssignmentMode("auto");
     setSelectedAgentIds(new Set());
+    setStaffingPolicyJson("");
     setManualAssignmentWarning(null);
     setGithubConnectReason(null);
     setPendingGitHubSave(null);
@@ -244,6 +257,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     setCoreGoal(viewedProject.core_goal);
     setAssignmentMode(viewedProject.assignment_mode || "auto");
     setSelectedAgentIds(new Set(viewedProject.assigned_agent_ids || []));
+    setStaffingPolicyJson(viewedProject.staffing_policy_json ? JSON.stringify(viewedProject.staffing_policy_json, null, 2) : "");
     setManualAssignmentWarning(null);
     setGithubConnectReason(null);
     setPendingGitHubSave(null);
@@ -265,6 +279,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     name,
     coreGoal,
     selectedAgentIds,
+    staffingPolicyJson,
     githubAutoCreateEnabled: !editingProjectId && gitHubProjectScaffold.githubAutoCreateEnabled,
     githubRepoName: gitHubProjectScaffold.githubRepoName,
     githubRepoPrivate: gitHubProjectScaffold.githubRepoPrivate,
@@ -464,6 +479,8 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
                   manualSelectionStats={manualSelectionStats}
                   selectedAgentIds={selectedAgentIds}
                   setSelectedAgentIds={setSelectedAgentIds}
+                  staffingPolicyJson={staffingPolicyJson}
+                  setStaffingPolicyJson={setStaffingPolicyJson}
                   agentFilterDept={agentFilterDept}
                   setAgentFilterDept={setAgentFilterDept}
                   agents={agents}
@@ -483,6 +500,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
                       setName(viewedProject.name);
                       setProjectPath(viewedProject.project_path);
                       setCoreGoal(viewedProject.core_goal);
+                      setStaffingPolicyJson(viewedProject.staffing_policy_json ? JSON.stringify(viewedProject.staffing_policy_json, null, 2) : "");
                     }
                   }}
                   onStartEditSelected={startEditSelected}

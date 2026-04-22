@@ -1,6 +1,7 @@
 ﻿import { resolveConstrainedAgentScopeForTask } from "../../../routes/core/tasks/execution-run-auto-assign.ts";
 import { isPrimaryAuthorProfile, resolveAgentWorkflowProfile } from "../../agents/workflow-profile.ts";
 import { getCanonicalStageRank, resolveCanonicalIdentity } from "../../../company/canonical-identity.ts";
+import { mapLegacyDepartmentId } from "../../../bootstrap/schema/organization-manifest.ts";
 
 interface AgentRow {
   id: string;
@@ -123,6 +124,12 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
           canonical: resolveCanonicalIdentity(leader),
         }))
         .sort((left, right) => {
+          const leftPmoRank =
+            left.canonical.family === "orchestrator" && mapLegacyDepartmentId(left.leader.department_id) === "pmo" ? 0 : 1;
+          const rightPmoRank =
+            right.canonical.family === "orchestrator" && mapLegacyDepartmentId(right.leader.department_id) === "pmo" ? 0 : 1;
+          if (leftPmoRank !== rightPmoRank) return leftPmoRank - rightPmoRank;
+
           const leftFamilyRank = left.canonical.family === "orchestrator" ? 0 : 1;
           const rightFamilyRank = right.canonical.family === "orchestrator" ? 0 : 1;
           if (leftFamilyRank !== rightFamilyRank) return leftFamilyRank - rightFamilyRank;
@@ -434,4 +441,6 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
     getTaskReviewLeaders,
   };
 }
+
+
 

@@ -5,6 +5,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { decryptSecret } from "../../../oauth/helpers.ts";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
+import { isValidGitHubRepoName, normalizeGitHubRepoName } from "./github-validation.ts";
 
 export type GitHubRouteDeps = Pick<RuntimeContext, "app" | "db" | "broadcast">;
 
@@ -46,7 +47,58 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     let targetPath = candidate || defaultTarget;
     if (targetPath === "~") targetPath = os.homedir();
     else if (targetPath.startsWith("~/")) targetPath = path.join(os.homedir(), targetPath.slice(2));
+    else if (targetPath === "/Projects" || targetPath.startsWith("/Projects/")) {
+      const suffix = targetPath.slice("/Projects".length).replace(/^\/+/, "");
+      targetPath = suffix ? path.join(os.homedir(), "Projects", suffix) : path.join(os.homedir(), "Projects");
+    } else if (targetPath === "/projects" || targetPath.startsWith("/projects/")) {
+      const suffix = targetPath.slice("/projects".length).replace(/^\/+/, "");
+      targetPath = suffix ? path.join(os.homedir(), "projects", suffix) : path.join(os.homedir(), "projects");
+    }
     return path.resolve(targetPath);
+  }
+
+  const PROJECT_PATH_SCOPE_CASE_INSENSITIVE = process.platform === "win32" || process.platform === "darwin";
+
+  function normalizePathForScopeCompare(value: string): string {
+    const normalized = path.normalize(path.resolve(value));
+    return PROJECT_PATH_SCOPE_CASE_INSENSITIVE ? normalized.toLowerCase() : normalized;
+  }
+
+  function parseProjectPathAllowedRoots(raw: string | undefined): string[] {
+    const text = typeof raw === "string" ? raw.trim() : "";
+    if (!text) return [];
+    const roots: string[] = [];
+    const seen = new Set<string>();
+    for (const part of text.split(/[\n,;]+/)) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const normalized = normalizeTargetPath(trimmed);
+      const key = normalizePathForScopeCompare(normalized);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      roots.push(normalized);
+    }
+    return roots;
+  }
+
+  const PROJECT_PATH_ALLOWED_ROOTS = parseProjectPathAllowedRoots(process.env.PROJECT_PATH_ALLOWED_ROOTS);
+
+  function pathInsideRoot(candidatePath: string, rootPath: string): boolean {
+    const rel = path.relative(normalizePathForScopeCompare(rootPath), normalizePathForScopeCompare(candidatePath));
+    if (!rel) return true;
+    return !rel.startsWith("..") && !path.isAbsolute(rel);
+  }
+
+  function isTargetPathInsideAllowedRoots(targetPath: string): boolean {
+    if (PROJECT_PATH_ALLOWED_ROOTS.length === 0) return true;
+    return PROJECT_PATH_ALLOWED_ROOTS.some((root) => pathInsideRoot(targetPath, root));
+  }
+
+  function sendTargetPathOutsideAllowedRoots(res: { status: (code: number) => { json: (body: unknown) => unknown } }) {
+    return res.status(403).json({
+      error: "target_path_outside_allowed_roots",
+      allowed_roots: PROJECT_PATH_ALLOWED_ROOTS,
+    });
   }
 
   const activeClones = new Map<
@@ -164,9 +216,15 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     if (!token) return res.status(401).json({ error: "github_not_connected" });
 
     const body = (req.body ?? {}) as { name?: unknown; private?: unknown };
-    const repoName = typeof body.name === "string" ? body.name.trim() : "";
+    const repoName = normalizeGitHubRepoName(body.name);
     const isPrivate = typeof body.private === "boolean" ? body.private : true;
     if (!repoName) return res.status(400).json({ error: "repo_name_required" });
+    if (!isValidGitHubRepoName(repoName)) {
+      return res.status(400).json({
+        error: "invalid_repo_name",
+        reason: "Use 1-100 lowercase letters, numbers, dots, underscores, or hyphens. Slashes and .git suffixes are not allowed.",
+      });
+    }
 
     try {
       const resp = await fetch("https://api.github.com/user/repos", {
@@ -343,6 +401,9 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
 
     const repoFullName = `${owner}/${repo}`;
     const targetPath = normalizeTargetPath(target_path, String(repo));
+    if (!isTargetPathInsideAllowedRoots(targetPath)) {
+      return sendTargetPathOutsideAllowedRoots(res);
+    }
 
     if (fs.existsSync(targetPath) && fs.existsSync(path.join(targetPath, ".git"))) {
       return res.json({ clone_id: null, already_exists: true, target_path: targetPath });
@@ -427,6 +488,9 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     const targetPath = normalizeTargetPath(rawTargetPath);
     if (!path.isAbsolute(targetPath)) {
       return res.status(400).json({ error: "absolute_path_required" });
+    }
+    if (!isTargetPathInsideAllowedRoots(targetPath)) {
+      return sendTargetPathOutsideAllowedRoots(res);
     }
     if (!fs.existsSync(targetPath)) {
       return res.json({ ok: true, removed: false, target_path: targetPath });

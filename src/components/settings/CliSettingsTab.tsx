@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import type { OfficeExecutionProvider } from "../../api";
 import { withCliModelFallback } from "../../app/cli-model-fallbacks";
 import type { CliModelInfo } from "../../types";
@@ -26,6 +26,42 @@ function runnerChipClass(status: "active" | "idle" | "stopping" | "error"): stri
   if (status === "idle") return "bg-slate-500/15 text-slate-300 border border-slate-400/30";
   if (status === "stopping") return "bg-amber-500/15 text-amber-300 border border-amber-500/30";
   return "bg-rose-500/15 text-rose-300 border border-rose-500/30";
+}
+
+function localizePoolStatus(status: CliPoolStatus, t: CliSettingsTabProps["t"]): string {
+  if (status === "connected") return t({ ko: "연결됨", en: "Connected", ja: "Connected", zh: "Connected" });
+  if (status === "auth_required") return t({ ko: "인증 필요", en: "Auth required", ja: "Auth required", zh: "Auth required" });
+  if (status === "install_required") {
+    return t({ ko: "CLI 설치 필요", en: "Install required", ja: "Install required", zh: "Install required" });
+  }
+  return t({ ko: "프로필 오류", en: "Profile error", ja: "Profile error", zh: "Profile error" });
+}
+
+function localizeRunnerStatus(
+  status: "active" | "idle" | "stopping" | "error" | null,
+  t: CliSettingsTabProps["t"],
+): string {
+  if (status === "active") return t({ ko: "활성", en: "Active", ja: "Active", zh: "Active" });
+  if (status === "idle") return t({ ko: "대기", en: "Idle", ja: "Idle", zh: "Idle" });
+  if (status === "stopping") return t({ ko: "중지 중", en: "Stopping", ja: "Stopping", zh: "Stopping" });
+  if (status === "error") return t({ ko: "오류", en: "Error", ja: "Error", zh: "Error" });
+  return t({ ko: "러너 없음", en: "No runner", ja: "No runner", zh: "No runner" });
+}
+
+function localizeAvailability(value: string, t: CliSettingsTabProps["t"]): string {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === "unknown") return t({ ko: "알 수 없음", en: "Unknown", ja: "Unknown", zh: "Unknown" });
+  if (normalized === "ready") return t({ ko: "사용 가능", en: "Ready", ja: "Ready", zh: "Ready" });
+  if (normalized === "delayed") return t({ ko: "지연", en: "Delayed", ja: "Delayed", zh: "Delayed" });
+  if (normalized === "unavailable") return t({ ko: "사용 불가", en: "Unavailable", ja: "Unavailable", zh: "Unavailable" });
+  return normalized;
+}
+
+function localizeSyncSource(value: "auth_report" | "storage_fallback", t: CliSettingsTabProps["t"]): string {
+  if (value === "storage_fallback") {
+    return t({ ko: "저장소 폴백", en: "Storage fallback", ja: "Storage fallback", zh: "Storage fallback" });
+  }
+  return t({ ko: "라이브 리포트", en: "Live report", ja: "Live report", zh: "Live report" });
 }
 
 function normalizeReasoningOptions(provider: OfficeExecutionProvider, model: CliModelInfo | null) {
@@ -75,6 +111,7 @@ export default function CliSettingsTab({
   onUpdatePool,
   onDeletePool,
   onVerifyPool,
+  onSyncCodexPoolsFromMultiAuth,
   onCopyLoginCommand,
   onActivateRunner,
   onDeactivateRunner,
@@ -82,6 +119,36 @@ export default function CliSettingsTab({
   const [verifyMessageByKey, setVerifyMessageByKey] = useState<Record<string, string>>({});
   const [labelDraftByKey, setLabelDraftByKey] = useState<Record<string, string>>({});
   const [verifyAllCodexBusy, setVerifyAllCodexBusy] = useState(false);
+  const codexAutoSyncRef = useRef(false);
+  const [codexSyncMetaByPool, setCodexSyncMetaByPool] = useState<
+    Record<
+      string,
+      {
+        usageSummary: string | null;
+        availability: string;
+        riskScore: number;
+        waitMs: number;
+        isCurrent: boolean;
+        lastUsedAt: number | null;
+        expiresAt: number | null;
+        source: "auth_report" | "storage_fallback";
+      }
+    >
+  >({});
+  const [codexSyncedAccounts, setCodexSyncedAccounts] = useState<
+    Array<{
+      poolId: string;
+      label: string;
+      usageSummary: string | null;
+      availability: string;
+      riskScore: number;
+      waitMs: number;
+      isCurrent: boolean;
+      lastUsedAt: number | null;
+      expiresAt: number | null;
+      source: "auth_report" | "storage_fallback";
+    }>
+  >([]);
 
   const updateProviderPolicy = (
     provider: OfficeExecutionProvider,
@@ -119,21 +186,81 @@ export default function CliSettingsTab({
       const runner = officeRunners.find(
         (item) => item.provider === "codex" && item.accountPoolId === pool.accountPoolId,
       );
+      const syncMeta = codexSyncMetaByPool[`codex:${pool.accountPoolId}`];
       return {
         poolId: pool.accountPoolId,
         label: pool.label,
         accountStatus: pool.status,
         lastVerifiedAt: pool.lastVerifiedAt,
         runnerStatus: runner?.status ?? null,
+        usageSummary: syncMeta?.usageSummary ?? null,
+        availability: syncMeta?.availability ?? "",
+        riskScore: syncMeta?.riskScore ?? 0,
+        waitMs: syncMeta?.waitMs ?? 0,
+        isCurrent: syncMeta?.isCurrent ?? false,
+        lastUsedAt: syncMeta?.lastUsedAt ?? null,
+        expiresAt: syncMeta?.expiresAt ?? null,
+        source: syncMeta?.source ?? "auth_report",
       };
     });
-  }, [codexPools, officeRunners]);
+  }, [codexPools, officeRunners, codexSyncMetaByPool]);
 
   const handleVerifyAllCodexPools = async () => {
-    if (codexPools.length <= 0 || verifyAllCodexBusy) return;
+    if (verifyAllCodexBusy) return;
     setVerifyAllCodexBusy(true);
     try {
-      for (const pool of codexPools) {
+      let poolsToVerify = codexPools;
+      if (onSyncCodexPoolsFromMultiAuth) {
+        const synced = await onSyncCodexPoolsFromMultiAuth(true);
+        setCodexSyncedAccounts(
+          (synced.accounts ?? []).map((account) => ({
+            poolId: account.poolId,
+            label: account.label,
+            usageSummary: account.usageSummary ?? null,
+            availability: account.availability,
+            riskScore: account.riskScore,
+            waitMs: account.waitMs,
+            isCurrent: account.isCurrent,
+            lastUsedAt: account.lastUsedAt ?? null,
+            expiresAt: account.expiresAt ?? null,
+            source: account.source,
+          })),
+        );
+        const syncMetaEntries: Record<
+          string,
+          {
+            usageSummary: string | null;
+            availability: string;
+            riskScore: number;
+            waitMs: number;
+            isCurrent: boolean;
+            lastUsedAt: number | null;
+            expiresAt: number | null;
+            source: "auth_report" | "storage_fallback";
+          }
+        > = {};
+        for (const account of synced.accounts ?? []) {
+          syncMetaEntries[`codex:${account.poolId}`] = {
+            usageSummary: account.usageSummary ?? null,
+            availability: account.availability,
+            riskScore: account.riskScore,
+            waitMs: account.waitMs,
+            isCurrent: account.isCurrent,
+            lastUsedAt: account.lastUsedAt ?? null,
+            expiresAt: account.expiresAt ?? null,
+            source: account.source,
+          };
+        }
+        if (Object.keys(syncMetaEntries).length > 0) {
+          setCodexSyncMetaByPool((prev) => ({
+            ...prev,
+            ...syncMetaEntries,
+          }));
+        }
+        poolsToVerify = (synced.pools ?? []).filter((pool) => pool.provider === "codex");
+      }
+      if (poolsToVerify.length <= 0) return;
+      for (const pool of poolsToVerify) {
         const response = await onVerifyPool("codex", pool.accountPoolId);
         setVerifyMessageByKey((prev) => ({
           ...prev,
@@ -144,6 +271,76 @@ export default function CliSettingsTab({
       setVerifyAllCodexBusy(false);
     }
   };
+
+  const handleSyncCodexPools = async () => {
+    if (!onSyncCodexPoolsFromMultiAuth) return;
+    const response = await onSyncCodexPoolsFromMultiAuth(true);
+    setCodexSyncedAccounts(
+      (response.accounts ?? []).map((account) => ({
+        poolId: account.poolId,
+        label: account.label,
+        usageSummary: account.usageSummary ?? null,
+        availability: account.availability,
+        riskScore: account.riskScore,
+        waitMs: account.waitMs,
+        isCurrent: account.isCurrent,
+        lastUsedAt: account.lastUsedAt ?? null,
+        expiresAt: account.expiresAt ?? null,
+        source: account.source,
+      })),
+    );
+    const syncMetaEntries: Record<
+      string,
+      {
+        usageSummary: string | null;
+        availability: string;
+        riskScore: number;
+        waitMs: number;
+        isCurrent: boolean;
+        lastUsedAt: number | null;
+        expiresAt: number | null;
+        source: "auth_report" | "storage_fallback";
+      }
+    > = {};
+    for (const account of response.accounts ?? []) {
+      const key = `codex:${account.poolId}`;
+      syncMetaEntries[key] = {
+        usageSummary: account.usageSummary ?? null,
+        availability: account.availability,
+        riskScore: account.riskScore,
+        waitMs: account.waitMs,
+        isCurrent: account.isCurrent,
+        lastUsedAt: account.lastUsedAt ?? null,
+        expiresAt: account.expiresAt ?? null,
+        source: account.source,
+      };
+    }
+    if (Object.keys(syncMetaEntries).length > 0) {
+      setCodexSyncMetaByPool((prev) => ({
+        ...prev,
+        ...syncMetaEntries,
+      }));
+    }
+    const verifyMessages: Record<string, string> = {};
+    for (const pool of response.pools ?? []) {
+      verifyMessages[`codex:${pool.accountPoolId}`] = pool.status;
+    }
+    if (Object.keys(verifyMessages).length > 0) {
+      setVerifyMessageByKey((prev) => ({
+        ...prev,
+        ...verifyMessages,
+      }));
+    }
+  };
+
+  const codexSyncBusy = cliAuthBusyKey === "codex:sync";
+
+  useEffect(() => {
+    if (codexAutoSyncRef.current) return;
+    if (!onSyncCodexPoolsFromMultiAuth) return;
+    codexAutoSyncRef.current = true;
+    void handleSyncCodexPools();
+  }, [onSyncCodexPoolsFromMultiAuth]);
 
   return (
     <section
@@ -160,6 +357,27 @@ export default function CliSettingsTab({
           })}
         </h3>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              void handleSyncCodexPools();
+            }}
+            disabled={codexSyncBusy || !onSyncCodexPoolsFromMultiAuth}
+            className="rounded border border-emerald-400/40 px-2 py-1 text-xs text-emerald-300 enabled:hover:bg-emerald-500/10 disabled:opacity-40"
+          >
+            {codexSyncBusy
+              ? t({
+                  ko: "Codex 계정 동기화 중...",
+                  en: "Syncing Codex accounts...",
+                  ja: "Syncing Codex accounts...",
+                  zh: "Syncing Codex accounts...",
+                })
+              : t({
+                  ko: "Codex 계정 동기화",
+                  en: "Sync Codex Accounts",
+                  ja: "Sync Codex Accounts",
+                  zh: "Sync Codex Accounts",
+                })}
+          </button>
           <button
             onClick={() => {
               void handleVerifyAllCodexPools();
@@ -192,7 +410,7 @@ export default function CliSettingsTab({
                 <div className="truncate font-medium text-slate-100">{row.label}</div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusChipClass(row.accountStatus)}`}>
-                    {row.accountStatus}
+                    {localizePoolStatus(row.accountStatus, t)}
                   </span>
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] ${
@@ -201,17 +419,74 @@ export default function CliSettingsTab({
                         : "bg-slate-600/30 text-slate-300 border border-slate-500/30"
                     }`}
                   >
-                    {row.runnerStatus ?? "no_runner"}
+                    {localizeRunnerStatus(row.runnerStatus, t)}
                   </span>
                 </div>
                 <div className="mt-1 text-[10px] text-slate-400">
                   {t({ ko: "마지막 검증", en: "Last verify", ja: "Last verify", zh: "Last verify" })}:{" "}
                   {row.lastVerifiedAt ? new Date(row.lastVerifiedAt).toLocaleString() : "-"}
                 </div>
+                <div className="mt-1 text-[10px] text-slate-400">
+                  {t({ ko: "가용성", en: "Availability", ja: "Availability", zh: "Availability" })}:{" "}
+                  {localizeAvailability(row.availability || "unknown", t)}
+                  {row.isCurrent
+                    ? ` · ${t({ ko: "현재 선택", en: "Current", ja: "Current", zh: "Current" })}`
+                    : ""}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-400">
+                  {t({ ko: "리스크/대기", en: "Risk/Wait", ja: "Risk/Wait", zh: "Risk/Wait" })}: {row.riskScore}/
+                  {row.waitMs}ms
+                </div>
+                <div className="mt-1 text-[10px] text-slate-300">
+                  {t({ ko: "사용량", en: "Usage", ja: "Usage", zh: "Usage" })}:{" "}
+                  {row.usageSummary ?? t({ ko: "- (사용량 데이터 없음)", en: "-", ja: "-", zh: "-" })}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-400">
+                  {t({ ko: "마지막 사용", en: "Last used", ja: "Last used", zh: "Last used" })}:{" "}
+                  {row.lastUsedAt ? new Date(row.lastUsedAt).toLocaleString() : "-"}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-400">
+                  {t({ ko: "만료 시각", en: "Expires", ja: "Expires", zh: "Expires" })}:{" "}
+                  {row.expiresAt ? new Date(row.expiresAt).toLocaleString() : "-"}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-500">
+                  {t({ ko: "동기화 소스", en: "Sync source", ja: "Sync source", zh: "Sync source" })}:{" "}
+                  {localizeSyncSource(row.source, t)}
+                </div>
               </div>
             ))}
           </div>
         )}
+        {codexSyncedAccounts.length > 0 ? (
+          <div className="mt-3 rounded border border-cyan-500/20 bg-slate-900/40 p-2.5">
+            <div className="mb-2 text-[11px] font-semibold text-cyan-200">
+              {t({
+                ko: "계정별 사용량 요약 (동기화 기준)",
+                en: "Per-account usage summary (synced)",
+                ja: "Per-account usage summary (synced)",
+                zh: "Per-account usage summary (synced)",
+              })}
+            </div>
+            <ul className="space-y-1 text-[11px] text-slate-300">
+              {codexSyncedAccounts.map((account) => (
+                <li
+                  key={`usage:${account.poolId}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700/70 bg-slate-900/40 px-2 py-1"
+                >
+                  <span className="truncate text-slate-200">
+                    {account.label}
+                    {account.isCurrent
+                      ? ` · ${t({ ko: "현재", en: "Current", ja: "Current", zh: "Current" })}`
+                      : ""}
+                  </span>
+                  <span className="text-slate-400">
+                    {account.usageSummary ?? t({ ko: "- (사용량 데이터 없음)", en: "-", ja: "-", zh: "-" })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-2 rounded-lg border border-slate-700/60 bg-slate-900/30 p-3 text-xs sm:grid-cols-3">
@@ -403,7 +678,7 @@ export default function CliSettingsTab({
                   {runner ? (
                     <div className="mt-1 flex items-center gap-2">
                       <span className={`rounded-full px-2 py-0.5 text-[11px] ${runnerChipClass(runner.status)}`}>
-                        {runner.status}
+                        {localizeRunnerStatus(runner.status, t)}
                       </span>
                       <span className="text-slate-500">Q:{queuedCount}</span>
                     </div>
@@ -687,4 +962,6 @@ export default function CliSettingsTab({
     </section>
   );
 }
+
+
 

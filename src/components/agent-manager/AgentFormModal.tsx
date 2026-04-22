@@ -2,7 +2,7 @@
 import { localeName, type UiLanguage } from "../../i18n";
 import { getWorkflowRoleDisplayLabel } from "../../app/canonical-display";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../../i18n/canonical-label-registry";
-import type { Department } from "../../types";
+import type { AgentWorkflowRole, Department } from "../../types";
 import type { CliAccountPoolView } from "../../api";
 import * as api from "../../api";
 import { CLI_PROVIDERS, getLegacyRoleLabel } from "./constants";
@@ -19,6 +19,28 @@ type CanonicalEditableField =
   | "authority_level"
   | "specialization_key"
   | "execution_capability_profile";
+
+function isKoLocale(locale: UiLanguage | string): boolean {
+  return String(locale ?? "en").toLowerCase().startsWith("ko");
+}
+
+function getCanonicalSourceDisplayLabel(source: string | null | undefined, locale: UiLanguage | string): string {
+  const normalized = String(source ?? "").trim().toLowerCase();
+  if (!normalized) return "-";
+  if (normalized === "stored") return isKoLocale(locale) ? "저장됨" : "stored";
+  if (normalized === "derived") return isKoLocale(locale) ? "파생됨" : "derived";
+  return normalized;
+}
+
+function formatKeyWithDisplayLabel(label: string, raw: string | null | undefined, locale: UiLanguage | string): string {
+  const value = String(raw ?? "").trim();
+  if (!isKoLocale(locale) || !value || value === label) return label || value || "-";
+  return `${label} (${value})`;
+}
+
+function isAgentWorkflowRole(value: string | null | undefined): value is AgentWorkflowRole {
+  return value === "primary_author" || value === "reviewer";
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -127,8 +149,16 @@ export default function AgentFormModal({
   const workflowRoleLabel = getWorkflowRoleDisplayLabel(form.workflow_role, locale);
   const workflowCapabilityText =
     String(form.execution_capability_profile ?? "").trim() || String(form.workflow_role ?? "").trim();
+  const workflowCapabilityDisplayLabel = formatKeyWithDisplayLabel(
+    isAgentWorkflowRole(workflowCapabilityText)
+      ? getWorkflowRoleDisplayLabel(workflowCapabilityText, locale)
+      : workflowCapabilityText,
+    workflowCapabilityText,
+    locale,
+  );
   const canonicalFamilyLabel = getCanonicalFamilyLabel(form.family, uiLocale);
   const canonicalStageLabel = getCanonicalStageLabel(form.career_stage, uiLocale);
+  const canonicalSourceLabel = getCanonicalSourceDisplayLabel(form.canonical_identity_source, locale);
 
   const updateCanonicalIdentity = (key: CanonicalEditableField, value: FormData[CanonicalEditableField]) => {
     setForm({
@@ -237,7 +267,7 @@ export default function AgentFormModal({
 
             <div className="rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
               <div className="mb-2 text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
-                {tr("Legacy Compatibility", "Legacy Compatibility")}
+                {tr("레거시 호환 정보", "Legacy Compatibility")}
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--th-input-border)" }}>
@@ -250,10 +280,10 @@ export default function AgentFormModal({
                 </div>
                 <div className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--th-input-border)" }}>
                   <div className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
-                    {tr("워크플로우 capability (호환)", "Workflow Capability (compat)")}
+                    {tr("워크플로우 역량(호환)", "Workflow Capability (compat)")}
                   </div>
                   <div className="mt-1 text-sm font-medium" style={{ color: "var(--th-text-heading)" }}>
-                    {workflowCapabilityText || workflowRoleLabel}
+                    {workflowCapabilityDisplayLabel || workflowRoleLabel}
                   </div>
                   <div className="mt-0.5 text-[10px]" style={{ color: "var(--th-text-muted)" }}>
                     {workflowRoleLabel}
@@ -262,7 +292,7 @@ export default function AgentFormModal({
               </div>
               <p className="mt-2 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
                 {tr(
-                  "role / workflow_role / review 제어값은 compatibility mirror로만 유지됩니다.",
+                  "role / workflow_role / review 제어값은 호환용 읽기 정보로만 유지됩니다.",
                   "role / workflow_role / review controls remain compatibility mirrors only.",
                 )}
               </p>
@@ -274,7 +304,7 @@ export default function AgentFormModal({
                 className="mb-1.5 block text-xs font-medium"
                 style={{ color: "var(--th-text-secondary)" }}
               >
-                {tr("CLI Provider", "CLI Provider")}
+                {tr("CLI 제공자", "CLI Provider")}
               </label>
               <select
                 id={cliProviderFieldId}
@@ -334,7 +364,7 @@ export default function AgentFormModal({
 
             <div className="rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
               <div className="mb-2 text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
-                {tr("Canonical Identity", "Canonical Identity")}
+                {tr("표준 정체성", "Canonical Identity")}
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
@@ -343,7 +373,7 @@ export default function AgentFormModal({
                     className="mb-1.5 block text-xs font-medium"
                     style={{ color: "var(--th-text-secondary)" }}
                   >
-                    {tr("Family", "Family")}
+                    {tr("능력군", "Family")}
                   </label>
                   <select
                     id={canonicalFamilyFieldId}
@@ -365,7 +395,7 @@ export default function AgentFormModal({
                     className="mb-1.5 block text-xs font-medium"
                     style={{ color: "var(--th-text-secondary)" }}
                   >
-                    {tr("Career Stage", "Career Stage")}
+                    {tr("경력 단계", "Career Stage")}
                   </label>
                   <select
                     id={canonicalStageFieldId}
@@ -391,7 +421,7 @@ export default function AgentFormModal({
                     className="mb-1.5 block text-xs font-medium"
                     style={{ color: "var(--th-text-secondary)" }}
                   >
-                    {tr("Authority Level", "Authority Level")}
+                    {tr("권한 레벨", "Authority Level")}
                   </label>
                   <input
                     id={canonicalAuthorityFieldId}
@@ -408,13 +438,13 @@ export default function AgentFormModal({
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
-                    {tr("Source", "Source")}
+                    {tr("소스", "Source")}
                   </label>
                   <div
                     className="rounded-lg border px-3 py-2 text-sm"
                     style={{ ...inputStyle, borderColor: "var(--th-input-border)" }}
                   >
-                    {form.canonical_identity_source}
+                    {canonicalSourceLabel}
                   </div>
                 </div>
               </div>
@@ -425,7 +455,7 @@ export default function AgentFormModal({
                     className="mb-1.5 block text-xs font-medium"
                     style={{ color: "var(--th-text-secondary)" }}
                   >
-                    {tr("Specialization Key", "Specialization Key")}
+                    {tr("전문화 키", "Specialization Key")}
                   </label>
                   <input
                     id={specializationFieldId}
@@ -433,7 +463,7 @@ export default function AgentFormModal({
                     onChange={(event) => updateCanonicalIdentity("specialization_key", event.target.value)}
                     className={inputClass}
                     style={inputStyle}
-                    placeholder="frontend.react"
+                    placeholder={tr("예: frontend.react", "frontend.react")}
                   />
                 </div>
                 <div>
@@ -442,7 +472,7 @@ export default function AgentFormModal({
                     className="mb-1.5 block text-xs font-medium"
                     style={{ color: "var(--th-text-secondary)" }}
                   >
-                    {tr("Execution Capability Profile", "Execution Capability Profile")}
+                    {tr("실행 역량 프로필", "Execution Capability Profile")}
                   </label>
                   <input
                     id={capabilityProfileFieldId}
@@ -452,13 +482,13 @@ export default function AgentFormModal({
                     }
                     className={inputClass}
                     style={inputStyle}
-                    placeholder="reviewer"
+                    placeholder={tr("예: reviewer", "reviewer")}
                   />
                 </div>
               </div>
               <p className="mt-2 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
                 {tr(
-                  `Resolved identity: ${canonicalFamilyLabel} / ${canonicalStageLabel}`,
+                  `해석된 정체성: ${canonicalFamilyLabel} / ${canonicalStageLabel}`,
                   `Resolved identity: ${canonicalFamilyLabel} / ${canonicalStageLabel}`,
                 )}
               </p>
@@ -466,18 +496,18 @@ export default function AgentFormModal({
 
             <div className="rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
               <div className="text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
-                {tr("Policy Notes", "Policy Notes")}
+                {tr("정책 메모", "Policy Notes")}
               </div>
               <div className="mt-2 space-y-1 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
                 <div>
                   {tr(
-                    "workflow_role / review_lenses / review rounds는 canonical capability와 provider policy에서 파생됩니다.",
+                    "워크플로우 역할, 리뷰 렌즈, 리뷰 라운드는 표준 역량과 제공자 정책에서 파생됩니다.",
                     "workflow_role / review_lenses / review rounds are derived from canonical capability and provider policy.",
                   )}
                 </div>
                 <div>
                   {tr(
-                    "UI는 현재 언어로만 표시하고 canonical key와 source 파일은 영어로 유지합니다.",
+                    "화면 표시는 현재 언어를 따르고, 표준 키와 원본 파일은 영어로 유지합니다.",
                     "The UI follows the selected locale, while canonical keys and source files remain in English.",
                   )}
                 </div>
@@ -559,7 +589,7 @@ export default function AgentFormModal({
 
               <div className="flex items-center gap-3">
                 <label className="text-xs" style={{ color: "var(--th-text-secondary)" }}>
-                  Sprite #
+                  {tr("스프라이트 번호", "Sprite #")}
                 </label>
                 <input
                   type="number"

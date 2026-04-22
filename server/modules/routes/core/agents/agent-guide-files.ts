@@ -10,6 +10,7 @@ type AgentGuideInput = {
   agentProfileJson?: string | null | undefined;
   statsTasksDone?: number | null | undefined;
   statsXp?: number | null | undefined;
+  skillBundle?: string[] | null | undefined;
 };
 
 type AgentProfileExtras = {
@@ -289,12 +290,12 @@ function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: stri
 
 function buildSkillsContent(input: AgentGuideInput): string {
   const safeName = input.name || input.id || "agent";
+  const skills = Array.isArray(input.skillBundle) ? input.skillBundle.filter(Boolean) : [];
   return [
     `# ${safeName}_skills`,
     "",
     "## Active Skills",
-    "- learned snapshot: none",
-    "- installed snapshot: none",
+    ...(skills.length > 0 ? skills.map((skill) => `- ${skill}`) : ["- learned snapshot: none", "- installed snapshot: none"]),
     "",
     "## Notes",
     "- This file records durable skill history for the agent bundle.",

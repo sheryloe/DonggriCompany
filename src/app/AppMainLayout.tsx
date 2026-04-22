@@ -1,4 +1,4 @@
-﻿import { Suspense, lazy, useCallback, useMemo, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useMemo, type ReactNode } from "react";
 import Sidebar from "../components/Sidebar";
 import { I18nProvider } from "../i18n";
 import type {
@@ -470,6 +470,7 @@ export default function AppMainLayout({
               {view === "settings" && (
                 <SettingsPanel
                   settings={settings}
+                  departments={officePresentation.departments}
                   cliStatus={cliStatus}
                   onSave={(nextSettings) => {
                     void onSaveSettings(nextSettings);

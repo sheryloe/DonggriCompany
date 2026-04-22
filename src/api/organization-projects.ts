@@ -407,6 +407,7 @@ export async function createProject(input: {
   github_repo?: string;
   assignment_mode?: "auto" | "manual";
   agent_ids?: string[];
+  staffing_policy_json?: Project["staffing_policy_json"];
 }): Promise<Project> {
   const j = (await post("/api/projects", input)) as { ok: boolean; project: Project };
   return j.project;
@@ -419,6 +420,7 @@ export async function updateProject(
     github_repo?: string | null;
     assignment_mode?: "auto" | "manual";
     agent_ids?: string[];
+    staffing_policy_json?: Project["staffing_policy_json"];
   },
 ): Promise<Project> {
   const j = (await patch(`/api/projects/${id}`, patchData)) as { ok: boolean; project: Project };

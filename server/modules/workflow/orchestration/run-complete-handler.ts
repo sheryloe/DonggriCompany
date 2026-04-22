@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 import {
   discoverVideoArtifact,
@@ -561,7 +561,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
 
     if (finalExitCode === 0) {
       setReviewConsentMetaForRunComplete(taskId);
-      // ?? SUCCESS: Move to 'review' for team leader check ??
+      // SUCCESS: Move to 'review' for team leader check
       db.prepare("UPDATE tasks SET status = 'review', updated_at = ? WHERE id = ?").run(t, taskId);
 
       appendTaskLog(taskId, "system", "Status -> review (team leader review pending)");
@@ -571,7 +571,6 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
       if (task) notifyTaskStatus(taskId, task.title, "review", resolveLang(task.description ?? task.title));
 
       // Collaboration child tasks should wait in review until parent consolidation meeting.
-      // Queue continuation is still triggered so sequential delegation does not stall.
       if (task?.source_task_id) {
         reconcileDelegatedSubtasksAfterRun(taskId, 0);
         const sourceLang = resolveLang(task.description ?? task.title);
@@ -590,7 +589,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
                 `'${task.title}' collaboration child task is now waiting in Review. It will be consolidated in the parent task's single review/merge meeting.`,
               ],
               [
-                `'${task.title}' の協업子タスクは Review 待機に入りました。親タスクの単一レビュー/マージ会議で最終反映されます。`,
+                `'${task.title}' の協업子タスクは Review 待機に入りました。親タ스크の単一レビュー/마ージ会議で最終反映されます。`,
               ],
               [`'${task.title}' 的协作子任务已进入 Review 等待状态，将在父任务的单次评审/合并会议中统一处理。`],
             ),
@@ -621,7 +620,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         const leader = findTeamLeader(task.department_id);
         const leaderName = leader
           ? getAgentDisplayName(leader, lang)
-          : pickL(l(["팀장"], ["Team Lead"], ["チームリード"], ["组长"]), lang);
+          : pickL(l(["팀장"], ["Team Lead"], ["팀리드"], ["组长"]), lang);
         notifyCeo(
           pickL(
             l(
@@ -649,18 +648,26 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         // Read the task result and pretty-parse it for the report
         let reportBody = "";
         try {
-          const logFile = path.join(logsDir, `${taskId}.log`);
-          if (fs.existsSync(logFile)) {
-            const raw = fs.readFileSync(logFile, "utf8");
-            const pretty = prettyStreamJson(raw);
-            // Take the last ~500 chars of the pretty output as summary
-            reportBody = pretty.length > 500 ? "..." + pretty.slice(-500) : pretty;
+          const targetPath = taskWorktrees.get(taskId)?.projectPath || task?.project_path;
+          if (targetPath) {
+            const mdReportPath = path.join(targetPath, "tasks", "report.md");
+            if (fs.existsSync(mdReportPath)) {
+              const rawMd = fs.readFileSync(mdReportPath, "utf8").trim();
+              if (rawMd) {
+                reportBody = rawMd.length > 4000 ? "..." + rawMd.slice(-4000) : rawMd;
+              }
+            }
           }
-        } catch {
-          /* ignore */
-        }
+          if (!reportBody) {
+            const logFile = path.join(logsDir, `${taskId}.log`);
+            if (fs.existsSync(logFile)) {
+              const raw = fs.readFileSync(logFile, "utf8");
+              const pretty = prettyStreamJson(raw);
+              reportBody = pretty.length > 500 ? "..." + pretty.slice(-500) : pretty;
+            }
+          }
+        } catch { /* ignore */ }
 
-        // If worktree exists, include diff summary in the report
         const wtInfo = taskWorktrees.get(taskId);
         let diffSummary = "";
         if (wtInfo) {
@@ -686,47 +693,30 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
               l(
                 [`CEO님, '${task.title}' 작업 완료 보고드립니다. 작업이 성공적으로 마무리되었습니다.`],
                 [`CEO, reporting completion for '${task.title}'. The work has been finished successfully.`],
-                [`CEO、'${task.title}' の完了を報告します。作業は正常に完了しました。`],
+                [`CEO、'${task.title}' の完了을 報告합니다. 作業은 正常히 完了되었습니다.`],
                 [`CEO，现报告 '${task.title}' 已完成，任务已成功结束。`],
               ),
               reportLang,
             );
 
-        const subtaskProgressLabel = pickL(
-          l(
-            ["보완/협업 진행 요약"],
-            ["Remediation/Collaboration Progress"],
-            ["修正/協업進捗サマリ"],
-            ["修复/协作进度摘要"],
-          ),
-          reportLang,
-        );
         const subtaskProgress = formatTaskSubtaskProgressSummary(taskId, reportLang);
         if (subtaskProgress) {
-          reportContent += `\n\n${subtaskProgressLabel}\n${subtaskProgress}`;
+          reportContent += `\n\n${pickL(l(["보완/협업 진행 요약"], ["Remediation/Collaboration Progress"]), reportLang)}\n${subtaskProgress}`;
         }
 
         if (hasVisibleDiffSummary(diffSummary)) {
-          reportContent += pickL(
-            l(
-              [`\n\n변경 사항 (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
-              [`\n\nChanges (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
-              [`\n\n変更内容 (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
-              [`\n\n变更内容 (branch: ${wtInfo?.branchName}):\n${diffSummary}`],
-            ),
-            reportLang,
-          );
+          reportContent += `\n\n${pickL(l([`변경 사항 (branch: ${wtInfo?.branchName}):\n${diffSummary}`], [`Changes (branch: ${wtInfo?.branchName}):\n${diffSummary}`]), reportLang)}`;
         }
 
         sendAgentMessage(leader, reportContent, "report", "all", null, taskId);
 
-      // After another 2-3s: team leader approves - move to done
+        // After another 2-3s: team leader approves - move to done
         setTimeout(() => {
           finishReview(taskId, task.title);
         }, 2500);
       }, 2500);
     } else {
-      // ?? FAILURE: Reset to inbox, team leader reports failure ??
+      // FAILURE: Reset to inbox, team leader reports failure
       db.prepare("UPDATE tasks SET status = 'inbox', updated_at = ? WHERE id = ?").run(t, taskId);
 
       if (task?.source_task_id) {
@@ -736,7 +726,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
       const updatedTask = db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId);
       broadcast("task_update", updatedTask);
 
-      // Clean up worktree on failure - failed work shouldn't persist
+      // Clean up worktree on failure
       const failWtInfo = taskWorktrees.get(taskId);
       if (failWtInfo) {
         cleanupWorktree(failWtInfo.projectPath, taskId);
@@ -747,7 +737,6 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         const leader = findTeamLeader(task.department_id);
         if (leader) {
           setTimeout(() => {
-            // Read error output for failure report
             let errorBody = "";
             try {
               const logFile = path.join(logsDir, `${taskId}.log`);
@@ -756,9 +745,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
                 const pretty = prettyStreamJson(raw);
                 errorBody = pretty.length > 300 ? "..." + pretty.slice(-300) : pretty;
               }
-            } catch {
-              /* ignore */
-            }
+            } catch { /* ignore */ }
 
             const failLang = resolveLang(task.description ?? task.title);
             const failContent = errorBody
@@ -788,7 +775,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
                       `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}). Please reassign the agent or revise the task, then try again.`,
                     ],
                     [
-                      `CEO、'${task.title}' の実行中に問題が発生しました (終了コード: ${finalExitCode})。担当エージェントの再割り当て、またはタスク内容修正後に再実行してください。`,
+                      `CEO、'${task.title}' の実行中に問題が発生しました (終了コード: ${finalExitCode})。担当エージェントの再割り当て、またはタ스크內容修正後、再実行してください。`,
                     ],
                     [
                       `CEO，'${task.title}' 执行过程中发生问题（退出码: ${finalExitCode}）。请重新分配代理或调整任务后再试。`,
@@ -806,7 +793,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
             l(
               [`'${task.title}' 작업 실패 (exit code: ${finalExitCode}).`],
               [`Task '${task.title}' failed (exit code: ${finalExitCode}).`],
-              [`'${task.title}' の実行に失敗しました (exit code: ${finalExitCode}).`],
+              [`'${task.title}' 의 實行에 失敗했습니다 (exit code: ${finalExitCode}).`],
               [`任务 '${task.title}' 执行失败 (exit code: ${finalExitCode}).`],
             ),
             failLang,
@@ -815,14 +802,12 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         );
       }
 
-      // Even on failure, trigger next cross-dept cooperation so the queue doesn't stall
+      // Trigger next task delegation so it doesn't stall
       const nextCallback = crossDeptNextCallbacks.get(taskId);
       if (nextCallback) {
         crossDeptNextCallbacks.delete(taskId);
         setTimeout(nextCallback, 3000);
       }
-
-      // Even on failure, trigger next subtask delegation so the queue doesn't stall
       const subtaskNext = subtaskDelegationCallbacks.get(taskId);
       if (subtaskNext) {
         subtaskDelegationCallbacks.delete(taskId);

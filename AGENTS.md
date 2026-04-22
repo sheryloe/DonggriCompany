@@ -398,17 +398,19 @@ If the source message does not contain a project path, do NOT include `project_p
 
 ---
 
-## Git Safety Rule
+## Autonomous QA & Git Deployment Rule
 
-Agents must NOT create commits by default.
+Agents MUST perform automated testing and auto-deployment (commit/push) for all completed code tasks.
 
 ### Required workflow
 
-**Work complete -> Test -> Approval -> Commit**
+**Work complete -> Auto-Test -> Auto-Commit -> Auto-Push**
 
-- Agents may stage changes, run tests, and prepare a commit message
-- **Never commit until tests have been run**
-- **Only commit after the user explicitly approves**
+1.  **Auto-Test**: After modifying code, you MUST run relevant tests (e.g., `npm run test`, `npx tsc --noEmit`, or equivalent syntax checks).
+2.  **Self-Correction**: If the tests fail, you MUST NOT commit. Read the error logs, fix the code, and re-run the tests.
+3.  **Auto-Commit**: ONLY when all requested tests pass successfully, you MUST automatically stage your changes and create a precise commit message following conventional commits format.
+4.  **Auto-Push**: After committing, you MUST automatically push to the designated origin branch (e.g., `git push origin main` or the current active branch).
+5.  **You DO NOT need to ask for explicit user approval** to commit or push IF AND ONLY IF you have proven that the tests passed. The CEO has granted full deployment autonomy upon successful QA.
 
 ---
 

@@ -827,18 +827,28 @@ export function registerDirectiveAndInboxRoutes(
       });
     }
 
-    const sessionRoute = !isDirective
+    let sessionRoute = !isDirective
       ? resolveSessionAgentRouteFromDb({
           db,
           source: inboxSource,
           chat: inboxChat,
         })
       : null;
-    const routedAgent = sessionRoute
+    let routedAgent = sessionRoute
       ? (db.prepare("SELECT id FROM agents WHERE id = ? LIMIT 1").get(sessionRoute.agentId) as
           | { id: string }
           | undefined)
       : null;
+
+    const agentDelegationMatch = inboxSource === "agent_delegation" ? content.match(/\[Assignee:\s*([^\]]+)\]/i) : null;
+    if (agentDelegationMatch) {
+       const assigneeName = agentDelegationMatch[1].trim();
+       const targetAgent = db.prepare("SELECT id FROM agents WHERE name LIKE ? OR department_id LIKE ? COLLATE NOCASE LIMIT 1").get(`%${assigneeName}%`, `%${assigneeName}%`) as { id: string } | undefined;
+       if (targetAgent) {
+          routedAgent = targetAgent;
+          sessionRoute = { agentId: targetAgent.id, channel: "cli", sessionId: "delegated", targetId: "delegated" };
+       }
+    }
     const shouldRouteToSessionAgent = Boolean(sessionRoute && routedAgent);
     if (sessionRoute && !routedAgent) {
       console.warn(

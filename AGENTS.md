@@ -69,6 +69,18 @@ These rules are additive and do NOT delete existing orchestration rules below.
 - Use logs/failing tests as evidence and resolve root causes.
 - Minimize user context-switching and avoid unnecessary hand-holding.
 
+### 7) Cascade Subagent Delegation (Hierarchy)
+- **Concept**: Delegation flows hierarchically: PMO -> Department PM -> Department Member.
+- **Action**: When you (as a PM) divide a large plan into sub-tasks, DO NOT execute the development or design tasks yourself.
+- **Execution**: You MUST automatically delegate by spawning a new task for each sub-task via the Inbox API. Use the following exact `curl` command to spawn subtasks:
+  ```bash
+  curl -X POST http://127.0.0.1:8790/api/inbox \
+    -H 'content-type: application/json' \
+    -H "x-inbox-secret: $INBOX_SECRET_VALUE" \
+    -d "{\"source\":\"agent_delegation\",\"text\":\"# [Assignee: <Dept_or_Agent_Name>] <Detailed Task Description>\"}"
+  ```
+- The backend will automatically route `# [Assignee: name] ...` to the correct sub-agent. Do this for all sub-tasks in your `tasks/todo.md`.
+
 ## Task Management
 
 1. Plan first: write checklist in `tasks/todo.md`.
@@ -77,6 +89,7 @@ These rules are additive and do NOT delete existing orchestration rules below.
 4. Explain major changes with concise high-level summaries.
 5. Add review results to `tasks/todo.md`.
 6. Capture lessons in `tasks/lessons.md` after corrections.
+7. **DELEGATE**: Trigger cascade spawns using the `curl` API rule above for tasks outside your role.
 
 ## Core Principles
 

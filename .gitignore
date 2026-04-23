@@ -74,6 +74,13 @@ test-results/
 extensions/donggri-vscode/out/
 extensions/donggri-vscode/coverage/
 
+# Generated agent/test artifacts
+agents/archive/
+agents/ci_*/
+agents/e2e*/
+scratch/
+public/e2e-calculator.html
+
 # Codex optimization gate (2026-04-10)
 tools/ollama-image-local/.venv/
 tools/ollama-image-local/outputs/

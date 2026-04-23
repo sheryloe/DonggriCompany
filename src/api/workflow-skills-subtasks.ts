@@ -396,6 +396,9 @@ export type MessengerRuntimeSession = {
   targetId: string;
   enabled: boolean;
   displayName: string;
+  agentId?: string;
+  workflowPackKey?: string;
+  departmentId?: string;
 };
 
 export type TelegramReceiverStatus = {
@@ -432,7 +435,7 @@ export type DiscordDiscoverableChannel = {
 };
 
 export async function getMessengerRuntimeSessions(): Promise<MessengerRuntimeSession[]> {
-  const data = await request<{ sessions?: MessengerRuntimeSession[] }>("/api/messenger/sessions");
+  const data = await request<{ sessions?: MessengerRuntimeSession[]; routing_mode?: string }>("/api/messenger/sessions");
   return data.sessions ?? [];
 }
 

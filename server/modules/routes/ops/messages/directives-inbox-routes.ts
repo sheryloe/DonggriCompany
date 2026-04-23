@@ -65,9 +65,9 @@ function detectLangForResetAck(text: string): "ko" | "en" | "ja" | "zh" {
 
 function buildSessionResetAck(text: string): string {
   const lang = detectLangForResetAck(text);
-  if (lang === "ko") return "현재 대화 세션을 초기화했습니다. 새 대화를 시작할게요.";
-  if (lang === "ja") return "現在の会話セッションを初期化しました。新しい会話を開始します。";
-  if (lang === "zh") return "已重置当前会话。现在开始新的对话。";
+  if (lang === "ko") return "?? ?? ??? ???????. ? ??? ?????.";
+  if (lang === "ja") return "???????????????????????????????";
+  if (lang === "zh") return "????????????????";
   return "Current conversation session was reset. Starting a new chat.";
 }
 
@@ -194,7 +194,7 @@ const buildAgentUpgradeRequiredPayload = () => {
     error: "agent_upgrade_required",
     reason: "install_first",
     message: `OpenClaw AGENTS is outdated (HTTP 428). Install path: ${installerPaths.mac_linux} (or ${installerPaths.windows_powershell}). Target AGENTS path: ${agentsTargetPath}. Should I install it now?`,
-    message_ko: `OpenClaw AGENTS가 구버전입니다(HTTP 428). 설치 경로: ${installerPaths.mac_linux} (또는 ${installerPaths.windows_powershell}), 대상 AGENTS: ${agentsTargetPath}. 지금 제가 직접 설치해드릴까요?`,
+    message_ko: `OpenClaw AGENTS? ??????(HTTP 428). ?? ??: ${installerPaths.mac_linux} (?? ${installerPaths.windows_powershell}), ?? AGENTS: ${agentsTargetPath}. ?? ?? ?? ????????`,
     required_agent_rules_version: 2,
     required_action: "install_latest_agents_rules",
     installer_files: ["scripts/openclaw-setup.sh", "scripts/openclaw-setup.ps1", "templates/AGENTS-empire.md"],
@@ -204,10 +204,10 @@ const buildAgentUpgradeRequiredPayload = () => {
     install_commands_absolute: absoluteInstallCommands,
     recommended_install_command: recommendedInstallCommand,
     user_prompt: {
-      ko: `OpenClaw AGENTS 규칙이 구버전입니다. 설치 파일: ${installerPaths.mac_linux} / ${installerPaths.windows_powershell}, 대상 AGENTS: ${agentsTargetPath}. 지금 제가 직접 설치해드릴까요? (예/아니오)`,
+      ko: `OpenClaw AGENTS ??? ??????. ?? ??: ${installerPaths.mac_linux} / ${installerPaths.windows_powershell}, ?? AGENTS: ${agentsTargetPath}. ?? ?? ?? ???????? (?/???)`,
       en: `OpenClaw AGENTS rules are outdated. Installer files: ${installerPaths.mac_linux} / ${installerPaths.windows_powershell}, target AGENTS: ${agentsTargetPath}. Should I install it now? (yes/no)`,
     },
-    next_step_ko: "사용자가 동의하면 설치 스크립트를 실행한 뒤 같은 directive를 1회 재시도하세요.",
+    next_step_ko: "???? ???? ?? ????? ??? ? ?? directive? 1? ??????.",
     next_step_en: "If the user agrees, run installer script and retry the same directive once.",
   };
 };
@@ -241,6 +241,7 @@ export function registerDirectiveAndInboxRoutes(
 
   const manualProjectModeCache = new Map<string, boolean>();
   const prnDraftIdempotencyCache = new Map<string, { payloadHash: string; response: unknown; createdAt: number }>();
+  const strictAgentUpgradeGate = process.env.DIRECTIVE_AGENT_UPGRADE_STRICT === "1";
 
   const isManualProject = (projectId: string | null): boolean => {
     const normalizedProjectId = normalizeTextField(projectId);
@@ -354,7 +355,10 @@ export function registerDirectiveAndInboxRoutes(
         })
       )
         return;
-      return res.status(428).json(buildAgentUpgradeRequiredPayload());
+      if (strictAgentUpgradeGate) {
+        return res.status(428).json(buildAgentUpgradeRequiredPayload());
+      }
+      console.warn("[directives] agent upgrade gate bypassed on /api/directives/prn-draft");
     }
 
     prunePrnDraftIdempotencyCache();
@@ -502,7 +506,10 @@ export function registerDirectiveAndInboxRoutes(
         })
       )
         return;
-      return res.status(428).json(buildAgentUpgradeRequiredPayload());
+      if (strictAgentUpgradeGate) {
+        return res.status(428).json(buildAgentUpgradeRequiredPayload());
+      }
+      console.warn("[directives] agent upgrade gate bypassed on /api/directives");
     }
     if (resolvedExplicitProject.provided && !resolvedExplicitProject.resolved) {
       if (
@@ -612,7 +619,7 @@ export function registerDirectiveAndInboxRoutes(
     scheduleAnnouncementReplies(content);
     const directivePolicy = analyzeDirectivePolicy(content);
     const explicitSkip = body.skipPlannedMeeting === true;
-    const shouldDelegate = shouldExecuteDirectiveDelegation(directivePolicy, explicitSkip);
+    const shouldDelegate = !directivePolicy.skipDelegation && shouldExecuteDirectiveDelegation(content);
     const directiveSessionRoute = resolveSessionTargetRouteFromDb({
       db,
       source: explicitSource,
@@ -806,7 +813,10 @@ export function registerDirectiveAndInboxRoutes(
         })
       )
         return;
-      return res.status(428).json(buildAgentUpgradeRequiredPayload());
+      if (strictAgentUpgradeGate) {
+        return res.status(428).json(buildAgentUpgradeRequiredPayload());
+      }
+      console.warn("[directives] agent upgrade gate bypassed on /api/inbox");
     }
     if (resolvedInboxProject.provided && !resolvedInboxProject.resolved) {
       if (
@@ -1096,7 +1106,7 @@ export function registerDirectiveAndInboxRoutes(
     const directivePolicy = isDirective ? analyzeDirectivePolicy(content) : null;
     const inboxExplicitSkip = body.skipPlannedMeeting === true;
     const shouldDelegateDirective =
-      isDirective && directivePolicy ? shouldExecuteDirectiveDelegation(directivePolicy, inboxExplicitSkip) : false;
+      isDirective && directivePolicy ? !directivePolicy.skipDelegation && shouldExecuteDirectiveDelegation(content) : false;
     const directiveDelegationOptions: DelegationOptions = {
       skipPlannedMeeting: inboxExplicitSkip || !!directivePolicy?.skipPlannedMeeting,
       skipPlanSubtasks: inboxExplicitSkip || !!directivePolicy?.skipPlanSubtasks,
@@ -1116,7 +1126,7 @@ export function registerDirectiveAndInboxRoutes(
       if (!directiveLeaderScopeByDept.has(normalizedDeptId)) {
         directiveLeaderScopeByDept.set(
           normalizedDeptId,
-          resolveDirectiveLeaderCandidateScope(db as any, inboxProjectId ?? null, normalizedDeptId),
+          resolveDirectiveLeaderCandidateScope(db as any, resolvedInboxProject.projectId ?? null, normalizedDeptId),
         );
       }
       return directiveLeaderScopeByDept.get(normalizedDeptId) ?? null;
@@ -1126,7 +1136,7 @@ export function registerDirectiveAndInboxRoutes(
       // Auto-delegate to planning team leader
       const planningLeader = findDirectiveLeader(
         "planning",
-        inboxProjectId ?? null,
+        resolvedInboxProject.projectId ?? null,
         getDirectiveLeaderScope("planning"),
       );
       if (planningLeader) {
@@ -1149,7 +1159,7 @@ export function registerDirectiveAndInboxRoutes(
           if (processedDepts.has(deptId)) continue;
           processedDepts.add(deptId);
           const leader = isDirective
-            ? findDirectiveLeader(deptId, inboxProjectId ?? null, getDirectiveLeaderScope(deptId))
+            ? findDirectiveLeader(deptId, resolvedInboxProject.projectId ?? null, getDirectiveLeaderScope(deptId))
             : findTeamLeader(deptId);
           if (leader) {
             handleTaskDelegation(leader, content, "", isDirective ? directiveDelegationOptions : {});
@@ -1164,7 +1174,7 @@ export function registerDirectiveAndInboxRoutes(
               isDirective && mentioned.department_id
                 ? findDirectiveLeader(
                     mentioned.department_id,
-                    inboxProjectId ?? null,
+                    resolvedInboxProject.projectId ?? null,
                     getDirectiveLeaderScope(mentioned.department_id),
                   )
                 : findTeamLeader(mentioned.department_id);

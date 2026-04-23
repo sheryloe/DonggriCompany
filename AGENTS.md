@@ -99,6 +99,17 @@ These rules are additive and do NOT delete existing orchestration rules below.
 
 ---
 
+## Messenger & Reporting Rules
+
+**Autonomous department-specific reporting is enabled.**
+
+1. **Mapping**: Telegram sessions are mapped to departments via `workflowPackKey` (e.g., `planning`, `development`) or `agentId` in the `messengerChannels` setting.
+2. **Fanout**: When a task is updated, the system automatically performs a `department_fanout`.
+3. **Verification**: After executing a directive, check for `route_kind=department_fanout` in the task logs to ensure reports are being routed correctly.
+4. **Secrets**: All messenger tokens must be centralized in the root `.env` file for consistent access across all agents.
+
+---
+
 ## CEO Directive (`$` prefix)
 
 **Messages starting with `$` are Claw-Empire CEO Directives.**

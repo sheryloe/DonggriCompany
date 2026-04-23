@@ -175,6 +175,10 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
   app.post("/api/office/runners/activate", (req, res) => {
     try {
       const { provider, accountPoolId } = ensureRunnerBodyProviderAndPool(req.body);
+      if (!isExecutionProvider(provider)) {
+        return res.status(400).json({ error: "unsupported_provider", provider });
+      }
+      cliAccountGateService.ensureProviderPoolReady(provider, accountPoolId);
       const result = runnerOrchestrator.requestRunner(provider, accountPoolId, { kind: "activate" });
       res.json({
         ok: true,
@@ -190,6 +194,9 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
   app.post("/api/office/runners/deactivate", (req, res) => {
     try {
       const { provider, accountPoolId } = ensureRunnerBodyProviderAndPool(req.body);
+      if (!isExecutionProvider(provider)) {
+        return res.status(400).json({ error: "unsupported_provider", provider });
+      }
       const runner = runnerOrchestrator.deactivateRunner(provider, accountPoolId);
       if (!runner) {
         const lang = getResponseLang();

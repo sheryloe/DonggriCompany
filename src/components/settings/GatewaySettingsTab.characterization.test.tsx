@@ -24,11 +24,6 @@ vi.mock("../../api", () => ({
   isApiRequestError: () => false,
 }));
 
-vi.mock("../AgentAvatar", () => ({
-  default: () => null,
-  useSpriteMap: () => new Map(),
-}));
-
 function t(messages: Record<string, string>): string {
   return messages.en ?? messages.ko ?? messages.ja ?? messages.zh ?? Object.values(messages)[0] ?? "";
 }
@@ -41,12 +36,18 @@ function createFormWithMessengerChannels(overrides?: Record<string, unknown>): R
         receiveEnabled: true,
         sessions: [],
       },
+      whatsapp: { token: "", receiveEnabled: false, sessions: [] },
+      discord: { token: "", receiveEnabled: false, sessions: [] },
+      googlechat: { token: "", receiveEnabled: false, sessions: [] },
+      slack: { token: "", receiveEnabled: false, sessions: [] },
+      signal: { token: "", receiveEnabled: false, sessions: [] },
+      imessage: { token: "", receiveEnabled: false, sessions: [] },
       ...overrides,
     },
   };
 }
 
-describe("GatewaySettingsTab characterization", () => {
+describe("GatewaySettingsTab single-group behavior", () => {
   beforeEach(() => {
     apiMocks.getAgents.mockReset();
     apiMocks.getWorkflowPacks.mockReset();
@@ -86,21 +87,14 @@ describe("GatewaySettingsTab characterization", () => {
     apiMocks.listDiscordChannelsByToken.mockResolvedValue([]);
   });
 
-  it("filters sessions without targetId and keeps only valid chat rows", async () => {
+  it("keeps only telegram sessions with targetId in list", async () => {
     const form = createFormWithMessengerChannels({
       telegram: {
         token: "telegram-token",
         receiveEnabled: true,
         sessions: [
-          { id: "empty", name: "Empty Chat", targetId: "", enabled: true, token: "t1", workflowPackKey: "development" },
-          {
-            id: "valid",
-            name: "Valid Chat",
-            targetId: "-100123456",
-            enabled: true,
-            token: "t2",
-            workflowPackKey: "development",
-          },
+          { id: "empty", name: "Empty Chat", targetId: "", enabled: true, token: "t1" },
+          { id: "valid", name: "Valid Chat", targetId: "-100123456", enabled: true, token: "t2" },
         ],
       },
     });
@@ -111,28 +105,15 @@ describe("GatewaySettingsTab characterization", () => {
       expect(screen.queryByText("Empty Chat")).not.toBeInTheDocument();
       expect(screen.getByText("Valid Chat")).toBeInTheDocument();
     });
-
-    const validOption = screen.getByRole("option", { name: /Telegram .* Valid Chat/i });
-    expect(validOption).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /Empty Chat/i })).not.toBeInTheDocument();
   });
 
-  it("sends runtime message with selected sessionKey and clears input on success", async () => {
+  it("sends runtime message to selected telegram session", async () => {
     const user = userEvent.setup();
     const form = createFormWithMessengerChannels({
       telegram: {
         token: "telegram-token",
         receiveEnabled: true,
-        sessions: [
-          {
-            id: "ops",
-            name: "Ops",
-            targetId: "-100123456",
-            enabled: true,
-            token: "t-ops",
-            workflowPackKey: "development",
-          },
-        ],
+        sessions: [{ id: "ops", name: "Ops", targetId: "-100123456", enabled: true, token: "t-ops" }],
       },
     });
 
@@ -153,43 +134,39 @@ describe("GatewaySettingsTab characterization", () => {
     expect(screen.getByText("Message sent")).toBeInTheDocument();
   });
 
-  it("loads Discord channels automatically when token is entered in chat editor", async () => {
+  it("persists single global telegram session and clears non-telegram sessions", async () => {
     const user = userEvent.setup();
-    apiMocks.listDiscordChannelsByToken.mockResolvedValue([
-      {
-        id: "1234567890",
-        name: "ops-alert",
-        guildId: "guild-1",
-        guildName: "Design Guild",
-        type: 0,
+    const setForm = vi.fn();
+    const persistSettings = vi.fn();
+    const form = createFormWithMessengerChannels({
+      telegram: {
+        token: "telegram-token",
+        receiveEnabled: true,
+        sessions: [{ id: "ops", name: "Ops", targetId: "-100123456", enabled: true, token: "t-ops" }],
       },
-    ]);
-
-    render(
-      <GatewaySettingsTab
-        t={t}
-        form={createFormWithMessengerChannels() as any}
-        setForm={vi.fn()}
-        persistSettings={vi.fn()}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: /Add Chat/i }));
-
-    const [messengerSelect] = screen.getAllByRole("combobox");
-    await user.selectOptions(messengerSelect, "discord");
-
-    const tokenInput = screen.getByPlaceholderText("Enter Discord token");
-    await user.type(tokenInput, "discord-test-token");
-
-    await waitFor(() => {
-      expect(apiMocks.listDiscordChannelsByToken).toHaveBeenCalledWith("discord-test-token");
+      discord: {
+        token: "discord-token",
+        receiveEnabled: true,
+        sessions: [{ id: "dc-1", name: "Discord", targetId: "123", enabled: true, token: "dc-token" }],
+      },
     });
 
-    await waitFor(() => {
-      expect(screen.getByText("Loaded 1 channels automatically.")).toBeInTheDocument();
-      expect(screen.getByRole("option", { name: /Design Guild \/ #ops-alert \(1234567890\)/i })).toBeInTheDocument();
+    render(<GatewaySettingsTab t={t} form={form as any} setForm={setForm} persistSettings={persistSettings} />);
+
+    await user.click(screen.getByRole("button", { name: "Edit Global Group" }));
+    const targetInput = screen.getByPlaceholderText("chat_id");
+    await user.clear(targetInput);
+    await user.type(targetInput, "-100987654");
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(persistSettings).toHaveBeenCalledTimes(1);
+    const saved = persistSettings.mock.calls[0][0];
+    expect(saved.messengerChannels.telegram.sessions).toHaveLength(1);
+    expect(saved.messengerChannels.telegram.sessions[0]).toMatchObject({
+      id: "global",
+      targetId: "-100987654",
     });
+    expect(saved.messengerChannels.discord.sessions).toEqual([]);
   });
 
   it("shows shared dictionary copy for empty state", async () => {

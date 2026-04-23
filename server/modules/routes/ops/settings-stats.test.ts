@@ -192,6 +192,73 @@ describe("settings-stats projection write guard", () => {
     }
   });
 
+  it("enforces single-group messenger routing and strips department scoped sessions", () => {
+    const db = createDb();
+    try {
+      const { putRoutes } = createHarness(db);
+      const handler = putRoutes.get("/api/settings");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createResponse();
+      handler?.(
+        {
+          body: {
+            messengerChannels: {
+              telegram: {
+                token: "tg-main-token",
+                receiveEnabled: true,
+                sessions: [
+                  {
+                    id: "planning-chat",
+                    name: "Planning Chat",
+                    targetId: "-100111",
+                    enabled: true,
+                    token: "tg-session-token",
+                    departmentId: "planning",
+                  },
+                  {
+                    id: "dev-chat",
+                    name: "Dev Chat",
+                    targetId: "-100222",
+                    enabled: true,
+                    workflowPackKey: "development",
+                  },
+                ],
+              },
+              discord: {
+                token: "discord-token",
+                sessions: [{ id: "dc-1", name: "Ops", targetId: "123", enabled: true }],
+              },
+            },
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.payload).toEqual({ ok: true, warnings: ["messenger_single_group_enforced"] });
+
+      const storedRaw = db.prepare("SELECT value FROM settings WHERE key = 'messengerChannels'").get() as
+        | { value: string }
+        | undefined;
+      expect(storedRaw?.value).toBeTypeOf("string");
+      const stored = JSON.parse(storedRaw?.value ?? "{}") as Record<string, unknown>;
+      const telegram = stored.telegram as Record<string, unknown>;
+      const telegramSessions = Array.isArray(telegram?.sessions) ? telegram.sessions : [];
+      expect(telegramSessions).toHaveLength(1);
+      expect(telegramSessions[0]).toMatchObject({
+        id: "global",
+        targetId: "-100111",
+        enabled: true,
+      });
+
+      const discord = stored.discord as Record<string, unknown>;
+      expect(Array.isArray(discord?.sessions) ? discord.sessions : []).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   it("writes allowed keys when no read-only projection key is included", () => {
     const db = createDb();
     try {

@@ -8,6 +8,14 @@ services:
         APP_GID: 10001
     container_name: donggricompany
     restart: unless-stopped
+    mem_limit: ${DOCKER_MEM_LIMIT:-2g}
+    cpus: ${DOCKER_CPU_LIMIT:-2.0}
+    pids_limit: ${DOCKER_PIDS_LIMIT:-512}
+    logging:
+      driver: json-file
+      options:
+        max-size: ${DOCKER_LOG_MAX_SIZE:-10m}
+        max-file: "${DOCKER_LOG_MAX_FILE:-3}"
     environment:
       PORT: 7777
       HOST: 0.0.0.0
@@ -17,6 +25,7 @@ services:
       OAUTH_ENCRYPTION_SECRET: ${OAUTH_ENCRYPTION_SECRET:-}
       OAUTH_BASE_URL: ${OAUTH_BASE_URL:-http://localhost:7777}
       OAUTH_GITHUB_CLIENT_ID: ${OAUTH_GITHUB_CLIENT_ID:-}
+      OAUTH_GITHUB_CLIENT_SECRET: ${OAUTH_GITHUB_CLIENT_SECRET:-}
       OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID:-}
       OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET:-}
       OFFICE_RUNNER_DOCKER_ENABLED: 0

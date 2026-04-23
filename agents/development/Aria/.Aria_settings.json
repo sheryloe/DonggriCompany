@@ -1,0 +1,13 @@
+{
+  "agent_id": "seed-development-lead",
+  "agent_name": "Aria",
+  "role": "team_leader",
+  "department_id": "development",
+  "workflow_profile": "{\"role\":\"primary_author\",\"review_lenses\":[\"architecture\",\"correctness\",\"maintainability\"],\"two_pass_required\":true,\"max_review_rounds\":2}",
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-22T22:36:54.835Z"
+}

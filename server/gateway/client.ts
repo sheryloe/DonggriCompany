@@ -34,6 +34,9 @@ type PersistedSession = {
   enabled?: boolean;
   token?: string;
   agentId?: string;
+  workflowPackKey?: string;
+  departmentId?: string;
+  department_id?: string;
 };
 
 type PersistedChannelConfig = {
@@ -50,6 +53,8 @@ type MessengerSession = {
   enabled: boolean;
   token?: string;
   agentId?: string;
+  workflowPackKey?: string;
+  departmentId?: string;
 };
 
 type MessengerChannelConfig = {
@@ -65,6 +70,9 @@ export type MessengerRuntimeSession = {
   targetId: string;
   enabled: boolean;
   displayName: string;
+  agentId?: string;
+  workflowPackKey?: string;
+  departmentId?: string;
 };
 
 export type DiscordDiscoverableChannel = {
@@ -121,6 +129,8 @@ function normalizeSession(
   const id = rawId || `${channel}-${index + 1}`;
   const name = normalizeText(session.name) || `${channel.toUpperCase()} ${index + 1}`;
   const token = normalizeText(session.token);
+  const workflowPackKey = normalizeText(session.workflowPackKey);
+  const departmentId = normalizeText(session.departmentId) || normalizeText(session.department_id);
   return {
     id,
     name,
@@ -128,6 +138,8 @@ function normalizeSession(
     enabled: session.enabled !== false,
     token: token ? decryptMessengerTokenForRuntime(channel, token) : undefined,
     agentId: normalizeText(session.agentId) || undefined,
+    workflowPackKey: workflowPackKey || undefined,
+    departmentId: departmentId || undefined,
   };
 }
 
@@ -772,13 +784,17 @@ export function listMessengerSessions(): MessengerRuntimeSession[] {
     const channelConfig = config[channel];
     for (const session of channelConfig.sessions) {
       const sessionKey = `${channel}:${session.id}`;
-      sessions.push({
+      const runtimeSession: MessengerRuntimeSession = {
         sessionKey,
         channel,
         targetId: session.targetId,
         enabled: session.enabled,
         displayName: session.name,
-      });
+      };
+      if (session.agentId) runtimeSession.agentId = session.agentId;
+      if (session.workflowPackKey) runtimeSession.workflowPackKey = session.workflowPackKey;
+      if (session.departmentId) runtimeSession.departmentId = session.departmentId;
+      sessions.push(runtimeSession);
     }
   }
 

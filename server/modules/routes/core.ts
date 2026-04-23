@@ -233,7 +233,7 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
   app.get("/api/messenger/sessions", (_req, res) => {
     try {
       const sessions = listMessengerSessions();
-      res.json({ ok: true, sessions });
+      res.json({ ok: true, routing_mode: "single_group", sessions });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: err?.message || String(err) });
     }

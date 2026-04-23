@@ -1,0 +1,13 @@
+{
+  "agent_id": "seed-ui-ux-junior",
+  "agent_name": "Echo",
+  "role": "junior",
+  "department_id": "ui-ux",
+  "workflow_profile": "{\"role\":\"reviewer\",\"review_lenses\":[\"ux\",\"consistency\",\"a11y\"],\"two_pass_required\":true,\"max_review_rounds\":null}",
+  "agent_profile_json": null,
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-22T22:36:55.376Z"
+}

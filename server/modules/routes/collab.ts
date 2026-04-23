@@ -1,7 +1,12 @@
 ﻿import type { RuntimeContext, RouteCollabExports } from "../../types/runtime-context.ts";
 import type { Lang } from "../../types/lang.ts";
 import { randomUUID } from "node:crypto";
-import { sendMessengerMessage, sendMessengerSessionMessage, type MessengerChannel } from "../../gateway/client.ts";
+import {
+  listMessengerSessions,
+  sendMessengerMessage,
+  sendMessengerSessionMessage,
+  type MessengerChannel,
+} from "../../gateway/client.ts";
 import { isMessengerChannel } from "../../messenger/channels.ts";
 
 import { createAnnouncementReplyScheduler } from "./collab/announcement-response.ts";
@@ -197,6 +202,82 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     return null;
   }
 
+  function normalizeMessengerDepartmentId(value: unknown): string {
+    const raw = typeof value === "string" ? value.trim() : "";
+    if (!raw) return "";
+    return mapLegacyDepartmentId(raw) ?? raw;
+  }
+
+  function resolveSingleGroupTaskMessengerRoute(
+    taskId: string,
+    fallbackRoute: { channel: MessengerChannel; targetId: string; sessionKey?: string } | null,
+  ): {
+    channel: MessengerChannel;
+    targetId: string;
+    sessionKey?: string;
+    routeKind: "single_group_department_tag";
+    routingReason: "global_group";
+    departmentId: string;
+    taskStatus: string;
+  } | null {
+    const taskRow = db
+      .prepare("SELECT department_id, status FROM tasks WHERE id = ?")
+      .get(taskId) as { department_id?: string | null; status?: string | null } | undefined;
+
+    const departmentId = normalizeMessengerDepartmentId(taskRow?.department_id) || "unknown";
+    const taskStatus =
+      typeof taskRow?.status === "string" && taskRow.status.trim().length > 0 ? taskRow.status.trim() : "unknown";
+
+    const sessions = listMessengerSessions();
+    const telegramSession =
+      sessions.find(
+        (session) =>
+          session.enabled &&
+          session.channel === "telegram" &&
+          String(session.sessionKey ?? "").trim().toLowerCase() === "telegram:global" &&
+          String(session.targetId ?? "").trim().length > 0,
+      ) ??
+      sessions.find(
+        (session) =>
+          session.enabled &&
+          session.channel === "telegram" &&
+          String((session as Record<string, unknown>).agentId ?? "").trim().length <= 0 &&
+          String(session.targetId ?? "").trim().length > 0,
+      ) ??
+      sessions.find(
+        (session) =>
+          session.enabled && session.channel === "telegram" && String(session.targetId ?? "").trim().length > 0,
+      ) ??
+      null;
+
+    const candidateRoute = telegramSession
+      ? {
+          channel: telegramSession.channel,
+          targetId: String(telegramSession.targetId ?? "").trim(),
+          sessionKey: String(telegramSession.sessionKey ?? "").trim() || undefined,
+        }
+      : fallbackRoute && fallbackRoute.channel === "telegram" && fallbackRoute.targetId
+        ? fallbackRoute
+        : null;
+
+    if (!candidateRoute) return null;
+
+    return {
+      ...candidateRoute,
+      routeKind: "single_group_department_tag",
+      routingReason: "global_group",
+      departmentId,
+      taskStatus,
+    };
+  }
+
+  function buildSingleGroupRelayHeader(taskId: string, departmentId: string, taskStatus: string): string {
+    const departmentLabel = departmentId !== "unknown" ? getDeptName(departmentId) : departmentId;
+    const normalizedDepartment = normalizeMessengerTextLine(departmentLabel || departmentId || "unknown");
+    const normalizedStatus = normalizeMessengerTextLine(taskStatus || "unknown");
+    return `[${normalizedDepartment}][${taskId}][${normalizedStatus}]`;
+  }
+
   function getMessengerChunkLimit(channel: MessengerChannel): number {
     if (channel === "discord") return 1900;
     if (channel === "telegram") return 3800;
@@ -378,19 +459,51 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     if (!content) return;
 
     const route = resolveTaskMessengerRoute(taskId);
-    if (!route) return;
+    const relayRoute = resolveSingleGroupTaskMessengerRoute(taskId, route);
+    if (!relayRoute) {
+      appendTaskLog(
+        taskId,
+        "system",
+        `messenger_relay_failed channel=unknown targetId=none task_id=${taskId} message_type=${messageType} error_code=route_missing`,
+      );
+      return;
+    }
+    const taggedContent = `${buildSingleGroupRelayHeader(taskId, relayRoute.departmentId, relayRoute.taskStatus)}\n${content}`;
+    const routeRef = relayRoute.sessionKey ? `sessionKey=${relayRoute.sessionKey}` : `targetId=${relayRoute.targetId}`;
+    const reasonSuffix = ` routing_reason=${relayRoute.routingReason} department_id=${relayRoute.departmentId}`;
 
-    const chunks = splitMessageByLimit(content, getMessengerChunkLimit(route.channel));
-    for (const chunk of chunks) {
-      if (route.sessionKey) {
-        await sendMessengerSessionMessage(route.sessionKey, chunk);
-      } else {
-        await sendMessengerMessage({
-          channel: route.channel,
-          targetId: route.targetId,
-          text: chunk,
-        });
+    appendTaskLog(
+      taskId,
+      "system",
+      `messenger_relay_attempt channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}`,
+    );
+
+    try {
+      const chunks = splitMessageByLimit(taggedContent, getMessengerChunkLimit(relayRoute.channel));
+      for (const chunk of chunks) {
+        if (relayRoute.sessionKey) {
+          await sendMessengerSessionMessage(relayRoute.sessionKey, chunk);
+        } else {
+          await sendMessengerMessage({
+            channel: relayRoute.channel,
+            targetId: relayRoute.targetId,
+            text: chunk,
+          });
+        }
       }
+      appendTaskLog(
+        taskId,
+        "system",
+        `messenger_relay_success channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}`,
+      );
+    } catch (err: unknown) {
+      const errorCode = err instanceof Error ? err.message.replace(/\s+/g, "_").slice(0, 120) : "send_failed";
+      appendTaskLog(
+        taskId,
+        "system",
+        `messenger_relay_failed channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix} error_code=${errorCode || "send_failed"}`,
+      );
+      throw err;
     }
   }
 

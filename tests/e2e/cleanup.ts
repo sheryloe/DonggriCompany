@@ -10,6 +10,7 @@ type E2ECleanupTargets = {
   agentIds?: string[];
   departmentIds?: string[];
   projectIds?: string[];
+  requestHeaders?: Record<string, string>;
 };
 
 function uniqueIds(ids: Array<string | null | undefined> | undefined): string[] {
@@ -28,10 +29,11 @@ async function deleteById(
   routePrefix: string,
   ids: string[],
   errors: string[],
+  requestHeaders?: Record<string, string>,
 ): Promise<void> {
   for (const id of ids) {
     try {
-      const response = await request.delete(`${routePrefix}/${id}`);
+      const response = await request.delete(`${routePrefix}/${id}`, requestHeaders ? { headers: requestHeaders } : {});
       if (response.ok() || response.status() === 404) continue;
       const text = await response.text();
       errors.push(`${routePrefix}/${id} -> ${response.status()}: ${text.slice(0, 300)}`);
@@ -41,12 +43,17 @@ async function deleteById(
   }
 }
 
-async function waitForTaskDeletion(request: APIRequestContext, taskIds: string[], errors: string[]): Promise<void> {
+async function waitForTaskDeletion(
+  request: APIRequestContext,
+  taskIds: string[],
+  errors: string[],
+  requestHeaders?: Record<string, string>,
+): Promise<void> {
   for (const id of taskIds) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < 5_000) {
       try {
-        const response = await request.get(`/api/tasks/${id}`);
+        const response = await request.get(`/api/tasks/${id}`, requestHeaders ? { headers: requestHeaders } : {});
         if (response.status() === 404) break;
       } catch {
         break;
@@ -55,7 +62,7 @@ async function waitForTaskDeletion(request: APIRequestContext, taskIds: string[]
     }
 
     try {
-      const verify = await request.get(`/api/tasks/${id}`);
+      const verify = await request.get(`/api/tasks/${id}`, requestHeaders ? { headers: requestHeaders } : {});
       if (verify.status() !== 404) {
         errors.push(`/api/tasks/${id} -> deletion not observed`);
       }
@@ -83,6 +90,24 @@ function deleteSubtasksFromLocalE2EDb(subtaskIds: string[], errors: string[]): v
   }
 }
 
+function deleteMessagesForProjectsFromLocalE2EDb(projectIds: string[], errors: string[]): void {
+  if (projectIds.length === 0) return;
+
+  const dbPath = path.resolve(process.cwd(), ".tmp", "e2e-runtime", "claw-empire.e2e.sqlite");
+  if (!fs.existsSync(dbPath)) return;
+
+  let db: DatabaseSync | null = null;
+  try {
+    db = new DatabaseSync(dbPath);
+    const placeholders = projectIds.map(() => "?").join(", ");
+    db.prepare(`DELETE FROM messages WHERE project_id IN (${placeholders})`).run(...projectIds);
+  } catch (error) {
+    errors.push(`messages(local-db) -> ${String(error)}`);
+  } finally {
+    db?.close();
+  }
+}
+
 export async function cleanupE2EResources(request: APIRequestContext, targets: E2ECleanupTargets): Promise<void> {
   const errors: string[] = [];
   const apiProviderIds = uniqueIds(targets.apiProviderIds);
@@ -91,15 +116,17 @@ export async function cleanupE2EResources(request: APIRequestContext, targets: E
   const projectIds = uniqueIds(targets.projectIds);
   const agentIds = uniqueIds(targets.agentIds);
   const departmentIds = uniqueIds(targets.departmentIds);
+  const requestHeaders = targets.requestHeaders;
 
-  await deleteById(request, "/api/tasks", taskIds, errors);
-  await waitForTaskDeletion(request, taskIds, errors);
+  await deleteById(request, "/api/tasks", taskIds, errors, requestHeaders);
+  await waitForTaskDeletion(request, taskIds, errors, requestHeaders);
   await sleep(300);
   deleteSubtasksFromLocalE2EDb(subtaskIds, errors);
-  await deleteById(request, "/api/agents", agentIds, errors);
-  await deleteById(request, "/api/api-providers", apiProviderIds, errors);
-  await deleteById(request, "/api/projects", projectIds, errors);
-  await deleteById(request, "/api/departments", departmentIds, errors);
+  deleteMessagesForProjectsFromLocalE2EDb(projectIds, errors);
+  await deleteById(request, "/api/agents", agentIds, errors, requestHeaders);
+  await deleteById(request, "/api/api-providers", apiProviderIds, errors, requestHeaders);
+  await deleteById(request, "/api/projects", projectIds, errors, requestHeaders);
+  await deleteById(request, "/api/departments", departmentIds, errors, requestHeaders);
 
   if (errors.length > 0) {
     throw new Error(`E2E cleanup failed:\n${errors.join("\n")}`);

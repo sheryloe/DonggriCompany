@@ -8,6 +8,16 @@ const MESSENGER_SETTINGS_KEY = "messengerChannels";
 const OFFICE_PACK_PROFILES_KEY = "officePackProfiles";
 const OFFICE_PACK_HYDRATED_PACKS_KEY = "officePackHydratedPacks";
 const PROVIDER_MODEL_CONFIG_KEY = "providerModelConfig";
+const MESSENGER_ROUTING_WARNING = "messenger_single_group_enforced";
+const MESSENGER_CHANNEL_KEYS = [
+  "telegram",
+  "whatsapp",
+  "discord",
+  "googlechat",
+  "slack",
+  "signal",
+  "imessage",
+] as const;
 
 function normalizePackKey(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -23,6 +33,111 @@ function safeJsonParse(raw: string): unknown {
   } catch {
     return raw;
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function normalizeMessengerChannelsForSingleGroup(raw: unknown): { value: unknown; warnings: string[] } {
+  const root = asRecord(raw);
+  if (!root) return { value: raw, warnings: [] };
+
+  const telegramRaw = asRecord(root.telegram) ?? {};
+  const telegramToken = typeof telegramRaw.token === "string" ? telegramRaw.token.trim() : "";
+  const telegramSessionsRaw = Array.isArray(telegramRaw.sessions) ? telegramRaw.sessions : [];
+
+  const normalizedTelegramSessions = telegramSessionsRaw
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    .map((entry, index) => {
+      const targetId = typeof entry.targetId === "string" ? entry.targetId.trim() : "";
+      if (!targetId) return null;
+      const idRaw = typeof entry.id === "string" ? entry.id.trim() : "";
+      const nameRaw = typeof entry.name === "string" ? entry.name.trim() : "";
+      const tokenRaw = typeof entry.token === "string" ? entry.token.trim() : "";
+      const enabled = entry.enabled !== false;
+      const agentId = typeof entry.agentId === "string" ? entry.agentId.trim() : "";
+      const workflowPackKey = typeof entry.workflowPackKey === "string" ? entry.workflowPackKey.trim() : "";
+      const departmentIdRaw =
+        typeof entry.departmentId === "string"
+          ? entry.departmentId.trim()
+          : typeof entry.department_id === "string"
+            ? entry.department_id.trim()
+            : "";
+      return {
+        id: idRaw || `telegram-${index + 1}`,
+        name: nameRaw || `Telegram ${index + 1}`,
+        targetId,
+        enabled,
+        token: tokenRaw,
+        agentId,
+        workflowPackKey,
+        departmentId: departmentIdRaw,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+  const preferredSession =
+    normalizedTelegramSessions.find((entry) => entry.id.toLowerCase() === "global") ??
+    normalizedTelegramSessions.find((entry) => entry.enabled) ??
+    normalizedTelegramSessions[0] ??
+    null;
+
+  const nonTelegramConfigured = MESSENGER_CHANNEL_KEYS.some((channel) => {
+    if (channel === "telegram") return false;
+    const config = asRecord(root[channel]);
+    if (!config) return false;
+    const token = typeof config.token === "string" ? config.token.trim() : "";
+    const sessions = Array.isArray(config.sessions)
+      ? config.sessions.filter((entry) => {
+          const record = asRecord(entry);
+          const targetId = record && typeof record.targetId === "string" ? record.targetId.trim() : "";
+          return targetId.length > 0;
+        })
+      : [];
+    return token.length > 0 || sessions.length > 0;
+  });
+
+  const hasScopedLegacyFields =
+    normalizedTelegramSessions.length > 1 ||
+    normalizedTelegramSessions.some(
+      (entry) => entry.agentId.length > 0 || entry.workflowPackKey.length > 0 || entry.departmentId.length > 0,
+    );
+
+  const nextChannels: Record<string, unknown> = {};
+  for (const channel of MESSENGER_CHANNEL_KEYS) {
+    if (channel === "telegram") {
+      const telegramSession = preferredSession
+        ? {
+            id: "global",
+            name: "Global Telegram Group",
+            targetId: preferredSession.targetId,
+            enabled: preferredSession.enabled,
+            ...(preferredSession.token ? { token: preferredSession.token } : {}),
+          }
+        : null;
+      nextChannels.telegram = {
+        token: telegramToken,
+        sessions: telegramSession ? [telegramSession] : [],
+        receiveEnabled: true,
+      };
+      continue;
+    }
+    nextChannels[channel] = {
+      token: "",
+      sessions: [],
+      receiveEnabled: false,
+    };
+  }
+
+  const warnings: string[] = [];
+  if (nonTelegramConfigured || hasScopedLegacyFields) {
+    warnings.push(MESSENGER_ROUTING_WARNING);
+  }
+
+  return { value: nextChannels, warnings };
 }
 
 export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
@@ -44,6 +159,7 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
 
   app.put("/api/settings", (req, res) => {
     const body = req.body ?? {};
+    const warnings: string[] = [];
     const readOnlyKeys = [OFFICE_PACK_PROFILES_KEY, OFFICE_PACK_HYDRATED_PACKS_KEY, PROVIDER_MODEL_CONFIG_KEY].filter(
       (key) =>
       Object.prototype.hasOwnProperty.call(body, key),
@@ -64,7 +180,13 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
       for (const [key, value] of Object.entries(body)) {
         if (key === MESSENGER_SETTINGS_KEY) {
           const parsedValue = typeof value === "string" ? safeJsonParse(value) : value;
-          const encrypted = encryptMessengerChannelsForStorage(parsedValue);
+          const normalized = normalizeMessengerChannelsForSingleGroup(parsedValue);
+          if (normalized.warnings.length > 0) {
+            for (const warning of normalized.warnings) {
+              if (!warnings.includes(warning)) warnings.push(warning);
+            }
+          }
+          const encrypted = encryptMessengerChannelsForStorage(normalized.value);
           upsert.run(key, typeof encrypted === "string" ? encrypted : JSON.stringify(encrypted));
           continue;
         }
@@ -76,7 +198,7 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
       return res.status(500).json({ ok: false, error: "settings_write_failed", detail });
     }
 
-    res.json({ ok: true, warnings: [] });
+    res.json({ ok: true, warnings });
   });
 
   app.get("/api/stats", (_req, res) => {

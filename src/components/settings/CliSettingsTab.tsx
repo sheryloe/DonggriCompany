@@ -37,6 +37,25 @@ function localizePoolStatus(status: CliPoolStatus, t: CliSettingsTabProps["t"]):
   return t({ ko: "프로필 오류", en: "Profile error", ja: "Profile error", zh: "Profile error" });
 }
 
+function isCliPoolStatus(value: string): value is CliPoolStatus {
+  return value === "connected" || value === "auth_required" || value === "install_required" || value === "profile_error";
+}
+
+function localizeVerifyResult(value: string, t: CliSettingsTabProps["t"]): string {
+  if (isCliPoolStatus(value)) return localizePoolStatus(value, t);
+  return value;
+}
+
+function localizeQueueStatus(value: string, t: CliSettingsTabProps["t"]): string {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "queued") return t({ ko: "대기", en: "Queued", ja: "Queued", zh: "Queued" });
+  if (normalized === "running") return t({ ko: "실행 중", en: "Running", ja: "Running", zh: "Running" });
+  if (normalized === "done") return t({ ko: "완료", en: "Done", ja: "Done", zh: "Done" });
+  if (normalized === "failed") return t({ ko: "실패", en: "Failed", ja: "Failed", zh: "Failed" });
+  if (normalized === "canceled") return t({ ko: "취소됨", en: "Canceled", ja: "Canceled", zh: "Canceled" });
+  return value;
+}
+
 function localizeRunnerStatus(
   status: "active" | "idle" | "stopping" | "error" | null,
   t: CliSettingsTabProps["t"],
@@ -116,7 +135,7 @@ export default function CliSettingsTab({
   onActivateRunner,
   onDeactivateRunner,
 }: CliSettingsTabProps) {
-  const [verifyMessageByKey, setVerifyMessageByKey] = useState<Record<string, string>>({});
+  const [verifyMessageByKey, setVerifyMessageByKey] = useState<Record<string, CliPoolStatus | string>>({});
   const [labelDraftByKey, setLabelDraftByKey] = useState<Record<string, string>>({});
   const [verifyAllCodexBusy, setVerifyAllCodexBusy] = useState(false);
   const codexAutoSyncRef = useRef(false);
@@ -736,7 +755,7 @@ export default function CliSettingsTab({
               {selectedPool && verifyMessageByKey[`${provider}:${selectedPool.accountPoolId}`] && (
                 <p className="text-[11px] text-slate-400">
                   {t({ ko: "최근 검증 결과", en: "Last verify result", ja: "最新検証結果", zh: "最近验证结果" })}:{" "}
-                  {verifyMessageByKey[`${provider}:${selectedPool.accountPoolId}`]}
+                  {localizeVerifyResult(verifyMessageByKey[`${provider}:${selectedPool.accountPoolId}`] ?? "", t)}
                 </p>
               )}
 
@@ -944,7 +963,7 @@ export default function CliSettingsTab({
                 <span className="truncate">
                   {item.provider}:{item.accountPoolId}
                 </span>
-                <span className="text-slate-400">{item.status}</span>
+                <span className="text-slate-400">{localizeQueueStatus(String(item.status ?? ""), t)}</span>
               </li>
             ))}
           </ul>

@@ -42,32 +42,23 @@ function normalizeText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function canonicalFieldsEmpty(row: Record<string, unknown>): boolean {
-  const family = normalizeText(row.family);
-  const careerStage = normalizeText(row.career_stage);
-  const specializationKey = normalizeText(row.specialization_key);
-  const executionProfile = normalizeText(row.execution_capability_profile);
-  const authorityLevel = Number(row.authority_level ?? 0);
-  const agentProfile = normalizeText(row.agent_profile_json);
-  return !family && !careerStage && !specializationKey && !executionProfile && authorityLevel <= 0 && !agentProfile;
-}
-
 function collectLegacyBuiltinMatches(db: DbLike): LegacyBuiltinMatch[] {
   const rows = db.prepare("SELECT * FROM agents").all() as Array<Record<string, unknown>>;
   const out: LegacyBuiltinMatch[] = [];
   const usedSourceIds = new Set<string>();
   const usedSeedIds = new Set<string>();
   for (const signature of LEGACY_BUILTIN_AGENT_SIGNATURES) {
+    const mappedDepartmentId = LEGACY_DEPARTMENT_ID_MAP[signature.department_id] ?? signature.department_id;
     const match = rows.find((row) => {
       const id = normalizeText(row.id);
       if (!id || usedSourceIds.has(id) || usedSeedIds.has(signature.seed_agent_id)) return false;
+      const rowDepartmentId = normalizeText(row.department_id);
       return (
         normalizeText(row.name) === signature.name &&
-        normalizeText(row.department_id) === signature.department_id &&
+        (rowDepartmentId === signature.department_id || rowDepartmentId === mappedDepartmentId) &&
         normalizeText(row.role) === signature.role &&
         normalizeText(row.cli_provider) === signature.cli_provider &&
-        normalizeText(row.personality) === signature.personality &&
-        canonicalFieldsEmpty(row)
+        normalizeText(row.personality) === signature.personality
       );
     });
     if (!match) continue;
@@ -164,6 +155,23 @@ function upsertDepartmentSeed(db: DbLike): void {
       department.color,
       department.sort_order,
     );
+  }
+}
+
+function reserveCanonicalDepartmentSortOrders(db: DbLike): void {
+  const rows = db.prepare("SELECT id, sort_order FROM departments ORDER BY sort_order, id").all() as Array<{
+    id?: unknown;
+    sort_order?: unknown;
+  }>;
+  const maxSortOrderRow = db.prepare("SELECT MAX(sort_order) AS max_sort_order FROM departments").get() as
+    | { max_sort_order?: number | null }
+    | undefined;
+  let offset = Number(maxSortOrderRow?.max_sort_order ?? 0) + 10_000;
+  for (const row of rows) {
+    const departmentId = normalizeText(row.id);
+    if (!departmentId) continue;
+    db.prepare("UPDATE departments SET sort_order = ? WHERE id = ?").run(offset, departmentId);
+    offset += 1;
   }
 }
 
@@ -312,12 +320,14 @@ export function applyCanonicalResetOrganization(db: DbLike): CanonicalResetApply
   db.exec("PRAGMA foreign_keys = OFF");
   try {
     db.exec("BEGIN");
-    upsertDepartmentSeed(db);
 
     for (const migration of preview.department_migrations) {
       updateDepartmentForeignKeys(db, migration.from, migration.to);
       migratedDepartments += 1;
     }
+
+    reserveCanonicalDepartmentSortOrders(db);
+    upsertDepartmentSeed(db);
 
     for (const match of preview.legacy_builtin_agents_matched) {
       const seed = getOrganizationAgentSeedById(match.seed_agent_id);
@@ -325,7 +335,12 @@ export function applyCanonicalResetOrganization(db: DbLike): CanonicalResetApply
       const targetExists = db.prepare("SELECT 1 AS ok FROM agents WHERE id = ? LIMIT 1").get(seed.id) as
         | { ok?: number }
         | undefined;
-      if (targetExists?.ok === 1 && match.source_agent_id !== seed.id) continue;
+      if (targetExists?.ok === 1 && match.source_agent_id !== seed.id) {
+        updateAgentReferenceTables(db, match.source_agent_id, seed.id);
+        db.prepare("DELETE FROM agents WHERE id = ?").run(match.source_agent_id);
+        migratedAgents += 1;
+        continue;
+      }
       if (match.source_agent_id !== seed.id) {
         updateAgentReferenceTables(db, match.source_agent_id, seed.id);
         db.prepare("UPDATE agents SET id = ? WHERE id = ?").run(seed.id, match.source_agent_id);

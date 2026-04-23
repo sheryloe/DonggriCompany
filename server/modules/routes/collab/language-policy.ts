@@ -131,7 +131,7 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
 
   function getPreferredLanguage(): Lang {
     const settingLang = readSettingString("language");
-    return isLang(settingLang) ? settingLang : "en";
+    return settingLang === "ko" ? "ko" : "en";
   }
 
   function detectLang(text: string): Lang {
@@ -146,11 +146,11 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
   }
 
   function resolveLang(text?: string, fallback?: Lang): Lang {
-    const settingLang = readSettingString("language");
-    if (isLang(settingLang)) return settingLang;
     const trimmed = String(text ?? "").trim();
-    if (trimmed) return detectLang(trimmed);
-    return fallback ?? getPreferredLanguage();
+    if (trimmed && detectLang(trimmed) === "ko") return "ko";
+    const settingLang = readSettingString("language");
+    if (settingLang === "ko") return "ko";
+    return fallback === "ko" ? "ko" : "en";
   }
 
   function l(ko: string[], en: string[], ja?: string[], zh?: string[]): L10n {
@@ -218,11 +218,11 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
   function analyzeDirectivePolicy(message: string): DirectivePolicy {
     const normalized = normalizeForSearch(message);
     const hasTaskVerb =
-      /(fix|build|implement|write|create|update|design|analyze|research|review|ship|배포|구현|수정|작성|분석|기획|개발|테스트)/i.test(
+      /(fix|build|implement|write|create|update|design|analyze|research|review|ship|make|배포|구현|수정|작성|분석|기획|개발|테스트|만들|제작|계산|계산기)/i.test(
         normalized,
       );
     const lightweight =
-      /(hello|thanks|고마워|감사|안녕|what'?s up|ping|status only|인사만)/i.test(normalized) || normalized.length < 24;
+      /(hello|thanks|고마워|감사|안녕|what'?s up|ping|status only|인사만)/i.test(normalized);
 
     if (!hasTaskVerb) {
       return {

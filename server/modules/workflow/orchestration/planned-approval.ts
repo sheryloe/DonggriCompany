@@ -1,4 +1,4 @@
-import { evaluateCanonicalMeetingAuthority } from "../../company/canonical-authority.ts";
+﻿import { evaluateCanonicalMeetingAuthority } from "../../company/canonical-authority.ts";
 
 type CreatePlannedApprovalToolsDeps = {
   reviewInFlight: Set<string>;
@@ -33,6 +33,19 @@ type CreatePlannedApprovalToolsDeps = {
   appendTaskLog: (...args: any[]) => any;
   reviewMeetingOneShotTimeoutMs?: number;
 };
+
+const PLANNED_PUBLIC_REQUIRED_DEPARTMENT_IDS = [
+  "pmo",
+  "planning-architecture",
+  "planning",
+  "development",
+  "dev",
+  "ui-ux",
+  "design",
+  "qa",
+  "knowledge-docs",
+  "operations",
+];
 
 export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps) {
   const {
@@ -106,7 +119,12 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
 
     void (async () => {
       let meetingId: string | null = null;
-      const leaders = getTaskReviewLeaders(taskId, departmentId);
+      const leaders = getTaskReviewLeaders(taskId, departmentId, {
+        minLeaders: 5,
+        includePlanning: true,
+        fallbackAll: true,
+        requiredDepartmentIds: PLANNED_PUBLIC_REQUIRED_DEPARTMENT_IDS,
+      });
       const quorumReasons = leaders.length >= 2 ? [] : [`quorum_not_met:${leaders.length}/2`];
       try {
         const round = (reviewRoundState.get(lockKey) ?? 0) + 1;
@@ -149,10 +167,10 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           notifyCeo(
             pickL(
               l(
-                [`[CEO OFFICE] '${taskTitle}' Planned 회의를 시작할 수 없습니다. 차단 사유: ${reasonText}`],
+                [`[CEO OFFICE] '${taskTitle}' Planned ?뚯쓽瑜??쒖옉?????놁뒿?덈떎. 李⑤떒 ?ъ쑀: ${reasonText}`],
                 [`[CEO OFFICE] Planned meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
-                [`[CEO OFFICE] '${taskTitle}' Planned 会議を開始できません。理由: ${reasonText}`],
-                [`[CEO OFFICE] 无法启动 '${taskTitle}' 的 Planned 会议。原因：${reasonText}`],
+                [`[CEO OFFICE] '${taskTitle}' Planned 鴉싪??믧뼀冶뗣겎?띲겲?쎼굯?귞릤?? ${reasonText}`],
+                [`[CEO OFFICE] ?졿퀡??뒯 '${taskTitle}' ??Planned 鴉싪??귛렅?좑폏${reasonText}`],
               ),
               resolveLang(taskDescription ?? taskTitle),
             ),
@@ -174,12 +192,11 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
         });
         const lang = resolveLang(taskDescription ?? taskTitle);
         const transcript: any[] = [];
+        const publicFeedbackDeptIds = new Set<string>();
         const oneShotTimeoutMs = Math.max(5_000, Number(reviewMeetingOneShotTimeoutMs ?? 65_000));
         const oneShotOptions = { projectPath, timeoutMs: oneShotTimeoutMs, noTools: true };
         const wantsRevision = (content: string): boolean =>
-          /보완|수정|보류|리스크|추가.?필요|hold|revise|revision|required|pending|risk|block|保留|修正|补充|暂缓/i.test(
-            content,
-          );
+          /보완|수정|보류|리스크|추가.*필요|hold|revise|revision|required|pending|risk|block|保留|修正|追加|风险|風險/i.test(content);
         const isTimeoutRun = (run: { text?: string; error?: string } | null | undefined): boolean => {
           const source = `${run?.error ?? ""}\n${run?.text ?? ""}`;
           return /timeout after|timed out|request timed out|aborted/i.test(source);
@@ -236,6 +253,60 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
             content,
           });
         };
+        const markPublicFeedback = (leader: any, source: "opening" | "feedback" | "fallback") => {
+          const deptId = String(leader?.department_id ?? "").trim();
+          if (deptId) publicFeedbackDeptIds.add(deptId);
+          appendTaskLog(
+            taskId,
+            "system",
+            `meeting_public_feedback phase=planned source=${source} department_id=${deptId || "unknown"} agent_id=${leader?.id ?? "unknown"}`,
+          );
+        };
+        const buildFallbackPublicFeedback = (leader: any): string => {
+          const deptId = String(leader?.department_id ?? "").trim();
+          const name = getAgentDisplayName(leader, lang);
+          const deptName = getDeptName(deptId, taskWorkflowPackKey);
+          const normalizedDeptId = deptId.toLowerCase();
+          const koByDept: Record<string, string> = {
+            pmo: "PMO 관점에서는 목표, 담당 부서, 일정 기준을 명확히 정리하겠습니다.",
+            "planning-architecture": "기획/설계 관점에서는 범위, 산출물 기준, 의사결정 항목을 먼저 정리하겠습니다.",
+            planning: "기획 관점에서는 범위, 산출물 기준, 의사결정 항목을 먼저 정리하겠습니다.",
+            development: "개발 관점에서는 계산 로직, 입력 검증, UI 연결을 우선 확인하겠습니다.",
+            dev: "개발 관점에서는 계산 로직, 입력 검증, UI 연결을 우선 확인하겠습니다.",
+            "ui-ux": "UI/UX 관점에서는 입력 흐름, 버튼 배치, 오류 피드백이 자연스러운지 확인하겠습니다.",
+            design: "UI/UX 관점에서는 입력 흐름, 버튼 배치, 오류 피드백이 자연스러운지 확인하겠습니다.",
+            qa: "QA 관점에서는 사칙연산, 예외 입력, 회귀 테스트 기준을 먼저 잡겠습니다.",
+            "knowledge-docs": "문서 관점에서는 결정 사항, 검증 기준, 최종 보고 항목을 남기겠습니다.",
+            operations: "운영 관점에서는 실행 경로, 상태 보고, 장애 시 재시도 기준을 점검하겠습니다.",
+            "cicd-repo": "CI/CD 관점에서는 브랜치, 병합, 빌드 검증 흐름을 확인하겠습니다.",
+            devsecops: "CI/CD와 보안 관점에서는 브랜치, 병합, 빌드 검증 흐름을 확인하겠습니다.",
+            "security-approval": "보안/승인 관점에서는 권한, 외부 연동, 배포 차단 조건을 확인하겠습니다.",
+            "api-research": "API 리서치 관점에서는 필요한 외부 정보와 무료 토큰 범위를 확인하겠습니다.",
+            bloggent: "블로그 운영 관점에서는 결과 요약과 콘텐츠 전환 가능성을 확인하겠습니다.",
+            management: "관리 관점에서는 진행 상태, 담당자, 보고 누락 여부를 점검하겠습니다.",
+          };
+          const enByDept: Record<string, string> = {
+            pmo: "From PMO, I will clarify goals, owning departments, and schedule criteria.",
+            "planning-architecture": "From planning and architecture, I will clarify scope, deliverables, and decision points.",
+            planning: "From planning, I will clarify scope, deliverables, and decision points.",
+            development: "From development, I will check calculation logic, input validation, and UI wiring first.",
+            dev: "From development, I will check calculation logic, input validation, and UI wiring first.",
+            "ui-ux": "From UI/UX, I will check input flow, button placement, and error feedback.",
+            design: "From UI/UX, I will check input flow, button placement, and error feedback.",
+            qa: "From QA, I will define arithmetic, invalid-input, and regression checks first.",
+            "knowledge-docs": "From documentation, I will capture decisions, validation criteria, and final report items.",
+            operations: "From operations, I will check execution flow, status reporting, and retry criteria.",
+            "cicd-repo": "From CI/CD, I will check branch, merge, and build verification flow.",
+            devsecops: "From CI/CD and security, I will check branch, merge, and build verification flow.",
+            "security-approval": "From security and approval, I will check permissions, external integrations, and release blocks.",
+            "api-research": "From API research, I will confirm required external information and free-token limits.",
+            bloggent: "From blog operations, I will check summary and content conversion opportunities.",
+            management: "From management, I will check progress state, ownership, and report gaps.",
+          };
+          const ko = koByDept[normalizedDeptId] ?? `${deptName} 관점에서 보완 항목과 다음 액션을 정리하겠습니다.`;
+          const en = enByDept[normalizedDeptId] ?? `From ${deptName}, I will clarify gaps and next actions.`;
+          return pickL(l([`${name}: ${ko}`], [`${name}: ${en}`]), lang);
+        };
         const speak = (
           leader: any,
           messageType: string,
@@ -258,16 +329,8 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
         notifyCeo(
           pickL(
             l(
-              [
-                `[CEO OFFICE] '${taskTitle}' Planned 계획 라운드 ${round} 시작. 부서별 보완점 수집 후 실행계획(SubTask)으로 정리합니다.`,
-              ],
-              [
-                `[CEO OFFICE] '${taskTitle}' planned round ${round} started. Collecting supplement points and turning them into executable subtasks.`,
-              ],
-              [
-                `[CEO OFFICE] '${taskTitle}' のPlanned計画ラウンド${round}を開始。補完項目を収集し、実行SubTaskへ落とし込みます。`,
-              ],
-              [`[CEO OFFICE] 已开始'${taskTitle}'第${round}轮 Planned 规划，正在收集补充点并转为可执行 SubTask。`],
+              [`[CEO OFFICE] '${taskTitle}' Planned ${round}차 회의를 시작합니다. 보완점을 수집해 실행 가능한 SubTask로 정리합니다.`],
+              [`[CEO OFFICE] '${taskTitle}' planned round ${round} started. Collecting supplement points and turning them into executable subtasks.`],
             ),
             lang,
           ),
@@ -290,6 +353,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
         if (abortIfInactive()) return;
         const openingText = chooseSafeReply(openingRun, lang, "opening", planningLeader);
         speak(planningLeader, "chat", "all", null, openingText);
+        markPublicFeedback(planningLeader, "opening");
         await sleepMs(randomDelay(700, 1260));
         if (abortIfInactive()) return;
 
@@ -309,11 +373,22 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           const feedbackRun = await runMeetingOneShotWithRetry(leader, feedbackPrompt, "feedback");
           if (abortIfInactive()) return;
           const feedbackText = chooseSafeReply(feedbackRun, lang, "feedback", leader);
-          speak(leader, "chat", "agent", planningLeader.id, feedbackText);
+          speak(leader, "chat", "all", null, feedbackText);
+          markPublicFeedback(leader, "feedback");
           if (wantsRevision(feedbackText)) {
             hasSupplementSignals = true;
           }
           await sleepMs(randomDelay(620, 1080));
+          if (abortIfInactive()) return;
+        }
+
+        for (const leader of leaders) {
+          const deptId = String(leader?.department_id ?? "").trim();
+          if (!deptId || publicFeedbackDeptIds.has(deptId)) continue;
+          const fallbackText = buildFallbackPublicFeedback(leader);
+          speak(leader, "chat", "all", null, fallbackText);
+          markPublicFeedback(leader, "fallback");
+          await sleepMs(randomDelay(320, 640));
           if (abortIfInactive()) return;
         }
 
@@ -373,18 +448,8 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
         notifyCeo(
           pickL(
             l(
-              [
-                `[CEO OFFICE] '${taskTitle}' Planned 회의 종료. 보완점 ${planItems.length}건을 계획 항목으로 기록하고 In Progress로 진행합니다.`,
-              ],
-              [
-                `[CEO OFFICE] Planned meeting for '${taskTitle}' is complete. Recorded ${planItems.length} improvement items and moving to In Progress.`,
-              ],
-              [
-                `[CEO OFFICE] '${taskTitle}' のPlanned会議が完了。補完項目${planItems.length}件を計画化し、In Progressへ進みます。`,
-              ],
-              [
-                `[CEO OFFICE] '${taskTitle}' 的 Planned 会议已结束，已记录 ${planItems.length} 个改进项并转入 In Progress。`,
-              ],
+              [`[CEO OFFICE] '${taskTitle}' Planned 회의를 완료했습니다. 개선 항목 ${planItems.length}건을 기록하고 실행 단계로 이동합니다.`],
+              [`[CEO OFFICE] Planned meeting for '${taskTitle}' is complete. Recorded ${planItems.length} improvement items and moving to In Progress.`],
             ),
             lang,
           ),
@@ -410,8 +475,6 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
             l(
               [`[CEO OFFICE] '${taskTitle}' Planned 회의 처리 중 오류가 발생했습니다: ${msg}`],
               [`[CEO OFFICE] Error while processing planned meeting for '${taskTitle}': ${msg}`],
-              [`[CEO OFFICE] '${taskTitle}' のPlanned会議処理中にエラーが発生しました: ${msg}`],
-              [`[CEO OFFICE] 处理'${taskTitle}'的 Planned 会议时发生错误：${msg}`],
             ),
             errLang,
           ),

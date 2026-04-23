@@ -347,6 +347,19 @@ function ensureAgentBundleFiles(root: string, input: AgentGuideInput): string {
   return agentsPath;
 }
 
+function moveDirectorySafe(from: string, to: string): void {
+  try {
+    fs.renameSync(from, to);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== "EXDEV") {
+      throw error;
+    }
+  }
+  fs.cpSync(from, to, { recursive: true, force: true });
+  fs.rmSync(from, { recursive: true, force: true });
+}
+
 export function upsertAgentGuideFile(input: AgentGuideInput): string {
   const root = resolveGuideRoot();
   fs.mkdirSync(root, { recursive: true });
@@ -356,7 +369,7 @@ export function upsertAgentGuideFile(input: AgentGuideInput): string {
 
   if (currentRoot && path.resolve(currentRoot) !== path.resolve(targetRoot)) {
     fs.mkdirSync(path.dirname(targetRoot), { recursive: true });
-    fs.renameSync(currentRoot, targetRoot);
+    moveDirectorySafe(currentRoot, targetRoot);
   }
 
   const finalRoot = currentRoot && path.resolve(currentRoot) === path.resolve(targetRoot) ? currentRoot : targetRoot;
@@ -374,6 +387,6 @@ export function archiveAgentGuideFile(agentId: string): string | null {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const destination = path.join(root, "archive", timestamp, relativeBundlePath);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
-  fs.renameSync(bundleRoot, destination);
+  moveDirectorySafe(bundleRoot, destination);
   return destination;
 }

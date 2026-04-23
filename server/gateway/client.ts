@@ -1,5 +1,6 @@
-import { execFile } from "node:child_process";
+﻿import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 
@@ -143,6 +144,50 @@ function normalizeSession(
   };
 }
 
+function isScopedMessengerSession(session: Pick<MessengerSession, "agentId" | "workflowPackKey" | "departmentId">): boolean {
+  return Boolean(session.agentId || session.workflowPackKey || session.departmentId);
+}
+
+function normalizeMessengerChannelsForSingleGroupRuntime(
+  channels: PersistedMessengerChannels | null,
+): PersistedMessengerChannels | null {
+  if (!channels || typeof channels !== "object") return channels;
+
+  const telegramRaw = channels.telegram;
+  if (!telegramRaw || typeof telegramRaw !== "object") return channels;
+
+  const normalizedSessions = Array.isArray(telegramRaw.sessions)
+    ? telegramRaw.sessions
+        .map((session, index) => normalizeSession(session ?? {}, "telegram", index))
+        .filter((session): session is MessengerSession => Boolean(session))
+    : [];
+
+  const preferredSession =
+    normalizedSessions.find((session) => session.id.toLowerCase() === "global") ??
+    normalizedSessions.find((session) => session.enabled && !isScopedMessengerSession(session)) ??
+    normalizedSessions.find((session) => session.enabled) ??
+    normalizedSessions[0] ??
+    null;
+
+  return {
+    ...channels,
+    telegram: {
+      token: telegramRaw.token,
+      sessions: preferredSession
+        ? [
+            {
+              id: "global",
+              name: "Global Telegram Group",
+              targetId: preferredSession.targetId,
+              enabled: preferredSession.enabled,
+              ...(preferredSession.token ? { token: preferredSession.token } : {}),
+            },
+          ]
+        : [],
+    },
+  };
+}
+
 function buildEmptyConfig(): MessengerRuntimeConfig {
   return MESSENGER_CHANNELS.reduce((acc, channel) => {
     acc[channel] = { token: "", sessions: [] };
@@ -158,6 +203,9 @@ function readPersistedMessengerChannels(): PersistedMessengerChannels | null {
   const dbPath = process.env.DB_PATH ?? DEFAULT_DB_PATH;
   let db: DatabaseSync | null = null;
   try {
+    if (!fs.existsSync(dbPath)) {
+      return null;
+    }
     db = new DatabaseSync(dbPath);
     const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(MESSENGER_SETTINGS_KEY) as
       | { value?: unknown }
@@ -170,9 +218,12 @@ function readPersistedMessengerChannels(): PersistedMessengerChannels | null {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
-    return parsed as PersistedMessengerChannels;
+    return normalizeMessengerChannelsForSingleGroupRuntime(parsed as PersistedMessengerChannels);
   } catch (err) {
-    console.warn(`[Claw-Empire] failed to load messenger channels settings: ${String(err)}`);
+    const message = String(err);
+    if (!message.includes("unable to open database file")) {
+      console.warn(`[Claw-Empire] failed to load messenger channels settings: ${message}`);
+    }
     return null;
   } finally {
     try {
@@ -901,6 +952,7 @@ async function sendMessengerWake(text: string): Promise<void> {
     for (const session of config[channel].sessions) {
       if (!session.enabled) continue;
       if (session.agentId) continue;
+      if (session.workflowPackKey || session.departmentId) continue;
       const token = normalizeText(session.token) || channelToken;
       if (channel !== "imessage" && !token) continue;
       targets.push({ channel, targetId: session.targetId, token });
@@ -955,29 +1007,23 @@ function detectGatewayLang(text: string): GatewayLang {
 }
 
 function normalizeGatewayLang(lang: string | null | undefined, title: string): GatewayLang {
-  if (lang === "ko" || lang === "en" || lang === "ja" || lang === "zh") return lang;
-  if (title.trim()) return detectGatewayLang(title);
+  if (lang === "ko") return "ko";
+  if (lang === "en" || lang === "ja" || lang === "zh") return "en";
+  if (title.trim()) {
+    return detectGatewayLang(title) === "ko" ? "ko" : "en";
+  }
   return "en";
 }
 
 function resolveStatusLabel(status: string, lang: GatewayLang): string {
   if (status === "in_progress") {
-    if (lang === "en") return "Started";
-    if (lang === "ja") return "開始";
-    if (lang === "zh") return "开始";
-    return "진행 시작";
+    return lang === "ko" ? "진행 시작" : "Started";
   }
   if (status === "review") {
-    if (lang === "en") return "In Review";
-    if (lang === "ja") return "レビュー中";
-    if (lang === "zh") return "审核中";
-    return "검토 중";
+    return lang === "ko" ? "검토 중" : "In Review";
   }
   if (status === "done") {
-    if (lang === "en") return "Completed";
-    if (lang === "ja") return "完了";
-    if (lang === "zh") return "完成";
-    return "완료";
+    return lang === "ko" ? "완료" : "Completed";
   }
   return status;
 }

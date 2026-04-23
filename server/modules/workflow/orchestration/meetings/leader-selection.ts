@@ -294,11 +294,17 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
   function getTaskReviewLeaders(
     taskId: string,
     fallbackDeptId: string | null,
-    opts?: { minLeaders?: number; includePlanning?: boolean; fallbackAll?: boolean },
+    opts?: {
+      minLeaders?: number;
+      includePlanning?: boolean;
+      fallbackAll?: boolean;
+      requiredDepartmentIds?: string[];
+    },
   ): AgentRow[] {
     const includePlanning = opts?.includePlanning ?? true;
     const minLeaders = opts?.minLeaders ?? 2;
     const fallbackAll = opts?.fallbackAll ?? true;
+    const requiredDepartmentIds = (opts?.requiredDepartmentIds ?? []).map((id) => String(id ?? "").trim()).filter(Boolean);
 
     const taskColumns = getTaskColumns();
     const selectColumns = [
@@ -370,7 +376,7 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
           .all(taskMeta.project_id) as Array<{ department_id: string | null }>;
         const manualDeptIds = assignedAgents.map((r) => r.department_id).filter(Boolean) as string[];
         const relatedDeptIds = getTaskRelatedDepartmentIds(taskId, fallbackDeptId, taskMeta);
-        const desiredDeptIds = [...new Set([...manualDeptIds, ...relatedDeptIds])];
+        const desiredDeptIds = [...new Set([...manualDeptIds, ...relatedDeptIds, ...requiredDepartmentIds])];
 
         const leaders = getLeadersByDepartmentIds(desiredDeptIds, constrainedAgentIds);
         const seen = new Set(leaders.map((l) => l.id));
@@ -409,10 +415,18 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
       }
     }
 
-    const deptIds = getTaskRelatedDepartmentIds(taskId, fallbackDeptId, taskMeta);
+    const deptIds = [...new Set([...getTaskRelatedDepartmentIds(taskId, fallbackDeptId, taskMeta), ...requiredDepartmentIds])];
     const leaders = getLeadersByDepartmentIds(deptIds, constrainedAgentIds);
 
     const seen = new Set(leaders.map((l) => l.id));
+    for (const deptId of deptIds) {
+      const hasDeptLeader = leaders.some((leader) => leader.department_id === deptId);
+      if (hasDeptLeader) continue;
+      const fallbackLeader = getLeadersByDepartmentIds([deptId], packScopedAgentIds)[0];
+      if (!fallbackLeader || seen.has(fallbackLeader.id)) continue;
+      leaders.push(fallbackLeader);
+      seen.add(fallbackLeader.id);
+    }
     if (includePlanning) {
       const planningLeader = pickCanonicalPlanningChair(constrainedAgentIds);
       if (planningLeader && !seen.has(planningLeader.id)) {

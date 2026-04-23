@@ -3,7 +3,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
 import * as api from "../api";
 import type { DecisionInboxItem } from "../components/chat/decision-inbox";
-import { detectBrowserLanguage } from "../i18n";
+import { detectBrowserLanguage, normalizeLanguage } from "../i18n";
 import type { Agent, CompanySettings, CompanyStats, Department, MeetingPresence, SubTask, Task } from "../types";
 import { DEFAULT_SETTINGS } from "../types";
 import { ROOM_THEMES_STORAGE_KEY } from "./constants";
@@ -76,11 +76,17 @@ export function useAppBootstrapData({
       const mergedSettings = mergeSettingsWithDefaults(sett);
       const autoDetectedLanguage = detectBrowserLanguage();
       const storedClientLanguage = readStoredClientLanguage();
+      const pinnedClientLanguage =
+        isUserLanguagePinned() && storedClientLanguage ? normalizeLanguage(storedClientLanguage) : null;
+      const shouldUsePinnedClientLanguage =
+        Boolean(pinnedClientLanguage) && mergedSettings.language !== pinnedClientLanguage;
       const shouldAutoAssignLanguage =
-        !isUserLanguagePinned() && !storedClientLanguage && mergedSettings.language === DEFAULT_SETTINGS.language;
-      const nextSettings = shouldAutoAssignLanguage
-        ? { ...mergedSettings, language: autoDetectedLanguage }
-        : mergedSettings;
+        !pinnedClientLanguage && !storedClientLanguage && mergedSettings.language === DEFAULT_SETTINGS.language;
+      const nextSettings: CompanySettings = shouldUsePinnedClientLanguage
+        ? { ...mergedSettings, language: pinnedClientLanguage ?? mergedSettings.language }
+        : shouldAutoAssignLanguage
+          ? { ...mergedSettings, language: autoDetectedLanguage }
+          : mergedSettings;
 
       setSettings(nextSettings);
       syncClientLanguage(nextSettings.language);
@@ -106,7 +112,10 @@ export function useAppBootstrapData({
         });
       }
 
-      if (shouldAutoAssignLanguage && mergedSettings.language !== autoDetectedLanguage) {
+      if (
+        shouldUsePinnedClientLanguage ||
+        (shouldAutoAssignLanguage && mergedSettings.language !== autoDetectedLanguage)
+      ) {
         api.saveSettings(nextSettings).catch((error) => {
           console.error("Auto language sync failed:", error);
         });

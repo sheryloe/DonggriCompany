@@ -29,10 +29,10 @@ type CreateReplyCoreToolsDeps = {
 };
 
 const MEETING_BUBBLE_EMPTY: LocalizedLines = {
-  ko: ["의견 공유드립니다."],
+  ko: ["의견을 곧 공유하겠습니다."],
   en: ["Sharing thoughts shortly."],
-  ja: ["ご意見を共有します。"],
-  zh: ["稍后分享意见。"],
+  ja: ["Sharing thoughts shortly."],
+  zh: ["Sharing thoughts shortly."],
 };
 
 const MEETING_PROMPT_TASK_CONTEXT_MAX_CHARS = Math.max(
@@ -127,7 +127,7 @@ export function createReplyCoreTools(deps: CreateReplyCoreToolsDeps) {
     }
 
     if (cleaned.length > maxChars) {
-      cleaned = `${cleaned.slice(0, maxChars - 1).trimEnd()}…`;
+      cleaned = `${cleaned.slice(0, maxChars - 3).trimEnd()}...`;
     }
 
     return cleaned;
@@ -168,39 +168,72 @@ export function createReplyCoreTools(deps: CreateReplyCoreToolsDeps) {
     );
   }
 
+  function departmentFallbackBody(kind: ReplyKind, lang: string, agent?: AgentRow): string {
+    const deptId = String(agent?.department_id ?? "").trim().toLowerCase();
+    const isKo = lang === "ko";
+    const koFeedbackByDept: Record<string, string> = {
+      pmo: "PMO 관점에서는 목표, 담당 부서, 일정 기준을 명확히 정리하겠습니다.",
+      "planning-architecture": "기획/설계 관점에서는 범위, 산출물 기준, 의사결정 항목을 먼저 정리하겠습니다.",
+      planning: "기획 관점에서는 범위, 산출물 기준, 의사결정 항목을 먼저 정리하겠습니다.",
+      development: "개발 관점에서는 계산 로직, 입력 검증, UI 연결을 우선 확인하겠습니다.",
+      dev: "개발 관점에서는 계산 로직, 입력 검증, UI 연결을 우선 확인하겠습니다.",
+      "ui-ux": "UI/UX 관점에서는 입력 흐름, 버튼 배치, 오류 피드백을 확인하겠습니다.",
+      design: "UI/UX 관점에서는 입력 흐름, 버튼 배치, 오류 피드백을 확인하겠습니다.",
+      qa: "QA 관점에서는 사칙연산, 예외 입력, 회귀 테스트 기준을 먼저 잡겠습니다.",
+      "knowledge-docs": "문서 관점에서는 결정 사항, 검증 기준, 최종 보고 항목을 남기겠습니다.",
+      operations: "운영 관점에서는 실행 경로, 상태 보고, 장애 시 재시도 기준을 점검하겠습니다.",
+      management: "관리 관점에서는 진행 상태, 담당자, 보고 누락 여부를 점검하겠습니다.",
+      "cicd-repo": "CI/CD 관점에서는 브랜치, 병합, 빌드 검증 흐름을 확인하겠습니다.",
+      devsecops: "CI/CD와 보안 관점에서는 브랜치, 병합, 빌드 검증 흐름을 확인하겠습니다.",
+      "security-approval": "보안/승인 관점에서는 권한, 외부 연동, 배포 차단 조건을 확인하겠습니다.",
+      "api-research": "API 리서치 관점에서는 필요한 외부 정보와 무료 토큰 범위를 확인하겠습니다.",
+      bloggent: "블로그 운영 관점에서는 결과 요약과 콘텐츠 전환 가능성을 확인하겠습니다.",
+    };
+    const enFeedbackByDept: Record<string, string> = {
+      pmo: "From PMO, I will clarify goals, owning departments, and schedule criteria.",
+      "planning-architecture": "From planning and architecture, I will clarify scope, deliverables, and decision points.",
+      planning: "From planning, I will clarify scope, deliverables, and decision points.",
+      development: "From development, I will check calculation logic, input validation, and UI wiring first.",
+      dev: "From development, I will check calculation logic, input validation, and UI wiring first.",
+      "ui-ux": "From UI/UX, I will check input flow, button placement, and error feedback.",
+      design: "From UI/UX, I will check input flow, button placement, and error feedback.",
+      qa: "From QA, I will define arithmetic, invalid-input, and regression checks first.",
+      "knowledge-docs": "From documentation, I will capture decisions, validation criteria, and final report items.",
+      operations: "From operations, I will check execution flow, status reporting, and retry criteria.",
+      management: "From management, I will check progress state, ownership, and report gaps.",
+      "cicd-repo": "From CI/CD, I will check branch, merge, and build verification flow.",
+      devsecops: "From CI/CD and security, I will check branch, merge, and build verification flow.",
+      "security-approval": "From security and approval, I will check permissions, external integrations, and release blocks.",
+      "api-research": "From API research, I will confirm required external information and free-token limits.",
+      bloggent: "From blog operations, I will check summary and content conversion opportunities.",
+    };
+    if (kind === "opening") {
+      return isKo
+        ? "킥오프 회의를 시작합니다. 각 부서는 관점별 보완 항목과 다음 액션을 한 줄씩 공유해주세요."
+        : "Kickoff started. Each department should share gaps and next actions from its own perspective.";
+    }
+    if (kind === "feedback") {
+      return isKo
+        ? (koFeedbackByDept[deptId] ?? "부서 관점에서 보완 항목과 다음 액션을 정리하겠습니다.")
+        : (enFeedbackByDept[deptId] ?? "From my department, I will clarify gaps and next actions.");
+    }
+    if (kind === "summary") {
+      return isKo
+        ? "각 부서 의견을 취합해 실행 가능한 SubTask와 검증 기준으로 정리하겠습니다."
+        : "I will consolidate department feedback into executable subtasks and validation criteria.";
+    }
+    if (kind === "approval") {
+      return isKo
+        ? (koFeedbackByDept[deptId] ?? "회의 결론에 따라 담당 액션을 진행하겠습니다.")
+        : (enFeedbackByDept[deptId] ?? "I will proceed with the assigned action from the meeting conclusion.");
+    }
+    return isKo ? "확인했습니다. 요청 방향에 맞춰 진행하겠습니다." : "Acknowledged. Proceeding with the requested direction.";
+  }
+
   function fallbackTurnReply(kind: ReplyKind, lang: string, agent?: AgentRow): string {
     const name = agent ? getAgentDisplayName(agent, lang) : "";
-    switch (kind) {
-      case "opening":
-        if (lang === "en") return `${name}: Kickoff noted. Please share concise feedback in order.`;
-        if (lang === "ja") return `${name}: キックオフを開始します。順番に簡潔なフィードバックを共有してください。`;
-        if (lang === "zh") return `${name}: 现在开始会议，请各位按顺序简要反馈。`;
-        return `${name}: 킥오프 회의를 시작합니다. 순서대로 핵심 피드백을 간단히 공유해주세요.`;
-      case "feedback":
-        if (lang === "en")
-          return `${name}: We have identified key gaps and a top-priority validation item before execution.`;
-        if (lang === "ja") return `${name}: 着手前の補完項目と最優先の検証課題を確認しました。`;
-        if (lang === "zh") return `${name}: 已确认执行前的补充项与最高优先验证课题。`;
-        return `${name}: 착수 전 보완 항목과 최우선 검증 과제를 확인했습니다.`;
-      case "summary":
-        if (lang === "en")
-          return `${name}: I will consolidate all leader feedback and proceed with the agreed next step.`;
-        if (lang === "ja") return `${name}: 各チームリーダーの意見を統合し、合意した次のステップへ進めます。`;
-        if (lang === "zh") return `${name}: 我将汇总各负责人意见，并按约定进入下一步。`;
-        return `${name}: 각 팀장 의견을 취합해 합의된 다음 단계로 진행하겠습니다.`;
-      case "approval":
-        if (lang === "en")
-          return `${name}: Decision noted. We will proceed according to the current meeting conclusion.`;
-        if (lang === "ja") return `${name}: 本会議の結論に従って進行します。`;
-        if (lang === "zh") return `${name}: 已确认决策，将按本轮会议结论执行。`;
-        return `${name}: 본 회의 결론에 따라 진행하겠습니다.`;
-      case "direct":
-      default:
-        if (lang === "en") return `${name}: Acknowledged. Proceeding with the requested direction.`;
-        if (lang === "ja") return `${name}: 承知しました。ご指示の方向で進めます。`;
-        if (lang === "zh") return `${name}: 收到，将按您的指示推进。`;
-        return `${name}: 확인했습니다. 요청하신 방향으로 진행하겠습니다.`;
-    }
+    const body = departmentFallbackBody(kind, lang, agent);
+    return name ? `${name}: ${body}` : body;
   }
 
   function buildAgentReplyText(
@@ -217,7 +250,7 @@ export function createReplyCoreTools(deps: CreateReplyCoreToolsDeps) {
     const normalized = value.replace(/\s+/g, " ").trim();
     if (!normalized) return "";
     if (normalized.length <= max) return normalized;
-    return `${normalized.slice(0, max - 1).trimEnd()}…`;
+    return `${normalized.slice(0, max - 3).trimEnd()}...`;
   }
 
   function extractRunFailureDetail(rawText: string, runError?: string): string {
@@ -262,42 +295,42 @@ export function createReplyCoreTools(deps: CreateReplyCoreToolsDeps) {
   function buildRunFailureReply(kind: RunFailureKind, lang: string, agent?: AgentRow, detail = ""): string {
     if (kind === "permission") {
       return buildAgentReplyText(lang, agent, {
-        ko: "파일 접근 권한에 의해 작업이 차단되었습니다. 프로젝트 디렉터리 설정을 확인해주세요.",
+        ko: "파일 접근 권한 문제로 작업이 차단되었습니다. 프로젝트 디렉터리 설정을 확인해주세요.",
         en: "The requested operation was blocked by a file-access permission. Please check the project directory settings.",
-        ja: "ファイルアクセス権限により操作がブロックされました。プロジェクトディレクトリ設定を確認してください。",
-        zh: "操作因文件访问权限被阻止，请检查项目目录设置。",
+        ja: "The requested operation was blocked by a file-access permission. Please check the project directory settings.",
+        zh: "The requested operation was blocked by a file-access permission. Please check the project directory settings.",
       });
     }
     if (kind === "stale_file") {
       return buildAgentReplyText(lang, agent, {
-        ko: "파일이 읽은 뒤 변경되어 작업이 중단되었습니다. 파일을 다시 읽고 재시도해주세요.",
+        ko: "파일을 읽은 뒤 내용이 변경되어 작업을 중단했습니다. 파일을 다시 읽고 재시도해주세요.",
         en: "The file changed after it was read, so the operation was stopped. Please re-read the file and retry.",
-        ja: "読み取り後にファイルが変更されたため、処理が停止しました。再読込して再試行してください。",
-        zh: "文件在读取后被修改，操作已中止。请重新读取该文件后再试。",
+        ja: "The file changed after it was read, so the operation was stopped. Please re-read the file and retry.",
+        zh: "The file changed after it was read, so the operation was stopped. Please re-read the file and retry.",
       });
     }
     if (kind === "tool_calls_only") {
       return buildAgentReplyText(lang, agent, {
-        ko: "도구 호출 단계에서 종료되어 최종 답변이 생성되지 않았습니다. 다시 시도해주세요.",
+        ko: "도구 호출 단계에서 종료되어 최종 응답이 생성되지 않았습니다. 다시 시도해주세요.",
         en: "The run ended at tool-calls without producing a final reply. Please retry.",
-        ja: "ツール呼び出し段階で終了し、最終回答が生成されませんでした。再試行してください。",
-        zh: "执行在工具调用阶段结束，未生成最终回复。请重试。",
+        ja: "The run ended at tool-calls without producing a final reply. Please retry.",
+        zh: "The run ended at tool-calls without producing a final reply. Please retry.",
       });
     }
     if (kind === "timeout") {
       return buildAgentReplyText(lang, agent, {
-        ko: "응답 생성 시간이 초과되어 작업이 중단되었습니다. 잠시 후 다시 시도해주세요.",
+        ko: "응답 생성 시간이 초과되어 작업을 중단했습니다. 잠시 후 다시 시도해주세요.",
         en: "Response generation timed out, so the run was stopped. Please try again shortly.",
-        ja: "応答生成がタイムアウトしたため処理を停止しました。しばらくして再試行してください。",
-        zh: "回复生成超时，任务已中止。请稍后重试。",
+        ja: "Response generation timed out, so the run was stopped. Please try again shortly.",
+        zh: "Response generation timed out, so the run was stopped. Please try again shortly.",
       });
     }
     const suffix = detail ? ` (${detail})` : "";
     return buildAgentReplyText(lang, agent, {
       ko: `CLI 실행 중 오류가 발생했습니다${suffix}.`,
       en: `CLI execution failed${suffix}.`,
-      ja: `CLI 実行中にエラーが発生しました${suffix}。`,
-      zh: `CLI 执行失败${suffix}。`,
+      ja: `CLI execution failed${suffix}.`,
+      zh: `CLI execution failed${suffix}.`,
     });
   }
 
@@ -311,7 +344,7 @@ export function createReplyCoreTools(deps: CreateReplyCoreToolsDeps) {
     }
     const cleaned = normalizeConversationReply(rawText, maxReplyChars, { maxSentences: 0 });
     if (!cleaned) return fallbackTurnReply(kind, lang, agent);
-    if (/timeout after|CLI 응답 생성에 실패|response failed|one-shot-error/i.test(cleaned)) {
+    if (/timeout after|CLI 응답 생성 실패|response failed|one-shot-error/i.test(cleaned)) {
       return fallbackTurnReply(kind, lang, agent);
     }
     if (isInternalWorkNarration(cleaned)) return fallbackTurnReply(kind, lang, agent);
@@ -335,25 +368,19 @@ export function createReplyCoreTools(deps: CreateReplyCoreToolsDeps) {
       .trim();
     if (!cleaned) return pickL(MEETING_BUBBLE_EMPTY, lang);
     if (cleaned.length <= maxChars) return cleaned;
-    return `${cleaned.slice(0, maxChars - 1).trimEnd()}…`;
+    return `${cleaned.slice(0, maxChars - 3).trimEnd()}...`;
   }
 
   function isMvpDeferralSignal(text: string): boolean {
-    return /mvp|범위\s*초과|실환경|프로덕션|production|post[-\s]?merge|post[-\s]?release|안정화\s*단계|stabilization|모니터링|monitoring|sla|체크리스트|checklist|문서화|runbook|후속\s*(개선|처리|모니터링)|defer|deferred|later\s*phase|다음\s*단계|배포\s*후/i.test(
-      text,
-    );
+    return /mvp|범위\s*초과|운영환경|프로덕션|production|post[-\s]?merge|post[-\s]?release|안정화\s*단계|stabilization|모니터링|monitoring|sla|체크리스트|checklist|문서화|runbook|후속\s*(개선|처리|모니터링)|defer|deferred|later\s*phase|다음\s*단계|배포\s*후/i.test(text);
   }
 
   function isHardBlockSignal(text: string): boolean {
-    return /최종\s*승인\s*불가|배포\s*불가|절대\s*불가|중단|즉시\s*중단|반려|cannot\s+(approve|ship|release)|must\s+fix\s+before|hard\s+blocker|critical\s+blocker|p0|data\s+loss|security\s+incident|integrity\s+broken|audit\s*fail|build\s*fail|무결성\s*(훼손|깨짐)|데이터\s*손실|보안\s*사고|치명/i.test(
-      text,
-    );
+    return /최종\s*승인\s*불가|배포\s*불가|실행\s*불가|중단|즉시\s*중단|반려|cannot\s+(approve|ship|release)|must\s+fix\s+before|hard\s+blocker|critical\s+blocker|p0|data\s+loss|security\s+incident|integrity\s+broken|audit\s*fail|build\s*fail|무결성\s*(훼손|깨짐)|데이터\s*손실|보안\s*사고|치명/i.test(text);
   }
 
   function hasApprovalAgreementSignal(text: string): boolean {
-    return /승인|approve|approved|동의|agree|agreed|lgtm|go\s+ahead|merge\s+approve|병합\s*승인|전환\s*동의|조건부\s*승인/i.test(
-      text,
-    );
+    return /승인|approve|approved|동의|agree|agreed|lgtm|go\s+ahead|merge\s+approve|병합\s*승인|전환\s*동의|조건부\s*승인/i.test(text);
   }
 
   function isDeferrableReviewHold(text: string): boolean {
@@ -371,17 +398,11 @@ export function createReplyCoreTools(deps: CreateReplyCoreToolsDeps) {
     const hasMvpDeferral = isMvpDeferralSignal(cleaned);
     const hasHardBlock = isHardBlockSignal(cleaned);
     const hasApprovalSignal =
-      /(승인|통과|문제없|진행.?가능|배포.?가능|approve|approved|lgtm|ship\s+it|go\s+ahead|承認|批准|通过|可发布)/i.test(
-        cleaned,
-      );
+      /(승인|통과|문제\s*없음|진행\s*가능|배포\s*가능|approve|approved|lgtm|ship\s+it|go\s+ahead)/i.test(cleaned);
     const hasNoRiskSignal =
-      /(리스크\s*(없|없음|없습니다|없는|없이)|위험\s*(없|없음|없습니다|없는|없이)|문제\s*없|이슈\s*없|no\s+risk|without\s+risk|risk[-\s]?free|no\s+issue|no\s+blocker|リスク(は)?(ありません|なし|無し)|問題ありません|无风险|没有风险|無風險|无问题)/i.test(
-        cleaned,
-      );
+      /(리스크\s*(없음|없습니다|없는|없이)|위험\s*(없음|없습니다|없는|없이)|문제\s*(없음|없습니다|없는|없이)|no\s+risk|without\s+risk|risk[-\s]?free|no\s+issue|no\s+blocker)/i.test(cleaned);
     const hasConditionalOrHoldSignal =
-      /(조건부|보완|수정|보류|리스크|미흡|미완|추가.?필요|재검토|중단|불가|hold|revise|revision|changes?\s+requested|required|pending|risk|block|missing|incomplete|not\s+ready|保留|修正|风险|补充|未完成|暂缓|差し戻し)/i.test(
-        cleaned,
-      );
+      /(조건부|보완|수정|보류|리스크|미흡|미완|추가.*필요|일단.*중단|불가|hold|revise|revision|changes?\s+requested|required|pending|risk|block|missing|incomplete|not\s+ready)/i.test(cleaned);
 
     if (hasApprovalSignal && hasNoRiskSignal) return "approved";
     if ((hasApprovalAgreement || hasApprovalSignal) && hasMvpDeferral && !hasHardBlock) return "approved";

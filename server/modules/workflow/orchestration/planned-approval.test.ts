@@ -28,6 +28,7 @@ function makeTools(db: DatabaseSync, options: { getTaskReviewLeaders: (...args: 
   const notifyCeo = vi.fn();
   const beginMeetingMinutes = vi.fn(() => "meeting-1");
   const appendTaskLog = vi.fn();
+  const sendAgentMessage = vi.fn();
   const tools = createPlannedApprovalTools({
     reviewInFlight,
     reviewRoundState,
@@ -45,7 +46,7 @@ function makeTools(db: DatabaseSync, options: { getTaskReviewLeaders: (...args: 
     getAgentDisplayName: (agent: { name: string }) => agent.name,
     getDeptName: () => "Planning",
     getRoleLabel: () => "Team Leader",
-    sendAgentMessage: vi.fn(),
+    sendAgentMessage,
     emitMeetingSpeech: vi.fn(),
     appendMeetingMinuteEntry: vi.fn(),
     callLeadersToCeoOffice: vi.fn(),
@@ -63,7 +64,17 @@ function makeTools(db: DatabaseSync, options: { getTaskReviewLeaders: (...args: 
     reviewMeetingOneShotTimeoutMs: 100,
   } as never);
 
-  return { db, tools, onApproved, notifyCeo, beginMeetingMinutes, appendTaskLog, reviewInFlight, reviewRoundState };
+  return {
+    db,
+    tools,
+    onApproved,
+    notifyCeo,
+    beginMeetingMinutes,
+    appendTaskLog,
+    sendAgentMessage,
+    reviewInFlight,
+    reviewRoundState,
+  };
 }
 
 describe("planned approval gating", () => {
@@ -157,5 +168,94 @@ describe("planned approval gating", () => {
     );
     expect(onApproved).not.toHaveBeenCalled();
     expect(beginMeetingMinutes).not.toHaveBeenCalled();
+  });
+
+  it("publishes planned feedback from each selected department to the shared room", async () => {
+    db = createMemoryDb();
+    db.prepare(`INSERT INTO tasks (id, description, project_path, workflow_pack_key) VALUES (?, ?, ?, ?)`).run(
+      "task-public",
+      "Build a clean calculator",
+      "/repo",
+      "development",
+    );
+
+    const leaders = [
+      {
+        id: "pmo-lead",
+        name: "PMO",
+        role: "team_leader",
+        department_id: "pmo",
+        status: "idle",
+        workflow_profile: "{}",
+        family: "orchestrator",
+        career_stage: "team-lead",
+        authority_level: 7,
+      },
+      {
+        id: "dev-lead",
+        name: "Dev",
+        role: "team_leader",
+        department_id: "development",
+        status: "idle",
+        workflow_profile: "{}",
+        family: "backend",
+        career_stage: "team-lead",
+        authority_level: 5,
+      },
+      {
+        id: "qa-lead",
+        name: "QA",
+        role: "team_leader",
+        department_id: "qa",
+        status: "idle",
+        workflow_profile: "{}",
+        family: "qa",
+        career_stage: "team-lead",
+        authority_level: 5,
+      },
+    ];
+    const getTaskReviewLeaders = vi.fn(() => leaders);
+    const { tools, onApproved, sendAgentMessage, appendTaskLog } = makeTools(db, { getTaskReviewLeaders });
+
+    tools.startPlannedApprovalMeeting("task-public", "계산 기능을 깔끔하게 만들어봐", "planning", onApproved);
+    for (let i = 0; i < 8; i += 1) await flush();
+
+    expect(getTaskReviewLeaders).toHaveBeenCalledWith(
+      "task-public",
+      "planning",
+      expect.objectContaining({
+        minLeaders: 5,
+        includePlanning: true,
+        fallbackAll: true,
+        requiredDepartmentIds: expect.arrayContaining(["development", "ui-ux", "qa", "knowledge-docs"]),
+      }),
+    );
+    expect(sendAgentMessage).toHaveBeenCalledWith(
+      leaders[1],
+      "ok",
+      "chat",
+      "all",
+      null,
+      "task-public",
+    );
+    expect(sendAgentMessage).toHaveBeenCalledWith(
+      leaders[2],
+      "ok",
+      "chat",
+      "all",
+      null,
+      "task-public",
+    );
+    expect(appendTaskLog).toHaveBeenCalledWith(
+      "task-public",
+      "system",
+      expect.stringContaining("meeting_public_feedback phase=planned source=feedback department_id=development"),
+    );
+    expect(appendTaskLog).toHaveBeenCalledWith(
+      "task-public",
+      "system",
+      expect.stringContaining("meeting_public_feedback phase=planned source=feedback department_id=qa"),
+    );
+    expect(onApproved).toHaveBeenCalled();
   });
 });

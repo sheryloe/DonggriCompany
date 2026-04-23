@@ -23,6 +23,8 @@ import {
 
 type DirectiveAndInboxRouteCtx = Pick<RuntimeContext, "app" | "db" | "broadcast">;
 
+const DIRECTIVE_CHAIR_DEPARTMENT_IDS = ["pmo", "planning-architecture", "planning"] as const;
+
 type DirectiveAndInboxRouteDeps = {
   IdempotencyConflictError: RuntimeContext["IdempotencyConflictError"];
   StorageBusyError: RuntimeContext["StorageBusyError"];
@@ -65,9 +67,9 @@ function detectLangForResetAck(text: string): "ko" | "en" | "ja" | "zh" {
 
 function buildSessionResetAck(text: string): string {
   const lang = detectLangForResetAck(text);
-  if (lang === "ko") return "?? ?? ??? ???????. ? ??? ?????.";
-  if (lang === "ja") return "???????????????????????????????";
-  if (lang === "zh") return "????????????????";
+  if (lang === "ko") return "현재 대화 세션을 초기화했습니다. 새 대화를 시작합니다.";
+  if (lang === "ja") return "Current conversation session was reset. Starting a new chat.";
+  if (lang === "zh") return "Current conversation session was reset. Starting a new chat.";
   return "Current conversation session was reset. Starting a new chat.";
 }
 
@@ -286,6 +288,9 @@ export function registerDirectiveAndInboxRoutes(
     const scopedLeader = findTeamLeader(departmentId, scopedCandidateAgentIds);
     if (scopedLeader) return scopedLeader;
     if (Array.isArray(scopedCandidateAgentIds)) {
+      if (scopedCandidateAgentIds.length <= 0) {
+        return findTeamLeader(departmentId);
+      }
       // In manual projects, a selected member may exist without selecting the team leader.
       // Allow only the department leader as a coordinator fallback for that exact department.
       if (isManualProject(projectId) && hasScopedDepartmentMember(departmentId, scopedCandidateAgentIds)) {
@@ -644,7 +649,7 @@ export function registerDirectiveAndInboxRoutes(
     };
     const directiveLeaderScopeByDept = new Map<string, string[] | null>();
     const getDirectiveLeaderScope = (deptId: string): string[] | null => {
-      const normalizedDeptId = normalizeTextField(deptId) ?? "planning";
+      const normalizedDeptId = normalizeTextField(deptId) ?? "pmo";
       if (!directiveLeaderScopeByDept.has(normalizedDeptId)) {
         directiveLeaderScopeByDept.set(
           normalizedDeptId,
@@ -655,16 +660,15 @@ export function registerDirectiveAndInboxRoutes(
     };
 
     if (shouldDelegate) {
-      // 4. Auto-delegate to planning team leader
-      const planningLeader = findDirectiveLeader(
-        "planning",
-        resolvedExplicitProject.projectId ?? null,
-        getDirectiveLeaderScope("planning"),
-      );
-      if (planningLeader) {
+      // 4. Auto-delegate to PMO chair, with legacy planning fallback.
+      const chairLeader = DIRECTIVE_CHAIR_DEPARTMENT_IDS.map((deptId) =>
+        findTeamLeader(deptId) ??
+        findDirectiveLeader(deptId, resolvedExplicitProject.projectId ?? null, getDirectiveLeaderScope(deptId)),
+      ).find((leader): leader is AgentRow => Boolean(leader));
+      if (chairLeader) {
         const delegationDelay = 3000 + Math.random() * 2000;
         setTimeout(() => {
-          handleTaskDelegation(planningLeader, content, "", delegationOptions);
+          handleTaskDelegation(chairLeader, content, "", delegationOptions);
         }, delegationDelay);
       }
 
@@ -673,7 +677,7 @@ export function registerDirectiveAndInboxRoutes(
       if (mentions.deptIds.length > 0 || mentions.agentIds.length > 0) {
         const mentionDelay = 5000 + Math.random() * 2000;
         setTimeout(() => {
-          const processedDepts = new Set<string>(["planning"]);
+          const processedDepts = new Set<string>(DIRECTIVE_CHAIR_DEPARTMENT_IDS);
 
           for (const deptId of mentions.deptIds) {
             if (processedDepts.has(deptId)) continue;
@@ -1122,7 +1126,7 @@ export function registerDirectiveAndInboxRoutes(
     const directiveLeaderScopeByDept = new Map<string, string[] | null>();
     const getDirectiveLeaderScope = (deptId: string): string[] | null => {
       if (!(shouldDelegateDirective || isDirective)) return null;
-      const normalizedDeptId = normalizeTextField(deptId) ?? "planning";
+      const normalizedDeptId = normalizeTextField(deptId) ?? "pmo";
       if (!directiveLeaderScopeByDept.has(normalizedDeptId)) {
         directiveLeaderScopeByDept.set(
           normalizedDeptId,
@@ -1133,16 +1137,15 @@ export function registerDirectiveAndInboxRoutes(
     };
 
     if (shouldDelegateDirective) {
-      // Auto-delegate to planning team leader
-      const planningLeader = findDirectiveLeader(
-        "planning",
-        resolvedInboxProject.projectId ?? null,
-        getDirectiveLeaderScope("planning"),
-      );
-      if (planningLeader) {
+      // Auto-delegate to PMO chair, with legacy planning fallback.
+      const chairLeader = DIRECTIVE_CHAIR_DEPARTMENT_IDS.map((deptId) =>
+        findTeamLeader(deptId) ??
+        findDirectiveLeader(deptId, resolvedInboxProject.projectId ?? null, getDirectiveLeaderScope(deptId)),
+      ).find((leader): leader is AgentRow => Boolean(leader));
+      if (chairLeader) {
         const delegationDelay = 3000 + Math.random() * 2000;
         setTimeout(() => {
-          handleTaskDelegation(planningLeader, content, "", directiveDelegationOptions);
+          handleTaskDelegation(chairLeader, content, "", directiveDelegationOptions);
         }, delegationDelay);
       }
     }
@@ -1153,7 +1156,7 @@ export function registerDirectiveAndInboxRoutes(
     if (shouldHandleMentions && (mentions.deptIds.length > 0 || mentions.agentIds.length > 0)) {
       const mentionDelay = 5000 + Math.random() * 2000;
       setTimeout(() => {
-        const processedDepts = new Set<string>(isDirective ? ["planning"] : []);
+        const processedDepts = new Set<string>(isDirective ? DIRECTIVE_CHAIR_DEPARTMENT_IDS : []);
 
         for (const deptId of mentions.deptIds) {
           if (processedDepts.has(deptId)) continue;

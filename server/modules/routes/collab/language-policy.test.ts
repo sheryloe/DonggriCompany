@@ -23,6 +23,68 @@ function setupDb(): DatabaseSync {
 }
 
 describe("language-policy detectTargetDepartments", () => {
+  it("settings.language가 en이어도 한글 directive는 한국어로 응답한다", () => {
+    const db = setupDb();
+    try {
+      db.prepare("INSERT INTO settings (key, value) VALUES ('language', '\"en\"')").run();
+
+      const { resolveLang } = initializeCollabLanguagePolicy({ db });
+
+      expect(resolveLang("기본적인 계산이 깔끔하게 만들어봐")).toBe("ko");
+      expect(resolveLang("hello")).toBe("en");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("settings.language가 ko이면 영어 입력도 사용자 노출 언어를 한국어로 유지한다", () => {
+    const db = setupDb();
+    try {
+      db.prepare("INSERT INTO settings (key, value) VALUES ('language', '\"ko\"')").run();
+
+      const { getPreferredLanguage, resolveLang } = initializeCollabLanguagePolicy({ db });
+
+      expect(getPreferredLanguage()).toBe("ko");
+      expect(resolveLang("hello")).toBe("ko");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("짧은 한글 생성 요청도 delegation 대상으로 판단한다", () => {
+    const db = setupDb();
+    try {
+      db.prepare("INSERT INTO settings (key, value) VALUES ('language', '\"ko\"')").run();
+
+      const { analyzeDirectivePolicy, shouldExecuteDirectiveDelegation } = initializeCollabLanguagePolicy({ db });
+
+      expect(shouldExecuteDirectiveDelegation("기본적인 계산이 깔끔하게 만들어봐")).toBe(true);
+      expect(analyzeDirectivePolicy("기본적인 계산이 깔끔하게 만들어봐")).toMatchObject({
+        skipDelegation: false,
+        skipDelegationReason: null,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("짧은 인사 directive는 delegation을 생략한다", () => {
+    const db = setupDb();
+    try {
+      db.prepare("INSERT INTO settings (key, value) VALUES ('language', '\"ko\"')").run();
+
+      const { analyzeDirectivePolicy, shouldExecuteDirectiveDelegation } = initializeCollabLanguagePolicy({ db });
+
+      expect(shouldExecuteDirectiveDelegation("안녕")).toBe(false);
+      expect(analyzeDirectivePolicy("안녕")).toMatchObject({
+        skipDelegation: true,
+        skipDelegationReason: "no_task",
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it("한글 부서명/별칭으로 대상 부서를 감지한다", () => {
     const db = setupDb();
     try {

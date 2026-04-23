@@ -8,6 +8,7 @@ import {
   type MessengerChannel,
 } from "../../gateway/client.ts";
 import { isMessengerChannel } from "../../messenger/channels.ts";
+import { decryptMessengerTokenForRuntime } from "../../messenger/token-crypto.ts";
 
 import { createAnnouncementReplyScheduler } from "./collab/announcement-response.ts";
 import { createChatReplyGenerator } from "./collab/chat-response.ts";
@@ -208,6 +209,81 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     return mapLegacyDepartmentId(raw) ?? raw;
   }
 
+  function readSingleGroupTelegramRouteFromSettings(): {
+    channel: "telegram";
+    targetId: string;
+    sessionKey: string;
+    token: string;
+  } | null {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'messengerChannels' LIMIT 1").get() as
+      | { value?: unknown }
+      | undefined;
+    const raw = typeof row?.value === "string" ? row.value.trim() : "";
+    if (!raw) return null;
+
+    try {
+      const root = JSON.parse(raw) as {
+        telegram?: {
+          token?: string;
+          sessions?: Array<{
+            id?: string;
+            targetId?: string;
+            enabled?: boolean;
+            token?: string;
+            agentId?: string;
+            workflowPackKey?: string;
+            departmentId?: string;
+            department_id?: string;
+          }>;
+        };
+      };
+      const telegram = root.telegram;
+      if (!telegram || typeof telegram !== "object") return null;
+      const sessions = Array.isArray(telegram.sessions) ? telegram.sessions : [];
+      const preferred =
+        sessions.find((session) => String(session.id ?? "").trim().toLowerCase() === "global") ??
+        sessions.find(
+          (session) =>
+            session.enabled !== false &&
+            !String(session.agentId ?? "").trim() &&
+            !String(session.workflowPackKey ?? "").trim() &&
+            !String(session.departmentId ?? session.department_id ?? "").trim(),
+        ) ??
+        sessions.find((session) => session.enabled !== false) ??
+        sessions[0] ??
+        null;
+      const targetId = String(preferred?.targetId ?? "").trim();
+      if (!targetId) return null;
+      const rawToken = String(preferred?.token ?? telegram.token ?? "").trim();
+      const token = rawToken ? decryptMessengerTokenForRuntime("telegram", rawToken) : "";
+      if (!token) return null;
+      return {
+        channel: "telegram",
+        targetId,
+        sessionKey: "telegram:global",
+        token,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async function sendTelegramMessageWithToken(token: string, chatId: string, text: string): Promise<void> {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: true,
+      }),
+    });
+    const payload = (await response.json().catch(() => null)) as { ok?: boolean; description?: string } | null;
+    if (!response.ok || payload?.ok === false) {
+      throw new Error(payload?.description || `telegram send failed (${response.status})`);
+    }
+  }
+
   function resolveSingleGroupTaskMessengerRoute(
     taskId: string,
     fallbackRoute: { channel: MessengerChannel; targetId: string; sessionKey?: string } | null,
@@ -215,6 +291,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     channel: MessengerChannel;
     targetId: string;
     sessionKey?: string;
+    token?: string;
     routeKind: "single_group_department_tag";
     routingReason: "global_group";
     departmentId: string;
@@ -237,6 +314,18 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
           String(session.sessionKey ?? "").trim().toLowerCase() === "telegram:global" &&
           String(session.targetId ?? "").trim().length > 0,
       ) ??
+      sessions.find((session) => {
+        const sessionKey = String(session.sessionKey ?? "").trim().toLowerCase();
+        const departmentId = String((session as Record<string, unknown>).departmentId ?? "")
+          .trim()
+          .toLowerCase();
+        return (
+          session.enabled &&
+          session.channel === "telegram" &&
+          (sessionKey.includes("global") || departmentId === "all") &&
+          String(session.targetId ?? "").trim().length > 0
+        );
+      }) ??
       sessions.find(
         (session) =>
           session.enabled &&
@@ -249,6 +338,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
           session.enabled && session.channel === "telegram" && String(session.targetId ?? "").trim().length > 0,
       ) ??
       null;
+    const settingsRoute = telegramSession ? null : readSingleGroupTelegramRouteFromSettings();
 
     const candidateRoute = telegramSession
       ? {
@@ -256,6 +346,8 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
           targetId: String(telegramSession.targetId ?? "").trim(),
           sessionKey: String(telegramSession.sessionKey ?? "").trim() || undefined,
         }
+      : settingsRoute
+        ? settingsRoute
       : fallbackRoute && fallbackRoute.channel === "telegram" && fallbackRoute.targetId
         ? fallbackRoute
         : null;
@@ -481,7 +573,9 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     try {
       const chunks = splitMessageByLimit(taggedContent, getMessengerChunkLimit(relayRoute.channel));
       for (const chunk of chunks) {
-        if (relayRoute.sessionKey) {
+        if (relayRoute.channel === "telegram" && relayRoute.token) {
+          await sendTelegramMessageWithToken(relayRoute.token, relayRoute.targetId, chunk);
+        } else if (relayRoute.sessionKey) {
           await sendMessengerSessionMessage(relayRoute.sessionKey, chunk);
         } else {
           await sendMessengerMessage({

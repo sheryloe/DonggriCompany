@@ -8,6 +8,7 @@ import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
 import { previewCanonicalRouting } from "../../../company/canonical-policy.ts";
+import { evaluateExecutionPathGate } from "../../../workflow/core/execution-path-gate.ts";
 
 export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
   const {
@@ -169,7 +170,22 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
     });
     const taskLang = resolveLang(task.description ?? task.title);
 
-    const projectPath = task.project_path || process.cwd();
+    const pathGate = evaluateExecutionPathGate({
+      db: db as any,
+      task: {
+        project_id: task.project_id,
+        project_path: task.project_path,
+      },
+    });
+    if (!pathGate.ok) {
+      appendTaskLog(taskId, "system", `execution_blocked ${pathGate.error}`);
+      appendTaskLog(taskId, "error", `Execution blocked (${pathGate.error}): ${pathGate.message}`);
+      return res.status(pathGate.statusCode).json({
+        error: pathGate.error,
+        message: pathGate.message,
+      });
+    }
+    const projectPath = pathGate.projectPath;
     const worktreePath = createWorktree(projectPath, taskId, agent.name);
     if (!worktreePath) {
       appendTaskLog(
@@ -178,8 +194,8 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
         `Execution blocked: isolated worktree creation failed for project path '${projectPath}'`,
       );
       return res.status(409).json({
-        error: "worktree_required",
-        message: "Isolated worktree creation failed. Task execution was blocked to protect the project root.",
+        error: "git_repo_required",
+        message: "Git repository is required for isolated worktree execution.",
       });
     }
     const agentCwd = worktreePath;

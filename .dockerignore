@@ -8,6 +8,11 @@
 .climpire
 .climpire-worktrees
 .local
+.agents
+.claude
+.codex-home
+.codex-local
+.codex-state
 node_modules
 data
 logs
@@ -16,6 +21,7 @@ playwright-report
 reports
 test-results
 tests
+tasks
 
 # Dev-only assets not copied by Dockerfile
 deploy
@@ -31,6 +37,10 @@ dist
 .tmp
 .tmp*
 *.tsbuildinfo
+cache
+tmp
+temp
+*.tmp
 
 # OS/editor noise
 .DS_Store
@@ -40,4 +50,5 @@ dist
 # Local db/log secrets
 *.sqlite
 *.sqlite-*
+*.sqlite-journal
 *.log

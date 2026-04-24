@@ -26,7 +26,7 @@
 - Applied Rule: junior -> senior @xp>=300, team_leader manual only
 
 ## Latest Snapshot
-- 2026-04-23T12:37:32.006Z | tasks_done=1 | xp=10 | role=junior
+- 2026-04-24T02:10:26.598Z | tasks_done=1 | xp=10 | role=junior
 
 ## Workflow Profile
 - Raw: (none)

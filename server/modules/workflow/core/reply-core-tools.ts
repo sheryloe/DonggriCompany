@@ -172,64 +172,63 @@ export function createReplyCoreTools(deps: CreateReplyCoreToolsDeps) {
     const deptId = String(agent?.department_id ?? "").trim().toLowerCase();
     const isKo = lang === "ko";
     const koFeedbackByDept: Record<string, string> = {
-      pmo: "PMO 관점에서는 목표, 담당 부서, 일정 기준을 명확히 정리하겠습니다.",
-      "planning-architecture": "기획/설계 관점에서는 범위, 산출물 기준, 의사결정 항목을 먼저 정리하겠습니다.",
-      planning: "기획 관점에서는 범위, 산출물 기준, 의사결정 항목을 먼저 정리하겠습니다.",
-      development: "개발 관점에서는 계산 로직, 입력 검증, UI 연결을 우선 확인하겠습니다.",
-      dev: "개발 관점에서는 계산 로직, 입력 검증, UI 연결을 우선 확인하겠습니다.",
-      "ui-ux": "UI/UX 관점에서는 입력 흐름, 버튼 배치, 오류 피드백을 확인하겠습니다.",
-      design: "UI/UX 관점에서는 입력 흐름, 버튼 배치, 오류 피드백을 확인하겠습니다.",
-      qa: "QA 관점에서는 사칙연산, 예외 입력, 회귀 테스트 기준을 먼저 잡겠습니다.",
-      "knowledge-docs": "문서 관점에서는 결정 사항, 검증 기준, 최종 보고 항목을 남기겠습니다.",
-      operations: "운영 관점에서는 실행 경로, 상태 보고, 장애 시 재시도 기준을 점검하겠습니다.",
-      management: "관리 관점에서는 진행 상태, 담당자, 보고 누락 여부를 점검하겠습니다.",
-      "cicd-repo": "CI/CD 관점에서는 브랜치, 병합, 빌드 검증 흐름을 확인하겠습니다.",
-      devsecops: "CI/CD와 보안 관점에서는 브랜치, 병합, 빌드 검증 흐름을 확인하겠습니다.",
-      "security-approval": "보안/승인 관점에서는 권한, 외부 연동, 배포 차단 조건을 확인하겠습니다.",
-      "api-research": "API 리서치 관점에서는 필요한 외부 정보와 무료 토큰 범위를 확인하겠습니다.",
-      bloggent: "블로그 운영 관점에서는 결과 요약과 콘텐츠 전환 가능성을 확인하겠습니다.",
+      pmo: "PMO는 요구사항을 실행 작업으로 쪼개 담당 부서와 순서를 지정하겠습니다. 산출물은 SubTask 목록과 완료 기준표입니다.",
+      "planning-architecture": "기획/설계는 계산기 범위를 사칙연산, 입력 오류, 결과 표시로 확정하겠습니다. 산출물은 요구사항, 화면 흐름, 예외 규칙입니다.",
+      planning: "기획은 계산기 범위를 사칙연산, 입력 오류, 결과 표시로 확정하겠습니다. 산출물은 요구사항, 화면 흐름, 예외 규칙입니다.",
+      development: "개발은 숫자 입력 파서와 사칙연산 함수를 분리 구현하고 버튼 클릭에 연결하겠습니다. 산출물은 계산 모듈, UI 연결 코드, 기본 단위 테스트입니다.",
+      dev: "개발은 숫자 입력 파서와 사칙연산 함수를 분리 구현하고 버튼 클릭에 연결하겠습니다. 산출물은 계산 모듈, UI 연결 코드, 기본 단위 테스트입니다.",
+      "ui-ux": "UI/UX는 숫자 입력창, 연산 버튼, 결과 영역을 한 화면 흐름으로 배치하겠습니다. 산출물은 레이아웃 기준과 상태별 오류 문구입니다.",
+      design: "UI/UX는 숫자 입력창, 연산 버튼, 결과 영역을 한 화면 흐름으로 배치하겠습니다. 산출물은 레이아웃 기준과 상태별 오류 문구입니다.",
+      qa: "QA는 정상 계산, 0으로 나누기, 빈 입력, 연속 연산 케이스를 표로 만들고 검증하겠습니다. 산출물은 테스트 체크리스트와 회귀 결과입니다.",
+      "knowledge-docs": "문서는 결정 사항과 테스트 기준을 한 페이지로 정리하고 최종 보고에 포함하겠습니다. 산출물은 결정 로그와 완료 보고 초안입니다.",
+      operations: "운영은 실행 경로와 실패 시 재시도 절차를 확인하겠습니다. 산출물은 실행 절차와 장애 대응 메모입니다.",
+      management: "관리는 담당자, 진행 상태, 보고 누락 여부를 주기적으로 확인하겠습니다. 산출물은 상태표와 리스크 메모입니다.",
+      "cicd-repo": "CI/CD는 작업 브랜치, 빌드 명령, 병합 기준을 고정하고 통과 여부를 확인하겠습니다. 산출물은 검증 로그와 병합 준비 체크입니다.",
+      devsecops: "CI/CD와 보안은 작업 브랜치, 빌드 명령, 병합 기준, 보안 차단 조건을 확인하겠습니다. 산출물은 검증 로그와 승인 체크입니다.",
+      "security-approval": "보안/승인은 외부 전송, 토큰, 권한 변경이 없는지 확인하겠습니다. 산출물은 승인/차단 체크 결과입니다.",
+      "api-research": "API 리서치는 외부 API 필요 여부와 무료 토큰 사용 범위를 확인하겠습니다. 산출물은 사용 판단과 제한 조건입니다.",
+      bloggent: "블로그는 완성 결과를 사용자 설명 글로 전환할 수 있게 핵심 기능과 사용 예시를 정리하겠습니다. 산출물은 게시글 초안 소재입니다.",
     };
     const enFeedbackByDept: Record<string, string> = {
-      pmo: "From PMO, I will clarify goals, owning departments, and schedule criteria.",
-      "planning-architecture": "From planning and architecture, I will clarify scope, deliverables, and decision points.",
-      planning: "From planning, I will clarify scope, deliverables, and decision points.",
-      development: "From development, I will check calculation logic, input validation, and UI wiring first.",
-      dev: "From development, I will check calculation logic, input validation, and UI wiring first.",
-      "ui-ux": "From UI/UX, I will check input flow, button placement, and error feedback.",
-      design: "From UI/UX, I will check input flow, button placement, and error feedback.",
-      qa: "From QA, I will define arithmetic, invalid-input, and regression checks first.",
-      "knowledge-docs": "From documentation, I will capture decisions, validation criteria, and final report items.",
-      operations: "From operations, I will check execution flow, status reporting, and retry criteria.",
-      management: "From management, I will check progress state, ownership, and report gaps.",
-      "cicd-repo": "From CI/CD, I will check branch, merge, and build verification flow.",
-      devsecops: "From CI/CD and security, I will check branch, merge, and build verification flow.",
-      "security-approval": "From security and approval, I will check permissions, external integrations, and release blocks.",
-      "api-research": "From API research, I will confirm required external information and free-token limits.",
-      bloggent: "From blog operations, I will check summary and content conversion opportunities.",
+      pmo: "PMO will split requirements into executable work, assign owning departments and order. Deliverables: subtask list and acceptance criteria.",
+      "planning-architecture": "Planning/architecture will lock calculator scope to arithmetic, input errors, and result display. Deliverables: requirements, screen flow, exception rules.",
+      planning: "Planning will lock calculator scope to arithmetic, input errors, and result display. Deliverables: requirements, screen flow, exception rules.",
+      development: "Development will separate the numeric parser and arithmetic functions, then wire them to button clicks. Deliverables: calculation module, UI wiring, basic unit tests.",
+      dev: "Development will separate the numeric parser and arithmetic functions, then wire them to button clicks. Deliverables: calculation module, UI wiring, basic unit tests.",
+      "ui-ux": "UI/UX will lay out the input, operation buttons, and result area as one flow. Deliverables: layout rules and state-specific error copy.",
+      design: "UI/UX will lay out the input, operation buttons, and result area as one flow. Deliverables: layout rules and state-specific error copy.",
+      qa: "QA will create and run a matrix for normal arithmetic, divide-by-zero, empty input, and chained operations. Deliverables: test checklist and regression result.",
+      "knowledge-docs": "Docs will capture decisions and test criteria on one page and include them in the final report. Deliverables: decision log and report draft.",
+      operations: "Operations will verify the execution path and retry procedure. Deliverables: run procedure and incident memo.",
+      management: "Management will track owner, progress state, and report gaps. Deliverables: status table and risk memo.",
+      "cicd-repo": "CI/CD will fix the work branch, build command, and merge criteria, then verify pass/fail. Deliverables: verification log and merge-readiness check.",
+      devsecops: "CI/CD and security will check the work branch, build command, merge criteria, and security blocks. Deliverables: verification log and approval check.",
+      "security-approval": "Security/approval will check external transmission, tokens, and permission changes. Deliverables: approve/block result.",
+      "api-research": "API research will decide whether external APIs are needed and confirm free-token limits. Deliverables: usage decision and constraints.",
+      bloggent: "Blog operations will turn the result into user-facing explanation material. Deliverables: post draft material.",
     };
     if (kind === "opening") {
       return isKo
-        ? "킥오프 회의를 시작합니다. 각 부서는 관점별 보완 항목과 다음 액션을 한 줄씩 공유해주세요."
-        : "Kickoff started. Each department should share gaps and next actions from its own perspective.";
+        ? "킥오프를 시작합니다. 각 부서는 대상, 방법, 산출물, 완료 기준을 한 문장으로 공유해 주세요."
+        : "Kickoff started. Each department should share target, method, deliverable, and acceptance criteria in one sentence.";
     }
     if (kind === "feedback") {
       return isKo
-        ? (koFeedbackByDept[deptId] ?? "부서 관점에서 보완 항목과 다음 액션을 정리하겠습니다.")
-        : (enFeedbackByDept[deptId] ?? "From my department, I will clarify gaps and next actions.");
+        ? (koFeedbackByDept[deptId] ?? "담당 부서는 요청 범위를 구체 작업으로 나누고 산출물과 완료 기준을 함께 보고하겠습니다.")
+        : (enFeedbackByDept[deptId] ?? "The department will split its scope into concrete work and report deliverables with acceptance criteria.");
     }
     if (kind === "summary") {
       return isKo
-        ? "각 부서 의견을 취합해 실행 가능한 SubTask와 검증 기준으로 정리하겠습니다."
-        : "I will consolidate department feedback into executable subtasks and validation criteria.";
+        ? "각 부서 발언을 담당자, 실행 방법, 산출물, 검증 기준이 포함된 SubTask 목록으로 정리하겠습니다."
+        : "I will consolidate department feedback into subtasks with owner, method, deliverable, and validation criteria.";
     }
     if (kind === "approval") {
       return isKo
-        ? (koFeedbackByDept[deptId] ?? "회의 결론에 따라 담당 액션을 진행하겠습니다.")
-        : (enFeedbackByDept[deptId] ?? "I will proceed with the assigned action from the meeting conclusion.");
+        ? (koFeedbackByDept[deptId] ?? "회의 결론에 따라 담당 작업을 산출물 기준으로 실행하겠습니다.")
+        : (enFeedbackByDept[deptId] ?? "I will execute the assigned work with deliverable-based acceptance criteria.");
     }
-    return isKo ? "확인했습니다. 요청 방향에 맞춰 진행하겠습니다." : "Acknowledged. Proceeding with the requested direction.";
+    return isKo ? "확인했습니다. 요청 범위를 작업, 산출물, 검증 기준으로 나눠 진행하겠습니다." : "Acknowledged. I will proceed by splitting the request into work, deliverables, and validation criteria.";
   }
-
   function fallbackTurnReply(kind: ReplyKind, lang: string, agent?: AgentRow): string {
     const name = agent ? getAgentDisplayName(agent, lang) : "";
     const body = departmentFallbackBody(kind, lang, agent);
@@ -293,47 +292,47 @@ export function createReplyCoreTools(deps: CreateReplyCoreToolsDeps) {
   }
 
   function buildRunFailureReply(kind: RunFailureKind, lang: string, agent?: AgentRow, detail = ""): string {
+    const detailSuffixKo = detail ? ` 세부 정보: ${detail}` : "";
+    const detailSuffixEn = detail ? ` Detail: ${detail}` : "";
     if (kind === "permission") {
       return buildAgentReplyText(lang, agent, {
-        ko: "파일 접근 권한 문제로 작업이 차단되었습니다. 프로젝트 디렉터리 설정을 확인해주세요.",
-        en: "The requested operation was blocked by a file-access permission. Please check the project directory settings.",
-        ja: "The requested operation was blocked by a file-access permission. Please check the project directory settings.",
-        zh: "The requested operation was blocked by a file-access permission. Please check the project directory settings.",
+        ko: `파일 접근 권한 문제로 작업이 차단되었습니다. 프로젝트 디렉터리 설정을 확인해 주세요.${detailSuffixKo}`,
+        en: `The requested operation was blocked by file-access permissions. Please check the project directory settings.${detailSuffixEn}`,
+        ja: `The requested operation was blocked by file-access permissions. Please check the project directory settings.${detailSuffixEn}`,
+        zh: `The requested operation was blocked by file-access permissions. Please check the project directory settings.${detailSuffixEn}`,
       });
     }
     if (kind === "stale_file") {
       return buildAgentReplyText(lang, agent, {
-        ko: "파일을 읽은 뒤 내용이 변경되어 작업을 중단했습니다. 파일을 다시 읽고 재시도해주세요.",
-        en: "The file changed after it was read, so the operation was stopped. Please re-read the file and retry.",
-        ja: "The file changed after it was read, so the operation was stopped. Please re-read the file and retry.",
-        zh: "The file changed after it was read, so the operation was stopped. Please re-read the file and retry.",
+        ko: `파일을 읽은 뒤 내용이 바뀌어 작업을 중단했습니다. 최신 파일 기준으로 다시 시도해 주세요.${detailSuffixKo}`,
+        en: `The file changed after it was read, so the operation was stopped. Please re-read the file and retry.${detailSuffixEn}`,
+        ja: `The file changed after it was read, so the operation was stopped. Please re-read the file and retry.${detailSuffixEn}`,
+        zh: `The file changed after it was read, so the operation was stopped. Please re-read the file and retry.${detailSuffixEn}`,
       });
     }
     if (kind === "tool_calls_only") {
       return buildAgentReplyText(lang, agent, {
-        ko: "도구 호출 단계에서 종료되어 최종 응답이 생성되지 않았습니다. 다시 시도해주세요.",
-        en: "The run ended at tool-calls without producing a final reply. Please retry.",
-        ja: "The run ended at tool-calls without producing a final reply. Please retry.",
-        zh: "The run ended at tool-calls without producing a final reply. Please retry.",
+        ko: `도구 호출 단계에서 종료되어 최종 응답이 생성되지 않았습니다. 같은 지시를 다시 실행해 주세요.${detailSuffixKo}`,
+        en: `The run ended at tool-calls without producing a final reply. Please retry.${detailSuffixEn}`,
+        ja: `The run ended at tool-calls without producing a final reply. Please retry.${detailSuffixEn}`,
+        zh: `The run ended at tool-calls without producing a final reply. Please retry.${detailSuffixEn}`,
       });
     }
     if (kind === "timeout") {
       return buildAgentReplyText(lang, agent, {
-        ko: "응답 생성 시간이 초과되어 작업을 중단했습니다. 잠시 후 다시 시도해주세요.",
-        en: "Response generation timed out, so the run was stopped. Please try again shortly.",
-        ja: "Response generation timed out, so the run was stopped. Please try again shortly.",
-        zh: "Response generation timed out, so the run was stopped. Please try again shortly.",
+        ko: `응답 생성 시간이 초과되었습니다. 해당 부서는 자동 fallback 기준으로 산출물과 검증 기준을 정리하겠습니다.${detailSuffixKo}`,
+        en: `The reply timed out. The department will use fallback planning output with deliverables and validation criteria.${detailSuffixEn}`,
+        ja: `The reply timed out. The department will use fallback planning output with deliverables and validation criteria.${detailSuffixEn}`,
+        zh: `The reply timed out. The department will use fallback planning output with deliverables and validation criteria.${detailSuffixEn}`,
       });
     }
-    const suffix = detail ? ` (${detail})` : "";
     return buildAgentReplyText(lang, agent, {
-      ko: `CLI 실행 중 오류가 발생했습니다${suffix}.`,
-      en: `CLI execution failed${suffix}.`,
-      ja: `CLI execution failed${suffix}.`,
-      zh: `CLI execution failed${suffix}.`,
+      ko: `응답 생성 중 오류가 발생했습니다. 요청 범위를 작업, 산출물, 검증 기준으로 나눠 다시 정리하겠습니다.${detailSuffixKo}`,
+      en: `An error occurred while generating the reply. I will restate the request as work, deliverables, and validation criteria.${detailSuffixEn}`,
+      ja: `An error occurred while generating the reply. I will restate the request as work, deliverables, and validation criteria.${detailSuffixEn}`,
+      zh: `An error occurred while generating the reply. I will restate the request as work, deliverables, and validation criteria.${detailSuffixEn}`,
     });
   }
-
   function chooseSafeReply(run: OneShotRunResult, lang: string, kind: ReplyKind, agent?: AgentRow): string {
     const maxReplyChars = kind === "direct" ? 12000 : 2000;
     const rawText = run.text || "";

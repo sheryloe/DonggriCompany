@@ -10,6 +10,7 @@ import { buildWorkflowPackExecutionGuidance } from "../../../workflow/packs/exec
 import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-artifact.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/core/video-skill-bootstrap.ts";
 import { previewCanonicalRouting } from "../../../company/canonical-policy.ts";
+import { evaluateExecutionPathGate } from "../../../workflow/core/execution-path-gate.ts";
 import {
   buildInterruptPromptBlock,
   consumeInterruptPrompts,
@@ -308,7 +309,29 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
     const interruptPromptBlock = buildInterruptPromptBlock(pendingInterruptPrompts);
 
     const requestedProjectPath = normalizeTextField(req.body?.project_path);
-    const projectPath = requestedProjectPath || resolveProjectPath(task) || process.cwd();
+    if (!task.project_path && !task.project_id) {
+      const legacyResolvedPath = resolveProjectPath(task);
+      if (legacyResolvedPath) {
+        appendTaskLog(id, "system", "compat_warning resolveProjectPath_fallback_ignored");
+      }
+    }
+    const pathGate = evaluateExecutionPathGate({
+      db: db as any,
+      task: {
+        project_id: task.project_id,
+        project_path: task.project_path,
+      },
+      requestedProjectPath,
+    });
+    if (!pathGate.ok) {
+      appendTaskLog(id, "system", `execution_blocked ${pathGate.error}`);
+      appendTaskLog(id, "error", `Execution blocked (${pathGate.error}): ${pathGate.message}`);
+      return res.status(pathGate.statusCode).json({
+        error: pathGate.error,
+        message: pathGate.message,
+      });
+    }
+    const projectPath = pathGate.projectPath;
     const logPath = path.join(logsDir, `${id}.log`);
 
     const worktreePath = createWorktree(projectPath, id, agent.name);
@@ -319,8 +342,8 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
         `Execution blocked: isolated worktree creation failed for project path '${projectPath}'`,
       );
       return res.status(409).json({
-        error: "worktree_required",
-        message: "Isolated worktree creation failed. Task execution was blocked to protect the project root.",
+        error: "git_repo_required",
+        message: "Git repository is required for isolated worktree execution.",
       });
     }
     const agentCwd = worktreePath;

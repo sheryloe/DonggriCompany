@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -80,7 +80,7 @@ describe("gateway client", () => {
       OPENCLAW_CONFIG: undefined,
     });
 
-    gateway.notifyTaskStatus("task-1", "?뚯뒪???묒뾽", "in_progress", "ko");
+    gateway.notifyTaskStatus("task-1", "테스트 작업", "in_progress", "ko");
     await flushAsyncWork();
 
     expect(fetchMock).toHaveBeenCalledTimes(4);

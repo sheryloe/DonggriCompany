@@ -131,6 +131,38 @@ function createHarness(): { db: DatabaseSync; routes: Map<string, RouteHandler> 
   return { db, routes };
 }
 
+const generatedUnassignedGuideNames = [
+  "Codex_Main_Agent",
+  "Codex_Planner",
+  "Codex_Planner_agent1",
+  "Compatibility_Legacy_Agent",
+  "Compatibility_Workflow_Role_Agent",
+  "Gemini_Agent",
+  "Invalid_Role_Agent",
+  "Jules_Agent",
+  "Lead_B",
+  "Legacy_Intern",
+  "Legacy_Role_Agent",
+  "Legacy_Workflow_Role_Agent",
+  "Planner",
+  "Profiled_Agent",
+  "Role_Compatibility_Agent",
+];
+
+function cleanupGeneratedUnassignedGuides(): void {
+  const unassignedRoot = path.join(process.cwd(), "agents", "unassigned");
+  for (const guideName of generatedUnassignedGuideNames) {
+    fs.rmSync(path.join(unassignedRoot, guideName), { recursive: true, force: true });
+  }
+  try {
+    if (fs.existsSync(unassignedRoot) && fs.readdirSync(unassignedRoot).length === 0) {
+      fs.rmSync(unassignedRoot, { recursive: true, force: true });
+    }
+  } catch {
+    // Best-effort cleanup only; test assertions do not depend on guide filesystem state.
+  }
+}
+
 describe("agent CRUD seed filter", () => {
   const previousGuideRoot = process.env.AGENT_GUIDE_ROOT;
   let tempGuideRoot: string | null = null;
@@ -141,6 +173,7 @@ describe("agent CRUD seed filter", () => {
   });
 
   afterEach(() => {
+    cleanupGeneratedUnassignedGuides();
     if (tempGuideRoot) {
       fs.rmSync(tempGuideRoot, { recursive: true, force: true });
       tempGuideRoot = null;

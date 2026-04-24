@@ -1,3 +1,7 @@
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyBaseSchema } from "../../../bootstrap/schema/base-schema.ts";
@@ -20,7 +24,8 @@ function pickVariant(value: unknown): string {
   return String(value ?? "");
 }
 
-function seedCollaborationFixture(db: DatabaseSync, provider: ProviderCase["provider"]): SeededAgents {
+function seedCollaborationFixture(db: DatabaseSync, provider: ProviderCase["provider"], projectPath: string): SeededAgents {
+  const safeProjectPath = projectPath.replace(/'/g, "''");
   db.exec(`
     INSERT INTO departments (id, name, name_ko, icon, color, sort_order)
     VALUES
@@ -28,7 +33,7 @@ function seedCollaborationFixture(db: DatabaseSync, provider: ProviderCase["prov
       ('dev', 'Development', '개발', 'D', '#1d4ed8', 2);
 
     INSERT INTO projects (id, name, project_path, core_goal, default_pack_key, created_at, updated_at)
-    VALUES ('project-1', 'Demo', '/workspace/demo', 'Ship it', 'development', 1, 1);
+    VALUES ('project-1', 'Demo', '${safeProjectPath}', 'Ship it', 'development', 1, 1);
 
     INSERT INTO agents (
       id, name, name_ko, department_id, workflow_pack_key, role, cli_provider,
@@ -52,7 +57,7 @@ function seedCollaborationFixture(db: DatabaseSync, provider: ProviderCase["prov
       1,
       'general',
       'development',
-      '/workspace/demo',
+      '${safeProjectPath}',
       1,
       1
     );
@@ -66,11 +71,16 @@ function seedCollaborationFixture(db: DatabaseSync, provider: ProviderCase["prov
 }
 
 describe("createCrossDeptCooperationTools", () => {
+  const previousAllowedRoots = process.env.PROJECT_PATH_ALLOWED_ROOTS;
   let db: DatabaseSync | null = null;
+  let tempProjectPath: string | null = null;
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.spyOn(Math, "random").mockReturnValue(0);
+    tempProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), "cross-dept-project-"));
+    execFileSync("git", ["init"], { cwd: tempProjectPath, stdio: "ignore" });
+    process.env.PROJECT_PATH_ALLOWED_ROOTS = tempProjectPath;
   });
 
   afterEach(() => {
@@ -78,6 +88,15 @@ describe("createCrossDeptCooperationTools", () => {
     vi.restoreAllMocks();
     db?.close();
     db = null;
+    if (tempProjectPath) {
+      fs.rmSync(tempProjectPath, { recursive: true, force: true });
+      tempProjectPath = null;
+    }
+    if (previousAllowedRoots === undefined) {
+      delete process.env.PROJECT_PATH_ALLOWED_ROOTS;
+    } else {
+      process.env.PROJECT_PATH_ALLOWED_ROOTS = previousAllowedRoots;
+    }
   });
 
   it.each<ProviderCase>([
@@ -89,7 +108,8 @@ describe("createCrossDeptCooperationTools", () => {
     applyBaseSchema(db);
     applyTaskSchemaMigrations(db);
 
-    const { teamLeader, crossLeader, execAgent } = seedCollaborationFixture(db, provider);
+    const projectPath = tempProjectPath ?? "";
+    const { teamLeader, crossLeader, execAgent } = seedCollaborationFixture(db, provider, projectPath);
 
     const launchApiProviderAgent = vi.fn();
     const launchHttpAgent = vi.fn();
@@ -116,8 +136,8 @@ describe("createCrossDeptCooperationTools", () => {
         pickVariant(messages[lang] ?? messages.en ?? messages.ko),
       startTaskExecutionForAgent: vi.fn(),
       linkCrossDeptTaskToParentSubtask: vi.fn(() => null),
-      detectProjectPath: vi.fn(() => "/workspace/demo"),
-      resolveProjectPath: vi.fn((task: { project_path?: string | null }) => task.project_path ?? "/workspace/demo"),
+      detectProjectPath: vi.fn(() => projectPath),
+      resolveProjectPath: vi.fn((task: { project_path?: string | null }) => task.project_path ?? projectPath),
       logsDir: "/tmp",
       getDeptRoleConstraint: vi.fn(() => ""),
       getRecentConversationContext: vi.fn(() => ""),
@@ -202,7 +222,8 @@ describe("createCrossDeptCooperationTools", () => {
     applyBaseSchema(db);
     applyTaskSchemaMigrations(db);
 
-    const { teamLeader, crossLeader, execAgent } = seedCollaborationFixture(db, provider);
+    const projectPath = tempProjectPath ?? "";
+    const { teamLeader, crossLeader, execAgent } = seedCollaborationFixture(db, provider, projectPath);
 
     const handleSubtaskDelegationComplete = vi.fn();
     const handleTaskRunComplete = vi.fn();
@@ -236,8 +257,8 @@ describe("createCrossDeptCooperationTools", () => {
         pickVariant(messages[lang] ?? messages.en ?? messages.ko),
       startTaskExecutionForAgent: vi.fn(),
       linkCrossDeptTaskToParentSubtask: vi.fn(() => "subtask-linked"),
-      detectProjectPath: vi.fn(() => "/workspace/demo"),
-      resolveProjectPath: vi.fn((task: { project_path?: string | null }) => task.project_path ?? "/workspace/demo"),
+      detectProjectPath: vi.fn(() => projectPath),
+      resolveProjectPath: vi.fn((task: { project_path?: string | null }) => task.project_path ?? projectPath),
       logsDir: "/tmp",
       getDeptRoleConstraint: vi.fn(() => ""),
       getRecentConversationContext: vi.fn(() => ""),
@@ -298,7 +319,8 @@ describe("createCrossDeptCooperationTools", () => {
     applyBaseSchema(db);
     applyTaskSchemaMigrations(db);
 
-    const { teamLeader } = seedCollaborationFixture(db, "api");
+    const projectPath = tempProjectPath ?? "";
+    const { teamLeader } = seedCollaborationFixture(db, "api", projectPath);
 
     const appendTaskLog = vi.fn();
     const notifyCeo = vi.fn();
@@ -323,8 +345,8 @@ describe("createCrossDeptCooperationTools", () => {
         pickVariant(messages[lang] ?? messages.en ?? messages.ko),
       startTaskExecutionForAgent: vi.fn(),
       linkCrossDeptTaskToParentSubtask: vi.fn(() => null),
-      detectProjectPath: vi.fn(() => "/workspace/demo"),
-      resolveProjectPath: vi.fn((task: { project_path?: string | null }) => task.project_path ?? "/workspace/demo"),
+      detectProjectPath: vi.fn(() => projectPath),
+      resolveProjectPath: vi.fn((task: { project_path?: string | null }) => task.project_path ?? projectPath),
       logsDir: "/tmp",
       getDeptRoleConstraint: vi.fn(() => ""),
       getRecentConversationContext: vi.fn(() => ""),

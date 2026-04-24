@@ -1,6 +1,6 @@
 ﻿import type { RuntimeContext, RouteCollabExports } from "../../types/runtime-context.ts";
 import type { Lang } from "../../types/lang.ts";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   listMessengerSessions,
   sendMessengerMessage,
@@ -22,6 +22,30 @@ import { deriveFamilyFromDepartment, getCanonicalStageRank, resolveCanonicalIden
 import { pickCanonicalMeetingChair } from "../company/canonical-authority.ts";
 import { getDepartmentForPack, readActiveOfficeWorkflowPackKey } from "../workflow/packs/department-scope.ts";
 import { getDepartmentResponsibilityText, mapLegacyDepartmentId } from "../bootstrap/schema/organization-manifest.ts";
+
+export function buildMessengerRelayPayloadHash(text: string): string {
+  return createHash("sha256").update(String(text ?? ""), "utf8").digest("hex").slice(0, 24);
+}
+
+export function hasDuplicateMessengerRelayLog(
+  messages: string[],
+  input: {
+    messageType: string;
+    routeKind: string;
+    departmentId: string;
+    payloadHash: string;
+  },
+): boolean {
+  return messages.some((message) => {
+    const source = String(message ?? "");
+    if (!source.includes("messenger_relay_success")) return false;
+    if (!source.includes(`message_type=${input.messageType}`)) return false;
+    if (!source.includes(`route_kind=${input.routeKind}`)) return false;
+    if (!source.includes(`department_id=${input.departmentId}`)) return false;
+    if (source.includes(`payload_hash=${input.payloadHash}`)) return true;
+    return input.messageType === "report" && !source.includes("payload_hash=");
+  });
+}
 
 export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
   const __ctx: RuntimeContext = ctx;
@@ -287,6 +311,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
   function resolveSingleGroupTaskMessengerRoute(
     taskId: string,
     fallbackRoute: { channel: MessengerChannel; targetId: string; sessionKey?: string } | null,
+    speakerDepartmentId?: string | null,
   ): {
     channel: MessengerChannel;
     targetId: string;
@@ -301,7 +326,8 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       .prepare("SELECT department_id, status FROM tasks WHERE id = ?")
       .get(taskId) as { department_id?: string | null; status?: string | null } | undefined;
 
-    const departmentId = normalizeMessengerDepartmentId(taskRow?.department_id) || "unknown";
+    const departmentId =
+      normalizeMessengerDepartmentId(speakerDepartmentId) || normalizeMessengerDepartmentId(taskRow?.department_id) || "unknown";
     const taskStatus =
       typeof taskRow?.status === "string" && taskRow.status.trim().length > 0 ? taskRow.status.trim() : "unknown";
 
@@ -551,7 +577,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     if (!content) return;
 
     const route = resolveTaskMessengerRoute(taskId);
-    const relayRoute = resolveSingleGroupTaskMessengerRoute(taskId, route);
+    const relayRoute = resolveSingleGroupTaskMessengerRoute(taskId, route, agent.department_id);
     if (!relayRoute) {
       appendTaskLog(
         taskId,
@@ -561,13 +587,46 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       return;
     }
     const taggedContent = `${buildSingleGroupRelayHeader(taskId, relayRoute.departmentId, relayRoute.taskStatus)}\n${content}`;
+    const payloadHash = buildMessengerRelayPayloadHash(taggedContent);
     const routeRef = relayRoute.sessionKey ? `sessionKey=${relayRoute.sessionKey}` : `targetId=${relayRoute.targetId}`;
     const reasonSuffix = ` routing_reason=${relayRoute.routingReason} department_id=${relayRoute.departmentId}`;
+    const hashSuffix = ` payload_hash=${payloadHash}`;
+
+    const recentRelayMessages = (
+      db
+        .prepare(
+          `
+      SELECT message
+      FROM task_logs
+      WHERE task_id = ?
+        AND kind = 'system'
+        AND message LIKE '%messenger_relay_%'
+      ORDER BY created_at DESC
+      LIMIT 100
+    `,
+        )
+        .all(taskId) as Array<{ message?: string | null }>
+    ).map((row) => String(row.message ?? ""));
+    if (
+      hasDuplicateMessengerRelayLog(recentRelayMessages, {
+        messageType,
+        routeKind: relayRoute.routeKind,
+        departmentId: relayRoute.departmentId,
+        payloadHash,
+      })
+    ) {
+      appendTaskLog(
+        taskId,
+        "system",
+        `messenger_relay_skipped duplicate_report channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}${hashSuffix}`,
+      );
+      return;
+    }
 
     appendTaskLog(
       taskId,
       "system",
-      `messenger_relay_attempt channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}`,
+      `messenger_relay_attempt channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}${hashSuffix}`,
     );
 
     try {
@@ -588,14 +647,14 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       appendTaskLog(
         taskId,
         "system",
-        `messenger_relay_success channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}`,
+        `messenger_relay_success channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}${hashSuffix}`,
       );
     } catch (err: unknown) {
       const errorCode = err instanceof Error ? err.message.replace(/\s+/g, "_").slice(0, 120) : "send_failed";
       appendTaskLog(
         taskId,
         "system",
-        `messenger_relay_failed channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix} error_code=${errorCode || "send_failed"}`,
+        `messenger_relay_failed channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}${hashSuffix} error_code=${errorCode || "send_failed"}`,
       );
       throw err;
     }
@@ -683,7 +742,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       project_id: persistedProjectId,
       created_at: t,
       sender_name: agent.name,
-      sender_avatar: agent.avatar_emoji ?? "?쨼",
+      sender_avatar: agent.avatar_emoji ?? "BOT",
     });
 
     if (shouldRelayTaskBroadcastToMessenger(messageType, receiverType, persistedTaskId)) {
@@ -737,19 +796,19 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
 
   const { normalizeTextField, resolveProjectFromOptions, buildRoundGoal } = initializeProjectResolution({ db });
 
-  /** Detect @mentions in messages ??returns department IDs and agent IDs */
+  /** Detect @mentions in messages and return department IDs and agent IDs. */
   function detectMentions(message: string): { deptIds: string[]; agentIds: string[] } {
     const deptIds: string[] = [];
     const agentIds: string[] = [];
 
-    // Match @遺?쒖씠由?patterns (both with and without ? suffix)
+    // Match @department display-name patterns.
     const depts = db.prepare("SELECT id, name, name_ko FROM departments").all() as {
       id: string;
       name: string;
       name_ko: string;
     }[];
     for (const dept of depts) {
-      const nameKo = dept.name_ko.replace("?", "");
+      const nameKo = dept.name_ko.replace(/팀$/u, "").trim();
       if (
         message.includes(`@${dept.name_ko}`) ||
         message.includes(`@${nameKo}`) ||
@@ -760,7 +819,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       }
     }
 
-    // Match @?먯씠?꾪듃?대쫫 patterns
+    // Match @agent display-name patterns.
     const agents = db.prepare("SELECT id, name, name_ko FROM agents").all() as {
       id: string;
       name: string;

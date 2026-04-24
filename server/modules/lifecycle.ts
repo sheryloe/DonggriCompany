@@ -9,6 +9,32 @@ import { startDiscordReceiver } from "../messenger/discord-receiver.ts";
 import { startTelegramReceiver } from "../messenger/telegram-receiver.ts";
 import { registerGracefulShutdownHandlers } from "./lifecycle/register-graceful-shutdown.ts";
 
+type StartupCliStatus = Record<string, { installed?: boolean; authenticated?: boolean }>;
+
+export function resolveStartupAuthenticatedProviders(
+  cliStatus: StartupCliStatus,
+  connectedPoolProviders: string[] = [],
+): string[] {
+  const providers = new Set<string>();
+  for (const [name, status] of Object.entries(cliStatus ?? {})) {
+    const provider = String(name ?? "").trim();
+    if (!provider) continue;
+    if (status?.installed && status?.authenticated) providers.add(provider);
+  }
+  for (const rawProvider of connectedPoolProviders) {
+    const provider = String(rawProvider ?? "").trim();
+    if (provider) providers.add(provider);
+  }
+  return [...providers];
+}
+
+export function buildWatchdogRecoveryMessage(taskTitle: string, lang: string): string {
+  if (lang === "ko") {
+    return `[WATCHDOG] '${taskTitle}' 작업이 in_progress 상태였지만 실행 프로세스가 없어 inbox로 복구했습니다.`;
+  }
+  return `[WATCHDOG] '${taskTitle}' was in progress but had no active process. Recovered to inbox.`;
+}
+
 export function startLifecycle(ctx: RuntimeContext): void {
   const {
     IN_PROGRESS_ORPHAN_GRACE_MS,
@@ -76,7 +102,7 @@ export function startLifecycle(ctx: RuntimeContext): void {
   }
 
   // ---------------------------------------------------------------------------
-  // Auto break rotation: idle ↔ break every 60s
+  // Auto break rotation: idle <-> break every 60s
   // ---------------------------------------------------------------------------
   function rotateBreaks(): void {
     // Rule: max 1 agent per department on break at a time
@@ -110,7 +136,7 @@ export function startLifecycle(ctx: RuntimeContext): void {
       const idle = members.filter((a) => a.status === "idle");
 
       if (onBreak.length > 1) {
-        // Too many on break from same dept — return extras to idle
+        // Too many on break from same dept; return extras to idle.
         const extras = onBreak.slice(1);
         for (const a of extras) {
           db.prepare("UPDATE agents SET status = 'idle' WHERE id = ?").run(a.id);
@@ -234,6 +260,27 @@ export function startLifecycle(ctx: RuntimeContext): void {
     }>;
 
     const now = nowMs();
+    const hasSuccessfulReportRelay = (taskId: string): boolean => {
+      try {
+        const row = db
+          .prepare(
+            `
+      SELECT 1 AS ok
+      FROM task_logs
+      WHERE task_id = ?
+        AND kind = 'system'
+        AND message LIKE '%messenger_relay_success%'
+        AND message LIKE '%message_type=report%'
+      LIMIT 1
+    `,
+          )
+          .get(taskId) as { ok?: number } | undefined;
+        return row?.ok === 1;
+      } catch {
+        return false;
+      }
+    };
+
     for (const task of inProgressTasks) {
       const active = activeProcesses.get(task.id);
       if (active) {
@@ -249,8 +296,10 @@ export function startLifecycle(ctx: RuntimeContext): void {
       const lastTouchedAt = Math.max(task.updated_at ?? 0, task.started_at ?? 0, task.created_at ?? 0);
       const ageMs = lastTouchedAt > 0 ? Math.max(0, now - lastTouchedAt) : IN_PROGRESS_ORPHAN_GRACE_MS + 1;
       if (ageMs < IN_PROGRESS_ORPHAN_GRACE_MS) continue;
+      const reportRelaySucceeded = hasSuccessfulReportRelay(task.id);
 
-      // 추가 안전장치 1: task_logs 활동이 최근 윈도우 내에 있으면 아직 활성 상태로 간주
+      // Safety 1: recent task log activity usually means the task is still active.
+      // Exception: a task that already emitted a report but has no process should recover instead of looping reports.
       const recentLog = db
         .prepare(
           `
@@ -264,8 +313,8 @@ export function startLifecycle(ctx: RuntimeContext): void {
         continue;
       }
 
-      // 추가 안전장치 2: 터미널 로그 파일이 최근까지 갱신됐다면 여전히 출력이 진행 중인 것으로 간주
-      // (예: 서버 리로드/재시작으로 in-memory process handle만 유실된 경우)
+      // Safety 2: a recently touched terminal log means output is still progressing.
+      // Exception: a reported task with no process should recover to stop duplicate report fan-out.
       try {
         const logPath = path.join(logsDir, `${task.id}.log`);
         const stat = fs.statSync(logPath);
@@ -296,7 +345,7 @@ export function startLifecycle(ctx: RuntimeContext): void {
         appendTaskLog(
           task.id,
           "system",
-          `Recovery (${reason}): orphan in_progress detected (age_ms=${ageMs}) → replaying successful completion`,
+          `Recovery (${reason}): orphan in_progress detected (age_ms=${ageMs}) -> replaying successful completion`,
         );
         handleTaskRunComplete(task.id, 0);
         continue;
@@ -306,7 +355,7 @@ export function startLifecycle(ctx: RuntimeContext): void {
         appendTaskLog(
           task.id,
           "system",
-          `Recovery (${reason}): orphan in_progress detected (age_ms=${ageMs}) → replaying failed completion`,
+          `Recovery (${reason}): orphan in_progress detected (age_ms=${ageMs}) -> replaying failed completion`,
         );
         handleTaskRunComplete(task.id, 1);
         continue;
@@ -324,7 +373,9 @@ export function startLifecycle(ctx: RuntimeContext): void {
       appendTaskLog(
         task.id,
         "system",
-        `Recovery (${reason}): in_progress without active process/run log (age_ms=${ageMs}) → inbox`,
+        reportRelaySucceeded
+          ? `stale_execution_recovered Recovery (${reason}): in_progress had report relay success but no active process (age_ms=${ageMs}) -> inbox`
+          : `Recovery (${reason}): in_progress without active process/run log (age_ms=${ageMs}) -> inbox`,
       );
 
       if (task.assigned_agent_id) {
@@ -339,15 +390,7 @@ export function startLifecycle(ctx: RuntimeContext): void {
       broadcast("task_update", updatedTask);
       const lang = resolveLang(task.title);
       notifyTaskStatus(task.id, task.title, "inbox", lang);
-      const watchdogMessage =
-        lang === "en"
-          ? `[WATCHDOG] '${task.title}' was in progress but had no active process. Recovered to inbox.`
-          : lang === "ja"
-            ? `[WATCHDOG] '${task.title}' は in_progress でしたが実行プロセスが存在しないため inbox に復旧しました。`
-            : lang === "zh"
-              ? `[WATCHDOG] '${task.title}' 处于 in_progress，但未发现执行进程，已恢复到 inbox。`
-              : `[WATCHDOG] '${task.title}' 작업이 in_progress 상태였지만 실행 프로세스가 없어 inbox로 복구했습니다.`;
-      notifyCeo(watchdogMessage, task.id);
+      notifyCeo(buildWatchdogRecoveryMessage(task.title, lang), task.id);
     }
   }
 
@@ -417,10 +460,25 @@ export function startLifecycle(ctx: RuntimeContext): void {
       | undefined;
     if (!autoAssignRow || autoAssignRow.value === "false") return;
 
-    const cliStatus = (await detectAllCli()) as Record<string, { installed?: boolean; authenticated?: boolean }>;
-    const authenticated = Object.entries(cliStatus)
-      .filter(([, s]) => s.installed && s.authenticated)
-      .map(([name]) => name);
+    const cliStatus = (await detectAllCli()) as StartupCliStatus;
+    const connectedPoolProviders = (() => {
+      try {
+        const table = db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cli_account_pools' LIMIT 1")
+          .get() as { name?: string } | undefined;
+        if (table?.name !== "cli_account_pools") return [];
+        return (
+          db
+            .prepare("SELECT DISTINCT provider FROM cli_account_pools WHERE status = 'connected'")
+            .all() as Array<{ provider?: string | null }>
+        )
+          .map((row) => String(row.provider ?? "").trim())
+          .filter(Boolean);
+      } catch {
+        return [];
+      }
+    })();
+    const authenticated = resolveStartupAuthenticatedProviders(cliStatus, connectedPoolProviders);
 
     if (authenticated.length === 0) {
       console.log("[Claw-Empire] Auto-assign skipped: no authenticated CLI providers");

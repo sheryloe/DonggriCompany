@@ -167,10 +167,10 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           notifyCeo(
             pickL(
               l(
-                [`[CEO OFFICE] '${taskTitle}' Planned ?뚯쓽瑜??쒖옉?????놁뒿?덈떎. 李⑤떒 ?ъ쑀: ${reasonText}`],
+                [`[CEO OFFICE] '${taskTitle}' Planned 회의를 시작할 수 없습니다. 차단 사유: ${reasonText}`],
                 [`[CEO OFFICE] Planned meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
-                [`[CEO OFFICE] '${taskTitle}' Planned 鴉싪??믧뼀冶뗣겎?띲겲?쎼굯?귞릤?? ${reasonText}`],
-                [`[CEO OFFICE] ?졿퀡??뒯 '${taskTitle}' ??Planned 鴉싪??귛렅?좑폏${reasonText}`],
+                [`[CEO OFFICE] Planned meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
+                [`[CEO OFFICE] Planned meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
               ),
               resolveLang(taskDescription ?? taskTitle),
             ),
@@ -268,43 +268,45 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           const deptName = getDeptName(deptId, taskWorkflowPackKey);
           const normalizedDeptId = deptId.toLowerCase();
           const koByDept: Record<string, string> = {
-            pmo: "PMO 관점에서는 목표, 담당 부서, 일정 기준을 명확히 정리하겠습니다.",
-            "planning-architecture": "기획/설계 관점에서는 범위, 산출물 기준, 의사결정 항목을 먼저 정리하겠습니다.",
-            planning: "기획 관점에서는 범위, 산출물 기준, 의사결정 항목을 먼저 정리하겠습니다.",
-            development: "개발 관점에서는 계산 로직, 입력 검증, UI 연결을 우선 확인하겠습니다.",
-            dev: "개발 관점에서는 계산 로직, 입력 검증, UI 연결을 우선 확인하겠습니다.",
-            "ui-ux": "UI/UX 관점에서는 입력 흐름, 버튼 배치, 오류 피드백이 자연스러운지 확인하겠습니다.",
-            design: "UI/UX 관점에서는 입력 흐름, 버튼 배치, 오류 피드백이 자연스러운지 확인하겠습니다.",
-            qa: "QA 관점에서는 사칙연산, 예외 입력, 회귀 테스트 기준을 먼저 잡겠습니다.",
-            "knowledge-docs": "문서 관점에서는 결정 사항, 검증 기준, 최종 보고 항목을 남기겠습니다.",
-            operations: "운영 관점에서는 실행 경로, 상태 보고, 장애 시 재시도 기준을 점검하겠습니다.",
-            "cicd-repo": "CI/CD 관점에서는 브랜치, 병합, 빌드 검증 흐름을 확인하겠습니다.",
-            devsecops: "CI/CD와 보안 관점에서는 브랜치, 병합, 빌드 검증 흐름을 확인하겠습니다.",
-            "security-approval": "보안/승인 관점에서는 권한, 외부 연동, 배포 차단 조건을 확인하겠습니다.",
-            "api-research": "API 리서치 관점에서는 필요한 외부 정보와 무료 토큰 범위를 확인하겠습니다.",
-            bloggent: "블로그 운영 관점에서는 결과 요약과 콘텐츠 전환 가능성을 확인하겠습니다.",
-            management: "관리 관점에서는 진행 상태, 담당자, 보고 누락 여부를 점검하겠습니다.",
+            pmo: "PMO는 요구사항을 실행 작업으로 쪼개 담당 부서와 순서를 지정하겠습니다. 산출물은 SubTask 목록과 완료 기준표입니다.",
+            "planning-architecture": "기획/설계는 계산기 범위를 사칙연산, 입력 오류, 결과 표시로 확정하겠습니다. 산출물은 요구사항, 화면 흐름, 예외 규칙입니다.",
+            planning: "기획은 계산기 범위를 사칙연산, 입력 오류, 결과 표시로 확정하겠습니다. 산출물은 요구사항, 화면 흐름, 예외 규칙입니다.",
+            development: "개발은 숫자 입력 파서와 사칙연산 함수를 분리 구현하고 버튼 클릭에 연결하겠습니다. 산출물은 계산 모듈, UI 연결 코드, 기본 단위 테스트입니다.",
+            dev: "개발은 숫자 입력 파서와 사칙연산 함수를 분리 구현하고 버튼 클릭에 연결하겠습니다. 산출물은 계산 모듈, UI 연결 코드, 기본 단위 테스트입니다.",
+            "ui-ux": "UI/UX는 숫자 입력창, 연산 버튼, 결과 영역을 한 화면 흐름으로 배치하겠습니다. 산출물은 레이아웃 기준과 상태별 오류 문구입니다.",
+            design: "UI/UX는 숫자 입력창, 연산 버튼, 결과 영역을 한 화면 흐름으로 배치하겠습니다. 산출물은 레이아웃 기준과 상태별 오류 문구입니다.",
+            qa: "QA는 정상 계산, 0으로 나누기, 빈 입력, 연속 연산 케이스를 표로 만들고 검증하겠습니다. 산출물은 테스트 체크리스트와 회귀 결과입니다.",
+            "knowledge-docs": "문서는 결정 사항과 테스트 기준을 한 페이지로 정리하고 최종 보고에 포함하겠습니다. 산출물은 결정 로그와 완료 보고 초안입니다.",
+            operations: "운영은 실행 경로와 실패 시 재시도 절차를 확인하겠습니다. 산출물은 실행 절차와 장애 대응 메모입니다.",
+            "cicd-repo": "CI/CD는 작업 브랜치, 빌드 명령, 병합 기준을 고정하고 통과 여부를 확인하겠습니다. 산출물은 검증 로그와 병합 준비 체크입니다.",
+            devsecops: "CI/CD와 보안은 작업 브랜치, 빌드 명령, 병합 기준, 보안 차단 조건을 확인하겠습니다. 산출물은 검증 로그와 승인 체크입니다.",
+            "security-approval": "보안/승인은 외부 전송, 토큰, 권한 변경이 없는지 확인하겠습니다. 산출물은 승인/차단 체크 결과입니다.",
+            "api-research": "API 리서치는 외부 API 필요 여부와 무료 토큰 사용 범위를 확인하겠습니다. 산출물은 사용 판단과 제한 조건입니다.",
+            bloggent: "블로그는 완성 결과를 사용자 설명 글로 전환할 수 있게 핵심 기능과 사용 예시를 정리하겠습니다. 산출물은 게시글 초안 소재입니다.",
+            management: "관리는 담당자, 진행 상태, 보고 누락 여부를 주기적으로 확인하겠습니다. 산출물은 상태표와 리스크 메모입니다.",
           };
           const enByDept: Record<string, string> = {
-            pmo: "From PMO, I will clarify goals, owning departments, and schedule criteria.",
-            "planning-architecture": "From planning and architecture, I will clarify scope, deliverables, and decision points.",
-            planning: "From planning, I will clarify scope, deliverables, and decision points.",
-            development: "From development, I will check calculation logic, input validation, and UI wiring first.",
-            dev: "From development, I will check calculation logic, input validation, and UI wiring first.",
-            "ui-ux": "From UI/UX, I will check input flow, button placement, and error feedback.",
-            design: "From UI/UX, I will check input flow, button placement, and error feedback.",
-            qa: "From QA, I will define arithmetic, invalid-input, and regression checks first.",
-            "knowledge-docs": "From documentation, I will capture decisions, validation criteria, and final report items.",
-            operations: "From operations, I will check execution flow, status reporting, and retry criteria.",
-            "cicd-repo": "From CI/CD, I will check branch, merge, and build verification flow.",
-            devsecops: "From CI/CD and security, I will check branch, merge, and build verification flow.",
-            "security-approval": "From security and approval, I will check permissions, external integrations, and release blocks.",
-            "api-research": "From API research, I will confirm required external information and free-token limits.",
-            bloggent: "From blog operations, I will check summary and content conversion opportunities.",
-            management: "From management, I will check progress state, ownership, and report gaps.",
+            pmo: "PMO will split requirements into executable work, assign owning departments and order. Deliverables: subtask list and acceptance criteria.",
+            "planning-architecture": "Planning/architecture will lock calculator scope to arithmetic, input errors, and result display. Deliverables: requirements, screen flow, exception rules.",
+            planning: "Planning will lock calculator scope to arithmetic, input errors, and result display. Deliverables: requirements, screen flow, exception rules.",
+            development: "Development will separate the numeric parser and arithmetic functions, then wire them to button clicks. Deliverables: calculation module, UI wiring, basic unit tests.",
+            dev: "Development will separate the numeric parser and arithmetic functions, then wire them to button clicks. Deliverables: calculation module, UI wiring, basic unit tests.",
+            "ui-ux": "UI/UX will lay out the input, operation buttons, and result area as one flow. Deliverables: layout rules and state-specific error copy.",
+            design: "UI/UX will lay out the input, operation buttons, and result area as one flow. Deliverables: layout rules and state-specific error copy.",
+            qa: "QA will create and run a matrix for normal arithmetic, divide-by-zero, empty input, and chained operations. Deliverables: test checklist and regression result.",
+            "knowledge-docs": "Docs will capture decisions and test criteria on one page and include them in the final report. Deliverables: decision log and report draft.",
+            operations: "Operations will verify the execution path and retry procedure. Deliverables: run procedure and incident memo.",
+            "cicd-repo": "CI/CD will fix the work branch, build command, and merge criteria, then verify pass/fail. Deliverables: verification log and merge-readiness check.",
+            devsecops: "CI/CD and security will check the work branch, build command, merge criteria, and security blocks. Deliverables: verification log and approval check.",
+            "security-approval": "Security/approval will check external transmission, tokens, and permission changes. Deliverables: approve/block result.",
+            "api-research": "API research will decide whether external APIs are needed and confirm free-token limits. Deliverables: usage decision and constraints.",
+            bloggent: "Blog operations will turn the result into user-facing explanation material. Deliverables: post draft material.",
+            management: "Management will track owner, progress state, and report gaps. Deliverables: status table and risk memo.",
           };
-          const ko = koByDept[normalizedDeptId] ?? `${deptName} 관점에서 보완 항목과 다음 액션을 정리하겠습니다.`;
-          const en = enByDept[normalizedDeptId] ?? `From ${deptName}, I will clarify gaps and next actions.`;
+          const ko = koByDept[normalizedDeptId] ?? `${deptName}는 담당 범위를 구체 작업으로 나누고 산출물과 완료 기준을 함께 보고하겠습니다.`;
+          const en =
+            enByDept[normalizedDeptId] ??
+            `${deptName} will split its scope into concrete work and report deliverables with acceptance criteria.`;
           return pickL(l([`${name}: ${ko}`], [`${name}: ${en}`]), lang);
         };
         const speak = (
@@ -345,8 +347,9 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           workflowPackKey: taskWorkflowPackKey,
           transcript,
           turnObjective:
-            "Open the planned kickoff meeting and ask each leader for concrete supplement points and planning actions.",
-          stanceHint: "At Planned stage, do not block kickoff; convert concerns into executable planning items.",
+            "Open the planned kickoff meeting and ask each leader to state target, method, deliverable, and acceptance criteria.",
+          stanceHint:
+            "At Planned stage, avoid vague readiness talk. Ask for concrete output and convert concerns into executable planning items.",
           lang,
         });
         const openingRun = await runMeetingOneShotWithRetry(planningLeader, openingPrompt, "opening");
@@ -366,8 +369,10 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
             taskDescription,
             workflowPackKey: taskWorkflowPackKey,
             transcript,
-            turnObjective: "Share concise readiness feedback plus concrete supplement items to be planned as subtasks.",
-            stanceHint: "Do not hold approval here; provide actionable plan additions with evidence/check item.",
+            turnObjective:
+              "Share one concrete department plan with target, method, deliverable, and acceptance criteria for subtasks.",
+            stanceHint:
+              "Do not answer with only 'we will check'. State what will be made, how it will be verified, and the expected output.",
             lang,
           });
           const feedbackRun = await runMeetingOneShotWithRetry(leader, feedbackPrompt, "feedback");
@@ -400,8 +405,8 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           workflowPackKey: taskWorkflowPackKey,
           transcript,
           turnObjective:
-            "Summarize supplement points and announce that they will be converted to subtasks before execution.",
-          stanceHint: "Keep kickoff moving and show concrete planned next steps instead of blocking.",
+            "Summarize department points as executable subtasks with owner, method, deliverable, and acceptance criteria.",
+          stanceHint: "Keep kickoff moving and show concrete planned next steps instead of generic agreement.",
           lang,
         });
         const summaryRun = await runMeetingOneShotWithRetry(planningLeader, summaryPrompt, "summary");
@@ -420,9 +425,10 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
             taskDescription,
             workflowPackKey: taskWorkflowPackKey,
             transcript,
-            turnObjective: "Propose one immediate planning action item for your team in subtask style.",
+            turnObjective:
+              "Propose one immediate planning action item for your team with target, method, deliverable, and acceptance criteria.",
             stanceHint:
-              "State what to do next, what evidence to collect, and who owns it. Do not block kickoff at this stage.",
+              "State what to do next, what evidence to collect, who owns it, and what output proves completion. Do not block kickoff at this stage.",
             lang,
           });
           const actionRun = await runMeetingOneShotWithRetry(leader, actionPrompt, "approval");

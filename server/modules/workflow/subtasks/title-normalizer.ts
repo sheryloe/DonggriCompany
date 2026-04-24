@@ -2,6 +2,7 @@
 const SUBTASK_EN_REGEX = /^sub[\s_-]*task(?:\s*title)?\s*(\d+)?$/i;
 const COMPLETED_SUBTASK_EN_REGEX = /^(?:done|complete|completed)\s*sub[\s_-]*task(?:\s*title)?\s*(\d+)?$/i;
 const SUBTASK_KO_REGEX = /^(?:\uC644\uB8CC\uB41C\s*)?\uC11C\uBE0C\uD0DC\uC2A4\uD06C(?:\s*\uC81C\uBAA9)?\s*(\d+)?$/u;
+// Intentionally keeps mojibake repair tokens so old corrupted task titles can be normalized.
 const MOJIBAKE_FRAGMENT_REGEX =
   /(\uFFFD|\?\uC3D5\uD23F|\uC3D5\uD23F|\?\uAFE8\uC99A|\uC5CC\uC8E3\uC14A|\uAFE8\uC99A|\?쒕툕|쒕툕|\?쒖뒪|쒖뒪|\?쒕ぉ|\?{2,})/u;
 const DONE_TOKEN_REGEX = /(done|complete|completed|\uC644\uB8CC|\?\uAFE8\uC99A|\?꾨즺|꾨즺)/i;

@@ -6,6 +6,7 @@ import { resolveProviderExecutionPolicy } from "../../workflow/agents/provider-p
 import { previewCanonicalRouting } from "../../company/canonical-policy.ts";
 import { resolveCanonicalIdentity } from "../../company/canonical-identity.ts";
 import { formatDelegationTrace } from "./delegation-log.ts";
+import { evaluateExecutionPathGate } from "../../workflow/core/execution-path-gate.ts";
 
 import type { Lang } from "../../../types/lang.ts";
 import { resolveWorkflowPackKeyForTask } from "../../workflow/packs/task-pack-resolver.ts";
@@ -145,7 +146,6 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
     sendAgentMessage,
     appendTaskLog,
     recordTaskCreationAudit,
-    resolveProjectPath,
     createWorktree,
     logsDir,
     ensureTaskExecutionSession,
@@ -520,17 +520,25 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
       if (runtimeKind) {
         let delegatedProcessStarted = false;
         try {
-          const projPath = resolveProjectPath({
-            project_id: parentTask.project_id,
-            project_path: parentTask.project_path,
-            description: parentTask.description,
-            title: parentTask.title,
+          const pathGate = evaluateExecutionPathGate({
+            db: db as any,
+            task: {
+              project_id: parentTask.project_id,
+              project_path: parentTask.project_path,
+            },
           });
+          if (!pathGate.ok) {
+            appendTaskLog(delegatedTaskId, "system", `execution_blocked ${pathGate.error}`);
+            failDelegatedLaunch(new Error(`${pathGate.error}: ${pathGate.message}`), pathGate.error);
+            return;
+          }
+          const projPath = pathGate.projectPath;
           const worktreePath = createWorktree(projPath, delegatedTaskId, execAgent.name);
           if (!worktreePath) {
+            appendTaskLog(delegatedTaskId, "system", "execution_blocked git_repo_required");
             failDelegatedLaunch(
-              new Error(`worktree_required: isolated worktree creation failed for '${projPath}'`),
-              "worktree_required",
+              new Error(`git_repo_required: isolated worktree creation failed for '${projPath}'`),
+              "git_repo_required",
             );
             return;
           }

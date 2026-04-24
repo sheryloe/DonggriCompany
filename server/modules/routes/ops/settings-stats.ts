@@ -3,6 +3,7 @@ import {
   decryptMessengerChannelsForClient,
   encryptMessengerChannelsForStorage,
 } from "../../../messenger/token-crypto.ts";
+import { getCanonicalAgentsSourceMode } from "../../company/canonical-policy.ts";
 
 const MESSENGER_SETTINGS_KEY = "messengerChannels";
 const OFFICE_PACK_PROFILES_KEY = "officePackProfiles";
@@ -154,7 +155,12 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
         settings[row.key] = row.value;
       }
     }
-    res.json({ settings });
+    res.json({
+      settings,
+      runtime: {
+        agents_source_mode: getCanonicalAgentsSourceMode(),
+      },
+    });
   });
 
   app.put("/api/settings", (req, res) => {
@@ -335,6 +341,9 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
         top_agents: topAgents,
         tasks_by_department: tasksByDept,
         recent_activity: recentActivity,
+        runtime: {
+          agents_source_mode: getCanonicalAgentsSourceMode(),
+        },
       },
     });
   });

@@ -61,7 +61,13 @@ type FamilyMapRules = {
 
 const ROOT_DIR = process.cwd();
 const CANONICAL_SOURCE_ROOT = path.join(ROOT_DIR, "restructing", "autonomous-coding-company-release-pack", ".ai");
-const CANONICAL_AGENTS_MD = path.join(ROOT_DIR, "restructing", "autonomous-coding-company-release-pack", "AGENTS.md");
+const CANONICAL_AGENTS_MD = path.join(ROOT_DIR, "AGENTS.md");
+const LEGACY_CANONICAL_AGENTS_MD = path.join(
+  ROOT_DIR,
+  "restructing",
+  "autonomous-coding-company-release-pack",
+  "AGENTS.md",
+);
 const SUBAGENTS_ROOT = path.join(CANONICAL_SOURCE_ROOT, "subagents");
 const ROUTING_ROOT = path.join(CANONICAL_SOURCE_ROOT, "routing");
 const ORG_ROOT = path.join(CANONICAL_SOURCE_ROOT, "org");
@@ -71,6 +77,7 @@ const LAST_GOOD_DIR = path.join(ROOT_DIR, "data", "canonical-company");
 const LAST_GOOD_PATH = path.join(LAST_GOOD_DIR, "last-good-snapshot.json");
 const SNAPSHOT_ARCHIVE_DIR = path.join(LAST_GOOD_DIR, "snapshots");
 const CURRENT_POINTER_PATH = path.join(LAST_GOOD_DIR, "current-version.json");
+const AGENTS_SOURCE_MODE = "root_only" as const;
 
 const FAMILY_ORDER: CanonicalFamilyKey[] = [
   "architect",
@@ -139,6 +146,10 @@ const DEFAULT_PROVIDER_MODEL_CONFIG: Record<string, ProviderModelConfig> = {
 };
 
 let cachedSnapshot: CanonicalSnapshot | null = null;
+
+export function getCanonicalAgentsSourceMode(): "root_only" {
+  return AGENTS_SOURCE_MODE;
+}
 
 function isCanonicalFamilyKey(value: unknown): value is CanonicalFamilyKey {
   return typeof value === "string" && FAMILY_ORDER.includes(value as CanonicalFamilyKey);
@@ -271,6 +282,24 @@ function buildApprovalGates(): CanonicalApprovalGate[] {
     });
   });
   return rules;
+}
+
+function buildAgentsSourceDiagnostics(): CanonicalDiagnostic[] {
+  const diagnostics: CanonicalDiagnostic[] = [];
+  if (fs.existsSync(LEGACY_CANONICAL_AGENTS_MD)) {
+    diagnostics.push({
+      code: "compat_warning",
+      severity: "warning",
+      message: "Legacy AGENTS source detected outside root; root AGENTS.md is enforced (root_only).",
+      sourcePath: LEGACY_CANONICAL_AGENTS_MD,
+      details: {
+        agents_source_mode: AGENTS_SOURCE_MODE,
+        selected: CANONICAL_AGENTS_MD,
+        ignored: LEGACY_CANONICAL_AGENTS_MD,
+      },
+    });
+  }
+  return diagnostics;
 }
 
 function buildRoutingRules(): { rules: CanonicalRoutingRule[]; diagnostics: CanonicalDiagnostic[] } {
@@ -530,8 +559,10 @@ function compileSnapshot(): CanonicalSnapshot {
   const { profiles: packProfiles, diagnostics: packDiagnostics } = buildPackProfiles();
   const registry = buildRegistry(compiledAt);
   diagnostics.push(...familyDiagnostics, ...stageDiagnostics, ...routingDiagnostics, ...modelTierDiagnostics, ...packDiagnostics);
+  diagnostics.push(...buildAgentsSourceDiagnostics());
   diagnostics.push(...registry.diagnostics);
   policyDiagnostics.push(...familyDiagnostics, ...stageDiagnostics, ...routingDiagnostics, ...modelTierDiagnostics, ...packDiagnostics);
+  policyDiagnostics.push(...buildAgentsSourceDiagnostics());
 
   const hash = stableHash([policySourceParts, families, stages, approvalGates, routingRules, modelTierRules, packProfiles]);
   const policy: CanonicalCompanyPolicy = {

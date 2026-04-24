@@ -21,13 +21,21 @@ type AgentProfileExtras = {
 const RESERVED_ROOT_DIRS = new Set(["archive", "classes"]);
 const DEFAULT_CLASS_PATH = "(unclassified)";
 const DEFAULT_PROMOTION_POLICY = "junior -> senior @xp>=300, team_leader manual only";
+const PROJECT_AGENTS_ROOT = path.resolve(process.cwd(), "agents");
+let warnedExternalGuideRoot = false;
 
 function resolveGuideRoot(): string {
   const envRoot = String(process.env.AGENT_GUIDE_ROOT ?? "").trim();
-  if (envRoot) {
-    return path.resolve(envRoot);
+  if (envRoot && !warnedExternalGuideRoot) {
+    warnedExternalGuideRoot = true;
+    const resolvedEnvRoot = path.resolve(envRoot);
+    if (resolvedEnvRoot !== PROJECT_AGENTS_ROOT) {
+      console.warn(
+        `[compat_warning] AGENT_GUIDE_ROOT='${resolvedEnvRoot}' ignored. agents_source_mode=root_only -> '${PROJECT_AGENTS_ROOT}'`,
+      );
+    }
   }
-  return path.resolve(process.cwd(), "agents");
+  return PROJECT_AGENTS_ROOT;
 }
 
 function normalizeFileToken(raw: string): string {

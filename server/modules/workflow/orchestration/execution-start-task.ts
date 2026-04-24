@@ -1,4 +1,4 @@
-﻿import path from "node:path";
+import path from "node:path";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import { getDepartmentPromptForPack } from "../packs/department-scope.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../core/video-skill-bootstrap.ts";
@@ -9,6 +9,7 @@ import { resolveProviderExecutionPolicy } from "../agents/provider-policy-resolv
 import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
 import { previewCanonicalRouting } from "../../company/canonical-policy.ts";
 import { buildCanonicalCapabilityLabel } from "../../company/canonical-display.ts";
+import { evaluateExecutionPathGate } from "../core/execution-path-gate.ts";
 import {
   buildInterruptPromptBlock,
   consumeInterruptPrompts,
@@ -152,10 +153,59 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     });
     notifyTaskStatus(taskId, taskData.title, "in_progress", taskLang);
 
-    const projPath = resolveProjectPath(taskData);
+    if (!taskData.project_path && !taskData.project_id) {
+      const legacyResolvedPath = resolveProjectPath(taskData);
+      if (legacyResolvedPath) {
+        appendTaskLog(taskId, "system", "compat_warning resolveProjectPath_fallback_ignored");
+      }
+    }
+    const pathGate = evaluateExecutionPathGate({
+      db: db as any,
+      task: {
+        project_id: taskData.project_id,
+        project_path: taskData.project_path,
+      },
+    });
+    if (!pathGate.ok) {
+      const rollbackAt = nowMs();
+      appendTaskLog(taskId, "system", `execution_blocked ${pathGate.error}`);
+      appendTaskLog(taskId, "error", `Execution blocked (${pathGate.error}): ${pathGate.message}`);
+      db.prepare("UPDATE tasks SET status = 'pending', started_at = NULL, updated_at = ? WHERE id = ?").run(
+        rollbackAt,
+        taskId,
+      );
+      db.prepare(
+        "UPDATE agents SET status = 'idle', current_task_id = CASE WHEN current_task_id = ? THEN NULL ELSE current_task_id END WHERE id = ?",
+      ).run(taskId, execAgent.id);
+      broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId));
+      broadcast("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(execAgent.id));
+      notifyTaskStatus(taskId, taskData.title, "pending", taskLang);
+      notifyCeo(
+        pickL(
+          taskLang === "ko"
+            ? l(
+                [`[EXECUTION BLOCKED] '${taskData.title}' 실행이 차단되었습니다. (${pathGate.error}) ${pathGate.message}`],
+                [`[EXECUTION BLOCKED] Blocked execution for '${taskData.title}' (${pathGate.error}): ${pathGate.message}`],
+                [`[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`],
+                [`[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`],
+              )
+            : l(
+                [`[EXECUTION BLOCKED] '${taskData.title}' 실행이 차단되었습니다. (${pathGate.error}) ${pathGate.message}`],
+                [`[EXECUTION BLOCKED] Blocked execution for '${taskData.title}' (${pathGate.error}): ${pathGate.message}`],
+                [`[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`],
+                [`[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`],
+              ),
+          taskLang,
+        ),
+        taskId,
+      );
+      return;
+    }
+    const projPath = pathGate.projectPath;
     const worktreePath = createWorktree(projPath, taskId, execAgent.name, taskData.base_branch ?? undefined);
     if (!worktreePath) {
       const rollbackAt = nowMs();
+      appendTaskLog(taskId, "system", "execution_blocked git_repo_required");
       appendTaskLog(
         taskId,
         "error",
@@ -176,30 +226,30 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
           taskLang === "ko"
             ? l(
                 [
-                  `[WORKTREE REQUIRED] '${taskData.title}' 실행이 차단되었습니다. 격리 worktree 생성에 실패하여 프로젝트 루트 보호를 위해 실행을 중단했습니다.`, 
+                  `[git_repo_required] '${taskData.title}' 실행이 차단되었습니다. Git 저장소 기반의 격리 worktree가 필요해 실행을 중단했습니다.`,
                 ],
                 [
-                  `[WORKTREE REQUIRED] Blocked execution for '${taskData.title}'. Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                  `[git_repo_required] Blocked execution for '${taskData.title}'. Git repository based isolated worktree execution is required, so the run was blocked.`,
                 ],
                 [
-                  `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                  `[git_repo_required] Blocked execution for "${taskData.title}". Git repository based isolated worktree execution is required, so the run was blocked.`,
                 ],
                 [
-                  `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                  `[git_repo_required] Blocked execution for "${taskData.title}". Git repository based isolated worktree execution is required, so the run was blocked.`,
                 ],
               )
             : l(
                 [
-                  `[WORKTREE REQUIRED] '${taskData.title}' 실행이 차단되었습니다. 격리 worktree 생성에 실패하여 프로젝트 루트 보호를 위해 실행을 중단했습니다.`, 
+                  `[git_repo_required] '${taskData.title}' 실행이 차단되었습니다. Git 저장소 기반의 격리 worktree가 필요해 실행을 중단했습니다.`,
                 ],
                 [
-                  `[WORKTREE REQUIRED] Blocked execution for '${taskData.title}'. Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                  `[git_repo_required] Blocked execution for '${taskData.title}'. Git repository based isolated worktree execution is required, so the run was blocked.`,
                 ],
                 [
-                  `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                  `[git_repo_required] Blocked execution for "${taskData.title}". Git repository based isolated worktree execution is required, so the run was blocked.`,
                 ],
                 [
-                  `[WORKTREE REQUIRED] Blocked execution for "${taskData.title}". Isolated worktree creation failed, so run was aborted to protect the project root.`,
+                  `[git_repo_required] Blocked execution for "${taskData.title}". Git repository based isolated worktree execution is required, so the run was blocked.`,
                 ],
               ),
           taskLang,
@@ -229,7 +279,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
           taskLang === "ko"
             ? l(
                 [
-                  "연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요.", 
+                  "연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요.",
                 ],
                 [
                   "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
@@ -243,7 +293,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
               )
             : l(
                 [
-                  "연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요.", 
+                  "연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요.",
                 ],
                 [
                   "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
@@ -260,13 +310,13 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       : pickL(
           taskLang === "ko"
             ? l(
-                ["서두 설명 없이 바로 실행하고, 메시지는 간결하게 유지하세요."], 
+                ["서두 설명 없이 바로 실행하고, 메시지는 간결하게 유지하세요."],
                 ["Execute directly without long preamble and keep messages concise."],
                 ["Execute directly without long preamble and keep messages concise."],
                 ["Execute directly without long preamble and keep messages concise."],
               )
             : l(
-                ["서두 설명 없이 바로 실행하고, 메시지는 간결하게 유지하세요."], 
+                ["서두 설명 없이 바로 실행하고, 메시지는 간결하게 유지하세요."],
                 ["Execute directly without long preamble and keep messages concise."],
                 ["Execute directly without long preamble and keep messages concise."],
                 ["Execute directly without long preamble and keep messages concise."],
@@ -276,7 +326,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     const runInstruction = pickL(
       taskLang === "ko"
         ? l(
-            ["위 작업을 누락 없이 완료하세요. 필요하면 위의 연속 실행 브리프와 대화 컨텍스트를 활용하세요."], 
+            ["위 작업을 누락 없이 완료하세요. 필요하면 위의 연속 실행 브리프와 대화 컨텍스트를 활용하세요."],
             [
               "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
             ],
@@ -288,7 +338,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
             ],
           )
         : l(
-            ["위 작업을 누락 없이 완료하세요. 필요하면 위의 연속 실행 브리프와 대화 컨텍스트를 활용하세요."], 
+            ["위 작업을 누락 없이 완료하세요. 필요하면 위의 연속 실행 브리프와 대화 컨텍스트를 활용하세요."],
             [
               "Please complete the task above thoroughly. Use the continuation brief and conversation context above if relevant.",
             ],
@@ -407,15 +457,15 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     const worktreeNote = pickL(
       taskLang === "ko"
         ? l(
-            [` (격리 브랜치: climpire/${taskId.slice(0, 8)})`], 
+            [` (격리 브랜치: climpire/${taskId.slice(0, 8)})`],
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
           )
         : l(
-            [` (격리 브랜치: climpire/${taskId.slice(0, 8)})`], 
+            [` (격리 브랜치: climpire/${taskId.slice(0, 8)})`],
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
-            [` (分離ブランチ: climpire/${taskId.slice(0, 8)})`], 
+            [` (分離ブランチ: climpire/${taskId.slice(0, 8)})`],
             [` (isolated branch: climpire/${taskId.slice(0, 8)})`],
           ),
       taskLang,
@@ -424,16 +474,16 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       pickL(
         taskLang === "ko"
           ? l(
-              [`${execName}가 '${taskData.title}' 작업을 시작했습니다.${worktreeNote}`], 
+              [`${execName}가 '${taskData.title}' 작업을 시작했습니다.${worktreeNote}`],
               [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
               [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
               [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
             )
           : l(
-              [`${execName}가 '${taskData.title}' 작업을 시작했습니다.${worktreeNote}`], 
+              [`${execName}가 '${taskData.title}' 작업을 시작했습니다.${worktreeNote}`],
               [`${execName} started work on '${taskData.title}'.${worktreeNote}`],
-              [`${execName} が '${taskData.title}' の作業を開始しました。${worktreeNote}`], 
-              [`${execName} 已开始处理 '${taskData.title}'。${worktreeNote}`], 
+              [`${execName} が '${taskData.title}' の作業を開始しました。${worktreeNote}`],
+              [`${execName} 已开始处理 '${taskData.title}'。${worktreeNote}`],
             ),
         taskLang,
       ),

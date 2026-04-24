@@ -512,12 +512,12 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
     sendAgentMessage(
       reportAssignee,
       pickL(
-        l(
-          [`${assigneeName}입니다. 보고 요청을 접수했습니다. ${outputLabel} 형식으로 작성해 제출하겠습니다.`],
-          [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
-          [`${assigneeName}です。レポート依頼を受領しました。${outputLabel}形式で作成して提出します。`],
-          [`${assigneeName}收到报告请求，将按${outputLabel}格式完成并提交。`],
-        ),
+          l(
+            [`${assigneeName}\uC785\uB2C8\uB2E4. \uBCF4\uACE0 \uC694\uCCAD\uC744 \uC811\uC218\uD588\uC2B5\uB2C8\uB2E4. ${outputLabel} \uD615\uC2DD\uC73C\uB85C \uC791\uC131\uD574 \uC81C\uCD9C\uD558\uACA0\uC2B5\uB2C8\uB2E4.`],
+            [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
+            [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
+            [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
+          ),
         lang,
       ),
       "report",
@@ -528,18 +528,18 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
 
     notifyCeo(
       pickL(
-        l(
-          [
-            `[REPORT ROUTING] '${taskTitle}' 요청을 ${assigneeName}(${providerLabel})에게 배정했습니다. 출력 형식: ${outputLabel}`,
-          ],
-          [
-            `[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`,
-          ],
-          [
-            `[REPORT ROUTING] '${taskTitle}' を ${assigneeName} (${providerLabel}) に割り当てました。出力形式: ${outputLabel}`,
-          ],
-          [`[REPORT ROUTING] 已将'${taskTitle}'分配给${assigneeName}（${providerLabel}）。输出格式：${outputLabel}`],
-        ),
+          l(
+            [
+              `[REPORT ROUTING] '${taskTitle}' \uC694\uCCAD\uC744 ${assigneeName}(${providerLabel})\uC5D0\uAC8C \uBC30\uC815\uD588\uC2B5\uB2C8\uB2E4. \uCD9C\uB825 \uD615\uC2DD: ${outputLabel}`,
+            ],
+            [
+              `[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`,
+            ],
+            [
+              `[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`,
+            ],
+            [`[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`],
+          ),
         lang,
       ),
       taskId,
@@ -548,20 +548,20 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
       const requestedName = getAgentDisplayName(routing.requestedAgent, lang);
       notifyCeo(
         pickL(
-          l(
-            [
-              `[CLAUDE RECOMMENDATION] 요청 대상 ${requestedName}(${routing.requestedAgent.cli_provider || "unknown"})는 Claude Code가 아니어서 Claude Code 우선 라우팅을 적용했습니다. 우선순위 추천: ${recommendationText}`,
-            ],
-            [
-              `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
-            ],
-            [
-              `[CLAUDE RECOMMENDATION] 依頼先 ${requestedName}（${routing.requestedAgent.cli_provider || "unknown"}）は Claude Code ではないため、Claude 優先ルーティングを適用しました。優先候補: ${recommendationText}`,
-            ],
-            [
-              `[CLAUDE RECOMMENDATION] 请求目标 ${requestedName}（${routing.requestedAgent.cli_provider || "unknown"}）不是 Claude Code，已启用 Claude 优先路由。优先推荐：${recommendationText}`,
-            ],
-          ),
+            l(
+              [
+                `[CLAUDE RECOMMENDATION] \uC694\uCCAD \uB300\uC0C1 ${requestedName}(${routing.requestedAgent.cli_provider || "unknown"})\uC740 Claude Code\uAC00 \uC544\uB2C8\uC5B4\uC11C Claude Code \uC6B0\uC120 \uB77C\uC6B0\uD305\uC744 \uC801\uC6A9\uD588\uC2B5\uB2C8\uB2E4. \uC6B0\uC120\uC21C\uC704 \uCD94\uCC9C: ${recommendationText}`,
+              ],
+              [
+                `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
+              ],
+              [
+                `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
+              ],
+              [
+                `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
+              ],
+            ),
           lang,
         ),
         taskId,
@@ -572,16 +572,16 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
         pickL(
           l(
             [
-              "[CLAUDE RECOMMENDATION] 우선순위 부서(기획>개발>디자인>QA>운영)에서 Claude Code 에이전트를 찾지 못해 현재 담당자가 PPT를 우선 시도하고, 실패 시 MD로 대체하도록 지시했습니다.",
+              "[CLAUDE RECOMMENDATION] \uC6B0\uC120\uC21C\uC704 \uBD80\uC11C(\uAE30\uD68D>\uAC1C\uBC1C>\uB514\uC790\uC778>QA>\uC6B4\uC601)\uC5D0\uC11C Claude Code \uC5D0\uC774\uC804\uD2B8\uB97C \uCC3E\uC9C0 \uBABB\uD574 \uD604\uC7AC \uB2F4\uB2F9\uC790\uAC00 PPT\uB97C \uC6B0\uC120 \uC2DC\uB3C4\uD558\uACE0, \uC2E4\uD328 \uC2DC MD\uB85C \uB300\uCCB4\uD558\uB3C4\uB85D \uC9C0\uC2DC\uD588\uC2B5\uB2C8\uB2E4.",
             ],
             [
               "[CLAUDE RECOMMENDATION] No Claude Code agent was found in priority departments (Planning>Development>Design>QA>Operations). The current assignee was instructed to attempt PPT first, then fallback to MD on failure.",
             ],
             [
-              "[CLAUDE RECOMMENDATION] 優先部門（企画>開発>デザイン>QA>運用）に Claude Code エージェントがいないため、現担当者にPPT優先・失敗時MD代替を指示しました。",
+              "[CLAUDE RECOMMENDATION] No Claude Code agent was found in priority departments (Planning>Development>Design>QA>Operations). The current assignee was instructed to attempt PPT first, then fallback to MD on failure.",
             ],
             [
-              "[CLAUDE RECOMMENDATION] 在优先部门（企划>开发>设计>QA>运营）中未找到 Claude Code 代理，已要求当前负责人先尝试 PPT，失败时改为 MD。",
+              "[CLAUDE RECOMMENDATION] No Claude Code agent was found in priority departments (Planning>Development>Design>QA>Operations). The current assignee was instructed to attempt PPT first, then fallback to MD on failure.",
             ],
           ),
           lang,

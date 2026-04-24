@@ -3,6 +3,7 @@ import {
   getCanonicalSnapshotByVersion,
   getCurrentCanonicalVersion,
   getCanonicalPolicy,
+  getCanonicalAgentsSourceMode,
   getCanonicalSpecializationRegistry,
   previewCanonicalRouting,
   reloadCanonicalSnapshot,
@@ -65,5 +66,9 @@ describe("canonical policy", () => {
     expect(preview.policyVersion).toBe(currentVersion);
     expect(preview.snapshotScope).toBe("pinned");
     expect(preview.policySnapshotHash).toBeTruthy();
+  });
+
+  it("enforces root-only AGENTS source mode", () => {
+    expect(getCanonicalAgentsSourceMode()).toBe("root_only");
   });
 });

@@ -8,6 +8,7 @@ data/
 .local/
 custom-skills/
 /tasks/
+tasks/todo.md
 *.log
 *.pid
 *.sqlite
@@ -66,6 +67,7 @@ coverage/
 .codex-home/
 .codex-local/
 .codex-state/
+.codex-homes/
 skills-lock.json
 
 # OS metadata
@@ -83,6 +85,15 @@ agents/ci_*/
 agents/e2e*/
 scratch/
 public/e2e-calculator.html
+extensions/donggri-vscode/.vscode/
+
+# Caches and temp artifacts
+cache/
+tmp/
+temp/
+*.tmp
+*.bak
+*.old
 
 # Codex optimization gate (2026-04-10)
 tools/ollama-image-local/.venv/

@@ -9,6 +9,7 @@ import { previewCanonicalRouting } from "../../../company/canonical-policy.ts";
 import { resolveCanonicalIdentity } from "../../../company/canonical-identity.ts";
 import { resolveConstrainedAgentScopeForTask } from "../../core/tasks/execution-run-auto-assign.ts";
 import { formatDelegationTrace } from "../delegation-log.ts";
+import { evaluateExecutionPathGate } from "../../../workflow/core/execution-path-gate.ts";
 import type { AgentRow } from "./types.ts";
 
 interface CrossDeptContext {
@@ -46,7 +47,6 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
     startTaskExecutionForAgent,
     linkCrossDeptTaskToParentSubtask,
     detectProjectPath,
-    resolveProjectPath,
     logsDir,
     getDeptRoleConstraint,
     getRecentConversationContext,
@@ -290,17 +290,15 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
       notifyCeo(
         pickL(
           l(
+            [`'${taskTitle}' \uD611\uC5C5 \uB77C\uC6B0\uD305 \uC911 ${getDeptName(crossDeptId)} \uBD80\uC11C\uC758 \uD300\uC7A5\uC744 \uCC3E\uC9C0 \uBABB\uD574 \uD574\uB2F9 \uBD80\uC11C \uC704\uC784\uC744 \uAC74\uB108\uB701\uB2C8\uB2E4. (${blockingReason})`],
             [
-              `'${taskTitle}' 협업 라우팅 중 ${getDeptName(crossDeptId)} 부서 팀장을 찾지 못해 해당 부서 위임을 건너뜁니다. (${blockingReason})`,
+              `While routing collaboration for '${taskTitle}', no team leader was found in ${getDeptName(crossDeptId)}. Skipping that department. (${blockingReason})`,
             ],
             [
               `While routing collaboration for '${taskTitle}', no team leader was found in ${getDeptName(crossDeptId)}. Skipping that department. (${blockingReason})`,
             ],
             [
-              `'${taskTitle}' の協業ルーティング中に ${getDeptName(crossDeptId)} のチームリーダーが見つからなかったため、その部門はスキップします。(${blockingReason})`,
-            ],
-            [
-              `在 '${taskTitle}' 协作路由中未找到 ${getDeptName(crossDeptId)} 的组长，已跳过该部门。(${blockingReason})`,
+              `While routing collaboration for '${taskTitle}', no team leader was found in ${getDeptName(crossDeptId)}. Skipping that department. (${blockingReason})`,
             ],
           ),
           lang,
@@ -341,27 +339,18 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
       const remaining = deptIds.length - index;
       notifyCeo(
         pickL(
-          lang === "ko"
-            ? l(
-                [`협업 요청 전송 중: ${crossDeptName} (${index + 1}/${deptIds.length}, 대기 ${remaining}개 팀)`],
-                [
-                  `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
-                ],
-                [
-                  `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
-                ],
-                [
-                  `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
-                ],
-              )
-            : l(
-                [`협업 요청 전송 중: ${crossDeptName} (${index + 1}/${deptIds.length}, 대기 ${remaining}개 팀)`],
-                [
-                  `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
-                ],
-                [`連携依頼を送信中: ${crossDeptName} (${index + 1}/${deptIds.length}, 残り ${remaining} チーム)`],
-                [`协作请求发送中: ${crossDeptName} (${index + 1}/${deptIds.length}, 剩余 ${remaining} 个团队)`],
-              ),
+          l(
+            [`\uD611\uC5C5 \uC694\uCCAD \uC804\uB2EC \uC911: ${crossDeptName} (${index + 1}/${deptIds.length}, \uB300\uAE30 ${remaining}\uAC1C \uD300)`],
+            [
+              `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
+            ],
+            [
+              `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
+            ],
+            [
+              `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
+            ],
+          ),
           lang,
         ),
         taskId,
@@ -369,37 +358,18 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
     }
 
     const coopReq = pickL(
-      lang === "ko"
-        ? l(
-            [
-              `${crossCoordinatorName}님, 대표님 지시로 "${taskTitle}" 작업에 ${crossDeptName}의 협업이 필요합니다. 지원 부탁드립니다.`,
-              `${crossCoordinatorName}님, "${taskTitle}" 작업과 관련해 ${crossDeptName} 검토가 필요합니다. 가능할 때 바로 연결 부탁드립니다.`,
-            ],
-            [
-              `Hi ${crossCoordinatorName}! We're working on "${taskTitle}" per CEO's directive and need ${crossDeptName}'s support. Could you help?`,
-              `${crossCoordinatorName}, we need ${crossDeptName}'s input on "${taskTitle}". Let's sync when you have a moment.`,
-            ],
-            [
-              `CEO instructed ${crossCoordinatorName} to delegate "${taskTitle}" to ${crossDeptName} for collaboration.`,
-            ],
-            [
-              `CEO instructed ${crossCoordinatorName} to delegate "${taskTitle}" to ${crossDeptName} for collaboration.`,
-            ],
-          )
-        : l(
-            [
-              `${crossCoordinatorName}님, 대표님 지시로 "${taskTitle}" 작업에 ${crossDeptName}의 협업이 필요합니다. 지원 부탁드립니다.`,
-              `${crossCoordinatorName}님, "${taskTitle}" 작업과 관련해 ${crossDeptName} 검토가 필요합니다. 가능할 때 바로 연결 부탁드립니다.`,
-            ],
-            [
-              `Hi ${crossCoordinatorName}! We're working on "${taskTitle}" per CEO's directive and need ${crossDeptName}'s support. Could you help?`,
-              `${crossCoordinatorName}, we need ${crossDeptName}'s input on "${taskTitle}". Let's sync when you have a moment.`,
-            ],
-            [
-              `${crossCoordinatorName}さん、CEO 指示の "${taskTitle}" 対応に ${crossDeptName} の協力が必要です。支援をお願いします。`,
-            ],
-            [`${crossCoordinatorName}，根据 CEO 指示，处理“${taskTitle}”需要 ${crossDeptName} 协作支持，请帮忙。`],
-          ),
+      l(
+        [
+          `${crossCoordinatorName}, CEO \uC9C0\uC2DC\uB85C "${taskTitle}" \uC791\uC5C5\uC744 \uC9C4\uD589 \uC911\uC774\uBA70 ${crossDeptName}\uC758 \uD611\uC5C5\uC774 \uD544\uC694\uD569\uB2C8\uB2E4. \uAC00\uB2A5\uD55C \uB2F4\uB2F9\uC790\uB97C \uBC30\uC815\uD558\uACE0, \uC218\uD589 \uBC94\uC704\uC640 \uAC80\uC99D \uAE30\uC900\uC744 \uD568\uAED8 \uACF5\uC720\uD574\uC8FC\uC138\uC694.`,
+          `${crossCoordinatorName}, "${taskTitle}" \uC791\uC5C5\uACFC \uAD00\uB828\uD574 ${crossDeptName} \uAC80\uD1A0\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4. \uBC14\uB85C \uC5F0\uACB0 \uAC00\uB2A5\uD55C \uB2F4\uB2F9\uC790\uC640 \uC608\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC54C\uB824\uC8FC\uC138\uC694.`,
+        ],
+        [
+          `Hi ${crossCoordinatorName}! We are working on "${taskTitle}" per CEO directive and need ${crossDeptName} support. Please assign an available owner and share the scope plus verification criteria.`,
+          `${crossCoordinatorName}, we need ${crossDeptName} input on "${taskTitle}". Please share the available owner and expected output.`,
+        ],
+        [`Hi ${crossCoordinatorName}! We are working on "${taskTitle}" per CEO directive and need ${crossDeptName} support. Please assign an available owner and share the scope plus verification criteria.`],
+        [`Hi ${crossCoordinatorName}! We are working on "${taskTitle}" per CEO directive and need ${crossDeptName} support. Please assign an available owner and share the scope plus verification criteria.`],
+      ),
       lang,
     );
     sendAgentMessage(
@@ -471,47 +441,29 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
         const crossAckMsg =
           execAgent.id !== crossCoordinator.id
             ? pickL(
-                lang === "ko"
-                  ? l(
-                      [
-                        `${leaderName}님, 확인했습니다. ${execName}이(가) ${crossDeptName} 측 협업을 바로 맡겠습니다.`,
-                        `${execName}에게 ${crossDeptName} 협업을 바로 배정하고 진행 상황을 공유드리겠습니다.`,
-                      ],
-                      [
-                        `Sure, ${leaderName}! I'll assign ${execName} to support right away.`,
-                        `Got it! ${execName} will handle the ${crossDeptName} side. I'll keep you posted.`,
-                      ],
-                      [`Sure, ${leaderName}! I'll assign ${execName} to support right away.`],
-                      [`Sure, ${leaderName}! I'll assign ${execName} to support right away.`],
-                    )
-                  : l(
-                      [
-                        `${leaderName}님, 확인했습니다. ${execName}에게 바로 배정하겠습니다.`,
-                        `${execName}에게 ${crossDeptName} 협업을 바로 배정하고 진행 상황을 공유드리겠습니다.`,
-                      ],
-                      [
-                        `Sure, ${leaderName}! I'll assign ${execName} to support right away.`,
-                        `Got it! ${execName} will handle the ${crossDeptName} side. I'll keep you posted.`,
-                      ],
-                      [`${leaderName}さん、承知しました。${execName} をすぐに割り当てます。`],
-                      [`${leaderName}，收到。我会立即把任务分配给 ${execName}。`],
-                    ),
+                l(
+                  [
+                    `${leaderName}, \uD655\uC778\uD588\uC2B5\uB2C8\uB2E4. ${execName}\uC5D0\uAC8C ${crossDeptName} \uC9C0\uC6D0 \uC791\uC5C5\uC744 \uBC14\uB85C \uBC30\uC815\uD558\uACE0 \uC9C4\uD589 \uC0C1\uD669\uC744 \uACF5\uC720\uD558\uACA0\uC2B5\uB2C8\uB2E4.`,
+                    `${execName}\uC774 ${crossDeptName} \uBC94\uC704\uB97C \uB2F4\uB2F9\uD569\uB2C8\uB2E4. \uC0B0\uCD9C\uBB3C\uACFC \uAC80\uC99D \uACB0\uACFC\uB97C \uD568\uAED8 \uC804\uB2EC\uD558\uACA0\uC2B5\uB2C8\uB2E4.`,
+                  ],
+                  [
+                    `Sure, ${leaderName}! I'll assign ${execName} to support ${crossDeptName} right away and keep you posted.`,
+                    `Got it! ${execName} will handle the ${crossDeptName} scope and report both output and verification results.`,
+                  ],
+                  [`Sure, ${leaderName}! I'll assign ${execName} to support ${crossDeptName} right away and keep you posted.`],
+                  [`Sure, ${leaderName}! I'll assign ${execName} to support ${crossDeptName} right away and keep you posted.`],
+                ),
                 lang,
               )
             : pickL(
-                lang === "ko"
-                  ? l(
-                      [`${leaderName}님, 확인했습니다. 제가 직접 진행하겠습니다.`],
-                      [`Sure, ${leaderName}! I'll handle it personally.`],
-                      [`Sure, ${leaderName}! I'll handle it personally.`],
-                      [`Sure, ${leaderName}! I'll handle it personally.`],
-                    )
-                  : l(
-                      [`${leaderName}님, 확인했습니다. 제가 직접 진행하겠습니다.`],
-                      [`Sure, ${leaderName}! I'll handle it personally.`],
-                      [`承知しました、${leaderName}さん。私が直接進めます。`],
-                      [`收到，${leaderName}。我会直接处理。`],
-                    ),
+                l(
+                  [
+                    `${leaderName}, \uD655\uC778\uD588\uC2B5\uB2C8\uB2E4. \uC81C\uAC00 \uC9C1\uC811 \uC9C4\uD589\uD558\uACE0 \uC0B0\uCD9C\uBB3C\uACFC \uAC80\uC99D \uACB0\uACFC\uB97C \uC815\uB9AC\uD558\uACA0\uC2B5\uB2C8\uB2E4.`,
+                  ],
+                  [`Sure, ${leaderName}! I'll handle it personally and summarize the output plus verification result.`],
+                  [`Sure, ${leaderName}! I'll handle it personally and summarize the output plus verification result.`],
+                  [`Sure, ${leaderName}! I'll handle it personally and summarize the output plus verification result.`],
+                ),
                 lang,
               );
         sendAgentMessage(crossCoordinator, crossAckMsg, "chat", "agent", null, taskId);
@@ -521,10 +473,10 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
         const ct = nowMs();
         const crossTaskTitle = pickL(
           l(
-            [`[협업] ${taskTitle}`],
+            [`[\uD611\uC5C5] ${taskTitle}`],
             [`[Collaboration] ${taskTitle}`],
-            [`[協業] ${taskTitle}`],
-            [`[协作] ${taskTitle}`],
+            [`[Collaboration] ${taskTitle}`],
+            [`[Collaboration] ${taskTitle}`],
           ),
           lang,
         );
@@ -618,7 +570,7 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
           crossTaskId,
           execAgent.id,
         );
-        appendTaskLog(crossTaskId, "system", `${crossCoordinatorName} → ${execName}`);
+        appendTaskLog(crossTaskId, "system", `${crossCoordinatorName} ??${execName}`);
 
         broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(crossTaskId));
         broadcast("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(execAgent.id));
@@ -647,12 +599,35 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
             | {
                 title: string;
                 description: string | null;
+                project_id: string | null;
                 project_path: string | null;
                 workflow_pack_key: string | null;
               }
             | undefined;
           if (crossTaskData) {
-            const projPath = resolveProjectPath(crossTaskData);
+            const pathGate = evaluateExecutionPathGate({
+              db: db as any,
+              task: {
+                project_id: crossTaskData.project_id ?? null,
+                project_path: crossTaskData.project_path ?? null,
+              },
+            });
+            if (!pathGate.ok) {
+              const blockedAt = nowMs();
+              appendTaskLog(crossTaskId, "system", `execution_blocked ${pathGate.error}`);
+              appendTaskLog(crossTaskId, "error", `Execution blocked (${pathGate.error}): ${pathGate.message}`);
+              db.prepare("UPDATE tasks SET status = 'inbox', started_at = NULL, updated_at = ? WHERE id = ?").run(
+                blockedAt,
+                crossTaskId,
+              );
+              db.prepare(
+                "UPDATE agents SET status = 'idle', current_task_id = CASE WHEN current_task_id = ? THEN NULL ELSE current_task_id END WHERE id = ?",
+              ).run(crossTaskId, execAgent.id);
+              broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(crossTaskId));
+              broadcast("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(execAgent.id));
+              return;
+            }
+            const projPath = pathGate.projectPath;
             const logFilePath = path.join(logsDir, `${crossTaskId}.log`);
             const roleLabels: Record<string, string> = {
               team_leader: "Team Leader",
@@ -681,10 +656,10 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
                 deptPromptBlock,
                 pickL(
                   l(
-                    ["위 작업을 충분히 수행하세요. 필요하면 위 대화 맥락을 참고하세요."],
+                    ["\uC704 \uC791\uC5C5\uC744 \uCDA9\uBD84\uD788 \uC218\uD589\uD558\uACE0, \uD544\uC694\uD558\uBA74 \uC704 \uB300\uD654 \uB9E5\uB77D\uC744 \uCC38\uACE0\uD558\uC138\uC694."],
                     ["Please complete the task above thoroughly. Use the conversation context above if relevant."],
-                    ["上記の作業を十分に遂行してください。必要に応じて会話コンテキストを参照してください。"],
-                    ["请充分完成上述任务，并在需要时参考上方对话上下文。"],
+                    ["Please complete the task above thoroughly. Use the conversation context above if relevant."],
+                    ["Please complete the task above thoroughly. Use the conversation context above if relevant."],
                   ),
                   taskLang,
                 ),
@@ -769,7 +744,7 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
             notifyCeo(
               pickL(
                 l(
-                  [`${crossDeptName} ${execName}이(가) '${taskTitle}' 협업 작업을 시작했습니다.`],
+                  [`${crossDeptName} ${execName}\uAC00 '${taskTitle}' \uD611\uC5C5 \uC791\uC5C5\uC744 \uC2DC\uC791\uD588\uC2B5\uB2C8\uB2E4.`],
                   [`${crossDeptName} ${execName} started collaboration work for '${taskTitle}'.`],
                   [`${crossDeptName} ${execName} started collaboration work for "${taskTitle}".`],
                   [`${crossDeptName} ${execName} started collaboration work for "${taskTitle}".`],

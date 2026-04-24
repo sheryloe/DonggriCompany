@@ -15,6 +15,10 @@ type CreateWorktreeLifecycleToolsDeps = {
 
 export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsDeps) {
   const { appendTaskLog, taskWorktrees } = deps;
+  const gitAddInitialTimeoutMs = 120_000;
+  const gitAddRetryTimeoutMs = 420_000;
+  const gitCommitTimeoutMs = 180_000;
+  const allowGitBootstrap = process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP === "1";
 
   function isGitRepo(dir: string): boolean {
     try {
@@ -27,6 +31,11 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
 
   function ensureWorktreeBootstrapRepo(projectPath: string, taskId: string): boolean {
     if (isGitRepo(projectPath)) return true;
+    if (!allowGitBootstrap) {
+      appendTaskLog(taskId, "system", "execution_blocked git_repo_required");
+      appendTaskLog(taskId, "system", "Git bootstrap is disabled. Set WORKTREE_ALLOW_GIT_BOOTSTRAP=1 to enable it.");
+      return false;
+    }
     const shortId = taskId.slice(0, 8);
     try {
       if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
@@ -52,7 +61,22 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
       }
 
       const excludePath = path.join(projectPath, ".git", "info", "exclude");
-      const baseIgnore = ["node_modules/", "dist/", ".climpire-worktrees/", ".climpire/", ".DS_Store", "*.log"];
+      const baseIgnore = [
+        "node_modules/",
+        "dist/",
+        ".climpire-worktrees/",
+        ".climpire/",
+        ".DS_Store",
+        "*.log",
+        "data/",
+        ".env",
+        ".env.*",
+        ".cache/",
+        ".npm/",
+        ".pnpm-store/",
+        ".turbo/",
+        ".next/",
+      ];
       let existingExclude = "";
       try {
         existingExclude = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, "utf8") : "";
@@ -89,11 +113,28 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
         });
       }
 
-      execFileSync("git", ["add", "-A"], { cwd: projectPath, stdio: "pipe", timeout: 20000 });
+      const runGitAdd = (timeout: number) => {
+        execFileSync("git", ["add", "-A"], { cwd: projectPath, stdio: "pipe", timeout });
+      };
+      try {
+        runGitAdd(gitAddInitialTimeoutMs);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/ETIMEDOUT|timed out/i.test(msg)) {
+          appendTaskLog(
+            taskId,
+            "system",
+            `Git bootstrap add timed out after ${gitAddInitialTimeoutMs}ms. Retrying with extended timeout...`,
+          );
+          runGitAdd(gitAddRetryTimeoutMs);
+        } else {
+          throw err;
+        }
+      }
       const staged = execFileSync("git", ["diff", "--cached", "--name-only"], {
         cwd: projectPath,
         stdio: "pipe",
-        timeout: 5000,
+        timeout: 15_000,
       })
         .toString()
         .trim();
@@ -101,13 +142,13 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
         execFileSync("git", ["commit", "-m", "chore: initialize project for Claw-Empire worktrees"], {
           cwd: projectPath,
           stdio: "pipe",
-          timeout: 20000,
+          timeout: gitCommitTimeoutMs,
         });
       } else {
         execFileSync("git", ["commit", "--allow-empty", "-m", "chore: initialize project for Claw-Empire worktrees"], {
           cwd: projectPath,
           stdio: "pipe",
-          timeout: 10000,
+          timeout: 30_000,
         });
       }
 
@@ -216,7 +257,7 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
           }
         }
       } catch {
-        // best effort — skill propagation failure should not block execution
+        // best effort: skill propagation failure should not block execution
       }
 
       taskWorktrees.set(taskId, { worktreePath: selectedWorktreePath, branchName: selectedBranch, projectPath });
@@ -226,6 +267,7 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
       return selectedWorktreePath;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
+      appendTaskLog(taskId, "error", `Worktree creation failed: ${msg}`);
       console.error(`[Claw-Empire] Failed to create worktree for task ${shortId}: ${msg}`);
       return null;
     }
@@ -262,7 +304,7 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
         timeout: 5000,
       });
     } catch {
-      console.warn(`[Claw-Empire] Failed to delete branch ${info.branchName} — may need manual cleanup`);
+      console.warn(`[Claw-Empire] Failed to delete branch ${info.branchName}; manual cleanup may be required`);
     }
 
     taskWorktrees.delete(taskId);

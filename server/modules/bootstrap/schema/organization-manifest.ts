@@ -113,11 +113,11 @@ function seed(params: Omit<OrganizationAgentSeed, "name_ja" | "name_zh" | "workf
 
 export const DEFAULT_DEPARTMENT_SKILL_BUNDLES: Record<OrganizationDepartmentId, string[]> = {
   development: ["typescript", "react-node", "test", "refactor", "review"],
-  "planning-architecture": ["spec", "scope", "architecture-review", "roadmap"],
+  "planning-architecture": ["prd-writing", "user-discovery", "impact-mapping", "scope", "architecture-review", "roadmap-planning", "acceptance-criteria"],
   "ui-ux": ["design-system", "interaction", "accessibility", "handoff"],
   "cicd-repo": ["git-workflow", "deployment", "release-checklist", "repo-bootstrap"],
   management: ["settings-control", "runtime-ops", "monitoring", "program-ops"],
-  pmo: ["task-distribution", "milestone-reset", "dependency-map", "rebalance"],
+  pmo: ["task-distribution", "prd-brief", "rice-prioritization", "kano-moscow", "north-star-metrics", "experiment-design", "roadmap-planning", "stakeholder-brief", "decision-log"],
   qa: ["regression", "test-strategy", "release-confidence", "review-consensus"],
   bloggent: ["bloggent-cli", "editorial-calendar", "seo-brief", "content-operations"],
   "api-research": ["docs-research", "citation", "search-specialist", "free-token-ops"],
@@ -148,8 +148,8 @@ export const ORGANIZATION_AGENT_SEEDS: OrganizationAgentSeed[] = [
   seed({ id: "seed-management-senior", name: "Turbo", name_ko: "터보", department_id: "management", role: "senior", cli_provider: "codex", avatar_emoji: "RUN", personality: "Workspace state controller", family: "memory-manager", career_stage: "senior", specialization_key: "workspace.state", authority_level: 3, execution_capability_profile: "reviewer", review_lenses: ["operations", "monitoring", "traceability"], max_review_rounds: null }),
   seed({ id: "seed-management-junior", name: "Ledger", name_ko: "레저", department_id: "management", role: "junior", cli_provider: "codex", avatar_emoji: "LOG", personality: "Operations record keeper", family: "documenter", career_stage: "junior", specialization_key: "ops.records", authority_level: 1, execution_capability_profile: "reviewer", review_lenses: ["operations", "traceability", "documentation"], max_review_rounds: null }),
 
-  seed({ id: "seed-pmo-lead", name: "Summit", name_ko: "서밋", department_id: "pmo", role: "team_leader", cli_provider: "codex", avatar_emoji: "PMO", personality: "CEO-direct PMO chair", family: "orchestrator", career_stage: "team-lead", specialization_key: "pmo.command-desk", authority_level: 7, execution_capability_profile: "primary_author", review_lenses: ["scope", "priority", "dependency"], max_review_rounds: 2 }),
-  seed({ id: "seed-pmo-senior", name: "Vector", name_ko: "벡터", department_id: "pmo", role: "senior", cli_provider: "codex", avatar_emoji: "ROAD", personality: "Roadmap control specialist", family: "product-manager", career_stage: "senior", specialization_key: "roadmap.control", authority_level: 3, execution_capability_profile: "reviewer", review_lenses: ["scope", "priority", "timeline"], max_review_rounds: null }),
+  seed({ id: "seed-pmo-lead", name: "Summit", name_ko: "서밋", department_id: "pmo", role: "team_leader", cli_provider: "codex", avatar_emoji: "PMO", personality: "CEO-direct PMO chair", family: "orchestrator", career_stage: "team-lead", specialization_key: "pmo.command-desk", authority_level: 7, execution_capability_profile: "primary_author", review_lenses: ["scope", "priority", "dependency", "metrics", "risk"], max_review_rounds: 2 }),
+  seed({ id: "seed-pmo-senior", name: "Vector", name_ko: "벡터", department_id: "pmo", role: "senior", cli_provider: "codex", avatar_emoji: "ROAD", personality: "Roadmap control specialist", family: "product-manager", career_stage: "senior", specialization_key: "roadmap.control", authority_level: 3, execution_capability_profile: "reviewer", review_lenses: ["scope", "priority", "timeline", "metrics"], max_review_rounds: null }),
   seed({ id: "seed-pmo-junior", name: "Tempo", name_ko: "템포", department_id: "pmo", role: "junior", cli_provider: "codex", avatar_emoji: "STAT", personality: "Status rollup coordinator", family: "documenter", career_stage: "junior", specialization_key: "status.rollup", authority_level: 1, execution_capability_profile: "reviewer", review_lenses: ["timeline", "traceability", "clarity"], max_review_rounds: null }),
 
   seed({ id: "seed-qa-lead", name: "Hawk", name_ko: "호크", department_id: "qa", role: "team_leader", cli_provider: "codex", avatar_emoji: "QA", personality: "Quality lead", family: "qa", career_stage: "team-lead", specialization_key: "release.validation", authority_level: 7, execution_capability_profile: "reviewer", review_lenses: ["test_coverage", "regression", "reliability"], max_review_rounds: null }),

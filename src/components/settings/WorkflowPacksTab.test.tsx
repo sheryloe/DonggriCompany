@@ -48,7 +48,7 @@ describe("WorkflowPacksTab", () => {
       expect(screen.getByText("development")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Projection")).toBeInTheDocument();
+    expect(screen.getByText("Read-only projection")).toBeInTheDocument();
     expect(screen.getByText("canonical_projection")).toBeInTheDocument();
     expect(screen.getByText("base:donggri")).toBeInTheDocument();
     expect(screen.getByText("derived:donggri")).toBeInTheDocument();

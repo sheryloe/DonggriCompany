@@ -347,9 +347,9 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           workflowPackKey: taskWorkflowPackKey,
           transcript,
           turnObjective:
-            "Open the planned kickoff meeting and ask each leader to state target, method, deliverable, and acceptance criteria.",
+            "Open the planned kickoff meeting as a PMO product brief. Ask for goal, user/problem, scope, non-goals, success metric, owner, deliverable, risk, and acceptance criteria.",
           stanceHint:
-            "At Planned stage, avoid vague readiness talk. Ask for concrete output and convert concerns into executable planning items.",
+            "Do not accept vague readiness talk. Convert every concern into a concrete PM artifact or executable subtask with owner and proof of completion.",
           lang,
         });
         const openingRun = await runMeetingOneShotWithRetry(planningLeader, openingPrompt, "opening");
@@ -370,9 +370,9 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
             workflowPackKey: taskWorkflowPackKey,
             transcript,
             turnObjective:
-              "Share one concrete department plan with target, method, deliverable, and acceptance criteria for subtasks.",
+              "Share one concrete department plan: what you will make, how you will verify it, what artifact you will leave, and what acceptance criterion proves completion.",
             stanceHint:
-              "Do not answer with only 'we will check'. State what will be made, how it will be verified, and the expected output.",
+              "Do not answer with only 'we will check'. State the output, validation method, owner, risk, and next action in one practical message.",
             lang,
           });
           const feedbackRun = await runMeetingOneShotWithRetry(leader, feedbackPrompt, "feedback");
@@ -405,8 +405,8 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           workflowPackKey: taskWorkflowPackKey,
           transcript,
           turnObjective:
-            "Summarize department points as executable subtasks with owner, method, deliverable, and acceptance criteria.",
-          stanceHint: "Keep kickoff moving and show concrete planned next steps instead of generic agreement.",
+            "Summarize department points into a PM execution brief with goal, user/problem, scope, non-goals, success metric, owner, milestone, deliverable, risk, and acceptance criteria.",
+          stanceHint: "Keep kickoff moving. Produce concrete planned next steps, not generic agreement.",
           lang,
         });
         const summaryRun = await runMeetingOneShotWithRetry(planningLeader, summaryPrompt, "summary");
@@ -426,7 +426,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
             workflowPackKey: taskWorkflowPackKey,
             transcript,
             turnObjective:
-              "Propose one immediate planning action item for your team with target, method, deliverable, and acceptance criteria.",
+              "Propose one immediate action item with target, method, deliverable, evidence to collect, owner, and acceptance criterion.",
             stanceHint:
               "State what to do next, what evidence to collect, who owns it, and what output proves completion. Do not block kickoff at this stage.",
             lang,

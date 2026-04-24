@@ -583,15 +583,17 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
           pickL(
             l(
               [
-                `'${task.title}' 협업 하위 태스크가 Review 대기 상태로 전환되었습니다. 상위 태스크의 단일 취합 검토 회의에서 최종 반영됩니다.`,
+                `'${task.title}' 하위 협업 작업이 리뷰 대기 상태로 전환되었습니다. 상위 작업의 단일 리뷰/병합 회의에서 최종 반영됩니다.`,
               ],
               [
                 `'${task.title}' collaboration child task is now waiting in Review. It will be consolidated in the parent task's single review/merge meeting.`,
               ],
               [
-                `'${task.title}' の協업子タスクは Review 待機に入りました。親タ스크の単一レビュー/마ージ会議で最終反映されます。`,
+                `'${task.title}' collaboration child task is now waiting in Review. It will be consolidated in the parent task's single review/merge meeting.`,
               ],
-              [`'${task.title}' 的协作子任务已进入 Review 等待状态，将在父任务的单次评审/合并会议中统一处理。`],
+              [
+                `'${task.title}' collaboration child task is now waiting in Review. It will be consolidated in the parent task's single review/merge meeting.`,
+              ],
             ),
             sourceLang,
           ),
@@ -620,14 +622,14 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         const leader = findTeamLeader(task.department_id);
         const leaderName = leader
           ? getAgentDisplayName(leader, lang)
-          : pickL(l(["팀장"], ["Team Lead"], ["팀리드"], ["组长"]), lang);
+          : pickL(l(["팀 리드"], ["Team Lead"], ["Team Lead"], ["Team Lead"]), lang);
         notifyCeo(
           pickL(
             l(
               [`${leaderName}이(가) '${task.title}' 결과를 검토 중입니다.`],
               [`${leaderName} is reviewing the result for '${task.title}'.`],
-              [`${leaderName} が '${task.title}' の結果をレビュー中です。`],
-              [`${leaderName} 正在审核 '${task.title}' 的结果。`],
+              [`${leaderName} is reviewing the result for '${task.title}'.`],
+              [`${leaderName} is reviewing the result for '${task.title}'.`],
             ),
             lang,
           ),
@@ -682,19 +684,19 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         let reportContent = reportBody
           ? pickL(
               l(
-                [`CEO님, '${task.title}' 작업 완료 보고드립니다.\n\n결과 요약:\n${reportBody}`],
+                [`CEO, '${task.title}' 작업 완료를 보고드립니다.\n\n결과 요약:\n${reportBody}`],
                 [`CEO, reporting completion for '${task.title}'.\n\nResult Summary:\n${reportBody}`],
-                [`CEO、'${task.title}' の完了を報告します。\n\n結果サマリ:\n${reportBody}`],
-                [`CEO，现报告 '${task.title}' 已完成。\n\n结果摘要:\n${reportBody}`],
+                [`CEO, reporting completion for '${task.title}'.\n\nResult Summary:\n${reportBody}`],
+                [`CEO, reporting completion for '${task.title}'.\n\nResult Summary:\n${reportBody}`],
               ),
               reportLang,
             )
           : pickL(
               l(
-                [`CEO님, '${task.title}' 작업 완료 보고드립니다. 작업이 성공적으로 마무리되었습니다.`],
+                [`CEO, '${task.title}' 작업 완료를 보고드립니다. 작업이 성공적으로 마무리되었습니다.`],
                 [`CEO, reporting completion for '${task.title}'. The work has been finished successfully.`],
-                [`CEO、'${task.title}' の完了을 報告합니다. 作業은 正常히 完了되었습니다.`],
-                [`CEO，现报告 '${task.title}' 已完成，任务已成功结束。`],
+                [`CEO, reporting completion for '${task.title}'. The work has been finished successfully.`],
+                [`CEO, reporting completion for '${task.title}'. The work has been finished successfully.`],
               ),
               reportLang,
             );
@@ -752,16 +754,16 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
               ? pickL(
                   l(
                     [
-                      `CEO님, '${task.title}' 작업 중 문제가 발생했습니다 (종료코드: ${finalExitCode}).\n\n오류 내용:\n${errorBody}\n\n에이전트를 재배정하거나 작업 내용을 수정한 뒤 다시 시도해 주세요.`,
+                      `CEO, '${task.title}' 작업 중 문제가 발생했습니다 (종료 코드: ${finalExitCode}).\n\n오류 내용:\n${errorBody}\n\n담당자를 다시 배정하거나 작업 내용을 수정한 뒤 재시도해 주세요.`,
                     ],
                     [
                       `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}).\n\nError:\n${errorBody}\n\nPlease reassign the agent or revise the task, then try again.`,
                     ],
                     [
-                      `CEO、'${task.title}' の実行中に問題が発生しました (終了コード: ${finalExitCode})。\n\nエラー内容:\n${errorBody}\n\n担当エージェントの再割り当て、またはタスク内容修正後に再実行してください。`,
+                      `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}).\n\nError:\n${errorBody}\n\nPlease reassign the agent or revise the task, then try again.`,
                     ],
                     [
-                      `CEO，'${task.title}' 执行过程中发生问题（退出码: ${finalExitCode}）。\n\n错误信息:\n${errorBody}\n\n请重新分配代理或调整任务后再试。`,
+                      `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}).\n\nError:\n${errorBody}\n\nPlease reassign the agent or revise the task, then try again.`,
                     ],
                   ),
                   failLang,
@@ -769,16 +771,16 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
               : pickL(
                   l(
                     [
-                      `CEO님, '${task.title}' 작업 중 문제가 발생했습니다 (종료코드: ${finalExitCode}). 에이전트를 재배정하거나 작업 내용을 수정한 뒤 다시 시도해 주세요.`,
+                      `CEO, '${task.title}' 작업 중 문제가 발생했습니다 (종료 코드: ${finalExitCode}). 담당자를 다시 배정하거나 작업 내용을 수정한 뒤 재시도해 주세요.`,
                     ],
                     [
                       `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}). Please reassign the agent or revise the task, then try again.`,
                     ],
                     [
-                      `CEO、'${task.title}' の実行中に問題が発生しました (終了コード: ${finalExitCode})。担当エージェントの再割り当て、またはタ스크內容修正後、再実行してください。`,
+                      `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}). Please reassign the agent or revise the task, then try again.`,
                     ],
                     [
-                      `CEO，'${task.title}' 执行过程中发生问题（退出码: ${finalExitCode}）。请重新分配代理或调整任务后再试。`,
+                      `CEO, '${task.title}' failed with an issue (exit code: ${finalExitCode}). Please reassign the agent or revise the task, then try again.`,
                     ],
                   ),
                   failLang,
@@ -791,10 +793,10 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         notifyCeo(
           pickL(
             l(
-              [`'${task.title}' 작업 실패 (exit code: ${finalExitCode}).`],
+              [`'${task.title}' 작업이 실패했습니다 (exit code: ${finalExitCode}).`],
               [`Task '${task.title}' failed (exit code: ${finalExitCode}).`],
-              [`'${task.title}' 의 實行에 失敗했습니다 (exit code: ${finalExitCode}).`],
-              [`任务 '${task.title}' 执行失败 (exit code: ${finalExitCode}).`],
+              [`Task '${task.title}' failed (exit code: ${finalExitCode}).`],
+              [`Task '${task.title}' failed (exit code: ${finalExitCode}).`],
             ),
             failLang,
           ),

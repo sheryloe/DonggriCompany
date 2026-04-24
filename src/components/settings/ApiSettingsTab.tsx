@@ -439,7 +439,7 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
                                     zh: "Read-only (compatibility-only)",
                                   })}
                                 >
-                                  {t({ ko: "읽기전용", en: "Read-only", ja: "Read-only", zh: "Read-only" })}
+                                  {t({ ko: "?? ??", en: "Read-only", ja: "Read-only", zh: "Read-only" })}
                                 </button>
                               </div>
                             ))}

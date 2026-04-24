@@ -44,30 +44,16 @@ export function createMeetingPromptTools(deps: CreateMeetingPromptToolsDeps) {
         ? lang === "ko"
           ? [
               "[Video Runtime Invariant]",
-              "- 영상 기획/실행은 최종 렌더러를 Remotion으로 고정합니다.",
-              "- 기획 항목은 Remotion 기준(컴포지션/씬/타임라인/트랜지션)으로 작성하세요.",
-              "- Python(moviepy/Pillow) 등 비-Remotion 렌더 파이프라인 제안은 금지합니다.",
+              "- ?? ?? ???? Remotion?? ?????.",
+              "- ?? ??? Remotion ??(composition/scene/timeline/transition)? ?? ?????.",
+              "- Python(moviepy/Pillow) ?? ?-Remotion ?? ?????? ???? ???.",
             ].join("\n")
-          : lang === "ja"
-            ? [
-                "[Video Runtime Invariant]",
-                "- 動画企画/実行の最終レンダラーは Remotion 固定です。",
-                "- 計画項目は Remotion 前提（コンポジション/シーン/タイムライン/トランジション）で作成してください。",
-                "- Python（moviepy/Pillow）など非Remotionレンダーパイプラインの提案は禁止です。",
-              ].join("\n")
-            : lang === "zh"
-              ? [
-                  "[Video Runtime Invariant]",
-                  "- 视频策划/执行的最终渲染器固定为 Remotion。",
-                  "- 计划项必须按 Remotion 产线编写（composition/scene/timeline/transition）。",
-                  "- 禁止提出 Python（moviepy/Pillow）等非 Remotion 渲染方案。",
-                ].join("\n")
-              : [
-                  "[Video Runtime Invariant]",
-                  "- Final video rendering is fixed to Remotion.",
-                  "- Plan action items around Remotion flow (composition/scene/timeline/transitions).",
-                  "- Do not propose Python renderers (moviepy/Pillow) or any non-Remotion pipeline.",
-                ].join("\n")
+          : [
+              "[Video Runtime Invariant]",
+              "- Final video rendering is fixed to Remotion.",
+              "- Plan action items around Remotion flow (composition/scene/timeline/transitions).",
+              "- Do not propose Python renderers (moviepy/Pillow) or any non-Remotion pipeline.",
+            ].join("\n")
         : "";
     return [
       `[CEO OFFICE ${meetingLabel}]`,
@@ -143,10 +129,8 @@ export function createMeetingPromptTools(deps: CreateMeetingPromptToolsDeps) {
 
   function buildCliFailureMessage(agent: AgentRow, lang: string, error?: string): string {
     const name = getAgentDisplayName(agent, lang);
-    if (lang === "en") return `${name}: CLI response failed (${error || "unknown error"}).`;
-    if (lang === "ja") return `${name}: CLI応答の生成に失敗しました（${error || "不明なエラー"}）。`;
-    if (lang === "zh") return `${name}: CLI回复生成失败（${error || "未知错误"}）。`;
-    return `${name}: CLI 응답 생성에 실패했습니다 (${error || "알 수 없는 오류"}).`;
+    const detail = error || (lang === "ko" ? "? ? ?? ??" : "unknown error");
+    return lang === "ko" ? `${name}: CLI ?? ??? ?????? (${detail}).` : `${name}: CLI response failed (${detail}).`;
   }
 
   return {

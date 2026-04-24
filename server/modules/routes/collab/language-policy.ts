@@ -153,17 +153,13 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
     return fallback === "ko" ? "ko" : "en";
   }
 
-  function l(ko: string[], en: string[], ja?: string[], zh?: string[]): L10n {
-    return {
-      ko,
-      en,
-      ja: ja ?? en,
-      zh: zh ?? en,
-    };
+  function l(ko: string[], en: string[], _ja?: string[], _zh?: string[]): L10n {
+    return { ko, en, ja: en, zh: en };
   }
 
   function pickL(pool: L10n, lang: Lang): string {
-    const list = pool[lang] ?? pool.en;
+    const normalizedLang = lang === "ko" ? "ko" : "en";
+    const list = pool[normalizedLang] ?? pool.en;
     return list[Math.floor(Math.random() * list.length)] ?? "";
   }
 

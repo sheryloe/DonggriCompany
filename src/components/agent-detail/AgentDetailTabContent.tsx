@@ -51,6 +51,17 @@ function infoField(label: string, value: string | number | null | undefined) {
   );
 }
 
+function canonicalSourceLabel(value: string | null | undefined, language: UiLanguage): string {
+  const normalized = String(value ?? "derived").trim();
+  if (language !== "ko") return normalized || "-";
+  const labels: Record<string, string> = { stored: "저장됨", derived: "파생됨", default: "기본값", canonical: "표준 규칙" };
+  return (labels[normalized] ?? normalized) || "-";
+}
+
+function tierLabel(value: number, language: UiLanguage): string {
+  return language === "ko" ? `티어 ${value}` : `Tier ${value}`;
+}
+
 export default function AgentDetailTabContent({
   tab,
   t,
@@ -82,14 +93,14 @@ export default function AgentDetailTabContent({
   const classPath = classPathText(profile);
   const canonicalFamily = agent.family ? getCanonicalFamilyLabel(agent.family, language) : "-";
   const canonicalStage = agent.career_stage ? getCanonicalStageLabel(agent.career_stage, language) : "-";
-  const canonicalSource = agent.canonical_identity_source ?? "derived";
+  const canonicalSource = canonicalSourceLabel(agent.canonical_identity_source, language);
   const workflowRoleMirror = agent.workflow_profile?.role
     ? getWorkflowRoleDisplayLabel(agent.workflow_profile.role, language)
     : t({ ko: "설정 없음", en: "Not set", ja: "Not set", zh: "Not set" });
   const executionCapability = String(agent.execution_capability_profile ?? "").trim() || "-";
   const capabilityBars = [
     { key: "execution", label: t({ ko: "실행", en: "Execution", ja: "Execution", zh: "Execution" }), value: profile.capabilities.execution },
-    { key: "architecture", label: t({ ko: "설계", en: "Architecture", ja: "Architecture", zh: "Architecture" }), value: profile.capabilities.architecture },
+    { key: "architecture", label: t({ ko: "아키텍처", en: "Architecture", ja: "Architecture", zh: "Architecture" }), value: profile.capabilities.architecture },
     { key: "review", label: t({ ko: "리뷰", en: "Review", ja: "Review", zh: "Review" }), value: profile.capabilities.review },
     { key: "leadership", label: t({ ko: "리더십", en: "Leadership", ja: "Leadership", zh: "Leadership" }), value: profile.capabilities.leadership },
   ] as const;
@@ -99,30 +110,30 @@ export default function AgentDetailTabContent({
       <div className="space-y-3">
         <div className="rounded-lg bg-slate-700/30 p-3">
           <div className="mb-1 text-xs text-slate-500">
-            {t({ ko: "Canonical Identity", en: "Canonical Identity", ja: "Canonical Identity", zh: "Canonical Identity" })}
+            {t({ ko: "표준 정체성", en: "Canonical Identity", ja: "Canonical Identity", zh: "Canonical Identity" })}
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            {infoField(t({ ko: "Family", en: "Family", ja: "Family", zh: "Family" }), canonicalFamily)}
-            {infoField(t({ ko: "Career Stage", en: "Career Stage", ja: "Career Stage", zh: "Career Stage" }), canonicalStage)}
-            {infoField(t({ ko: "Specialization", en: "Specialization", ja: "Specialization", zh: "Specialization" }), agent.specialization_key ?? "-")}
-            {infoField(t({ ko: "Authority Level", en: "Authority Level", ja: "Authority Level", zh: "Authority Level" }), agent.authority_level ?? "-")}
+            {infoField(t({ ko: "직군", en: "Family", ja: "Family", zh: "Family" }), canonicalFamily)}
+            {infoField(t({ ko: "경력 단계", en: "Career Stage", ja: "Career Stage", zh: "Career Stage" }), canonicalStage)}
+            {infoField(t({ ko: "전문화", en: "Specialization", ja: "Specialization", zh: "Specialization" }), agent.specialization_key ?? "-")}
+            {infoField(t({ ko: "권한 레벨", en: "Authority Level", ja: "Authority Level", zh: "Authority Level" }), agent.authority_level ?? "-")}
             {infoField(
-              t({ ko: "Execution Capability", en: "Execution Capability", ja: "Execution Capability", zh: "Execution Capability" }),
+              t({ ko: "실행 역량", en: "Execution Capability", ja: "Execution Capability", zh: "Execution Capability" }),
               agent.execution_capability_profile ?? "-",
             )}
-            {infoField(t({ ko: "Source", en: "Source", ja: "Source", zh: "Source" }), canonicalSource)}
+            {infoField(t({ ko: "출처", en: "Source", ja: "Source", zh: "Source" }), canonicalSource)}
           </div>
         </div>
 
         <div className="rounded-lg bg-slate-700/30 p-3">
           <div className="mb-1 text-xs text-slate-500">
-            {t({ ko: "Legacy Compatibility", en: "Legacy Compatibility", ja: "Legacy Compatibility", zh: "Legacy Compatibility" })}
+            {t({ ko: "레거시 호환 정보", en: "Legacy Compatibility", ja: "Legacy Compatibility", zh: "Legacy Compatibility" })}
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            {infoField(t({ ko: "Legacy Role", en: "Legacy Role", ja: "Legacy Role", zh: "Legacy Role" }), getRoleDisplayLabel(agent.role, language))}
+            {infoField(t({ ko: "레거시 역할", en: "Legacy Role", ja: "Legacy Role", zh: "Legacy Role" }), getRoleDisplayLabel(agent.role, language))}
             {infoField(
               t({
-                ko: "Workflow Capability (Compat)",
+                ko: "워크플로우 역량(호환)",
                 en: "Workflow Capability (Compat)",
                 ja: "Workflow Capability (Compat)",
                 zh: "Workflow Capability (Compat)",
@@ -131,19 +142,19 @@ export default function AgentDetailTabContent({
             )}
             {infoField(
               t({
-                ko: "Legacy Workflow Role Mirror",
+                ko: "레거시 워크플로우 역할 미러",
                 en: "Legacy Workflow Role Mirror",
                 ja: "Legacy Workflow Role Mirror",
                 zh: "Legacy Workflow Role Mirror",
               }),
               workflowRoleMirror,
             )}
-            {infoField(t({ ko: "Applied Tier", en: "Applied Tier", ja: "Applied Tier", zh: "Applied Tier" }), `Tier ${profile.growth_tier}`)}
+            {infoField(t({ ko: "적용 티어", en: "Applied Tier", ja: "Applied Tier", zh: "Applied Tier" }), tierLabel(profile.growth_tier, language))}
             {infoField(
-              t({ ko: "Recommended Tier", en: "Recommended Tier", ja: "Recommended Tier", zh: "Recommended Tier" }),
-              `Tier ${recommendedTier}`,
+              t({ ko: "추천 티어", en: "Recommended Tier", ja: "Recommended Tier", zh: "Recommended Tier" }),
+              tierLabel(recommendedTier, language),
             )}
-            {infoField(t({ ko: "Class Path", en: "Class Path", ja: "Class Path", zh: "Class Path" }), classPath || "-")}
+            {infoField(t({ ko: "클래스 경로", en: "Class Path", ja: "Class Path", zh: "Class Path" }), classPath || "-")}
           </div>
           <div className="mt-2 text-sm text-slate-300">{capabilitySummary}</div>
           {specialtiesText ? <div className="mt-2 text-xs text-slate-400">{specialtiesText}</div> : null}
@@ -151,7 +162,7 @@ export default function AgentDetailTabContent({
 
         <div className="rounded-lg bg-slate-700/30 p-3">
           <div className="mb-2 text-xs text-slate-500">
-            {t({ ko: "능력치", en: "Capability Stats", ja: "Capability Stats", zh: "Capability Stats" })}
+            {t({ ko: "역량 스탯", en: "Capability Stats", ja: "Capability Stats", zh: "Capability Stats" })}
           </div>
           <div className="space-y-1.5">
             {capabilityBars.map((entry) => (
@@ -171,7 +182,7 @@ export default function AgentDetailTabContent({
 
         <div className="rounded-lg bg-slate-700/30 p-3">
           <div className="mb-1 text-xs text-slate-500">
-            {t({ ko: "Custom Prompt Override", en: "Custom Prompt Override", ja: "Custom Prompt Override", zh: "Custom Prompt Override" })}
+            {t({ ko: "사용자 프롬프트 보정", en: "Custom Prompt Override", ja: "Custom Prompt Override", zh: "Custom Prompt Override" })}
           </div>
           <div className="text-sm text-slate-300">
             {overrideText || t({ ko: "설정 없음", en: "Not set", ja: "Not set", zh: "Not set" })}

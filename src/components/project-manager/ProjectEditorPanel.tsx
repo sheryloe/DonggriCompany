@@ -147,7 +147,7 @@ export default function ProjectEditorPanel({
   return (
     <div className="min-w-0 space-y-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4">
       <label className="block text-xs text-slate-400">
-        {t({ ko: "프로젝트 이름", en: "Project Name", ja: "Project Name", zh: "Project Name" })}
+        {t({ ko: "???? ??", en: "Project Name", ja: "Project Name", zh: "Project Name" })}
         <input
           type="text"
           value={name}
@@ -204,7 +204,7 @@ export default function ProjectEditorPanel({
           {githubAutoCreateEnabled && (
             <div className="space-y-3">
               <label className="block text-xs text-slate-400">
-                {t({ ko: "저장소 이름", en: "Repository Name", ja: "Repository Name", zh: "Repository Name" })}
+                {t({ ko: "??? ??", en: "Repository Name", ja: "Repository Name", zh: "Repository Name" })}
                 <input
                   type="text"
                   value={githubRepoName}
@@ -218,7 +218,7 @@ export default function ProjectEditorPanel({
 
               <div className="space-y-2">
                 <p className="text-xs text-slate-400">
-                  {t({ ko: "공개 범위", en: "Visibility", ja: "Visibility", zh: "Visibility" })}
+                  {t({ ko: "?? ??", en: "Visibility", ja: "Visibility", zh: "Visibility" })}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -233,7 +233,7 @@ export default function ProjectEditorPanel({
                         : "border-slate-700 bg-slate-900 text-slate-300"
                     }`}
                   >
-                    {t({ ko: "비공개", en: "Private", ja: "Private", zh: "Private" })}
+                    {t({ ko: "???", en: "Private", ja: "Private", zh: "Private" })}
                   </button>
                   <button
                     type="button"
@@ -247,7 +247,7 @@ export default function ProjectEditorPanel({
                         : "border-slate-700 bg-slate-900 text-slate-300"
                     }`}
                   >
-                    {t({ ko: "공개", en: "Public", ja: "Public", zh: "Public" })}
+                    {t({ ko: "??", en: "Public", ja: "Public", zh: "Public" })}
                   </button>
                 </div>
               </div>
@@ -285,7 +285,7 @@ export default function ProjectEditorPanel({
               ja: "Project Path (Auto)",
               zh: "Project Path (Auto)",
             })
-          : t({ ko: "프로젝트 경로", en: "Project Path", ja: "Project Path", zh: "Project Path" })}
+          : t({ ko: "???? ??", en: "Project Path", ja: "Project Path", zh: "Project Path" })}
         <input
           type="text"
           value={projectPath}
@@ -318,7 +318,7 @@ export default function ProjectEditorPanel({
               }}
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800"
             >
-              {t({ ko: "자동 경로로 복원", en: "Use Auto Path", ja: "Use Auto Path", zh: "Use Auto Path" })}
+              {t({ ko: "?? ?? ??", en: "Use Auto Path", ja: "Use Auto Path", zh: "Use Auto Path" })}
             </button>
           ) : (
             <button
@@ -329,7 +329,7 @@ export default function ProjectEditorPanel({
               }}
               className="rounded-md border border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-800"
             >
-              {t({ ko: "경로 직접 수정", en: "Customize Path", ja: "Customize Path", zh: "Customize Path" })}
+              {t({ ko: "?? ?? ??", en: "Customize Path", ja: "Customize Path", zh: "Customize Path" })}
             </button>
           )}
         </div>
@@ -382,7 +382,7 @@ export default function ProjectEditorPanel({
                     ja: "Close Auto Finder",
                     zh: "Close Auto Finder",
                   })
-                : t({ ko: "자동 경로 찾기", en: "Auto Path Finder", ja: "Auto Path Finder", zh: "Auto Path Finder" })}
+                : t({ ko: "?? ?? ???", en: "Auto Path Finder", ja: "Auto Path Finder", zh: "Auto Path Finder" })}
             </button>
             <button
               type="button"
@@ -518,7 +518,7 @@ export default function ProjectEditorPanel({
       )}
 
       <label className="block text-xs text-slate-400">
-        {t({ ko: "핵심 목표", en: "Core Goal", ja: "Core Goal", zh: "Core Goal" })}
+        {t({ ko: "?? ??", en: "Core Goal", ja: "Core Goal", zh: "Core Goal" })}
         <textarea
           rows={5}
           value={coreGoal}
@@ -535,7 +535,7 @@ export default function ProjectEditorPanel({
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>
             <p className="text-xs font-semibold text-slate-200">
-              {t({ ko: "배정 정책", en: "Assignment Policy", ja: "Assignment Policy", zh: "Assignment Policy" })}
+              {t({ ko: "?? ??", en: "Assignment Policy", ja: "Assignment Policy", zh: "Assignment Policy" })}
             </p>
             <p className="mt-1 text-[11px] text-slate-400">
               {t({
@@ -576,7 +576,7 @@ export default function ProjectEditorPanel({
         <label className="block">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-200">
-              {t({ ko: "Staffing Overlay (JSON)", en: "Staffing Overlay (JSON)", ja: "Staffing Overlay (JSON)", zh: "Staffing Overlay (JSON)" })}
+              {t({ ko: "???? ?? ????(JSON)", en: "Staffing Overlay (JSON)", ja: "Staffing Overlay (JSON)", zh: "Staffing Overlay (JSON)" })}
             </p>
             {(() => {
               if (!staffingPolicyJson.trim()) return null;
@@ -608,8 +608,8 @@ export default function ProjectEditorPanel({
             className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40"
           >
             {editingProjectId
-              ? t({ ko: "저장", en: "Save", ja: "Save", zh: "Save" })
-              : t({ ko: "프로젝트 생성", en: "Create", ja: "Create", zh: "Create" })}
+              ? t({ ko: "??", en: "Save", ja: "Save", zh: "Save" })
+              : t({ ko: "??", en: "Create", ja: "Create", zh: "Create" })}
           </button>
         )}
         {(isCreating || !!editingProjectId) && (
@@ -618,7 +618,7 @@ export default function ProjectEditorPanel({
             onClick={onCancelEdit}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300"
           >
-            {t({ ko: "취소", en: "Cancel", ja: "Cancel", zh: "Cancel" })}
+            {t({ ko: "??", en: "Cancel", ja: "Cancel", zh: "Cancel" })}
           </button>
         )}
         <button
@@ -627,7 +627,7 @@ export default function ProjectEditorPanel({
           disabled={!selectedProject || isCreating || !!editingProjectId}
           className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-40"
         >
-          {t({ ko: "선택 프로젝트 편집", en: "Edit Selected", ja: "Edit Selected", zh: "Edit Selected" })}
+          {t({ ko: "?? ?? ??", en: "Edit Selected", ja: "Edit Selected", zh: "Edit Selected" })}
         </button>
         <button
           type="button"
@@ -635,7 +635,7 @@ export default function ProjectEditorPanel({
           disabled={!selectedProject}
           className="rounded-lg border border-red-700/70 px-3 py-1.5 text-xs text-red-300 disabled:opacity-40"
         >
-          {t({ ko: "삭제", en: "Delete", ja: "Delete", zh: "Delete" })}
+          {t({ ko: "??", en: "Delete", ja: "Delete", zh: "Delete" })}
         </button>
       </div>
     </div>

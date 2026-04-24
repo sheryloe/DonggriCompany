@@ -66,10 +66,7 @@ function splitMessageByLimit(text: string, limit: number): string[] {
 }
 
 function localeInstructionForDirect(lang: Lang): string {
-  if (lang === "en") return "Respond in English.";
-  if (lang === "ja") return "Respond in Japanese.";
-  if (lang === "zh") return "Respond in Chinese.";
-  return "Respond in Korean.";
+  return lang === "ko" ? "???? ?????." : "Respond in English.";
 }
 
 export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
@@ -290,7 +287,7 @@ export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
               message_id: msgId,
               agent_id: agent.id,
               agent_name: agent.name,
-              agent_avatar: agent.avatar_emoji ?? "🤖",
+              agent_avatar: agent.avatar_emoji ?? "AI",
             });
 
             let fullText = "";
@@ -360,7 +357,7 @@ export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
               message_id: msgId,
               agent_id: agent.id,
               agent_name: agent.name,
-              agent_avatar: agent.avatar_emoji ?? "🤖",
+              agent_avatar: agent.avatar_emoji ?? "AI",
             });
 
             let fullText = "";

@@ -213,12 +213,42 @@ export function createOAuthStatusBuilder(ctx: RuntimeContext) {
     };
   }
 
-  async function buildOAuthStatus() {
+  function redactProviderStatus(provider: ReturnType<typeof buildProviderStatus>) {
+    return {
+      connected: provider.connected,
+      detected: provider.detected,
+      executionReady: provider.executionReady,
+      requiresWebOAuth: provider.requiresWebOAuth,
+      source: provider.source,
+      email: null,
+      scope: null,
+      expires_at: null,
+      created_at: 0,
+      updated_at: 0,
+      webConnectable: provider.webConnectable,
+      hasRefreshToken: provider.hasRefreshToken,
+      refreshFailed: provider.refreshFailed,
+      lastRefreshed: provider.lastRefreshed,
+      activeAccountId: null,
+      activeAccountIds: [],
+      accounts: [],
+    };
+  }
+
+  async function buildOAuthDebugStatus() {
     return {
       "github-copilot": buildProviderStatus("github"),
       antigravity: buildProviderStatus("google_antigravity"),
     };
   }
 
-  return { buildOAuthStatus };
+  async function buildOAuthStatus() {
+    const providers = await buildOAuthDebugStatus();
+    return {
+      "github-copilot": redactProviderStatus(providers["github-copilot"]),
+      antigravity: redactProviderStatus(providers.antigravity),
+    };
+  }
+
+  return { buildOAuthStatus, buildOAuthDebugStatus };
 }

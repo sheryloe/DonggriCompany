@@ -4,6 +4,7 @@ import type { SkillLearnProvider } from "../../api";
 import type { Agent } from "../../types";
 import AgentAvatar from "../AgentAvatar";
 import { providerLabel, type TFunction } from "./model";
+import { skillText } from "./skillLibraryText";
 
 interface CustomSkillModalProps {
   t: TFunction;
@@ -52,65 +53,47 @@ export default function CustomSkillModal({
         <div className="flex items-start justify-between gap-4 border-b border-slate-700/60 px-5 py-4">
           <div>
             <h3 className="text-base font-semibold text-white flex items-center gap-2">
-              <span>✏️</span>
-              {t({ ko: "커스텀 스킬 추가", en: "Add Custom Skill", ja: "カスタムスキル追加", zh: "添加自定义技能" })}
+              <span className="rounded-md border border-slate-600/60 px-1.5 py-0.5 text-[10px] text-slate-300">CUSTOM</span>
+              {skillText(t, "custom.title")}
             </h3>
-            <div className="mt-1 text-xs text-slate-400">
-              {t({
-                ko: "skills.md 파일을 첨부하고 CLI 대표자를 선택하세요",
-                en: "Attach a skills.md file and select CLI representatives",
-                ja: "skills.md ファイルを添付し、CLI代表を選択してください",
-                zh: "附加 skills.md 文件并选择 CLI 代表",
-              })}
-            </div>
+            <div className="mt-1 text-xs text-slate-400">{skillText(t, "custom.description")}</div>
           </div>
           <button
             onClick={onClose}
             disabled={customSkillSubmitting}
             className="rounded-lg border border-slate-600 px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-800 transition-all"
           >
-            {t({ ko: "닫기", en: "Close", ja: "閉じる", zh: "关闭" })}
+            {skillText(t, "action.close")}
           </button>
         </div>
 
         <div className="space-y-4 overflow-y-auto px-5 py-4 max-h-[calc(90vh-72px)]">
           <div>
             <label className="block text-xs text-slate-400 mb-1.5">
-              {t({ ko: "스킬명", en: "Skill Name", ja: "スキル名", zh: "技能名称" })}
+              {skillText(t, "custom.nameLabel")}
             </label>
             <input
               type="text"
               value={customSkillName}
               onChange={(e) => setCustomSkillName(e.target.value)}
-              placeholder={t({
-                ko: "예: my-custom-skill",
-                en: "e.g. my-custom-skill",
-                ja: "例: my-custom-skill",
-                zh: "例如: my-custom-skill",
-              })}
+              placeholder={skillText(t, "custom.namePlaceholder")}
               className="w-full bg-slate-900/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/25"
             />
             <div className="text-[10px] text-slate-500 mt-1">
-              {t({
-                ko: "영문, 숫자, 하이픈(-), 언더스코어(_)만 사용 가능",
-                en: "Only alphanumeric, dash (-), underscore (_) allowed",
-                ja: "英数字、ハイフン(-)、アンダースコア(_)のみ使用可能",
-                zh: "仅允许字母数字、短划线(-)或下划线(_)",
-              })}
+              {skillText(t, "custom.nameHelp")}
             </div>
           </div>
 
           <div>
             <label className="block text-xs text-slate-400 mb-1.5">
-              {t({ ko: "skills.md 파일", en: "skills.md File", ja: "skills.md ファイル", zh: "skills.md 文件" })}
+              {skillText(t, "custom.fileLabel")}
             </label>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => customFileInputRef.current?.click()}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs bg-slate-800/60 border border-slate-600/50 rounded-lg text-slate-300 hover:bg-slate-700/60 transition-all"
               >
-                <span>📎</span>
-                {t({ ko: "파일 선택", en: "Choose File", ja: "ファイル選択", zh: "选择文件" })}
+                {skillText(t, "custom.chooseFile")}
               </button>
               <input
                 ref={customFileInputRef}
@@ -120,7 +103,7 @@ export default function CustomSkillModal({
                 className="hidden"
               />
               {customSkillFileName && (
-                <span className="text-xs text-emerald-300 truncate max-w-[200px]">📄 {customSkillFileName}</span>
+                <span className="text-xs text-emerald-300 truncate max-w-[200px]">{customSkillFileName}</span>
               )}
             </div>
             {customSkillContent && (
@@ -135,12 +118,7 @@ export default function CustomSkillModal({
 
           <div>
             <label className="block text-xs text-slate-400 mb-1.5">
-              {t({
-                ko: "학습시킬 CLI 대표자",
-                en: "CLI Representatives to Train",
-                ja: "学習させるCLI代表",
-                zh: "要培训的 CLI 代表",
-              })}
+              {skillText(t, "custom.providersLabel")}
             </label>
             <div className="grid grid-cols-2 gap-2">
               {representatives.map((row) => {
@@ -150,7 +128,7 @@ export default function CustomSkillModal({
                   ? preferKoreanName
                     ? row.agent.name_ko || row.agent.name
                     : row.agent.name || row.agent.name_ko
-                  : t({ ko: "없음", en: "None", ja: "なし", zh: "无" });
+                  : skillText(t, "custom.none");
                 return (
                   <button
                     key={`custom-${row.provider}`}
@@ -176,7 +154,7 @@ export default function CustomSkillModal({
                           : "border-slate-600 bg-slate-800/60"
                       }`}
                     >
-                      {isSelected && "✓"}
+                      {isSelected && "OK"}
                     </div>
                   </button>
                 );
@@ -196,7 +174,7 @@ export default function CustomSkillModal({
               disabled={customSkillSubmitting}
               className="px-3 py-1.5 rounded-lg text-xs border border-slate-600 text-slate-300 hover:bg-slate-800 transition-all"
             >
-              {t({ ko: "취소", en: "Cancel", ja: "キャンセル", zh: "取消" })}
+              {skillText(t, "action.cancel")}
             </button>
             <button
               onClick={onSubmit}
@@ -215,13 +193,10 @@ export default function CustomSkillModal({
               {customSkillSubmitting ? (
                 <>
                   <span className="animate-spin w-3 h-3 border border-violet-400 border-t-transparent rounded-full" />
-                  {t({ ko: "등록중...", en: "Submitting...", ja: "登録中...", zh: "提交中..." })}
+                  {skillText(t, "custom.submitting")}
                 </>
               ) : (
-                <>
-                  <span>🎓</span>
-                  {t({ ko: "학습 시작", en: "Start Training", ja: "学習開始", zh: "开始培训" })}
-                </>
+                skillText(t, "custom.startTraining")
               )}
             </button>
           </div>

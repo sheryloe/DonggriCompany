@@ -6,19 +6,25 @@ import {
   deleteCustomSkill,
   getAvailableLearnedSkills,
   getCustomSkills,
+  getOAuthStatus,
   getSkills,
+  installDonggriSkillToCodex,
+  refreshSkills,
   type CustomSkillEntry,
   type SkillEntry,
 } from "../api";
 
 vi.mock("../api", () => ({
   getSkills: vi.fn(),
+  refreshSkills: vi.fn(),
   getAvailableLearnedSkills: vi.fn(),
   getCustomSkills: vi.fn(),
+  getOAuthStatus: vi.fn(),
   uploadCustomSkill: vi.fn(),
   deleteCustomSkill: vi.fn(),
   getSkillDetail: vi.fn(),
   getSkillLearningJob: vi.fn(),
+  installDonggriSkillToCodex: vi.fn(),
   startSkillLearning: vi.fn(),
   unlearnSkill: vi.fn(),
 }));
@@ -44,9 +50,12 @@ vi.mock("./skills-library/ClassroomOverlay", () => ({
 }));
 
 const getSkillsMock = vi.mocked(getSkills);
+const refreshSkillsMock = vi.mocked(refreshSkills);
 const getAvailableLearnedSkillsMock = vi.mocked(getAvailableLearnedSkills);
 const getCustomSkillsMock = vi.mocked(getCustomSkills);
+const getOAuthStatusMock = vi.mocked(getOAuthStatus);
 const deleteCustomSkillMock = vi.mocked(deleteCustomSkill);
+const installDonggriSkillToCodexMock = vi.mocked(installDonggriSkillToCodex);
 
 const LANGUAGE_STORAGE_KEY = "climpire.language";
 const originalLocalStorage = window.localStorage;
@@ -103,6 +112,7 @@ function makeMixedCategoryCatalog(): SkillEntry[] {
       skillId: "react-component-kit",
       repo: "test/react-component-kit",
       installs: 300,
+      category: "codex-specialist",
     },
     {
       rank: 2,
@@ -110,6 +120,7 @@ function makeMixedCategoryCatalog(): SkillEntry[] {
       skillId: "backend-api-pro",
       repo: "test/backend-api-pro",
       installs: 200,
+      category: "google-gemini",
     },
     {
       rank: 3,
@@ -117,6 +128,7 @@ function makeMixedCategoryCatalog(): SkillEntry[] {
       skillId: "design-system-pro",
       repo: "test/design-system-pro",
       installs: 100,
+      category: "google-stitch",
     },
   ];
 }
@@ -131,7 +143,7 @@ function makeCustomSkills(count: number): CustomSkillEntry[] {
 }
 
 async function expectSummary(total: number, catalog: number, custom: number) {
-  await screen.findByText(`Total ${total} (skills.sh ${catalog} + custom ${custom})`);
+  await screen.findByText(`Total ${total} (catalog ${catalog} + custom ${custom})`);
 }
 
 const TEST_AGENT: Agent = {
@@ -159,7 +171,14 @@ describe("SkillsLibrary count aggregation", () => {
     getSkillsMock.mockResolvedValue(makeCatalogSkills(1));
     getAvailableLearnedSkillsMock.mockResolvedValue([]);
     getCustomSkillsMock.mockResolvedValue([]);
+    getOAuthStatusMock.mockResolvedValue({ storageReady: true, providers: {} });
+    refreshSkillsMock.mockResolvedValue(makeCatalogSkills(1));
     deleteCustomSkillMock.mockResolvedValue({ ok: true });
+    installDonggriSkillToCodexMock.mockResolvedValue({
+      ok: true,
+      skillName: "donggri-codex-55-agentic-coding",
+      installed: true,
+    });
   });
 
   afterEach(() => {
@@ -198,9 +217,10 @@ describe("SkillsLibrary count aggregation", () => {
 
     await expectSummary(5, 3, 2);
     expect(screen.getByRole("button", { name: /All.*5/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Frontend.*1/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Backend.*1/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Design.*1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Custom Skills.*2/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Codex Specialist.*1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Google \/ Gemini.*1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Google \/ Stitch.*1/ })).toBeInTheDocument();
   });
 
   it("decreases total/all immediately after deleting one custom skill", async () => {
@@ -218,6 +238,7 @@ describe("SkillsLibrary count aggregation", () => {
     });
     await expectSummary(4, 3, 1);
     expect(screen.getByRole("button", { name: /All.*4/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Custom Skills.*1/ })).toBeInTheDocument();
   });
 
   it("stabilizes to correct final total regardless of catalog/custom loading order", async () => {
@@ -241,5 +262,35 @@ describe("SkillsLibrary count aggregation", () => {
 
     await expectSummary(2, 0, 2);
     expect(screen.queryByText("Unable to load skills data")).not.toBeInTheDocument();
+  });
+
+  it("filters custom category counts with the search term", async () => {
+    getSkillsMock.mockResolvedValueOnce(makeMixedCategoryCatalog());
+    getCustomSkillsMock.mockResolvedValueOnce(makeCustomSkills(2));
+
+    render(<SkillsLibrary agents={[TEST_AGENT]} />);
+    await expectSummary(5, 3, 2);
+
+    fireEvent.change(screen.getByPlaceholderText(/Search skills/i), { target: { value: "custom-skill-2" } });
+    fireEvent.click(screen.getByRole("button", { name: /Custom Skills.*2/ }));
+
+    expect(screen.getByText("1 skills shown · \"custom-skill-2\" search results")).toBeInTheDocument();
+    expect(screen.getByText("custom-skill-2")).toBeInTheDocument();
+    expect(screen.queryByText("custom-skill-1")).not.toBeInTheDocument();
+  });
+
+  it("refreshes catalog data and updates the displayed totals", async () => {
+    getSkillsMock.mockResolvedValueOnce(makeCatalogSkills(1));
+    refreshSkillsMock.mockResolvedValueOnce(makeCatalogSkills(3));
+
+    render(<SkillsLibrary agents={[TEST_AGENT]} />);
+
+    await expectSummary(1, 1, 0);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() => {
+      expect(refreshSkillsMock).toHaveBeenCalledTimes(1);
+    });
+    await expectSummary(3, 3, 0);
   });
 });

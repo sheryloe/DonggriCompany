@@ -5,6 +5,15 @@ export interface SkillEntry {
   repo: string;
   installs: number;
   isRanked?: boolean;
+  origin?: "skills_sh" | "donggri" | "custom";
+  category?: string;
+  description?: string;
+  requiredProviders?: string[];
+  requiredOAuth?: string[];
+  supportedTargets?: Array<"donggri" | "codex" | "gemini">;
+  codexInstalled?: boolean;
+  codexInstallable?: boolean;
+  sourceUrl?: string;
 }
 
 export interface SkillDetail {

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getAvailableLearnedSkills,
+  getOAuthStatus,
   getSkillDetail,
   getSkillLearningJob,
   getSkills,
+  installDonggriSkillToCodex,
+  refreshSkills,
   startSkillLearning,
   unlearnSkill,
   type LearnedSkillEntry,
@@ -11,6 +14,7 @@ import {
   type SkillHistoryProvider,
   type SkillLearnJob,
   type SkillLearnProvider,
+  type OAuthStatus,
 } from "../../api";
 import type { Agent } from "../../types";
 import {
@@ -30,11 +34,15 @@ import { useCustomSkillsState } from "./useCustomSkillsState";
 export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[]; localeTag: string; t: TFunction }) {
   const [skills, setSkills] = useState<Awaited<ReturnType<typeof getSkills>>>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshingSkills, setRefreshingSkills] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [sortBy, setSortBy] = useState<"rank" | "name" | "installs">("rank");
   const [copiedSkill, setCopiedSkill] = useState<string | null>(null);
+  const [installingCodexSkill, setInstallingCodexSkill] = useState<string | null>(null);
+  const [codexInstallError, setCodexInstallError] = useState<string | null>(null);
+  const [oauthStatus, setOAuthStatus] = useState<OAuthStatus | null>(null);
   const [hoveredSkill, setHoveredSkill] = useState<string | null>(null);
   const [detailCache, setDetailCache] = useState<Record<string, SkillDetail | "loading" | "error">>({});
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,9 +128,40 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
       .finally(() => setLoading(false));
   }, []);
 
+  const handleRefreshSkills = useCallback(async () => {
+    setRefreshingSkills(true);
+    setCodexInstallError(null);
+    setError(null);
+    try {
+      const nextSkills = await refreshSkills();
+      setSkills(nextSkills);
+      setDetailCache({});
+      const nextOAuthStatus = await getOAuthStatus().catch(() => null);
+      setOAuthStatus(nextOAuthStatus);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRefreshingSkills(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadSkills();
   }, [loadSkills]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getOAuthStatus()
+      .then((status) => {
+        if (!cancelled) setOAuthStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setOAuthStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,7 +181,7 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
     () =>
       skills.map((skill) => ({
         ...skill,
-        category: categorize(skill.name, skill.repo),
+        category: categorize(skill),
         installsDisplay: formatInstalls(skill.installs, localeTag),
       })),
     [skills, localeTag],
@@ -151,11 +190,24 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
   const catalogSkillsCount = categorizedSkills.length;
   const customSkillsCount = customState.customSkills.length;
   const totalSkillsCount = catalogSkillsCount + customSkillsCount;
+  const filteredCustomSkillsCount = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return customSkillsCount;
+    return customState.customSkills.filter(
+      (skill) =>
+        skill.skillName.toLowerCase().includes(query) ||
+        skill.providers.some((provider) => provider.toLowerCase().includes(query)),
+    ).length;
+  }, [customSkillsCount, customState.customSkills, search]);
 
   const filtered = useMemo(() => {
     let result = categorizedSkills;
 
-    if (selectedCategory !== "All") {
+    if (selectedCategory === "custom") {
+      return [];
+    }
+
+    if (selectedCategory !== "all") {
       result = result.filter((skill) => skill.category === selectedCategory);
     }
 
@@ -181,12 +233,12 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
   }, [categorizedSkills, localeTag, search, selectedCategory, sortBy]);
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: totalSkillsCount };
+    const counts: Record<string, number> = { all: totalSkillsCount, custom: customSkillsCount };
     for (const skill of categorizedSkills) {
       counts[skill.category] = (counts[skill.category] || 0) + 1;
     }
     return counts;
-  }, [categorizedSkills, totalSkillsCount]);
+  }, [categorizedSkills, customSkillsCount, totalSkillsCount]);
 
   const learnedProvidersBySkill = useMemo(() => {
     const map = new Map<string, SkillHistoryProvider[]>();
@@ -373,16 +425,43 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
   );
 
   const handleCopy = useCallback((skill: CategorizedSkill) => {
-    const cmd = `npx skills add ${skill.repo}`;
+    const cmd =
+      skill.origin === "donggri"
+        ? `powershell -ExecutionPolicy Bypass -File .\\tools\\skills\\sync-codex-skills.ps1 -SkillName ${skill.skillId} -Validate`
+        : `npx skills add ${skill.repo}`;
     navigator.clipboard.writeText(cmd).then(() => {
       setCopiedSkill(skill.name);
       setTimeout(() => setCopiedSkill(null), 2000);
     });
   }, []);
 
+  const handleInstallToCodex = useCallback(
+    async (skill: CategorizedSkill) => {
+      if (skill.origin !== "donggri" || !skill.codexInstallable || installingCodexSkill) return;
+      setInstallingCodexSkill(skill.skillId);
+      setCodexInstallError(null);
+      try {
+        await installDonggriSkillToCodex(skill.skillId);
+        setSkills((prev) =>
+          prev.map((item) =>
+            item.origin === "donggri" && item.skillId === skill.skillId
+              ? { ...item, codexInstalled: true }
+              : item,
+          ),
+        );
+      } catch (error) {
+        setCodexInstallError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setInstallingCodexSkill(null);
+      }
+    },
+    [installingCodexSkill],
+  );
+
   return {
     skills,
     loading,
+    refreshingSkills,
     error,
     search,
     setSearch,
@@ -391,6 +470,9 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
     sortBy,
     setSortBy,
     copiedSkill,
+    installingCodexSkill,
+    codexInstallError,
+    oauthStatus,
     hoveredSkill,
     setHoveredSkill,
     detailCache,
@@ -426,6 +508,7 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
     filtered,
     catalogSkillsCount,
     customSkillsCount,
+    filteredCustomSkillsCount,
     totalSkillsCount,
     categoryCounts,
     learnedProvidersBySkill,
@@ -441,11 +524,13 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
     handleCardMouseEnter,
     handleCardMouseLeave,
     loadSkills,
+    handleRefreshSkills,
     openLearningModal,
     closeLearningModal,
     toggleProvider,
     handleStartLearning,
     handleUnlearnProvider,
     handleCopy,
+    handleInstallToCodex,
   };
 }

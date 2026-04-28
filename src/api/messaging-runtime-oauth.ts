@@ -390,6 +390,14 @@ export async function getOAuthStatus(): Promise<OAuthStatus> {
   return request<OAuthStatus>("/api/oauth/status");
 }
 
+export async function getOAuthDebugStatus(): Promise<OAuthStatus> {
+  return request<OAuthStatus>("/api/oauth/status/debug", {
+    headers: {
+      "x-donggri-debug-action": "oauth-status-debug",
+    },
+  });
+}
+
 export function getOAuthStartUrl(provider: OAuthConnectProvider, redirectTo: string): string {
   const params = new URLSearchParams({ provider, redirect_to: redirectTo });
   return `/api/oauth/start?${params.toString()}`;

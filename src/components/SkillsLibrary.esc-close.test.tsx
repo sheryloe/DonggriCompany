@@ -2,7 +2,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SkillsLibrary from "./SkillsLibrary";
 import type { Agent } from "../types";
-import { getAvailableLearnedSkills, getCustomSkills, startSkillLearning, unlearnSkill } from "../api";
+import { getAvailableLearnedSkills, getCustomSkills, getOAuthStatus, startSkillLearning, unlearnSkill } from "../api";
 
 vi.mock("../api", () => ({
   getSkills: vi.fn().mockResolvedValue([
@@ -14,8 +14,10 @@ vi.mock("../api", () => ({
       skillId: "superpowers:using-superpowers",
     },
   ]),
+  refreshSkills: vi.fn(),
   getAvailableLearnedSkills: vi.fn().mockResolvedValue([]),
   getCustomSkills: vi.fn().mockResolvedValue([]),
+  getOAuthStatus: vi.fn().mockResolvedValue({ storageReady: true, providers: {} }),
   uploadCustomSkill: vi.fn(),
   deleteCustomSkill: vi.fn(),
   getSkillDetail: vi.fn(),
@@ -27,6 +29,7 @@ vi.mock("../api", () => ({
 const startSkillLearningMock = vi.mocked(startSkillLearning);
 const getAvailableLearnedSkillsMock = vi.mocked(getAvailableLearnedSkills);
 const getCustomSkillsMock = vi.mocked(getCustomSkills);
+const getOAuthStatusMock = vi.mocked(getOAuthStatus);
 const unlearnSkillMock = vi.mocked(unlearnSkill);
 const LANGUAGE_STORAGE_KEY = "climpire.language";
 type TestLocale = "ko" | "en" | "ja" | "zh";
@@ -118,6 +121,7 @@ describe("SkillsLibrary learning modal ESC close", () => {
 
   beforeEach(() => {
     getCustomSkillsMock.mockResolvedValue([]);
+    getOAuthStatusMock.mockResolvedValue({ storageReady: true, providers: {} });
     Object.defineProperty(window, "localStorage", {
       value: createStorageMock({ [LANGUAGE_STORAGE_KEY]: currentLocale }),
       configurable: true,

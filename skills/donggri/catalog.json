@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "skillName": "donggri-codex-55-agentic-coding",
+      "category": "codex-specialist",
+      "description": "Codex 5.5 long-horizon coding, validation, and handoff workflow for Donggri repositories.",
+      "requiredProviders": ["codex"],
+      "requiredOAuth": [],
+      "supportedTargets": ["donggri", "codex"],
+      "sourceUrl": "https://openai.com/index/introducing-gpt-5-5/"
+    },
+    {
+      "skillName": "donggri-codex-skill-authoring",
+      "category": "codex-specialist",
+      "description": "Create, validate, and publish Codex skills with Donggri canonical metadata and sync rules.",
+      "requiredProviders": ["codex"],
+      "requiredOAuth": [],
+      "supportedTargets": ["donggri", "codex"],
+      "sourceUrl": "https://help.openai.com/en/articles/11369540-codex-in-chatgpt"
+    },
+    {
+      "skillName": "donggri-codex-oauth-operations",
+      "category": "provider-oauth",
+      "description": "Audit OAuth execution accounts, reconnect readiness, and provider-safe operation status.",
+      "requiredProviders": ["codex"],
+      "requiredOAuth": ["github-copilot", "antigravity"],
+      "supportedTargets": ["donggri", "codex"]
+    },
+    {
+      "skillName": "donggri-codex-pr-review-release",
+      "category": "codex-specialist",
+      "description": "Run Donggri Git, PR, CI, and release review workflows through Codex.",
+      "requiredProviders": ["codex"],
+      "requiredOAuth": ["github-copilot"],
+      "supportedTargets": ["donggri", "codex"]
+    },
+    {
+      "skillName": "donggri-gemini-cli-operations",
+      "category": "google-gemini",
+      "description": "Operate Gemini CLI safely for Donggri tasks, MCP workflows, quotas, and agent handoffs.",
+      "requiredProviders": ["gemini"],
+      "requiredOAuth": ["antigravity"],
+      "supportedTargets": ["donggri", "codex", "gemini"],
+      "sourceUrl": "https://developers.google.com/gemini-code-assist/docs/gemini-cli"
+    },
+    {
+      "skillName": "donggri-google-stitch-design",
+      "category": "google-stitch",
+      "description": "Prepare safe Google Stitch prompts, DESIGN.md specs, and export review workflows.",
+      "requiredProviders": ["gemini"],
+      "requiredOAuth": ["antigravity"],
+      "supportedTargets": ["donggri", "codex", "gemini"],
+      "sourceUrl": "https://blog.google/innovation-and-ai/models-and-research/google-labs/stitch-ai-ui-design/"
+    },
+    {
+      "skillName": "donggri-stitch-to-react-review",
+      "category": "google-stitch",
+      "description": "Review Stitch-generated UI exports and convert them into Donggri React/Tailwind implementation plans.",
+      "requiredProviders": ["codex", "gemini"],
+      "requiredOAuth": [],
+      "supportedTargets": ["donggri", "codex", "gemini"],
+      "sourceUrl": "https://blog.google/innovation-and-ai/models-and-research/google-labs/stitch-ai-ui-design/"
+    },
+    {
+      "skillName": "donggri-gemini-nano",
+      "category": "google-gemini",
+      "description": "Existing local Gemini Nano asset workflow skill detected from the Codex app skill home.",
+      "requiredProviders": ["gemini"],
+      "requiredOAuth": ["antigravity"],
+      "supportedTargets": ["codex", "gemini"],
+      "codexSkillName": "donggri-gemini-nano",
+      "sourceUrl": "local-codex-skill"
+    }
+  ]
+}

@@ -1,3 +1,9 @@
+import fs from "node:fs";
+import { randomUUID } from "node:crypto";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { hasValidCsrfToken, shouldRequireCsrf } from "../../../../security/auth.ts";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { SkillDetail, SkillEntry } from "./types.ts";
 
@@ -6,6 +12,10 @@ const SKILL_DETAIL_CACHE_TTL = 3600_000;
 const SKILLS_SITE_URL = "https://skills.sh";
 const SKILLS_TRENDING_URL = `${SKILLS_SITE_URL}/trending`;
 const SKILLS_SITEMAP_URL = `${SKILLS_SITE_URL}/sitemap.xml`;
+const DONGGRI_SKILLS_REPO = "donggri/skill-system";
+const DONGGRI_SKILL_NAME_RE = /^[a-z0-9-]{1,80}$/;
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(MODULE_DIR, "../../../../../");
 
 const RESERVED_ROOT_SEGMENTS = new Set([
   ".well-known",
@@ -30,11 +40,206 @@ type RawSkillFeedItem = {
   installs?: number;
 };
 
+type DonggriSkillManifest = {
+  version?: number;
+  skills?: DonggriSkillManifestEntry[];
+};
+
+type DonggriSkillManifestEntry = {
+  skillName?: string;
+  codexSkillName?: string;
+  category?: string;
+  description?: string;
+  requiredProviders?: string[];
+  requiredOAuth?: string[];
+  supportedTargets?: Array<"donggri" | "codex" | "gemini">;
+  sourceUrl?: string;
+};
+
 let cachedSkills: { data: SkillEntry[]; loadedAt: number } | null = null;
 const skillDetailCache = new Map<string, { data: SkillDetail; loadedAt: number }>();
 
 function buildSkillKey(repo: string, skillId: string): string {
   return `${repo}::${skillId}`;
+}
+
+function resolveRepoRoot(): string {
+  return REPO_ROOT;
+}
+
+function resolveDonggriSkillsRoot(): string {
+  return path.join(resolveRepoRoot(), "skills", "donggri");
+}
+
+function resolveCodexSkillsRoot(): string {
+  const configuredHome = process.env.CODEX_HOME?.trim();
+  const codexHome = configuredHome || path.join(process.env.USERPROFILE || os.homedir(), ".codex");
+  return path.join(codexHome, "skills");
+}
+
+function isSafeSkillName(skillName: string): boolean {
+  return DONGGRI_SKILL_NAME_RE.test(skillName);
+}
+
+function readJsonFile<T>(filePath: string): T | null {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+function parseSkillFrontmatter(content: string): { name: string; description: string } {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) return { name: "", description: "" };
+  const yaml = match[1];
+  const name = yaml.match(/^name:\s*(.+)$/m)?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
+  const description = yaml.match(/^description:\s*(.+)$/m)?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
+  return { name, description };
+}
+
+function resolveRepoSkillSource(skillName: string): { skillFile: string; sourceDir: string } | null {
+  if (!skillName || !isSafeSkillName(skillName)) return null;
+
+  const repoSkillDir = path.join(resolveDonggriSkillsRoot(), skillName);
+  const repoSkillFile = path.join(repoSkillDir, "SKILL.md");
+  if (fs.existsSync(repoSkillFile)) {
+    return { skillFile: repoSkillFile, sourceDir: repoSkillDir };
+  }
+
+  return null;
+}
+
+function readRepoSkillMarkdown(skillName: string): { content: string; sourceDir: string } | null {
+  const source = resolveRepoSkillSource(skillName);
+  if (!source) return null;
+  return { content: fs.readFileSync(source.skillFile, "utf-8"), sourceDir: source.sourceDir };
+}
+
+function loadDonggriSkillManifest(): DonggriSkillManifestEntry[] {
+  const manifestPath = path.join(resolveDonggriSkillsRoot(), "catalog.json");
+  const manifest = readJsonFile<DonggriSkillManifest>(manifestPath);
+  return Array.isArray(manifest?.skills) ? manifest.skills : [];
+}
+
+function isCodexSkillInstalled(skillName: string): boolean {
+  if (!isSafeSkillName(skillName)) return false;
+  return fs.existsSync(path.join(resolveCodexSkillsRoot(), skillName, "SKILL.md"));
+}
+
+function loadDonggriSeedSkills(): SkillEntry[] {
+  return loadDonggriSkillManifest()
+    .map((entry, index): SkillEntry | null => {
+      const skillName = String(entry.skillName ?? "").trim();
+      if (!skillName || !isSafeSkillName(skillName)) return null;
+      const skillSource = readRepoSkillMarkdown(skillName);
+
+      const frontmatter = skillSource ? parseSkillFrontmatter(skillSource.content) : { name: "", description: "" };
+      const codexSkillName = String(entry.codexSkillName ?? skillName).trim();
+      const repoBacked = !!skillSource;
+
+      return {
+        rank: index + 1,
+        name: frontmatter.name || skillName,
+        skillId: skillName,
+        repo: DONGGRI_SKILLS_REPO,
+        installs: 0,
+        isRanked: true,
+        origin: "donggri",
+        category: String(entry.category ?? "donggri-operations"),
+        description: String(entry.description ?? frontmatter.description ?? ""),
+        requiredProviders: Array.isArray(entry.requiredProviders) ? entry.requiredProviders : [],
+        requiredOAuth: Array.isArray(entry.requiredOAuth) ? entry.requiredOAuth : [],
+        supportedTargets: Array.isArray(entry.supportedTargets) ? entry.supportedTargets : ["donggri", "codex"],
+        codexInstalled: isCodexSkillInstalled(codexSkillName),
+        codexInstallable: repoBacked,
+        sourceUrl: entry.sourceUrl,
+      };
+    })
+    .filter((skill): skill is SkillEntry => !!skill);
+}
+
+function buildDonggriSkillDetail(skillId: string): SkillDetail | null {
+  const entry = loadDonggriSkillManifest().find((candidate) => candidate.skillName === skillId);
+  if (!entry) return null;
+  const skillSource = readRepoSkillMarkdown(skillId);
+  if (!skillSource) return null;
+  const frontmatter = parseSkillFrontmatter(skillSource.content);
+  const body = skillSource.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
+  const firstParagraph =
+    body
+      .split(/\r?\n\r?\n/)
+      .map((part) => part.replace(/^#+\s+/gm, "").trim())
+      .find(Boolean) ?? "";
+
+  return {
+    title: frontmatter.name || skillId,
+    description: entry.description || frontmatter.description || firstParagraph,
+    whenToUse: [frontmatter.description || entry.description || ""].filter(Boolean),
+    weeklyInstalls: "",
+    firstSeen: "",
+    installCommand: `powershell -ExecutionPolicy Bypass -File .\\tools\\skills\\sync-codex-skills.ps1 -SkillName ${skillId} -Validate`,
+    platforms: (entry.supportedTargets ?? []).map((target) => ({ name: target, installs: "local" })),
+    audits: [],
+  };
+}
+
+function mergeDonggriSeedSkills(input: { seedSkills: SkillEntry[]; catalogSkills: SkillEntry[] }): SkillEntry[] {
+  const merged = new Map<string, SkillEntry>();
+  for (const skill of input.seedSkills) {
+    merged.set(buildSkillKey(skill.repo, skill.skillId), skill);
+  }
+  for (const skill of input.catalogSkills) {
+    const next = { ...skill, origin: skill.origin ?? "skills_sh", category: skill.category ?? "external-catalog" };
+    merged.set(buildSkillKey(next.repo, next.skillId), next);
+  }
+  return [...merged.values()].sort((left, right) => {
+    if (left.origin === "donggri" && right.origin !== "donggri") return -1;
+    if (left.origin !== "donggri" && right.origin === "donggri") return 1;
+    return compareCatalogSkills(left, right);
+  });
+}
+
+function copyDirectoryRecursive(sourceDir: string, destinationDir: string): void {
+  fs.mkdirSync(destinationDir, { recursive: true });
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const destinationPath = path.join(destinationDir, entry.name);
+    if (entry.isDirectory()) {
+      copyDirectoryRecursive(sourcePath, destinationPath);
+      continue;
+    }
+    if (entry.isFile()) {
+      fs.copyFileSync(sourcePath, destinationPath);
+    }
+  }
+}
+
+function installDirectoryAtomically(sourceDir: string, destinationDir: string): void {
+  const parentDir = path.dirname(destinationDir);
+  const tempDir = path.join(parentDir, `${path.basename(destinationDir)}.tmp-${randomUUID()}`);
+  const backupDir = path.join(parentDir, `${path.basename(destinationDir)}.bak-${randomUUID()}`);
+  let backupCreated = false;
+
+  fs.mkdirSync(parentDir, { recursive: true });
+  copyDirectoryRecursive(sourceDir, tempDir);
+
+  try {
+    if (fs.existsSync(destinationDir)) {
+      fs.renameSync(destinationDir, backupDir);
+      backupCreated = true;
+    }
+    fs.renameSync(tempDir, destinationDir);
+    if (backupCreated) {
+      fs.rmSync(backupDir, { recursive: true, force: true });
+    }
+  } catch (error) {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    if (backupCreated && !fs.existsSync(destinationDir) && fs.existsSync(backupDir)) {
+      fs.renameSync(backupDir, destinationDir);
+    }
+    throw error;
+  }
 }
 
 function normalizeRepo(value: unknown): string {
@@ -255,12 +460,36 @@ async function fetchSkillsFromSite(): Promise<SkillEntry[]> {
   return mergeSkillCatalog({ sitemapSkills, rankedSkills });
 }
 
+async function buildMergedSkillCatalog(): Promise<SkillEntry[]> {
+  return mergeDonggriSeedSkills({
+    seedSkills: loadDonggriSeedSkills(),
+    catalogSkills: await fetchSkillsFromSite(),
+  });
+}
+
+async function loadSkillCatalog(options?: { forceRefresh?: boolean }): Promise<SkillEntry[]> {
+  if (!options?.forceRefresh && cachedSkills && Date.now() - cachedSkills.loadedAt < SKILLS_CACHE_TTL) {
+    return cachedSkills.data;
+  }
+
+  const skills = await buildMergedSkillCatalog();
+  if (skills.length > 0) {
+    cachedSkills = { data: skills, loadedAt: Date.now() };
+  }
+  return skills.length > 0 ? skills : (cachedSkills?.data ?? []);
+}
+
+function clearSkillCaches(): void {
+  cachedSkills = null;
+  skillDetailCache.clear();
+}
+
 function stripHtml(input: string): string {
   return decodeHtmlEntities(
     input
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<\/(p|h1|h2|h3|h4|h5|h6|li|tr|div)>/gi, "\n")
-      .replace(/<li[^>]*>/gi, "• ")
+      .replace(/<li[^>]*>/gi, "- ")
       .replace(/<[^>]*>/g, ""),
   )
     .replace(/\r/g, "")
@@ -403,14 +632,22 @@ export function registerSkillCatalogRoutes(ctx: RuntimeContext): void {
   const { app } = ctx;
 
   app.get("/api/skills", async (_req, res) => {
-    if (cachedSkills && Date.now() - cachedSkills.loadedAt < SKILLS_CACHE_TTL) {
-      return res.json({ skills: cachedSkills.data });
+    const skills = await loadSkillCatalog();
+    res.json({ skills });
+  });
+
+  app.post("/api/skills/refresh", async (req, res) => {
+    if (shouldRequireCsrf(req) && !hasValidCsrfToken(req)) {
+      return res.status(403).json({ ok: false, error: "csrf_required" });
     }
-    const skills = await fetchSkillsFromSite();
-    if (skills.length > 0) {
-      cachedSkills = { data: skills, loadedAt: Date.now() };
-    }
-    res.json({ skills: skills.length > 0 ? skills : (cachedSkills?.data ?? []) });
+    clearSkillCaches();
+    const skills = await loadSkillCatalog({ forceRefresh: true });
+    res.json({
+      ok: true,
+      skills,
+      count: skills.length,
+      refreshedAt: Date.now(),
+    });
   });
 
   app.get("/api/skills/detail", async (req, res) => {
@@ -418,6 +655,11 @@ export function registerSkillCatalogRoutes(ctx: RuntimeContext): void {
     const skillId = String(req.query.skillId ?? "");
     if (!source || !skillId) {
       return res.status(400).json({ error: "source and skillId required" });
+    }
+
+    if (source === DONGGRI_SKILLS_REPO) {
+      const detail = buildDonggriSkillDetail(skillId);
+      return res.json({ ok: !!detail, detail: detail ?? null });
     }
 
     const cacheKey = `${source}/${skillId}`;
@@ -435,5 +677,40 @@ export function registerSkillCatalogRoutes(ctx: RuntimeContext): void {
       }
     }
     res.json({ ok: !!detail, detail: detail ?? null });
+  });
+
+  app.post("/api/skills/donggri/:skillName/install-codex", (req, res) => {
+    if (req.header("x-donggri-local-action") !== "install-codex-skill") {
+      return res.status(403).json({ ok: false, error: "local_action_header_required" });
+    }
+    if (shouldRequireCsrf(req) && !hasValidCsrfToken(req)) {
+      return res.status(403).json({ ok: false, error: "csrf_required" });
+    }
+
+    const skillName = String(req.params.skillName ?? "").trim();
+    if (!isSafeSkillName(skillName)) {
+      return res.status(400).json({ ok: false, error: "invalid_skill_name" });
+    }
+
+    const source = resolveRepoSkillSource(skillName);
+    if (!source) {
+      return res.status(404).json({ ok: false, error: "repo_skill_not_found" });
+    }
+
+    const codexSkillsRoot = resolveCodexSkillsRoot();
+    const destinationDir = path.join(codexSkillsRoot, skillName);
+    const resolvedRoot = path.resolve(codexSkillsRoot);
+    const resolvedDestination = path.resolve(destinationDir);
+    if (!resolvedDestination.startsWith(`${resolvedRoot}${path.sep}`)) {
+      return res.status(400).json({ ok: false, error: "unsafe_destination" });
+    }
+
+    installDirectoryAtomically(source.sourceDir, destinationDir);
+    clearSkillCaches();
+    res.json({
+      ok: true,
+      skillName,
+      installed: true,
+    });
   });
 }

@@ -1,4 +1,5 @@
-﻿import type { TFunction } from "./model";
+import type { TFunction } from "./model";
+import { skillText, skillTextVars } from "./skillLibraryText";
 
 interface SkillsHeaderProps {
   t: TFunction;
@@ -9,6 +10,8 @@ interface SkillsHeaderProps {
   onSearchChange: (value: string) => void;
   sortBy: "rank" | "name" | "installs";
   onSortByChange: (value: "rank" | "name" | "installs") => void;
+  refreshing: boolean;
+  onRefreshCatalog: () => void;
   onOpenCustomSkillModal: () => void;
 }
 
@@ -21,6 +24,8 @@ export default function SkillsHeader({
   onSearchChange,
   sortBy,
   onSortByChange,
+  refreshing,
+  onRefreshCatalog,
   onOpenCustomSkillModal,
 }: SkillsHeaderProps) {
   return (
@@ -28,53 +33,37 @@ export default function SkillsHeader({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <span className="text-2xl">📚</span>
-            {t({
-              ko: "Agent Skills 문서고",
-              en: "Agent Skills Library",
-              ja: "Agent Skills ライブラリ",
-              zh: "Agent Skills 资料库",
-            })}
+            <span className="rounded-md border border-slate-600/60 px-1.5 py-0.5 text-[10px] text-slate-300">
+              SKILL
+            </span>
+            {skillText(t, "header.title")}
           </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            {t({
-              ko: "AI 에이전트 스킬 디렉토리 · skills.sh 전체 카탈로그",
-              en: "AI agent skill directory · full skills.sh catalog",
-              ja: "AI エージェントスキルディレクトリ · skills.sh 全体カタログ",
-              zh: "AI 代理技能目录 · skills.sh 全量目录",
-            })}
-          </p>
+          <p className="text-sm text-slate-400 mt-1">{skillText(t, "header.subtitle")}</p>
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={onRefreshCatalog}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-blue-600/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 disabled:cursor-not-allowed disabled:opacity-60 transition-all"
+            title={skillText(t, "header.refreshTitle")}
+          >
+            {refreshing ? skillText(t, "action.refreshing") : skillText(t, "action.refresh")}
+          </button>
+          <button
             onClick={onOpenCustomSkillModal}
             className="custom-skill-add-btn flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-violet-600/20 text-violet-300 border border-violet-500/30 rounded-lg hover:bg-violet-600/30 transition-all"
-            title={t({
-              ko: "커스텀 스킬 직접 추가",
-              en: "Add custom skill",
-              ja: "カスタムスキルを追加",
-              zh: "添加自定义技能",
-            })}
+            title={skillText(t, "header.addCustomTitle")}
           >
-            <span className="text-base">✨</span>
-            {t({
-              ko: "커스텀 스킬 추가",
-              en: "Add Custom Skill",
-              ja: "カスタムスキル追加",
-              zh: "添加自定义技能",
-            })}
+            {skillText(t, "header.addCustom")}
           </button>
           <div className="text-right">
             <div className="text-2xl font-bold text-empire-gold">{totalSkillsCount}</div>
-            <div className="text-xs text-slate-500">
-              {t({ ko: "등록된 스킬", en: "Registered skills", ja: "登録済みスキル", zh: "已收录技能" })}
-            </div>
+            <div className="text-xs text-slate-500">{skillText(t, "header.registeredSkills")}</div>
             <div className="text-[10px] text-slate-500 mt-0.5">
-              {t({
-                ko: `총 ${totalSkillsCount} (skills.sh ${catalogSkillsCount} + custom ${customSkillsCount})`,
-                en: `Total ${totalSkillsCount} (skills.sh ${catalogSkillsCount} + custom ${customSkillsCount})`,
-                ja: `合計 ${totalSkillsCount} (skills.sh ${catalogSkillsCount} + custom ${customSkillsCount})`,
-                zh: `总计 ${totalSkillsCount} (skills.sh ${catalogSkillsCount} + custom ${customSkillsCount})`,
+              {skillTextVars(t, "header.countSummary", {
+                total: totalSkillsCount,
+                catalog: catalogSkillsCount,
+                custom: customSkillsCount,
               })}
             </div>
           </div>
@@ -87,12 +76,7 @@ export default function SkillsHeader({
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={t({
-              ko: "스킬 검색... (이름, 저장소, 카테고리)",
-              en: "Search skills... (name, repo, category)",
-              ja: "スキル検索... (名前、リポジトリ、カテゴリ)",
-              zh: "搜索技能...（名称、仓库、分类）",
-            })}
+            placeholder={skillText(t, "header.searchPlaceholder")}
             className="w-full bg-slate-900/60 border border-slate-600/50 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/25"
           />
           {search && (
@@ -110,11 +94,9 @@ export default function SkillsHeader({
           onChange={(e) => onSortByChange(e.target.value as "rank" | "name" | "installs")}
           className="bg-slate-900/60 border border-slate-600/50 rounded-lg px-3 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500/50"
         >
-          <option value="rank">{t({ ko: "순위순", en: "By Rank", ja: "順位順", zh: "按排名" })}</option>
-          <option value="installs">
-            {t({ ko: "설치순", en: "By Installs", ja: "インストール順", zh: "按安装量" })}
-          </option>
-          <option value="name">{t({ ko: "이름순", en: "By Name", ja: "名前順", zh: "按名称" })}</option>
+          <option value="rank">{skillText(t, "sort.rank")}</option>
+          <option value="installs">{skillText(t, "sort.installs")}</option>
+          <option value="name">{skillText(t, "sort.name")}</option>
         </select>
       </div>
     </div>

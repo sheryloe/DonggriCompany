@@ -7,6 +7,7 @@ import {
   type SkillLearnProvider,
 } from "../../api";
 import type { TFunction } from "./model";
+import { skillText } from "./skillLibraryText";
 
 export function useCustomSkillsState({
   defaultSelectedProviders,
@@ -50,19 +51,22 @@ export function useCustomSkillsState({
     setShowCustomModal(false);
   }, [customSkillSubmitting]);
 
-  const handleCustomFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCustomSkillFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setCustomSkillContent(reader.result as string);
-    };
-    reader.onerror = () => {
-      setCustomSkillError("파일 읽기 실패");
-    };
-    reader.readAsText(file);
-  }, []);
+  const handleCustomFileSelect = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      setCustomSkillFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCustomSkillContent(String(reader.result ?? ""));
+      };
+      reader.onerror = () => {
+        setCustomSkillError(skillText(t, "custom.fileReadFailed"));
+      };
+      reader.readAsText(file);
+    },
+    [t],
+  );
 
   const toggleCustomProvider = useCallback((provider: SkillLearnProvider) => {
     setCustomSkillProviders((prev) =>
@@ -73,14 +77,7 @@ export function useCustomSkillsState({
   const handleCustomSkillSubmit = useCallback(async () => {
     if (!customSkillName.trim() || !customSkillContent.trim() || customSkillProviders.length === 0) return;
     if (!/^[a-zA-Z0-9_-]{1,80}$/.test(customSkillName.trim())) {
-      setCustomSkillError(
-        t({
-          ko: "스킬명은 영문, 숫자, 하이픈, 언더스코어만 사용 가능합니다 (최대 80자)",
-          en: "Skill name must be alphanumeric, dash or underscore (max 80 chars)",
-          ja: "スキル名は英数字、ハイフン、アンダースコアのみ使用可能です（最大80文字）",
-          zh: "技能名称仅限字母数字、短划线或下划线（最多80个字符）",
-        }),
-      );
+      setCustomSkillError(skillText(t, "custom.invalidName"));
       return;
     }
 
@@ -100,10 +97,9 @@ export function useCustomSkillsState({
         .then(setCustomSkills)
         .catch(() => {});
       onHistoryChanged();
-      setTimeout(() => setShowClassroomAnimation(false), 5500);
+      window.setTimeout(() => setShowClassroomAnimation(false), 5500);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      setCustomSkillError(msg);
+      setCustomSkillError(error instanceof Error ? error.message : String(error));
     } finally {
       setCustomSkillSubmitting(false);
     }
@@ -116,7 +112,7 @@ export function useCustomSkillsState({
         setCustomSkills((prev) => prev.filter((skill) => skill.skillName !== skillName));
         onHistoryChanged();
       } catch {
-        // ignore
+        // Keep deletion errors non-blocking in the library view.
       }
     },
     [onHistoryChanged],

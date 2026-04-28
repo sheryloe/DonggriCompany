@@ -143,11 +143,49 @@ export interface SkillEntry {
   repo: string;
   installs: number;
   isRanked?: boolean;
+  origin?: "skills_sh" | "donggri" | "custom";
+  category?: string;
+  description?: string;
+  requiredProviders?: string[];
+  requiredOAuth?: string[];
+  supportedTargets?: Array<"donggri" | "codex" | "gemini">;
+  codexInstalled?: boolean;
+  codexInstallable?: boolean;
+  sourceUrl?: string;
 }
 
 export async function getSkills(): Promise<SkillEntry[]> {
   const j = await request<{ skills: SkillEntry[] }>("/api/skills");
   return j.skills;
+}
+
+export async function refreshSkills(): Promise<SkillEntry[]> {
+  const j = (await post("/api/skills/refresh", { confirm: true })) as {
+    ok: boolean;
+    skills: SkillEntry[];
+    count: number;
+    refreshedAt: number;
+  };
+  return j.skills;
+}
+
+export async function installDonggriSkillToCodex(skillName: string): Promise<{
+  ok: boolean;
+  skillName: string;
+  installed: boolean;
+}> {
+  return request(`/api/skills/donggri/${encodeURIComponent(skillName)}/install-codex`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-donggri-local-action": "install-codex-skill",
+    },
+    body: JSON.stringify({ confirm: true }),
+  }) as Promise<{
+    ok: boolean;
+    skillName: string;
+    installed: boolean;
+  }>;
 }
 
 // Codex sub-agents catalog (VoltAgent/awesome-codex-subagents mirror output)

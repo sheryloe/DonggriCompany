@@ -8,6 +8,7 @@ import SkillsCategoryBar from "./skills-library/SkillsCategoryBar";
 import SkillsGrid from "./skills-library/SkillsGrid";
 import SkillsHeader from "./skills-library/SkillsHeader";
 import SkillsMemorySection from "./skills-library/SkillsMemorySection";
+import { skillText } from "./skills-library/skillLibraryText";
 import { useSkillsLibraryState } from "./skills-library/useSkillsLibraryState";
 
 interface SkillsLibraryProps {
@@ -23,14 +24,7 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
-          <div className="text-slate-400 text-sm">
-            {t({
-              ko: "skills.sh 데이터 로딩중...",
-              en: "Loading skills.sh data...",
-              ja: "skills.sh データを読み込み中...",
-              zh: "正在加载 skills.sh 数据...",
-            })}
-          </div>
+          <div className="text-slate-400 text-sm">{skillText(t, "loading.catalog")}</div>
         </div>
       </div>
     );
@@ -40,21 +34,14 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
-          <div className="text-4xl mb-3">⚠️</div>
-          <div className="text-slate-400 text-sm">
-            {t({
-              ko: "스킬 데이터를 불러올 수 없습니다",
-              en: "Unable to load skills data",
-              ja: "スキルデータを読み込めません",
-              zh: "无法加载技能数据",
-            })}
-          </div>
+          <div className="text-xs font-semibold text-rose-300 mb-3">LOAD FAILED</div>
+          <div className="text-slate-400 text-sm">{skillText(t, "loading.failed")}</div>
           <div className="text-slate-500 text-xs mt-1">{vm.error}</div>
           <button
             onClick={vm.loadSkills}
             className="mt-4 px-4 py-2 text-sm bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 transition-all"
           >
-            {t({ ko: "다시 시도", en: "Retry", ja: "再試行", zh: "重试" })}
+            {skillText(t, "action.retry")}
           </button>
         </div>
       </div>
@@ -72,6 +59,10 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
         onSearchChange={vm.setSearch}
         sortBy={vm.sortBy}
         onSortByChange={vm.setSortBy}
+        refreshing={vm.refreshingSkills}
+        onRefreshCatalog={() => {
+          void vm.handleRefreshSkills();
+        }}
         onOpenCustomSkillModal={vm.openCustomSkillModal}
       />
 
@@ -80,7 +71,13 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
         selectedCategory={vm.selectedCategory}
         onSelectCategory={vm.setSelectedCategory}
         categoryCounts={vm.categoryCounts}
-        filteredLength={vm.filtered.length}
+        filteredLength={
+          vm.selectedCategory === "custom"
+            ? vm.filteredCustomSkillsCount
+            : vm.selectedCategory === "all" && vm.search.trim()
+              ? vm.filtered.length + vm.filteredCustomSkillsCount
+              : vm.filtered.length
+        }
         search={vm.search}
         customSkillsCount={vm.customSkillsCount}
       />
@@ -92,24 +89,32 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
         onRefreshHistory={() => vm.setHistoryRefreshToken((prev) => prev + 1)}
       />
 
-      <SkillsGrid
-        t={t}
-        localeTag={localeTag}
-        agents={agents}
-        filtered={vm.filtered}
-        learnedProvidersBySkill={vm.learnedProvidersBySkill}
-        learnedRepresentatives={vm.learnedRepresentatives}
-        hoveredSkill={vm.hoveredSkill}
-        setHoveredSkill={vm.setHoveredSkill}
-        detailCache={vm.detailCache}
-        tooltipRef={vm.tooltipRef}
-        hoverTimerRef={vm.hoverTimerRef}
-        copiedSkill={vm.copiedSkill}
-        onHoverEnter={vm.handleCardMouseEnter}
-        onHoverLeave={vm.handleCardMouseLeave}
-        onOpenLearningModal={vm.openLearningModal}
-        onCopy={vm.handleCopy}
-      />
+      {vm.selectedCategory !== "custom" && (
+        <SkillsGrid
+          t={t}
+          localeTag={localeTag}
+          agents={agents}
+          filtered={vm.filtered}
+          learnedProvidersBySkill={vm.learnedProvidersBySkill}
+          learnedRepresentatives={vm.learnedRepresentatives}
+          hoveredSkill={vm.hoveredSkill}
+          setHoveredSkill={vm.setHoveredSkill}
+          detailCache={vm.detailCache}
+          tooltipRef={vm.tooltipRef}
+          hoverTimerRef={vm.hoverTimerRef}
+          copiedSkill={vm.copiedSkill}
+          installingCodexSkill={vm.installingCodexSkill}
+          codexInstallError={vm.codexInstallError}
+          oauthStatus={vm.oauthStatus}
+          onHoverEnter={vm.handleCardMouseEnter}
+          onHoverLeave={vm.handleCardMouseLeave}
+          onOpenLearningModal={vm.openLearningModal}
+          onCopy={vm.handleCopy}
+          onInstallToCodex={(skill) => {
+            void vm.handleInstallToCodex(skill);
+          }}
+        />
+      )}
 
       <LearningModal
         t={t}
@@ -138,14 +143,17 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
         }}
       />
 
-      <CustomSkillSection
-        t={t}
-        customSkills={vm.customSkills}
-        localeTag={localeTag}
-        onDeleteSkill={(skillName) => {
-          void vm.handleDeleteCustomSkill(skillName);
-        }}
-      />
+      {(vm.selectedCategory === "all" || vm.selectedCategory === "custom") && (
+        <CustomSkillSection
+          t={t}
+          customSkills={vm.customSkills}
+          localeTag={localeTag}
+          search={vm.search}
+          onDeleteSkill={(skillName) => {
+            void vm.handleDeleteCustomSkill(skillName);
+          }}
+        />
+      )}
 
       <ClassroomOverlay
         t={t}
@@ -178,12 +186,7 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
       />
 
       <div className="text-center text-xs text-slate-600 py-4">
-        {t({
-          ko: "데이터 출처: skills.sh · 설치: npx skills add <owner/repo>",
-          en: "Source: skills.sh · Install: npx skills add <owner/repo>",
-          ja: "データソース: skills.sh · インストール: npx skills add <owner/repo>",
-          zh: "数据来源: skills.sh · 安装: npx skills add <owner/repo>",
-        })}
+        {skillText(t, "footer.sources")}
       </div>
     </div>
   );

@@ -232,7 +232,15 @@ export function installSecurityMiddleware(app: Express): void {
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["content-type", "authorization", "x-inbox-secret", "x-csrf-token", "x-task-interrupt-token"],
+    allowedHeaders: [
+      "content-type",
+      "authorization",
+      "x-inbox-secret",
+      "x-csrf-token",
+      "x-task-interrupt-token",
+      "x-donggri-debug-action",
+      "x-donggri-local-action",
+    ],
     maxAge: 600,
   });
 

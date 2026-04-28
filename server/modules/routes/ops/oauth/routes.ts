@@ -39,7 +39,7 @@ export function registerOAuthRoutes(ctx: RuntimeContext): void {
     upsertOAuthCredential,
   } = createOAuthRouteHelpers(ctx);
 
-  const { buildOAuthStatus } = createOAuthStatusBuilder(ctx);
+  const { buildOAuthStatus, buildOAuthDebugStatus } = createOAuthStatusBuilder(ctx);
 
   const readSettingString = (key: string): string => {
     const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get(key) as
@@ -74,6 +74,19 @@ export function registerOAuthRoutes(ctx: RuntimeContext): void {
     } catch (err) {
       console.error("[oauth] Failed to build OAuth status:", err);
       res.status(500).json({ error: "Failed to build OAuth status" });
+    }
+  });
+
+  app.get("/api/oauth/status/debug", async (req, res) => {
+    if (req.header("x-donggri-debug-action") !== "oauth-status-debug") {
+      return res.status(403).json({ error: "debug_header_required" });
+    }
+    try {
+      const providers = await buildOAuthDebugStatus();
+      res.json({ storageReady: Boolean(OAUTH_ENCRYPTION_SECRET), providers });
+    } catch (err) {
+      console.error("[oauth] Failed to build OAuth debug status:", err);
+      res.status(500).json({ error: "Failed to build OAuth debug status" });
     }
   });
 

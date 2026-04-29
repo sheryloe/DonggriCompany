@@ -9,5 +9,12 @@
   "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
   "stats_tasks_done": 0,
   "stats_xp": 0,
-  "updated_at": "2026-04-15T06:57:37.445Z"
+  "updated_at": "2026-04-15T06:57:37.445Z",
+  "goal_command_policy": {
+    "version": "donggri_goal_commands_v1",
+    "native_commands_only": true,
+    "octopus_aliases_enabled": false,
+    "bottleneck_rule": "Use required_departments first; add extra departments only when a verification gate requires them.",
+    "parallelism_rule": "Split independent work up to max_parallel_workstreams with one owner per workstream."
+  }
 }

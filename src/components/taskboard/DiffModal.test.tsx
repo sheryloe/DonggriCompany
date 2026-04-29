@@ -50,11 +50,11 @@ describe("DiffModal", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Final Branch Verification")).toBeInTheDocument();
+      expect(screen.getByText("최종 브랜치 검증")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Passed")).toBeInTheDocument();
-    expect(screen.getByText("1 commit")).toBeInTheDocument();
+    expect(screen.getByText("통과")).toBeInTheDocument();
+    expect(screen.getByText("1개 커밋")).toBeInTheDocument();
     expect(screen.getByText("src/verify.ts")).toBeInTheDocument();
     expect(apiMocks.getTaskVerifyCommit).toHaveBeenCalledWith("task-1");
   });

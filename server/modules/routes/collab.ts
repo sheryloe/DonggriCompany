@@ -324,7 +324,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
   async function sendTelegramMessageWithToken(token: string, chatId: string, text: string): Promise<void> {
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json; charset=utf-8" },
       body: JSON.stringify({
         chat_id: chatId,
         text,

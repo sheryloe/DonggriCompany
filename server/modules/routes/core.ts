@@ -33,6 +33,7 @@ import {
 import { registerAgentRoutes } from "./core/agents/index.ts";
 import { registerDepartmentRoutes } from "./core/departments.ts";
 import { registerGitHubRoutes } from "./core/github-routes.ts";
+import { registerMemoryRoutes } from "./core/memory.ts";
 import { registerProjectRoutes } from "./core/projects.ts";
 import { registerTaskCrudRoutes } from "./core/tasks/crud.ts";
 import { registerTaskExecutionRoutes } from "./core/tasks/execution.ts";
@@ -376,6 +377,16 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
   // Agents
   // ---------------------------------------------------------------------------
   registerAgentRoutes(__ctx);
+
+  // ---------------------------------------------------------------------------
+  // Native Memory / Beads bridge
+  // ---------------------------------------------------------------------------
+  registerMemoryRoutes({
+    app,
+    db,
+    normalizeTextField,
+    nowMs,
+  });
 
   // ---------------------------------------------------------------------------
   // Tasks

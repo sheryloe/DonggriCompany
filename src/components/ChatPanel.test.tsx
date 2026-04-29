@@ -603,7 +603,7 @@ describe("ChatPanel directive project context", () => {
       expect(onSendDirective).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /change meeting mode/i }));
+    fireEvent.click(screen.getByRole("button", { name: "회의 모드 변경" }));
     fireEvent.change(screen.getByLabelText("chat-input"), { target: { value: "$ship without meeting" } });
     fireEvent.click(screen.getByRole("button", { name: "send" }));
 
@@ -657,7 +657,7 @@ describe("ChatPanel directive project context", () => {
 
     fireEvent.change(screen.getByLabelText("chat-input"), { target: { value: "#fix the build" } });
 
-    expect(screen.getByTestId("command-preview")).toHaveTextContent("Task Request");
+    expect(screen.getByTestId("command-preview")).toHaveTextContent("태스크 요청");
     expect(screen.getByTestId("command-preview")).toHaveTextContent("/api/messages task_assign");
 
     fireEvent.click(screen.getByRole("button", { name: "send" }));

@@ -105,7 +105,7 @@ describe("AgentFormModal canonical cutover", () => {
     expect(screen.getByLabelText("Execution Capability Profile")).toBeInTheDocument();
     expect(screen.getAllByText("Junior").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Reviewer").length).toBeGreaterThan(0);
-    expect(getPreviewTextarea().value).toContain("Role template: Junior");
+    expect(getPreviewTextarea().value).toContain("Role template: 주니어");
   });
 
   it("updates the generated prompt preview immediately when sliders change", async () => {

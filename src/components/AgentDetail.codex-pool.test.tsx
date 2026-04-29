@@ -31,7 +31,7 @@ const department: Department = {
 
 function renderDetail(agent: Agent) {
   return render(
-    <I18nProvider language="en">
+    <I18nProvider language="ko">
       <AgentDetail
         agent={agent}
         agents={[agent]}
@@ -50,12 +50,47 @@ function renderDetail(agent: Agent) {
   );
 }
 
+function makeAgent(overrides: Partial<Agent>): Agent {
+  return {
+    id: "agent-1",
+    name: "Codex Agent",
+    name_ko: "코덱스 에이전트",
+    name_ja: "Codex Agent",
+    name_zh: "Codex Agent",
+    department_id: "dev",
+    role: "junior",
+    cli_provider: "codex",
+    oauth_account_id: null,
+    api_provider_id: null,
+    api_model: null,
+    cli_model: null,
+    cli_reasoning_level: null,
+    run_mode: "standard",
+    cli_account_pool_id: null,
+    avatar_emoji: "C",
+    sprite_number: null,
+    personality: null,
+    status: "idle",
+    current_task_id: null,
+    stats_tasks_done: 0,
+    stats_xp: 0,
+    created_at: 1,
+    ...overrides,
+  };
+}
+
 describe("AgentDetail cli execution settings", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(api, "getOAuthDebugStatus").mockResolvedValue({
       storageReady: true,
       providers: {},
+    });
+    vi.spyOn(api, "getAgentMemory").mockResolvedValue({
+      ok: true,
+      memories: [],
+      skill_usage: [],
+      growth_events: [],
     });
   });
 
@@ -77,39 +112,21 @@ describe("AgentDetail cli execution settings", () => {
       },
     ]);
 
-    const agent: Agent = {
+    const agent = makeAgent({
       id: "agent-1",
-      name: "Codex Agent",
-      name_ko: "코덱스 에이전트",
-      name_ja: "Codex Agent",
-      name_zh: "Codex Agent",
-      department_id: "dev",
-      role: "junior",
       cli_provider: "codex",
-      oauth_account_id: null,
-      api_provider_id: null,
-      api_model: null,
       cli_model: "gpt-5.3-codex",
       cli_reasoning_level: "medium",
       run_mode: "plan",
-      cli_account_pool_id: null,
-      avatar_emoji: "C",
-      sprite_number: null,
-      personality: null,
-      status: "idle",
-      current_task_id: null,
-      stats_tasks_done: 0,
-      stats_xp: 0,
-      created_at: 1,
-    };
+    });
 
     renderDetail(agent);
 
-    await user.click(screen.getByTitle("Change CLI execution settings"));
+    await user.click(screen.getByTitle("CLI 실행 설정 변경"));
     const [providerSelect, poolSelect] = screen.getAllByRole("combobox");
     await user.selectOptions(providerSelect, "codex");
     await user.selectOptions(poolSelect, "codex-main");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
       expect(updateAgentMock).toHaveBeenCalledTimes(1);
@@ -145,42 +162,27 @@ describe("AgentDetail cli execution settings", () => {
       },
     ]);
 
-    const agent: Agent = {
+    const agent = makeAgent({
       id: "agent-g1",
       name: "Gemini Agent",
       name_ko: "제미나이 에이전트",
       name_ja: "Gemini Agent",
       name_zh: "Gemini Agent",
-      department_id: "dev",
-      role: "junior",
       cli_provider: "gemini",
-      oauth_account_id: null,
-      api_provider_id: null,
-      api_model: null,
       cli_model: "gemini-2.5-flash",
-      cli_reasoning_level: null,
-      run_mode: "standard",
-      cli_account_pool_id: null,
       avatar_emoji: "G",
-      sprite_number: null,
-      personality: null,
-      status: "idle",
-      current_task_id: null,
-      stats_tasks_done: 0,
-      stats_xp: 0,
-      created_at: 1,
-    };
+    });
 
     renderDetail(agent);
 
-    await user.click(screen.getByTitle("Change CLI execution settings"));
+    await user.click(screen.getByTitle("CLI 실행 설정 변경"));
     const [, poolSelect] = screen.getAllByRole("combobox");
 
     expect(screen.queryByDisplayValue("gemini-2.5-flash")).not.toBeInTheDocument();
-    expect(screen.queryByText("Syncing models...")).not.toBeInTheDocument();
+    expect(screen.queryByText("모델 동기화 중...")).not.toBeInTheDocument();
 
     await user.selectOptions(poolSelect, "gemini-main");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
       expect(updateAgentMock).toHaveBeenCalledTimes(1);
@@ -208,38 +210,22 @@ describe("AgentDetail cli execution settings", () => {
         }),
     );
 
-    const agent: Agent = {
+    const agent = makeAgent({
       id: "agent-g2",
       name: "Gemini Agent",
       name_ko: "제미나이 에이전트",
       name_ja: "Gemini Agent",
       name_zh: "Gemini Agent",
-      department_id: "dev",
-      role: "junior",
       cli_provider: "gemini",
-      oauth_account_id: null,
-      api_provider_id: null,
-      api_model: null,
-      cli_model: null,
-      cli_reasoning_level: null,
-      run_mode: "standard",
-      cli_account_pool_id: null,
       avatar_emoji: "G",
-      sprite_number: null,
-      personality: null,
-      status: "idle",
-      current_task_id: null,
-      stats_tasks_done: 0,
-      stats_xp: 0,
-      created_at: 1,
-    };
+    });
 
     renderDetail(agent);
 
-    await user.click(screen.getByTitle("Change CLI execution settings"));
+    await user.click(screen.getByTitle("CLI 실행 설정 변경"));
 
-    expect(screen.getByText("Loading pools...")).toBeInTheDocument();
-    expect(screen.queryByText("Syncing models...")).not.toBeInTheDocument();
+    expect(screen.getByText("계정 풀 불러오는 중...")).toBeInTheDocument();
+    expect(screen.queryByText("모델 동기화 중...")).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue("gemini-2.5-flash")).not.toBeInTheDocument();
   });
 });

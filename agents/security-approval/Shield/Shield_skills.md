@@ -4,6 +4,18 @@
 - learned snapshot: none
 - installed snapshot: none
 
+## Learned Skills History
+- No durable skill usage history yet.
+
+## Auto-selection Hints
+- Prefer skills with the highest proficiency score for similar workflow packs.
+- Confirm provider readiness before using provider-specific skills.
+- Record verification notes after every successful skill-assisted task.
+
+## Verification Notes
+- Skill usage is updated from task completion and review outcomes.
+- Manual edits should keep canonical English skill identifiers.
+
 ## Notes
 - This file records durable skill history for the agent bundle.
 - Append purpose, outcome, and verification when a new skill is adopted.

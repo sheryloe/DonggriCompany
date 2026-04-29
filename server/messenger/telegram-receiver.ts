@@ -335,7 +335,7 @@ async function forwardTelegramUpdate(params: {
   if (gmailIntakeCommand?.handled) {
     await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json; charset=utf-8" },
       body: JSON.stringify({
         chat_id: chatId,
         reply_to_message_id: message.message_id,
@@ -349,7 +349,7 @@ async function forwardTelegramUpdate(params: {
   if (calendarIntakeCommand?.handled) {
     await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json; charset=utf-8" },
       body: JSON.stringify({
         chat_id: chatId,
         reply_to_message_id: message.message_id,
@@ -367,7 +367,7 @@ async function forwardTelegramUpdate(params: {
   const inboxRes = await fetchImpl(`http://${OAUTH_BASE_HOST}:${PORT}/api/inbox`, {
     method: "POST",
     headers: {
-      "content-type": "application/json",
+      "content-type": "application/json; charset=utf-8",
       "x-inbox-secret": INBOX_WEBHOOK_SECRET,
     },
     body: JSON.stringify({
@@ -392,7 +392,7 @@ async function forwardTelegramUpdate(params: {
 
     await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json; charset=utf-8" },
       body: JSON.stringify({
         chat_id: chatId,
         reply_to_message_id: message.message_id,
@@ -456,7 +456,7 @@ export async function pollTelegramReceiverOnce(options: {
 
     const telegramRes = await fetchImpl(`https://api.telegram.org/bot${route.token}/getUpdates`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json; charset=utf-8" },
       body: JSON.stringify({
         offset: nextOffset,
         timeout: TELEGRAM_POLL_TIMEOUT_SECONDS,

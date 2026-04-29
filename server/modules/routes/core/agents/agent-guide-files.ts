@@ -11,6 +11,10 @@ type AgentGuideInput = {
   statsTasksDone?: number | null | undefined;
   statsXp?: number | null | undefined;
   skillBundle?: string[] | null | undefined;
+  memorySnapshot?: string[] | null | undefined;
+  skillGrowthSnapshot?: string[] | null | undefined;
+  recentLessons?: string[] | null | undefined;
+  projectExperience?: string[] | null | undefined;
 };
 
 type AgentProfileExtras = {
@@ -258,6 +262,10 @@ function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: stri
     workflowProfileRaw.length > 300 ? `${workflowProfileRaw.slice(0, 300)}...` : workflowProfileRaw;
   const extras = extractAgentProfileExtras(input.agentProfileJson ?? null);
   const updatedAt = new Date().toISOString();
+  const memorySnapshot = Array.isArray(input.memorySnapshot) ? input.memorySnapshot.filter(Boolean) : [];
+  const skillGrowthSnapshot = Array.isArray(input.skillGrowthSnapshot) ? input.skillGrowthSnapshot.filter(Boolean) : [];
+  const recentLessons = Array.isArray(input.recentLessons) ? input.recentLessons.filter(Boolean) : [];
+  const projectExperience = Array.isArray(input.projectExperience) ? input.projectExperience.filter(Boolean) : [];
 
   return [
     `# ${safeName}_AGENTS`,
@@ -301,12 +309,29 @@ function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: stri
     "## Workflow Profile",
     `- Raw: ${workflowPreview}`,
     "",
+    "## Memory Snapshot",
+    ...(memorySnapshot.length > 0 ? memorySnapshot.map((item) => `- ${item}`) : ["- No durable memory snapshot yet."]),
+    "",
+    "## Skill Growth Snapshot",
+    ...(skillGrowthSnapshot.length > 0
+      ? skillGrowthSnapshot.map((item) => `- ${item}`)
+      : ["- No skill usage history yet."]),
+    "",
+    "## Recent Lessons",
+    ...(recentLessons.length > 0 ? recentLessons.map((item) => `- ${item}`) : ["- No recent lesson extracted yet."]),
+    "",
+    "## Project Experience",
+    ...(projectExperience.length > 0
+      ? projectExperience.map((item) => `- ${item}`)
+      : ["- No project experience extracted yet."]),
+    "",
   ].join("\n");
 }
 
 function buildSkillsContent(input: AgentGuideInput): string {
   const safeName = input.name || input.id || "agent";
   const skills = Array.isArray(input.skillBundle) ? input.skillBundle.filter(Boolean) : [];
+  const skillGrowthSnapshot = Array.isArray(input.skillGrowthSnapshot) ? input.skillGrowthSnapshot.filter(Boolean) : [];
   return [
     `# ${safeName}_skills`,
     "",
@@ -314,6 +339,20 @@ function buildSkillsContent(input: AgentGuideInput): string {
     ...(skills.length > 0
       ? skills.map((skill) => `- ${skill}`)
       : ["- learned snapshot: none", "- installed snapshot: none"]),
+    "",
+    "## Learned Skills History",
+    ...(skillGrowthSnapshot.length > 0
+      ? skillGrowthSnapshot.map((skill) => `- ${skill}`)
+      : ["- No durable skill usage history yet."]),
+    "",
+    "## Auto-selection Hints",
+    "- Prefer skills with the highest proficiency score for similar workflow packs.",
+    "- Confirm provider readiness before using provider-specific skills.",
+    "- Record verification notes after every successful skill-assisted task.",
+    "",
+    "## Verification Notes",
+    "- Skill usage is updated from task completion and review outcomes.",
+    "- Manual edits should keep canonical English skill identifiers.",
     "",
     "## Notes",
     "- This file records durable skill history for the agent bundle.",
@@ -345,6 +384,10 @@ function buildSettingsContent(input: AgentGuideInput): string {
     promotion_policy: extras.promotionPolicy,
     stats_tasks_done: safeNumber(input.statsTasksDone),
     stats_xp: safeNumber(input.statsXp),
+    memory_snapshot: Array.isArray(input.memorySnapshot) ? input.memorySnapshot.filter(Boolean) : [],
+    skill_growth_snapshot: Array.isArray(input.skillGrowthSnapshot) ? input.skillGrowthSnapshot.filter(Boolean) : [],
+    recent_lessons: Array.isArray(input.recentLessons) ? input.recentLessons.filter(Boolean) : [],
+    project_experience: Array.isArray(input.projectExperience) ? input.projectExperience.filter(Boolean) : [],
     updated_at: new Date().toISOString(),
   };
 

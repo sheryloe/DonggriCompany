@@ -82,8 +82,8 @@ describe("agent-profile helpers", () => {
       locale: "en",
     });
 
-    expect(preview).toContain("Role template: Senior");
-    expect(preview).toContain("2x role: Reviewer");
+    expect(preview).toContain("Role template: 시니어");
+    expect(preview).toContain("2x role: 리뷰어");
     expect(preview).toContain("Class path: engineering > backend > platform");
     expect(preview).toContain("Promotion policy: @xp>=300");
     expect(preview).not.toContain("junior -> senior");

@@ -312,7 +312,7 @@ async function forwardDiscordMessage(params: {
   const inboxRes = await fetchImpl(`http://${OAUTH_BASE_HOST}:${PORT}/api/inbox`, {
     method: "POST",
     headers: {
-      "content-type": "application/json",
+      "content-type": "application/json; charset=utf-8",
       "x-inbox-secret": INBOX_WEBHOOK_SECRET,
     },
     body: JSON.stringify({

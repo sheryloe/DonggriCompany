@@ -34,7 +34,19 @@
 - Applied Rule: junior -> senior @xp>=300, team_leader manual only
 
 ## Latest Snapshot
-- 2026-04-29T06:17:41.020Z | tasks_done=0 | xp=0 | role=senior
+- 2026-04-29T08:59:54.389Z | tasks_done=0 | xp=0 | role=senior
 
 ## Workflow Profile
 - Raw: {"role":"reviewer","review_lenses":["ux","consistency","a11y"],"two_pass_required":true,"max_review_rounds":null}
+
+## Memory Snapshot
+- No durable memory snapshot yet.
+
+## Skill Growth Snapshot
+- No skill usage history yet.
+
+## Recent Lessons
+- No recent lesson extracted yet.
+
+## Project Experience
+- No project experience extracted yet.

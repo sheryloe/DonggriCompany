@@ -633,7 +633,7 @@ function parseSignalTarget(targetRaw: string): { recipient?: string[]; groupId?:
 async function sendTelegramMessage(token: string, chatId: string, text: string): Promise<void> {
   const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json; charset=utf-8" },
     body: JSON.stringify({
       chat_id: chatId,
       text,
@@ -650,7 +650,7 @@ async function sendTelegramMessage(token: string, chatId: string, text: string):
 async function sendTelegramTyping(token: string, chatId: string): Promise<void> {
   const r = await fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json; charset=utf-8" },
     body: JSON.stringify({
       chat_id: chatId,
       action: "typing",
@@ -667,7 +667,7 @@ async function sendDiscordMessage(token: string, channelId: string, text: string
   const r = await fetch(`https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}/messages`, {
     method: "POST",
     headers: {
-      "content-type": "application/json",
+      "content-type": "application/json; charset=utf-8",
       authorization: `Bot ${token}`,
     },
     body: JSON.stringify({ content: text }),
@@ -697,7 +697,7 @@ async function sendSlackMessage(token: string, channelId: string, text: string):
   const r = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
     headers: {
-      "content-type": "application/json",
+      "content-type": "application/json; charset=utf-8",
       authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ channel: channelId, text }),
@@ -714,7 +714,7 @@ async function sendWhatsAppMessage(token: string, targetId: string, text: string
   const r = await fetch(`https://graph.facebook.com/v22.0/${encodeURIComponent(phoneNumberId)}/messages`, {
     method: "POST",
     headers: {
-      "content-type": "application/json",
+      "content-type": "application/json; charset=utf-8",
       authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({
@@ -759,7 +759,7 @@ async function signalRpcRequest(params: {
 }): Promise<void> {
   const r = await fetch(`${params.baseUrl}/api/v1/rpc`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json; charset=utf-8" },
     body: JSON.stringify({
       jsonrpc: "2.0",
       id: randomUUID(),

@@ -4,7 +4,7 @@ import * as api from "../api";
 import { getRoleDisplayLabel } from "../app/canonical-display";
 import { localeName, useI18n } from "../i18n";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../i18n/canonical-label-registry";
-import type { Agent, Department, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
+import type { Agent, AgentMemoryResponse, Department, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
 import AgentAvatar from "./AgentAvatar";
 import AgentDetailTabContent from "./agent-detail/AgentDetailTabContent";
 import { CLI_LABELS, oauthAccountLabel, STATUS_CONFIG, statusLabel } from "./agent-detail/constants";
@@ -43,7 +43,7 @@ export default function AgentDetail({
   onAgentUpdated,
 }: AgentDetailProps) {
   const { t, language } = useI18n();
-  const [tab, setTab] = useState<"info" | "tasks" | "alba">("info");
+  const [tab, setTab] = useState<"info" | "tasks" | "alba" | "memory">("info");
   const [editingCli, setEditingCli] = useState(false);
   const [selectedCli, setSelectedCli] = useState(agent.cli_provider);
   const [selectedOAuthAccountId, setSelectedOAuthAccountId] = useState(agent.oauth_account_id ?? "");
@@ -54,6 +54,8 @@ export default function AgentDetail({
   const [oauthStatus, setOauthStatus] = useState<OAuthStatus | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [agentMemory, setAgentMemory] = useState<AgentMemoryResponse | null>(null);
+  const [agentMemoryLoading, setAgentMemoryLoading] = useState(false);
 
   const agentTasks = tasks.filter((task) => task.assigned_agent_id === agent.id);
   const agentSubAgents = subAgents.filter((subAgent) => subAgent.parentAgentId === agent.id);
@@ -115,6 +117,28 @@ export default function AgentDetail({
     setSelectedOAuthAccountId(agent.oauth_account_id ?? "");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
   }, [agent]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAgentMemoryLoading(true);
+    api
+      .getAgentMemory(agent.id)
+      .then((payload) => {
+        if (!cancelled) setAgentMemory(payload);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error("Failed to load agent memory:", error);
+          setAgentMemory(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAgentMemoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [agent.id]);
 
   useEffect(() => {
     if (!editingCli || !requiresOAuthAccount) return;
@@ -427,6 +451,10 @@ export default function AgentDetail({
               key: "alba",
               label: `${t({ ko: "서브에이전트", en: "Sub-agents", ja: "Sub-agents", zh: "Sub-agents" })} (${agentSubAgents.length})`,
             },
+            {
+              key: "memory",
+              label: t({ ko: "기억/성장", en: "Memory / Growth", ja: "Memory / Growth", zh: "Memory / Growth" }),
+            },
           ].map((tabItem) => (
             <button
               key={tabItem.key}
@@ -453,6 +481,8 @@ export default function AgentDetail({
             onChat={onChat}
             onAssignTask={onAssignTask}
             onOpenTerminal={onOpenTerminal}
+            agentMemory={agentMemory}
+            agentMemoryLoading={agentMemoryLoading}
           />
         </div>
       </div>

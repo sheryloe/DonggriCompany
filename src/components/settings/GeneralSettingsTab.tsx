@@ -167,25 +167,21 @@ export default function GeneralSettingsTab({ t, form, setForm, saved, onSave }: 
           </p>
         </div>
 
-        <div>
-          <label className="block text-xs mb-1" style={{ color: "var(--th-text-secondary)" }}>
-            {t({ ko: "언어", en: "Language", ja: "Language", zh: "Language" })}
-          </label>
-          <select
-            value={form.language}
-            onChange={(e) => setForm({ ...form, language: e.target.value as LocalSettings["language"] })}
-            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-colors"
-            style={{
-              background: "var(--th-input-bg)",
-              borderColor: "var(--th-input-border)",
-              color: "var(--th-text-primary)",
-            }}
-          >
-            <option value="ko">{t({ ko: "한국어", en: "Korean", ja: "Korean", zh: "Korean" })}</option>
-            <option value="en">{t({ ko: "영어", en: "English", ja: "English", zh: "English" })}</option>
-            <option value="ja">{t({ ko: "일본어", en: "Japanese", ja: "Japanese", zh: "Japanese" })}</option>
-            <option value="zh">{t({ ko: "중국어", en: "Chinese", ja: "Chinese", zh: "Chinese" })}</option>
-          </select>
+        <div
+          className="rounded-lg border px-3 py-2 text-xs"
+          style={{ borderColor: "var(--th-card-border)", background: "var(--th-input-bg)" }}
+        >
+          <div className="font-semibold" style={{ color: "var(--th-text-primary)" }}>
+            {t({ ko: "표시 언어", en: "Display Language", ja: "Display Language", zh: "Display Language" })}
+          </div>
+          <p className="mt-1" style={{ color: "var(--th-text-secondary)" }}>
+            {t({
+              ko: "운영 화면과 메시지는 한국어로 고정됩니다. 내부 key, API payload, MD 산출물은 영어 canonical 기준을 유지합니다.",
+              en: "The operational UI is fixed to Korean while internal keys, API payloads, and Markdown outputs remain canonical English.",
+              ja: "The operational UI is fixed to Korean while internal keys, API payloads, and Markdown outputs remain canonical English.",
+              zh: "The operational UI is fixed to Korean while internal keys, API payloads, and Markdown outputs remain canonical English.",
+            })}
+          </p>
         </div>
       </section>
 

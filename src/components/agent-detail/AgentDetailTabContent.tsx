@@ -8,12 +8,12 @@ import {
 } from "../../agent-profile";
 import { getRoleDisplayLabel, getWorkflowRoleDisplayLabel } from "../../app/canonical-display";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../../i18n/canonical-label-registry";
-import type { Agent, Department, SubAgent, SubTask, Task } from "../../types";
+import type { Agent, AgentMemoryResponse, Department, SubAgent, SubTask, Task } from "../../types";
 import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import { getSubAgentSpriteNum, SUBTASK_STATUS_ICON, taskStatusLabel, taskTypeLabel, type TFunction } from "./constants";
 
 interface AgentDetailTabContentProps {
-  tab: "info" | "tasks" | "alba";
+  tab: "info" | "tasks" | "alba" | "memory";
   t: TFunction;
   language: UiLanguage;
   agent: Agent;
@@ -26,6 +26,8 @@ interface AgentDetailTabContentProps {
   onChat: (agent: Agent) => void;
   onAssignTask: (agentId: string) => void;
   onOpenTerminal?: (taskId: string) => void;
+  agentMemory?: AgentMemoryResponse | null;
+  agentMemoryLoading?: boolean;
 }
 
 function classPathText(profile: ReturnType<typeof normalizeAgentProfile>): string {
@@ -81,6 +83,8 @@ export default function AgentDetailTabContent({
   onChat,
   onAssignTask,
   onOpenTerminal,
+  agentMemory,
+  agentMemoryLoading,
 }: AgentDetailTabContentProps) {
   const xpLevel = Math.floor(agent.stats_xp / 100) + 1;
   const profile = normalizeAgentProfile(agent.agent_profile, agent.role);
@@ -386,6 +390,102 @@ export default function AgentDetailTabContent({
             );
           })
         )}
+      </div>
+    );
+  }
+
+  if (tab === "memory") {
+    const memories = agentMemory?.memories ?? [];
+    const skillUsage = agentMemory?.skill_usage ?? [];
+    const growthEvents = agentMemory?.growth_events ?? [];
+    return (
+      <div className="space-y-3">
+        {agentMemoryLoading ? (
+          <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4 text-sm text-slate-300">
+            기억과 성장 정보를 불러오는 중입니다.
+          </div>
+        ) : null}
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+            <div className="text-[11px] text-slate-400">장기기억</div>
+            <div className="mt-1 text-2xl font-bold text-white">{memories.length}</div>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+            <div className="text-[11px] text-slate-400">스킬 숙련 항목</div>
+            <div className="mt-1 text-2xl font-bold text-white">{skillUsage.length}</div>
+          </div>
+          <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+            <div className="text-[11px] text-slate-400">성장 이벤트</div>
+            <div className="mt-1 text-2xl font-bold text-white">{growthEvents.length}</div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+          <div className="mb-2 text-xs font-semibold text-white">장기기억</div>
+          {memories.length === 0 ? (
+            <p className="text-xs text-slate-500">아직 축적된 기억이 없습니다. 작업 완료 후 자동으로 쌓입니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {memories.slice(0, 10).map((memory) => (
+                <div key={memory.id} className="rounded-md bg-slate-900/70 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-w-0 truncate text-sm font-medium text-slate-100">{memory.title}</p>
+                    <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200">
+                      {memory.memory_type}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-slate-400">{memory.display_summary_ko || memory.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+          <div className="mb-2 text-xs font-semibold text-white">스킬 숙련도</div>
+          {skillUsage.length === 0 ? (
+            <p className="text-xs text-slate-500">아직 기록된 스킬 사용 이력이 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {skillUsage.slice(0, 10).map((skill) => (
+                <div key={skill.skill_id} className="rounded-md bg-slate-900/70 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-medium text-slate-100">{skill.skill_id}</span>
+                    <span className="text-slate-400">
+                      사용 {skill.use_count}회 · 성공 {skill.success_count}회
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-700">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400"
+                      style={{ width: `${Math.round(Math.max(0, Math.min(1, skill.proficiency)) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+          <div className="mb-2 text-xs font-semibold text-white">최근 실수/교훈 및 성장</div>
+          {growthEvents.length === 0 ? (
+            <p className="text-xs text-slate-500">아직 성장 이벤트가 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {growthEvents.slice(0, 8).map((event) => (
+                <div key={event.id} className="rounded-md bg-slate-900/70 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-w-0 truncate text-sm font-medium text-slate-100">{event.title}</p>
+                    <span className="text-[10px] text-amber-200">XP +{event.xp_delta}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">{event.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   }

@@ -57,7 +57,7 @@ describe("TaskReportPopup", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByText("Final Branch Verification")).toBeInTheDocument();
+    expect(screen.getByText("최종 브랜치 검증")).toBeInTheDocument();
     expect(screen.getByText(/Final branch verification: passed/)).toBeInTheDocument();
   });
 

@@ -7,6 +7,10 @@ import { buildMessengerTokenKey } from "./token-hint.ts";
 
 const ORIGINAL_ENV = { ...process.env };
 
+function expectNoMojibake(value: unknown): void {
+  expect(String(value ?? "")).not.toMatch(/\uFFFD|\?{3,}/u);
+}
+
 function createTestDb(options?: { messengerChannels?: unknown; offset?: number }): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "claw-empire-telegram-receiver-test-"));
   const dbPath = path.join(tmpDir, "test.sqlite");
@@ -375,6 +379,107 @@ describe("telegram receiver", () => {
       expect(status.enabled).toBe(true);
       expect(status.allowedChatCount).toBe(1);
       expect(status.lastError).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("forwards Korean Telegram directives as UTF-8 and replies without mojibake", async () => {
+    const dbPath = createTestDb({
+      messengerChannels: {
+        telegram: {
+          token: "tg-db-token",
+          receiveEnabled: true,
+          sessions: [{ id: "ops", name: "Ops", targetId: "1001", enabled: true }],
+        },
+      },
+      offset: 0,
+    });
+    const db = new DatabaseSync(dbPath);
+
+    try {
+      const receiver = await importReceiverModule({
+        DB_PATH: dbPath,
+        INBOX_WEBHOOK_SECRET: "inbox-secret",
+      });
+      const status: import("./telegram-receiver.ts").TelegramReceiverStatus = {
+        running: true,
+        configured: false,
+        receiveEnabled: true,
+        enabled: false,
+        allowedChatCount: 0,
+        nextOffset: 0,
+        lastPollAt: null,
+        lastForwardAt: null,
+        lastUpdateId: null,
+        lastError: null,
+      };
+
+      const forwardedBodies: Array<Record<string, unknown>> = [];
+      const replies: string[] = [];
+      const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("api.telegram.org") && url.includes("/getUpdates")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              result: [
+                {
+                  update_id: 10,
+                  message: {
+                    message_id: 77,
+                    text: "$한글 CEO 지시 테스트",
+                    chat: { id: 1001 },
+                    from: { id: 9, is_bot: false, username: "greensheep", first_name: "GreenSheep" },
+                  },
+                },
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (url.includes("/api/inbox")) {
+          const contentType =
+            init?.headers instanceof Headers
+              ? init.headers.get("content-type")
+              : (init?.headers as Record<string, string> | undefined)?.["content-type"];
+          expect(contentType).toBe("application/json; charset=utf-8");
+          const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+          forwardedBodies.push(body);
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+
+        if (url.includes("api.telegram.org") && url.includes("/sendMessage")) {
+          const contentType =
+            init?.headers instanceof Headers
+              ? init.headers.get("content-type")
+              : (init?.headers as Record<string, string> | undefined)?.["content-type"];
+          expect(contentType).toBe("application/json; charset=utf-8");
+          const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+          replies.push(String(body.text ?? ""));
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+
+        return new Response("not found", { status: 404 });
+      });
+
+      await receiver.pollTelegramReceiverOnce({
+        db,
+        status,
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      });
+
+      expect(forwardedBodies[0]?.text).toBe("$한글 CEO 지시 테스트");
+      expectNoMojibake(forwardedBodies[0]?.text);
+      expect(replies[0]).toContain("CEO 지시 수신 완료");
+      expectNoMojibake(replies[0]);
     } finally {
       db.close();
     }

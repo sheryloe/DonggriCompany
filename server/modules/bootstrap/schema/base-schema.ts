@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { applyMemorySchema } from "./memory-schema.ts";
 
 type DbLike = Pick<DatabaseSync, "exec">;
 
@@ -485,6 +486,7 @@ CREATE TABLE IF NOT EXISTS api_providers (
 
   ensureCanonicalCompatibilityColumns(db);
   ensureCanonicalCompatibilityIndexes(db);
+  applyMemorySchema(db);
 }
 
 function ensureCanonicalCompatibilityColumns(db: DbLike): void {

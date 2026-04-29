@@ -16,6 +16,7 @@ import {
   consumeInterruptPrompts,
   loadPendingInterruptPrompts,
 } from "../../../workflow/core/interrupt-injection-tools.ts";
+import { buildMemoryContextBlock } from "../../../memory/store.ts";
 
 export type TaskRunRouteDeps = Pick<
   RuntimeContext,
@@ -505,6 +506,11 @@ Whenever you complete a subtask, report it in this format:
     const workflowPackGuidance = buildWorkflowPackExecutionGuidance(task.workflow_pack_key, taskLang, {
       videoArtifactRelativePath: videoArtifactSpec?.relativePath,
     });
+    const memoryContextBlock = buildMemoryContextBlock(db as any, {
+      agentId,
+      projectId: task.project_id,
+      limit: 8,
+    });
 
     const prompt = buildTaskExecutionPrompt(
       [
@@ -512,6 +518,7 @@ Whenever you complete a subtask, report it in this format:
           buildAvailableSkillsPromptBlock ||
           ((providerName: string) => `[Available Skills][provider=${providerName || "unknown"}][unavailable]`)
         )(provider),
+        memoryContextBlock,
         `[Task Session] id=${executionSession.sessionId} owner=${executionSession.agentId} provider=${executionSession.provider}`,
         "This session is task-scoped. Keep continuity for this task only and do not cross-contaminate context from other projects.",
         projectStructureBlock,

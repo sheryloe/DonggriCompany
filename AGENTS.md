@@ -554,6 +554,17 @@ When processing `$` or `#` commands, the response to the user must be **minimal 
 - Planned 회의는 실행 가능한 SubTask와 검증 증거를 만드는 용도다. 회의 발언 자체가 산출물이 되면 안 된다.
 - PMO는 병목이 생기면 회의를 늘리지 말고 범위를 쪼개거나 담당 부서를 줄인다.
 
+### Memory / Growth 운영 규칙
+
+- UI, 토스트, 운영 메시지는 한국어로 고정한다.
+- 내부 key, API payload, DB canonical 값, AGENTS/Skills MD 산출물은 영어 canonical만 저장한다.
+- 장기기억의 기본 source of truth는 Donggri SQLite memory다.
+- Beads는 프로젝트에 `bd`와 `.beads`가 있을 때만 선택 연동한다. 자동 설치나 자동 `bd init`은 하지 않는다.
+- Beads 쓰기 명령은 `beadsWriteEnabled=true`일 때만 허용한다.
+- 작업 시작 프롬프트에는 프로젝트 기억, 담당 에이전트 경험, 추천 skill 이력을 주입한다.
+- 작업 완료 시 task result, workflow metadata, agent id, project id를 기반으로 memory, skill usage, growth event를 갱신한다.
+- AGENTS 번들은 영어 섹션명 `Memory Snapshot`, `Skill Growth Snapshot`, `Recent Lessons`, `Project Experience`를 유지한다.
+
 ### 텔레그램 보고 규칙
 
 - 텔레그램은 단일 그룹방만 사용한다.

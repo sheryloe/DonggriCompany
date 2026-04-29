@@ -7,6 +7,7 @@ import {
 } from "../packs/video-artifact.ts";
 import { evaluateRemotionOnlyGateFromLogFiles } from "../packs/video-render-engine-gate.ts";
 import { upsertAgentGuideFile } from "../../routes/core/agents/agent-guide-files.ts";
+import { buildAgentGuideMemorySnapshot, extractAndStoreTaskMemory } from "../../memory/store.ts";
 
 type CreateRunCompleteHandlerDeps = Record<string, any>;
 
@@ -113,6 +114,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
           project_id: string | null;
           project_path: string | null;
           source_task_id: string | null;
+          workflow_meta_json: string | null;
         }
       | undefined;
     const stopRequested = stopRequestedTasks.has(taskId);
@@ -378,6 +380,27 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
             WHERE id = ?
           `,
         ).run(task.assigned_agent_id);
+        try {
+          extractAndStoreTaskMemory(db as any, {
+            task: {
+              id: taskId,
+              title: task.title,
+              description: task.description,
+              assigned_agent_id: task.assigned_agent_id,
+              department_id: task.department_id,
+              project_id: task.project_id,
+              project_path: task.project_path,
+              task_type: task.task_type,
+              workflow_pack_key: task.workflow_pack_key,
+              workflow_meta_json: task.workflow_meta_json,
+            },
+            result,
+            now: t,
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          appendTaskLog(taskId, "system", `Memory extraction skipped: ${msg}`);
+        }
       }
 
       const agent = db.prepare("SELECT * FROM agents WHERE id = ?").get(task.assigned_agent_id) as
@@ -385,6 +408,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
         | undefined;
       if (agent && finalExitCode === 0) {
         try {
+          const memorySnapshot = buildAgentGuideMemorySnapshot(db as any, String(agent.id ?? task.assigned_agent_id));
           upsertAgentGuideFile({
             id: String(agent.id ?? task.assigned_agent_id),
             name: String(agent.name ?? task.assigned_agent_id),
@@ -394,6 +418,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
             agentProfileJson: (agent.agent_profile_json as string | null | undefined) ?? null,
             statsTasksDone: Number(agent.stats_tasks_done ?? 0),
             statsXp: Number(agent.stats_xp ?? 0),
+            ...memorySnapshot,
           });
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);

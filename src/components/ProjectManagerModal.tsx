@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Agent, AssignmentMode, Department, Project } from "../types";
+import type { Agent, AssignmentMode, Department, Project, ProjectMemoryResponse } from "../types";
 import {
   deleteProject,
   getProjectDetail,
+  getProjectMemory,
   getProjects,
   getTaskReportDetail,
   type ProjectDecisionEventItem,
@@ -49,6 +50,8 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ProjectDetailResponse | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [projectMemory, setProjectMemory] = useState<ProjectMemoryResponse | null>(null);
+  const [projectMemoryLoading, setProjectMemoryLoading] = useState(false);
 
   const [isCreating, setIsCreating] = useState(false);
   const [githubImportMode, setGithubImportMode] = useState(false);
@@ -136,6 +139,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
   useEffect(() => {
     if (!selectedProjectId) {
       setDetail(null);
+      setProjectMemory(null);
       return;
     }
     setLoadingDetail(true);
@@ -157,6 +161,15 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
         console.error("Failed to load project detail:", err);
       })
       .finally(() => setLoadingDetail(false));
+
+    setProjectMemoryLoading(true);
+    getProjectMemory(selectedProjectId)
+      .then(setProjectMemory)
+      .catch((err) => {
+        console.error("Failed to load project memory:", err);
+        setProjectMemory(null);
+      })
+      .finally(() => setProjectMemoryLoading(false));
   }, [selectedProjectId, editingProjectId, isCreating]);
 
   useEffect(() => {
@@ -527,6 +540,8 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
                   sortedDecisionEvents={sortedDecisionEvents}
                   getDecisionEventLabel={getDecisionEventLabel}
                   handleOpenTaskDetail={handleOpenTaskDetail}
+                  projectMemory={projectMemory}
+                  projectMemoryLoading={projectMemoryLoading}
                 />
               </div>
             </>

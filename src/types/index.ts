@@ -149,6 +149,72 @@ export interface Agent {
   created_at: number;
 }
 
+export interface NativeMemory {
+  id: string;
+  agent_id: string | null;
+  project_id: string | null;
+  memory_type: string;
+  scope_type: string;
+  title: string;
+  body: string;
+  display_summary_ko: string | null;
+  tags_json: string;
+  confidence: number;
+  strength: number;
+  source_type: string;
+  source_id: string | null;
+  external_ref: string | null;
+  status: string;
+  created_at: number;
+  updated_at: number;
+  last_used_at: number | null;
+}
+
+export interface SkillUsageSummary {
+  skill_id: string;
+  use_count: number;
+  success_count: number;
+  latest_at: number;
+  proficiency: number;
+}
+
+export interface AgentGrowthEvent {
+  id: string;
+  agent_id: string;
+  project_id: string | null;
+  task_id: string | null;
+  event_type: string;
+  title: string;
+  body: string;
+  xp_delta: number;
+  created_at: number;
+}
+
+export interface BeadsStatus {
+  installed: boolean;
+  initialized: boolean;
+  project_path: string | null;
+  beads_dir: string | null;
+  version: string | null;
+  ready_count: number | null;
+  error: string | null;
+}
+
+export interface AgentMemoryResponse {
+  ok: boolean;
+  memories: NativeMemory[];
+  skill_usage: SkillUsageSummary[];
+  growth_events: AgentGrowthEvent[];
+}
+
+export interface ProjectMemoryResponse {
+  ok: boolean;
+  memories: NativeMemory[];
+  skill_usage: SkillUsageSummary[];
+  beads_status: BeadsStatus | null;
+  memory_context_preview?: string;
+}
+
 export interface MeetingPresence {
   agent_id: string;
   seat_index: number;
@@ -620,6 +686,10 @@ export interface CompanySettings {
   oauthAutoSwap?: boolean;
   theme: "dark" | "light";
   language: UiLanguage;
+  uiLanguageMode?: "ko_forced";
+  memoryExtractionEnabled?: boolean;
+  beadsBridgeEnabled?: boolean;
+  beadsWriteEnabled?: boolean;
   defaultProvider: CliProvider;
   officeWorkflowPack?: WorkflowPackKey;
   providerModelConfig?: Record<string, ProviderModelConfig>;
@@ -638,7 +708,11 @@ export const DEFAULT_SETTINGS: CompanySettings = {
   autoUpdateNoticePending: false,
   oauthAutoSwap: true,
   theme: "dark",
-  language: "en",
+  language: "ko",
+  uiLanguageMode: "ko_forced",
+  memoryExtractionEnabled: true,
+  beadsBridgeEnabled: true,
+  beadsWriteEnabled: false,
   defaultProvider: "codex",
   officeWorkflowPack: "development",
   providerModelConfig: {

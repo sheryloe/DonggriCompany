@@ -1,18 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import SkillsLibrary from "./SkillsLibrary";
-import type { Agent } from "../types";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import {
   deleteCustomSkill,
   getAvailableLearnedSkills,
   getCustomSkills,
   getOAuthStatus,
+  getSkillUsageSummary,
   getSkills,
   installDonggriSkillToCodex,
   refreshSkills,
   type CustomSkillEntry,
   type SkillEntry,
 } from "../api";
+import type { Agent } from "../types";
+import SkillsLibrary from "./SkillsLibrary";
 
 vi.mock("../api", () => ({
   getSkills: vi.fn(),
@@ -20,6 +22,7 @@ vi.mock("../api", () => ({
   getAvailableLearnedSkills: vi.fn(),
   getCustomSkills: vi.fn(),
   getOAuthStatus: vi.fn(),
+  getSkillUsageSummary: vi.fn(),
   uploadCustomSkill: vi.fn(),
   deleteCustomSkill: vi.fn(),
   getSkillDetail: vi.fn(),
@@ -54,6 +57,7 @@ const refreshSkillsMock = vi.mocked(refreshSkills);
 const getAvailableLearnedSkillsMock = vi.mocked(getAvailableLearnedSkills);
 const getCustomSkillsMock = vi.mocked(getCustomSkills);
 const getOAuthStatusMock = vi.mocked(getOAuthStatus);
+const getSkillUsageSummaryMock = vi.mocked(getSkillUsageSummary);
 const deleteCustomSkillMock = vi.mocked(deleteCustomSkill);
 const installDonggriSkillToCodexMock = vi.mocked(installDonggriSkillToCodex);
 
@@ -143,7 +147,7 @@ function makeCustomSkills(count: number): CustomSkillEntry[] {
 }
 
 async function expectSummary(total: number, catalog: number, custom: number) {
-  await screen.findByText(`Total ${total} (catalog ${catalog} + custom ${custom})`);
+  await screen.findByText(`총 ${total} (catalog ${catalog} + custom ${custom})`);
 }
 
 const TEST_AGENT: Agent = {
@@ -153,7 +157,7 @@ const TEST_AGENT: Agent = {
   department_id: "dep-1",
   role: "team_leader",
   cli_provider: "claude",
-  avatar_emoji: "🦉",
+  avatar_emoji: "A",
   personality: null,
   status: "idle",
   current_task_id: null,
@@ -172,6 +176,7 @@ describe("SkillsLibrary count aggregation", () => {
     getAvailableLearnedSkillsMock.mockResolvedValue([]);
     getCustomSkillsMock.mockResolvedValue([]);
     getOAuthStatusMock.mockResolvedValue({ storageReady: true, providers: {} });
+    getSkillUsageSummaryMock.mockResolvedValue([]);
     refreshSkillsMock.mockResolvedValue(makeCatalogSkills(1));
     deleteCustomSkillMock.mockResolvedValue({ ok: true });
     installDonggriSkillToCodexMock.mockResolvedValue({
@@ -196,7 +201,7 @@ describe("SkillsLibrary count aggregation", () => {
     render(<SkillsLibrary agents={[TEST_AGENT]} />);
 
     await expectSummary(600, 600, 0);
-    expect(screen.getByRole("button", { name: /All.*600/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /전체.*600/ })).toBeInTheDocument();
   }, 20000);
 
   it("shows counts above the old 600 cap when the full catalog is returned", async () => {
@@ -206,7 +211,7 @@ describe("SkillsLibrary count aggregation", () => {
     render(<SkillsLibrary agents={[TEST_AGENT]} />);
 
     await expectSummary(1400, 1400, 0);
-    expect(screen.getByRole("button", { name: /All.*1400/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /전체.*1400/ })).toBeInTheDocument();
   }, 20000);
 
   it("aggregates total/all with custom skills while keeping other category counts catalog-only", async () => {
@@ -216,9 +221,9 @@ describe("SkillsLibrary count aggregation", () => {
     render(<SkillsLibrary agents={[TEST_AGENT]} />);
 
     await expectSummary(5, 3, 2);
-    expect(screen.getByRole("button", { name: /All.*5/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Custom Skills.*2/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Codex Specialist.*1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /전체.*5/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /사용자 Skill.*2/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Codex 전문 기능.*1/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Google \/ Gemini.*1/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Google \/ Stitch.*1/ })).toBeInTheDocument();
   });
@@ -230,15 +235,15 @@ describe("SkillsLibrary count aggregation", () => {
     render(<SkillsLibrary agents={[TEST_AGENT]} />);
     await expectSummary(5, 3, 2);
 
-    const deleteButtons = await screen.findAllByRole("button", { name: "Delete" });
+    const deleteButtons = await screen.findAllByRole("button", { name: "삭제" });
     fireEvent.click(deleteButtons[0]);
 
     await waitFor(() => {
       expect(deleteCustomSkillMock).toHaveBeenCalledTimes(1);
     });
     await expectSummary(4, 3, 1);
-    expect(screen.getByRole("button", { name: /All.*4/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Custom Skills.*1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /전체.*4/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /사용자 Skill.*1/ })).toBeInTheDocument();
   });
 
   it("stabilizes to correct final total regardless of catalog/custom loading order", async () => {
@@ -251,7 +256,7 @@ describe("SkillsLibrary count aggregation", () => {
 
     customDeferred.resolve(makeCustomSkills(2));
     await expectSummary(4, 2, 2);
-    expect(screen.getByRole("button", { name: /All.*4/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /전체.*4/ })).toBeInTheDocument();
   });
 
   it("keeps custom count visible when skills.sh loading fails", async () => {
@@ -261,7 +266,7 @@ describe("SkillsLibrary count aggregation", () => {
     render(<SkillsLibrary agents={[TEST_AGENT]} />);
 
     await expectSummary(2, 0, 2);
-    expect(screen.queryByText("Unable to load skills data")).not.toBeInTheDocument();
+    expect(screen.queryByText("Skill 데이터를 불러오지 못했습니다.")).not.toBeInTheDocument();
   });
 
   it("filters custom category counts with the search term", async () => {
@@ -271,10 +276,10 @@ describe("SkillsLibrary count aggregation", () => {
     render(<SkillsLibrary agents={[TEST_AGENT]} />);
     await expectSummary(5, 3, 2);
 
-    fireEvent.change(screen.getByPlaceholderText(/Search skills/i), { target: { value: "custom-skill-2" } });
-    fireEvent.click(screen.getByRole("button", { name: /Custom Skills.*2/ }));
+    fireEvent.change(screen.getByPlaceholderText(/스킬 검색/i), { target: { value: "custom-skill-2" } });
+    fireEvent.click(screen.getByRole("button", { name: /사용자 Skill.*2/ }));
 
-    expect(screen.getByText('1 skills shown · "custom-skill-2" search results')).toBeInTheDocument();
+    expect(screen.getByText('1개 Skill 표시중 · "custom-skill-2" 검색 결과')).toBeInTheDocument();
     expect(screen.getByText("custom-skill-2")).toBeInTheDocument();
     expect(screen.queryByText("custom-skill-1")).not.toBeInTheDocument();
   });
@@ -286,7 +291,7 @@ describe("SkillsLibrary count aggregation", () => {
     render(<SkillsLibrary agents={[TEST_AGENT]} />);
 
     await expectSummary(1, 1, 0);
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "새로고침" }));
 
     await waitFor(() => {
       expect(refreshSkillsMock).toHaveBeenCalledTimes(1);

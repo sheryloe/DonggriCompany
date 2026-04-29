@@ -280,7 +280,7 @@ export default function CliUsagePanel({
             </button>
           </div>
         </div>
-        <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {rankedCards.map((card) => {
             const usage = card.usage;
             const sessionUsage = card.sessionUsage;
@@ -289,7 +289,7 @@ export default function CliUsagePanel({
             return (
               <div
                 key={card.key}
-                className={`group rounded-lg border ${card.bgColor} p-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg`}
+                className={`group min-w-0 rounded-lg border ${card.bgColor} p-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg`}
               >
                 <div className="mb-1.5 flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-start gap-2">
@@ -298,7 +298,7 @@ export default function CliUsagePanel({
                     </span>
                     <div className="min-w-0">
                       <div className={`truncate text-xs font-semibold ${card.color}`}>{card.title}</div>
-                      {card.subtitle && <div className="truncate text-[9px] text-slate-400">{card.subtitle}</div>}
+                      {card.subtitle && <div className="break-all text-[9px] leading-tight text-slate-400">{card.subtitle}</div>}
                     </div>
                   </div>
                   <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${statusDotClass}`} />
@@ -329,8 +329,8 @@ export default function CliUsagePanel({
                         : "";
                       return (
                         <div key={windowEntry.label}>
-                          <div className="mb-0.5 flex items-center justify-between text-[9px]">
-                            <span className="truncate text-slate-400">{windowEntry.label}</span>
+                          <div className="mb-0.5 flex min-w-0 items-center justify-between gap-2 text-[9px]">
+                            <span className="min-w-0 truncate text-slate-400">{windowEntry.label}</span>
                             <span title={resetText || undefined} className="flex items-center gap-1">
                               <span
                                 className={
@@ -364,24 +364,24 @@ export default function CliUsagePanel({
                 {sessionUsage && !sessionUsage.error && (
                   <div className="space-y-1 text-[9px] text-slate-300">
                     <div className="flex items-center justify-between">
-                      <span>In Progress</span>
+                      <span>{language === "ko" ? "진행 중" : "In Progress"}</span>
                       <span className="font-semibold text-emerald-300">{sessionUsage.sessions.in_progress}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Awaiting</span>
+                      <span>{language === "ko" ? "대기" : "Awaiting"}</span>
                       <span className="font-semibold text-amber-300">{sessionUsage.sessions.awaiting}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Completed</span>
+                      <span>{language === "ko" ? "완료" : "Completed"}</span>
                       <span className="text-cyan-300">{sessionUsage.sessions.completed}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Failed</span>
+                      <span>{language === "ko" ? "실패" : "Failed"}</span>
                       <span className="text-rose-300">{sessionUsage.sessions.failed}</span>
                     </div>
                     {sessionUsage.lastActive && (
-                      <div className="truncate text-[8px] text-slate-500">
-                        Last active: {formatReset(sessionUsage.lastActive, language)}
+                      <div className="break-all text-[8px] text-slate-500">
+                        {language === "ko" ? "마지막 활동" : "Last active"}: {formatReset(sessionUsage.lastActive, language)}
                       </div>
                     )}
                   </div>

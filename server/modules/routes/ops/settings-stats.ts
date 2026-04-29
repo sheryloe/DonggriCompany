@@ -207,6 +207,172 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
     res.json({ ok: true, warnings });
   });
 
+  type CommandLaneKey = "planning" | "meeting" | "delegation" | "progress" | "review" | "done" | "report";
+
+  const commandLaneKeys: CommandLaneKey[] = ["planning", "meeting", "delegation", "progress", "review", "done", "report"];
+
+  const emptyCommandLane = () => ({
+    count: 0,
+    active: false,
+    latest_at: null as number | null,
+    blocked_count: 0,
+    blocked_by: [] as string[],
+  });
+
+  const emptyCommandLanes = () =>
+    Object.fromEntries(commandLaneKeys.map((key) => [key, emptyCommandLane()])) as Record<
+      CommandLaneKey,
+      ReturnType<typeof emptyCommandLane>
+    >;
+
+  const parseWorkflowMeta = (raw: unknown): Record<string, any> => {
+    if (!raw) return {};
+    if (typeof raw === "object") return raw as Record<string, any>;
+    if (typeof raw !== "string") return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const touchCommandLane = (
+    lanes: Record<CommandLaneKey, ReturnType<typeof emptyCommandLane>>,
+    key: CommandLaneKey,
+    at: number,
+  ) => {
+    const lane = lanes[key];
+    lane.count += 1;
+    lane.active = true;
+    lane.latest_at = lane.latest_at === null ? at : Math.max(lane.latest_at, at);
+  };
+
+  const includesLogSignal = (logs: any[], signal: string): boolean =>
+    logs.some((log) => JSON.stringify(log ?? {}).includes(signal));
+
+  const countLogSignal = (logs: any[], signal: string): number =>
+    logs.reduce((count, log) => count + (JSON.stringify(log ?? {}).includes(signal) ? 1 : 0), 0);
+
+  const buildCommandTimeline = () => {
+    const taskRows = db
+      .prepare(
+        `
+      SELECT t.*, p.name AS project_name
+      FROM tasks t
+      LEFT JOIN projects p ON p.id = t.project_id
+      ORDER BY COALESCE(t.updated_at, t.created_at, 0) DESC
+      LIMIT 160
+    `,
+      )
+      .all() as any[];
+
+    const taskIds = taskRows.map((row) => String(row.id)).filter(Boolean);
+    const logsByTask = new Map<string, any[]>();
+    if (taskIds.length > 0) {
+      const placeholders = taskIds.map(() => "?").join(",");
+      const logRows = db
+        .prepare(
+          `
+        SELECT *
+        FROM task_logs
+        WHERE task_id IN (${placeholders})
+        ORDER BY created_at DESC
+      `,
+        )
+        .all(...taskIds) as any[];
+      for (const log of logRows) {
+        const taskId = String(log.task_id ?? "");
+        if (!taskId) continue;
+        const current = logsByTask.get(taskId) ?? [];
+        current.push(log);
+        logsByTask.set(taskId, current);
+      }
+    }
+
+    const summaries = new Map<string, any>();
+
+    for (const task of taskRows) {
+      const projectId = typeof task.project_id === "string" && task.project_id ? task.project_id : null;
+      const projectKey = projectId ?? "__unassigned__";
+      const latestAt = Number(task.updated_at ?? task.created_at ?? Date.now()) || Date.now();
+      const logs = logsByTask.get(String(task.id)) ?? [];
+      const meta = parseWorkflowMeta(task.workflow_meta_json);
+      const reviewConsent = meta.review_consent && typeof meta.review_consent === "object" ? meta.review_consent : null;
+
+      let summary = summaries.get(projectKey);
+      if (!summary) {
+        summary = {
+          project_id: projectId,
+          project_name: task.project_name || (projectId ? "프로젝트" : "미지정 프로젝트"),
+          task_count: 0,
+          latest_at: latestAt,
+          latest_task_title: null as string | null,
+          health: "planning" as "planning" | "active" | "blocked" | "complete",
+          departments: [] as string[],
+          lanes: emptyCommandLanes(),
+          signal_counts: {
+            meeting_public_feedback: 0,
+            messenger_relay_success: 0,
+            review_consent_blocked: 0,
+          },
+        };
+        summaries.set(projectKey, summary);
+      }
+
+      summary.task_count += 1;
+      if (latestAt >= summary.latest_at) {
+        summary.latest_at = latestAt;
+        summary.latest_task_title = task.title ?? null;
+      }
+      if (typeof task.department_id === "string" && task.department_id && !summary.departments.includes(task.department_id)) {
+        summary.departments.push(task.department_id);
+      }
+
+      const status = String(task.status ?? "");
+      if (status === "inbox" || status === "planned") touchCommandLane(summary.lanes, "planning", latestAt);
+      if (status === "planned" || status === "collaborating" || includesLogSignal(logs, "meeting_public_feedback")) {
+        touchCommandLane(summary.lanes, "meeting", latestAt);
+      }
+      if (Number(task.subtask_total ?? 0) > 0 || task.source_task_id || String(task.title ?? "").includes("서브태스크")) {
+        touchCommandLane(summary.lanes, "delegation", latestAt);
+      }
+      if (status === "collaborating" || status === "in_progress") touchCommandLane(summary.lanes, "progress", latestAt);
+      if (status === "review" || reviewConsent) touchCommandLane(summary.lanes, "review", latestAt);
+      if (status === "done") touchCommandLane(summary.lanes, "done", latestAt);
+      if (includesLogSignal(logs, "messenger_relay_success")) touchCommandLane(summary.lanes, "report", latestAt);
+
+      const publicFeedbackCount = countLogSignal(logs, "meeting_public_feedback");
+      const relaySuccessCount = countLogSignal(logs, "messenger_relay_success");
+      summary.signal_counts.meeting_public_feedback += publicFeedbackCount;
+      summary.signal_counts.messenger_relay_success += relaySuccessCount;
+
+      if (reviewConsent?.blocked === true) {
+        summary.health = "blocked";
+        summary.signal_counts.review_consent_blocked += 1;
+        const lane = summary.lanes.review;
+        lane.blocked_count = (lane.blocked_count ?? 0) + 1;
+        const blockedBy = Array.isArray(reviewConsent.blocked_by) ? reviewConsent.blocked_by : [];
+        for (const reason of blockedBy) {
+          if (typeof reason === "string" && reason && !lane.blocked_by.includes(reason)) {
+            lane.blocked_by.push(reason);
+          }
+        }
+      } else if (summary.health !== "blocked") {
+        if (summary.lanes.progress.active || summary.lanes.review.active || summary.lanes.delegation.active) {
+          summary.health = "active";
+        }
+        if (summary.lanes.done.active && !summary.lanes.progress.active && !summary.lanes.review.active) {
+          summary.health = "complete";
+        }
+      }
+    }
+
+    return Array.from(summaries.values())
+      .sort((a, b) => Number(b.latest_at ?? 0) - Number(a.latest_at ?? 0))
+      .slice(0, 8);
+  };
+
   app.get("/api/stats", (_req, res) => {
     const totalTasks = (db.prepare("SELECT COUNT(*) as cnt FROM tasks").get() as { cnt: number }).cnt;
     const doneTasks = (db.prepare("SELECT COUNT(*) as cnt FROM tasks WHERE status = 'done'").get() as { cnt: number })
@@ -341,6 +507,7 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
         top_agents: topAgents,
         tasks_by_department: tasksByDept,
         recent_activity: recentActivity,
+        command_timeline: buildCommandTimeline(),
         runtime: {
           agents_source_mode: getCanonicalAgentsSourceMode(),
         },

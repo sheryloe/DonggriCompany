@@ -119,7 +119,7 @@ export default function AgentDetail({
     if (!editingCli || !requiresOAuthAccount) return;
     setOauthLoading(true);
     api
-      .getOAuthStatus()
+      .getOAuthDebugStatus()
       .then(setOauthStatus)
       .catch((err) => console.error("Failed to load OAuth status:", err))
       .finally(() => setOauthLoading(false));

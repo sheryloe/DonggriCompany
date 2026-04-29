@@ -10,6 +10,7 @@ import type {
   TaskLog,
   TaskStatus,
   TaskType,
+  GoalCommandPreset,
   WorkflowPackKey,
 } from "../types";
 
@@ -251,6 +252,10 @@ export async function createTask(input: {
 }): Promise<string> {
   const j = (await post("/api/tasks", input)) as { id: string };
   return j.id;
+}
+
+export async function getGoalCommands(): Promise<{ version: string; commands: GoalCommandPreset[] }> {
+  return request<{ version: string; commands: GoalCommandPreset[] }>("/api/goal-commands");
 }
 
 export async function updateTask(

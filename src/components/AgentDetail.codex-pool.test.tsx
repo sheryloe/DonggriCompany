@@ -53,7 +53,7 @@ function renderDetail(agent: Agent) {
 describe("AgentDetail cli execution settings", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.spyOn(api, "getOAuthStatus").mockResolvedValue({
+    vi.spyOn(api, "getOAuthDebugStatus").mockResolvedValue({
       storageReady: true,
       providers: {},
     });

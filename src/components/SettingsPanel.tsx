@@ -151,7 +151,7 @@ export default function SettingsPanel({
   const loadOAuthStatus = useCallback(async () => {
     setOauthLoading(true);
     try {
-      const next = await api.getOAuthStatus();
+      const next = await api.getOAuthDebugStatus();
       setOauthStatus(next);
       setAccountDrafts((prev) => {
         const merged = { ...prev };

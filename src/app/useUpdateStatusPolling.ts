@@ -5,9 +5,10 @@ import * as api from "../api";
 export function useUpdateStatusPolling(setUpdateStatus: Dispatch<SetStateAction<api.UpdateStatus | null>>): void {
   useEffect(() => {
     let cancelled = false;
-    const refreshUpdateStatus = () => {
+    const refreshUpdateStatus = async () => {
       api
-        .getUpdateStatus()
+        .bootstrapSession({ promptOnUnauthorized: false })
+        .then(() => api.getUpdateStatus())
         .then((status) => {
           if (cancelled) return;
           setUpdateStatus(status);

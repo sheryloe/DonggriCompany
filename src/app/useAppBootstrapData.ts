@@ -55,6 +55,7 @@ export function useAppBootstrapData({
 }: UseAppBootstrapDataParams): void {
   const fetchAll = useCallback(async () => {
     try {
+      await api.bootstrapSession({ promptOnUnauthorized: false });
       // Settings is loaded first because server-side /api/settings can trigger one-time
       // office-pack hydration, and we want follow-up agent/department fetches to include it.
       const sett = await api.getSettings();

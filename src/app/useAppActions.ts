@@ -139,6 +139,7 @@ export function useAppActions({
       project_path?: string;
       assigned_agent_id?: string;
       workflow_pack_key?: WorkflowPackKey;
+      workflow_meta_json?: Record<string, unknown> | string;
     }) => {
       try {
         await api.createTask(input as Parameters<typeof api.createTask>[0]);

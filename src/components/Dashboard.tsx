@@ -8,7 +8,12 @@ import {
   type HudStat,
   type RankedAgent,
 } from "./dashboard/HeroSections";
-import { DashboardDeptAndSquad, DashboardMissionLog, type DepartmentPerformance } from "./dashboard/OpsSections";
+import {
+  DashboardCommandTimeline,
+  DashboardDeptAndSquad,
+  DashboardMissionLog,
+  type DepartmentPerformance,
+} from "./dashboard/OpsSections";
 import { DEPT_COLORS, useNow } from "./dashboard/model";
 
 interface DashboardProps {
@@ -185,6 +190,8 @@ export default function Dashboard({ stats, agents, tasks, companyName, onPrimary
       />
 
       <DashboardHudStats hudStats={hudStats} numberFormatter={numberFormatter} />
+
+      <DashboardCommandTimeline timeline={stats?.command_timeline} tasks={tasks} language={language} />
 
       <DashboardRankingBoard
         topAgents={topAgents}

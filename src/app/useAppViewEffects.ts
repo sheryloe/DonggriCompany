@@ -58,7 +58,8 @@ export function useAppViewEffects({
   useEffect(() => {
     if (view !== "office") return;
     api
-      .getMeetingPresence()
+      .bootstrapSession({ promptOnUnauthorized: false })
+      .then(() => api.getMeetingPresence())
       .then(setMeetingPresence)
       .catch(() => {
         // keep UI responsive even if meeting-presence endpoint is temporarily unavailable

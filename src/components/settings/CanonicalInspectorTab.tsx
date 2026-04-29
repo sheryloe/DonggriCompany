@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as api from "../../api";
 import {
   getCanonicalBadgeLabel,
@@ -32,14 +32,17 @@ type TabOption = {
 };
 
 const TAB_OPTIONS: TabOption[] = [
-  { key: "governance", label: { ko: "????", en: "Governance", ja: "Governance", zh: "Governance" } },
-  { key: "routing", label: { ko: "???", en: "Routing", ja: "Routing", zh: "Routing" } },
-  { key: "model-tiers", label: { ko: "?? ??", en: "Model Tiers", ja: "Model Tiers", zh: "Model Tiers" } },
-  { key: "approval-gates", label: { ko: "?? ???", en: "Approval Gates", ja: "Approval Gates", zh: "Approval Gates" } },
+  { key: "governance", label: { ko: "거버넌스", en: "Governance", ja: "Governance", zh: "Governance" } },
+  { key: "routing", label: { ko: "라우팅", en: "Routing", ja: "Routing", zh: "Routing" } },
+  { key: "model-tiers", label: { ko: "모델 등급", en: "Model Tiers", ja: "Model Tiers", zh: "Model Tiers" } },
+  {
+    key: "approval-gates",
+    label: { ko: "승인 게이트", en: "Approval Gates", ja: "Approval Gates", zh: "Approval Gates" },
+  },
   {
     key: "specialization-registry",
     label: {
-      ko: "??? ?????",
+      ko: "전문화 레지스트리",
       en: "Specialization Registry",
       ja: "Specialization Registry",
       zh: "Specialization Registry",
@@ -47,60 +50,60 @@ const TAB_OPTIONS: TabOption[] = [
   },
   {
     key: "pm-artifact-state",
-    label: { ko: "PM ??? ??", en: "PM Artifact State", ja: "PM Artifact State", zh: "PM Artifact State" },
+    label: { ko: "PM 산출물 상태", en: "PM Artifact State", ja: "PM Artifact State", zh: "PM Artifact State" },
   },
-  { key: "validation", label: { ko: "??", en: "Validation", ja: "Validation", zh: "Validation" } },
+  { key: "validation", label: { ko: "검증", en: "Validation", ja: "Validation", zh: "Validation" } },
   {
     key: "reload-rollback",
-    label: { ko: "???/??", en: "Reload / Rollback", ja: "Reload / Rollback", zh: "Reload / Rollback" },
+    label: { ko: "다시 불러오기/롤백", en: "Reload / Rollback", ja: "Reload / Rollback", zh: "Reload / Rollback" },
   },
 ];
 
 const TAB_DESCRIPTIONS: Record<InspectorKey, Record<UiLanguage, string>> = {
   governance: {
-    ko: "?? ?? ?? ?? ?? ??, ?? ??, ?? ??? ?????.",
+    ko: "활성 정책 버전, 거버넌스 기준, 라벨 상태를 점검합니다.",
     en: "Inspect the active policy version, governance baseline, and label health.",
     ja: "Inspect the active policy version, governance baseline, and label health.",
     zh: "Inspect the active policy version, governance baseline, and label health.",
   },
   routing: {
-    ko: "?? ??? ?? ???? ??, ??, ?? ??? ????? ?? ?????.",
+    ko: "입력값이 부서, 패밀리, 모델 정책으로 매핑되는 방식을 미리 확인합니다.",
     en: "Preview how an input maps to department, family, and model policy.",
     ja: "Preview how an input maps to department, family, and model policy.",
     zh: "Preview how an input maps to department, family, and model policy.",
   },
   "model-tiers": {
-    ko: "?? ??? ?? ?? ??? ??? ?????.",
+    ko: "작업 유형별 모델 등급 규칙과 요약을 검토합니다.",
     en: "Review model tier rules and summaries by work type.",
     ja: "Review model tier rules and summaries by work type.",
     zh: "Review model tier rules and summaries by work type.",
   },
   "approval-gates": {
-    ko: "??, ??, ?? ???? ?? ???? ????? ?????.",
+    ko: "권한, 정족수, 승인 게이트가 작업을 차단하는 조건을 검토합니다.",
     en: "Review when authority, quorum, and approval gates block work.",
     ja: "Review when authority, quorum, and approval gates block work.",
     zh: "Review when authority, quorum, and approval gates block work.",
   },
   "specialization-registry": {
-    ko: "??? ?? ?? ?? ??? ?? ???? ????? ?????.",
+    ko: "전문화 키가 패밀리와 실행 역량에 매핑되는 방식을 점검합니다.",
     en: "Inspect how specialization keys map to families and execution capability.",
     ja: "Inspect how specialization keys map to families and execution capability.",
     zh: "Inspect how specialization keys map to families and execution capability.",
   },
   "pm-artifact-state": {
-    ko: "???? ???, ?? ??, projection ??? ???? ?????.",
+    ko: "프로젝트 산출물, 의사결정 로그, projection 상태를 점검합니다.",
     en: "Inspect project artifacts, decision logs, and projection health.",
     ja: "Inspect project artifacts, decision logs, and projection health.",
     zh: "Inspect project artifacts, decision logs, and projection health.",
   },
   validation: {
-    ko: "???/?? ?? ????? ??? fallback ??? ?????.",
+    ko: "한국어/영어 라벨 레지스트리 범위와 fallback 상태를 검증합니다.",
     en: "Validate Korean/English label registry coverage and fallback health.",
     ja: "Validate Korean/English label registry coverage and fallback health.",
     zh: "Validate Korean/English label registry coverage and fallback health.",
   },
   "reload-rollback": {
-    ko: "?? ??? ?????? ?? ???? ?????.",
+    ko: "canonical 정책 규칙을 다시 불러오거나 지정 버전으로 롤백합니다.",
     en: "Reload canonical policy rules or roll back to a target version.",
     ja: "Reload canonical policy rules or roll back to a target version.",
     zh: "Reload canonical policy rules or roll back to a target version.",
@@ -327,7 +330,7 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
 
       {tab === "routing" ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-          <Panel title={t({ ko: "???? ??", en: "Preview Input", ja: "Preview Input", zh: "Preview Input" })}>
+          <Panel title={t({ ko: "미리보기 입력", en: "Preview Input", ja: "Preview Input", zh: "Preview Input" })}>
             <div className="space-y-3">
               <label className="block text-xs font-medium text-slate-300">
                 {t({ ko: "프로젝트", en: "Project", ja: "Project", zh: "Project" })}
@@ -345,7 +348,7 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
                 </select>
               </label>
               <label className="block text-xs font-medium text-slate-300">
-                {t({ ko: "??? ??", en: "Routing Input", ja: "Routing Input", zh: "Routing Input" })}
+                {t({ ko: "라우팅 입력", en: "Routing Input", ja: "Routing Input", zh: "Routing Input" })}
                 <textarea
                   rows={6}
                   className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
@@ -360,11 +363,11 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
               >
                 {loadingPreview
                   ? t({ ko: "실행 중...", en: "Running...", ja: "Running...", zh: "Running..." })
-                  : t({ ko: "???? ??", en: "Run Preview", ja: "Run Preview", zh: "Run Preview" })}
+                  : t({ ko: "미리보기 실행", en: "Run Preview", ja: "Run Preview", zh: "Run Preview" })}
               </button>
             </div>
           </Panel>
-          <Panel title={t({ ko: "?? ??", en: "Decision", ja: "Decision", zh: "Decision" })}>
+          <Panel title={t({ ko: "결정 결과", en: "Decision", ja: "Decision", zh: "Decision" })}>
             {previewResult ? (
               <div className="space-y-3 text-sm text-slate-300">
                 <div className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2 text-xs text-slate-300">
@@ -447,7 +450,7 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
             ) : (
               <div className="text-sm text-slate-500">
                 {t({
-                  ko: "????? ???? ?? ???? ??? ?????.",
+                  ko: "미리보기를 실행해 canonical 우선순위 결과를 확인하세요.",
                   en: "Run the preview to inspect canonical precedence results.",
                   ja: "Run the preview to inspect canonical precedence results.",
                   zh: "Run the preview to inspect canonical precedence results.",
@@ -474,7 +477,9 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
 
       {tab === "specialization-registry" && registryResponse ? (
         <div className="grid gap-4 xl:grid-cols-2">
-          <Panel title={t({ ko: "????? ??", en: "Registry Summary", ja: "Registry Summary", zh: "Registry Summary" })}>
+          <Panel
+            title={t({ ko: "레지스트리 요약", en: "Registry Summary", ja: "Registry Summary", zh: "Registry Summary" })}
+          >
             <div className="space-y-1 text-sm text-slate-300">
               <div>Total: {registryResponse.registry.total}</div>
               <div>Version: {registryResponse.registry.version}</div>
@@ -484,7 +489,12 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
             </div>
           </Panel>
           <Panel
-            title={t({ ko: "?? ??", en: "Family Assignments", ja: "Family Assignments", zh: "Family Assignments" })}
+            title={t({
+              ko: "패밀리 배정",
+              en: "Family Assignments",
+              ja: "Family Assignments",
+              zh: "Family Assignments",
+            })}
           >
             {renderList(
               Object.entries(registryResponse.registry.familyAssignments).map(
@@ -522,7 +532,7 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
                 className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t({
-                  ko: "??? ?????",
+                  ko: "산출물 초기화",
                   en: "Bootstrap Artifacts",
                   ja: "Bootstrap Artifacts",
                   zh: "Bootstrap Artifacts",
@@ -530,7 +540,7 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
               </button>
             </div>
           </Panel>
-          <Panel title={t({ ko: "??", en: "State", ja: "State", zh: "State" })}>
+          <Panel title={t({ ko: "상태", en: "State", ja: "State", zh: "State" })}>
             {artifactState ? (
               <div className="space-y-3 text-sm text-slate-300">
                 <div>Project Path: {artifactState.projectPath}</div>
@@ -563,7 +573,9 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
       ) : null}
 
       {tab === "validation" ? (
-        <Panel title={t({ ko: "?? ?? ??", en: "Locale Validation", ja: "Locale Validation", zh: "Locale Validation" })}>
+        <Panel
+          title={t({ ko: "언어 검증", en: "Locale Validation", ja: "Locale Validation", zh: "Locale Validation" })}
+        >
           {labelIssues.length > 0 ? (
             <ul className="space-y-1 text-xs text-slate-300">
               {labelIssues.map((issue) => (
@@ -575,7 +587,7 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
           ) : (
             <div className="text-sm text-slate-300">
               {t({
-                ko: "???/?? ?? ?????? ?????.",
+                ko: "한국어/영어/일본어/중국어 라벨 레지스트리 항목이 모두 유효합니다.",
                 en: "All KO/EN/JA/ZH label registry entries are valid.",
                 ja: "All KO/EN/JA/ZH label registry entries are valid.",
                 zh: "All KO/EN/JA/ZH label registry entries are valid.",
@@ -587,7 +599,7 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
 
       {tab === "reload-rollback" ? (
         <div className="grid gap-4 xl:grid-cols-2">
-          <Panel title={t({ ko: "???", en: "Reload", ja: "Reload", zh: "Reload" })}>
+          <Panel title={t({ ko: "다시 불러오기", en: "Reload", ja: "Reload", zh: "Reload" })}>
             <div className="space-y-3">
               <div className="text-xs text-slate-400">
                 {t({
@@ -634,7 +646,7 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
             ) : (
               <div className="text-sm text-slate-500">
                 {t({
-                  ko: "?? ?? ??? ????.",
+                  ko: "아직 다시 불러온 결과가 없습니다.",
                   en: "No reload result yet.",
                   ja: "No reload result yet.",
                   zh: "No reload result yet.",

@@ -1,12 +1,11 @@
 import { useState } from "react";
-import type { Agent, Department, SubTask, Task, TaskStatus } from "../../types";
+import type { Agent, Department, SubTask, Task, TaskStatus, GoalCommandKey, GoalCommandPreset } from "../../types";
 import { useI18n } from "../../i18n";
 import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import AgentAvatar from "../AgentAvatar";
 import AgentSelect from "../AgentSelect";
 import DiffModal from "./DiffModal";
 import { getGoalCommandTeamLabel, getGoalCommandTitle } from "./goal-command-text";
-import type { GoalCommandKey, GoalCommandPreset } from "../../types";
 import {
   getTaskTypeBadge,
   isHideableStatus,

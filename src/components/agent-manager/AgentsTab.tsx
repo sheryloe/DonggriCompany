@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Agent, Department } from "../../types";
 import { localeName } from "../../i18n";
 import AgentCard from "./AgentCard";
@@ -51,14 +51,17 @@ export default function AgentsTab({
   randomIconSprites,
 }: AgentsTabProps) {
   const workingCount = agents.filter((agent) => agent.status === "working").length;
-  const deptCounts = new Map<string, { total: number; working: number }>();
-  for (const agent of agents) {
-    const key = agent.department_id || "__none";
-    const count = deptCounts.get(key) ?? { total: 0, working: 0 };
-    count.total += 1;
-    if (agent.status === "working") count.working += 1;
-    deptCounts.set(key, count);
-  }
+  const deptCounts = useMemo(() => {
+    const counts = new Map<string, { total: number; working: number }>();
+    for (const agent of agents) {
+      const key = agent.department_id || "__none";
+      const count = counts.get(key) ?? { total: 0, working: 0 };
+      count.total += 1;
+      if (agent.status === "working") count.working += 1;
+      counts.set(key, count);
+    }
+    return counts;
+  }, [agents]);
 
   const [deptScrollTop, setDeptScrollTop] = useState(0);
   const deptRows = useMemo(

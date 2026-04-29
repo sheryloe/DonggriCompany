@@ -1,4 +1,4 @@
-﻿import os from "node:os";
+import os from "node:os";
 import path from "node:path";
 import { TextDecoder } from "node:util";
 
@@ -28,7 +28,12 @@ export function createCliTools(deps: CreateCliToolsDeps) {
           path.join(os.homedir(), "bin"),
         ];
 
-  const ANSI_ESCAPE_REGEX = /\u001b(?:\[[0-?]*[ -/]*[@-~]|][^\u0007]*(?:\u0007|\u001b\\)|[@-Z\\-_])/g;
+  const ESC = String.fromCharCode(27);
+  const BEL = String.fromCharCode(7);
+  const ANSI_ESCAPE_REGEX = new RegExp(
+    `${ESC}(?:\\[[0-?]*[ -/]*[@-~]|][^${BEL}]*(?:${BEL}|${ESC}\\\\)|[@-Z\\\\-_])`,
+    "g",
+  );
   const CLI_SPINNER_LINE_REGEX = /^[\s.|/\\\-+=*~]{2,}$/u;
   const cliOutputDedupCache = new Map<string, { normalized: string; ts: number }>();
 
@@ -85,7 +90,7 @@ export function createCliTools(deps: CreateCliToolsDeps) {
         const args = ["codex"];
         if (!noTools) args.push("--enable", "multi_agent");
         if (model) args.push("-m", model);
-        if (reasoningLevel) args.push("-c", `model_reasoning_effort=\"${reasoningLevel}\"`);
+        if (reasoningLevel) args.push("-c", `model_reasoning_effort="${reasoningLevel}"`);
         if (!noTools) args.push("--yolo");
         args.push("exec", "--json");
         if (noTools) args.push("--sandbox", "read-only");

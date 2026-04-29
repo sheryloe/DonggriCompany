@@ -40,7 +40,9 @@ export default function GitHubOAuthAppConfig({ t }: { t: TFunction }) {
           })}
         </h4>
         {saved && (
-          <span className="text-[10px] text-green-400">{t({ ko: "???", en: "Saved", ja: "Saved", zh: "Saved" })}</span>
+          <span className="text-[10px] text-green-400">
+            {t({ ko: "저장됨", en: "Saved", ja: "Saved", zh: "Saved" })}
+          </span>
         )}
       </div>
 
@@ -109,7 +111,7 @@ export default function GitHubOAuthAppConfig({ t }: { t: TFunction }) {
             onClick={saveClientId}
             className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-blue-500"
           >
-            {t({ ko: "??", en: "Save", ja: "Save", zh: "Save" })}
+            {t({ ko: "저장", en: "Save", ja: "Save", zh: "Save" })}
           </button>
         </div>
       )}

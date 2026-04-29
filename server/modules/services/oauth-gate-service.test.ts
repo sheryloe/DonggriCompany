@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { applyOAuthRunnerIsolationSchema } from "../bootstrap/schema/oauth-runner-isolation.ts";
-import { OAuthGateError, OAuthGateService } from "./oauth-gate-service.ts";
+import { type OAuthGateError, OAuthGateService } from "./oauth-gate-service.ts";
 
 describe("OAuthGateService", () => {
   let db: DatabaseSync;

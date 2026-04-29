@@ -70,51 +70,54 @@ export function useProjectSaveHandler({
   setIsCreating,
   t,
 }: UseProjectSaveHandlerParams) {
-  const buildGitHubRollbackMessage = (err: GitHubProjectCreateError, savePath: string, detail: string): string => {
-    const remoteName = err.remoteRepoFullName || githubRepoName.trim() || "repository";
-    const effectivePath = err.localPath || savePath;
-    const detailSuffix = detail ? ` / Cause: ${detail}` : "";
-    const detailSuffixKo = detail ? ` / 원인: ${detail}` : "";
-    const rollback = err.rollback;
+  const buildGitHubRollbackMessage = useCallback(
+    (err: GitHubProjectCreateError, savePath: string, detail: string): string => {
+      const remoteName = err.remoteRepoFullName || githubRepoName.trim() || "repository";
+      const effectivePath = err.localPath || savePath;
+      const detailSuffix = detail ? ` / Cause: ${detail}` : "";
+      const detailSuffixKo = detail ? ` / 원인: ${detail}` : "";
+      const rollback = err.rollback;
 
-    if (rollback?.manualCleanupRequired) {
+      if (rollback?.manualCleanupRequired) {
+        return t(
+          messages(
+            `GitHub 저장소 '${remoteName}' 생성 후 프로젝트 등록 상태를 확정하지 못했습니다. 원격 저장소와 로컬 경로를 수동으로 확인하세요. 경로: ${effectivePath}${detailSuffixKo}`,
+            `GitHub repository '${remoteName}' was created, but project registration state is uncertain. Verify the remote repository and local path manually. Path: ${effectivePath}${detailSuffix}`,
+          ),
+        );
+      }
+
+      const rollbackPartsKo: string[] = [];
+      const rollbackPartsEn: string[] = [];
+
+      if (rollback?.remoteRepoDeleted) {
+        rollbackPartsKo.push("원격 저장소 삭제 완료");
+        rollbackPartsEn.push("remote repository deleted");
+      } else if (rollback?.remoteDeleteAttempted && rollback.remoteRepoDeleteError) {
+        rollbackPartsKo.push(`원격 저장소 정리 실패: ${rollback.remoteRepoDeleteError}`);
+        rollbackPartsEn.push(`remote cleanup failed: ${rollback.remoteRepoDeleteError}`);
+      }
+
+      if (rollback?.localPathDeleted) {
+        rollbackPartsKo.push("로컬 clone 경로 삭제 완료");
+        rollbackPartsEn.push("local clone removed");
+      } else if (rollback?.localCleanupAttempted && rollback.localPathDeleteError) {
+        rollbackPartsKo.push(`로컬 경로 정리 실패: ${rollback.localPathDeleteError}`);
+        rollbackPartsEn.push(`local cleanup failed: ${rollback.localPathDeleteError}`);
+      }
+
+      const rollbackSummaryKo = rollbackPartsKo.length > 0 ? ` / 롤백 결과: ${rollbackPartsKo.join(", ")}` : "";
+      const rollbackSummaryEn = rollbackPartsEn.length > 0 ? ` / Rollback: ${rollbackPartsEn.join(", ")}` : "";
+
       return t(
         messages(
-          `GitHub 저장소 '${remoteName}' 생성 후 프로젝트 등록 상태를 확정하지 못했습니다. 원격 저장소와 로컬 경로를 수동으로 확인하세요. 경로: ${effectivePath}${detailSuffixKo}`,
-          `GitHub repository '${remoteName}' was created, but project registration state is uncertain. Verify the remote repository and local path manually. Path: ${effectivePath}${detailSuffix}`,
+          `GitHub 저장소 '${remoteName}' 생성 후 로컬 설정에 실패했습니다. 경로: ${effectivePath}${detailSuffixKo}${rollbackSummaryKo}`,
+          `GitHub repository '${remoteName}' was created, but local setup failed. Path: ${effectivePath}${detailSuffix}${rollbackSummaryEn}`,
         ),
       );
-    }
-
-    const rollbackPartsKo: string[] = [];
-    const rollbackPartsEn: string[] = [];
-
-    if (rollback?.remoteRepoDeleted) {
-      rollbackPartsKo.push("원격 저장소 삭제 완료");
-      rollbackPartsEn.push("remote repository deleted");
-    } else if (rollback?.remoteDeleteAttempted && rollback.remoteRepoDeleteError) {
-      rollbackPartsKo.push(`원격 저장소 정리 실패: ${rollback.remoteRepoDeleteError}`);
-      rollbackPartsEn.push(`remote cleanup failed: ${rollback.remoteRepoDeleteError}`);
-    }
-
-    if (rollback?.localPathDeleted) {
-      rollbackPartsKo.push("로컬 clone 경로 삭제 완료");
-      rollbackPartsEn.push("local clone removed");
-    } else if (rollback?.localCleanupAttempted && rollback.localPathDeleteError) {
-      rollbackPartsKo.push(`로컬 경로 정리 실패: ${rollback.localPathDeleteError}`);
-      rollbackPartsEn.push(`local cleanup failed: ${rollback.localPathDeleteError}`);
-    }
-
-    const rollbackSummaryKo = rollbackPartsKo.length > 0 ? ` / 롤백 결과: ${rollbackPartsKo.join(", ")}` : "";
-    const rollbackSummaryEn = rollbackPartsEn.length > 0 ? ` / Rollback: ${rollbackPartsEn.join(", ")}` : "";
-
-    return t(
-      messages(
-        `GitHub 저장소 '${remoteName}' 생성 후 로컬 설정에 실패했습니다. 경로: ${effectivePath}${detailSuffixKo}${rollbackSummaryKo}`,
-        `GitHub repository '${remoteName}' was created, but local setup failed. Path: ${effectivePath}${detailSuffix}${rollbackSummaryEn}`,
-      ),
-    );
-  };
+    },
+    [githubRepoName, t],
+  );
 
   return useCallback(
     async (allowCreateMissingPath = false, bypassManualWarning = false) => {

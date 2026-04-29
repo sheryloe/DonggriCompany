@@ -23,11 +23,11 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
   const MVP_CODE_REVIEW_POLICY_BASE_LINES = [
     "[MVP Code Review Policy / 코드 리뷰 정책]",
     "- CRITICAL/HIGH: fix immediately / 즉시 수정",
-    "- MEDIUM/LOW: warning report only, no code changes / 경고 보고서만, 코드 수정 금지",
+    "- MEDIUM/LOW: warning report only, no code changes / 경고 보고만, 코드 수정 금지",
   ];
   const EXECUTION_CONTINUITY_POLICY_LINES = [
     "[Execution Continuity / 실행 연속성]",
-    "- Continue from the latest state without self-introduction or kickoff narration / 자기소개·착수 멘트 없이 최신 상태에서 바로 이어서 작업",
+    "- Continue from the latest state without self-introduction or kickoff narration / 자기소개나 착수 멘트 없이 최신 상태에서 바로 이어서 작업",
     "- Reuse prior codebase understanding and read only files needed for this delta / 기존 코드베이스 이해를 재사용하고 이번 변경에 필요한 파일만 확인",
     "- Focus on unresolved checklist items and produce concrete diffs first / 미해결 체크리스트 중심으로 즉시 코드 변경부터 진행",
     "[Git Workflow Guardrail / Git 워크플로우 가드레일]",
@@ -35,7 +35,7 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
   ];
 
   const WARNING_FIX_OVERRIDE_LINE =
-    "- Exception override: User explicitly requested warning-level fixes for this task. You may fix the requested MEDIUM/LOW items / 예외: 이 작업에서 사용자 요청 시 MEDIUM/LOW도 해당 요청 범위 내에서 수정 가능";
+    "- Exception override: User explicitly requested warning-level fixes for this task. You may fix the requested MEDIUM/LOW items / 예외: 이 작업에서 사용자가 MEDIUM/LOW 수준 수정을 명시 요청했으므로 요청 범위 안에서 수정 가능";
 
   function hasExplicitWarningFixRequest(...textParts: Array<string | null | undefined>): boolean {
     const text = textParts
@@ -45,7 +45,7 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
     if (/\[(ALLOW_WARNING_FIX|WARN_FIX)\]/i.test(text)) return true;
 
     const requestHint =
-      /\b(please|can you|need to|must|should|fix this|fix these|resolve this|address this|fix requested|warning fix)\b|해줘|해주세요|수정해|수정해야|고쳐|고쳐줘|해결해|반영해|조치해|수정 요청/i;
+      /\b(please|can you|need to|must|should|fix this|fix these|resolve this|address this|fix requested|warning fix)\b|해줘|해주세요|수정|고쳐|해결|반영|조치|수정 요청/i;
     if (!requestHint.test(text)) return false;
 
     const warningFixPair =
@@ -146,8 +146,8 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       const isLast = i === entries.length - 1;
-      const connector = isLast ? "└── " : "├── ";
-      const childPrefix = isLast ? "    " : "│   ";
+      const connector = isLast ? "`-- " : "|-- ";
+      const childPrefix = isLast ? "    " : "|   ";
       if (e.isDirectory()) {
         lines.push(`${prefix}${connector}${e.name}/`);
         lines.push(...buildFileTree(path.join(dir, e.name), prefix + childPrefix, depth + 1, maxDepth));
@@ -189,23 +189,33 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
     }
     try {
       if (fs.existsSync(path.join(projectPath, "requirements.txt"))) stack.push("Python");
-    } catch {}
+    } catch {
+      void 0;
+    }
     try {
       if (fs.existsSync(path.join(projectPath, "go.mod"))) stack.push("Go");
-    } catch {}
+    } catch {
+      void 0;
+    }
     try {
       if (fs.existsSync(path.join(projectPath, "Cargo.toml"))) stack.push("Rust");
-    } catch {}
+    } catch {
+      void 0;
+    }
     try {
       if (fs.existsSync(path.join(projectPath, "pom.xml"))) stack.push("Java (Maven)");
-    } catch {}
+    } catch {
+      void 0;
+    }
     try {
       if (
         fs.existsSync(path.join(projectPath, "build.gradle")) ||
         fs.existsSync(path.join(projectPath, "build.gradle.kts"))
       )
         stack.push("Java (Gradle)");
-    } catch {}
+    } catch {
+      void 0;
+    }
     return stack;
   }
 
@@ -234,7 +244,9 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
           const stat = fs.statSync(fullPath);
           result.push(`${p} (${stat.size} bytes)`);
         }
-      } catch {}
+      } catch {
+        void 0;
+      }
     }
 
     const srcDirs = ["src", "server", "app", "lib", "pages", "components", "api"];
@@ -255,7 +267,9 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
           countFiles(dirPath);
           result.push(`${d}/ (${count} files)`);
         }
-      } catch {}
+      } catch {
+        void 0;
+      }
     }
 
     return result;
@@ -290,7 +304,9 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
           sections.push(`## README (first 20 lines)\n${lines.join("\n")}\n`);
           break;
         }
-      } catch {}
+      } catch {
+        void 0;
+      }
     }
 
     return sections.join("\n");
@@ -358,7 +374,9 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
           .toString()
           .trim();
         if (log) parts.push(`### Recent Commits\n${log}`);
-      } catch {}
+      } catch {
+        void 0;
+      }
 
       try {
         const worktreeList = execFileSync("git", ["worktree", "list", "--porcelain"], {
@@ -392,12 +410,16 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
               .toString()
               .trim();
             if (stat) worktreeLines.push(`  ${branch}:\n${stat}`);
-          } catch {}
+          } catch {
+            void 0;
+          }
         }
         if (worktreeLines.length) {
           parts.push(`### Active Worktree Changes (other agents)\n${worktreeLines.join("\n")}`);
         }
-      } catch {}
+      } catch {
+        void 0;
+      }
     }
 
     try {
@@ -421,7 +443,9 @@ export function createProjectContextTools(deps: CreateProjectContextToolsDeps) {
         const taskLines = recentTasks.map((t) => `- ${t.title} (by ${t.agent_name || "unknown"})`);
         parts.push(`### Recently Completed Tasks\n${taskLines.join("\n")}`);
       }
-    } catch {}
+    } catch {
+      void 0;
+    }
 
     if (!parts.length) return "";
     return parts.join("\n\n");

@@ -134,7 +134,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
 
   useEffect(() => {
     void loadProjects(1, search);
-  }, []);
+  }, [loadProjects, search]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -175,7 +175,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
   useEffect(() => {
     if (isCreating && !editingProjectId) return;
     gitHubProjectScaffold.resetGitHubProjectScaffold({ enabled: false });
-  }, [editingProjectId, gitHubProjectScaffold.resetGitHubProjectScaffold, isCreating]);
+  }, [editingProjectId, gitHubProjectScaffold, isCreating]);
 
   const getManualAssignmentWarning = useCallback((): ManualAssignmentWarning["reason"] | null => {
     const selectedAgents = agents.filter((agent) => selectedAgentIds.has(agent.id));

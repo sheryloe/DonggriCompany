@@ -1,5 +1,8 @@
 type CreatePlanningArchiveToolsDeps = Record<string, any>;
 
+const ESC = String.fromCharCode(27);
+const ANSI_SGR_REGEX = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
+
 export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps) {
   const {
     db,
@@ -25,7 +28,7 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
       .replace(/\\r\\n/g, "\n")
       .replace(/\\n/g, "\n")
       .replace(/\\t/g, " ")
-      .replace(/\u001b\[[0-9;]*m/g, "");
+      .replace(ANSI_SGR_REGEX, "");
     const lines = normalized
       .split(/\n+/)
       .map((line) => line.trim())
@@ -39,7 +42,7 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
           )
         )
           return false;
-        if (/"aggregated_output"|\"exit_code\"|\"session_id\"|\"total_cost_usd\"|\"usage\"/i.test(line)) return false;
+        if (/"aggregated_output"|"exit_code"|"session_id"|"total_cost_usd"|"usage"/i.test(line)) return false;
         if (/^\(Use `node --trace-warnings/i.test(line)) return false;
         if (/^command\s+["'`]/i.test(line)) return false;
         if (/^\[[A-Za-z-]+\]\s+/.test(line) && line.includes("listening on http://")) return false;

@@ -88,7 +88,9 @@ export function useOfficePixiRuntime({
       if (initIdRef.current !== currentInitId) {
         try {
           app.destroy();
-        } catch {}
+        } catch {
+          void 0;
+        }
         return;
       }
 
@@ -143,7 +145,9 @@ export function useOfficePixiRuntime({
       if (initIdRef.current !== currentInitId) {
         try {
           app.destroy();
-        } catch {}
+        } catch {
+          void 0;
+        }
         return;
       }
 
@@ -202,9 +206,13 @@ export function useOfficePixiRuntime({
 
     resizeObserver.observe(element);
 
+    const cancelCurrentInit = () => {
+      initIdRef.current += 1;
+    };
+
     return () => {
       destroyedRef.current = true;
-      initIdRef.current++;
+      cancelCurrentInit();
       resizeObserver.disconnect();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);

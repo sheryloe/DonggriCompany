@@ -265,14 +265,17 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
     return new Set(learnedProvidersBySkill.get(learningSkillKey) ?? []);
   }, [learnedProvidersBySkill, learningSkillKey]);
 
-  const learnInProgress = learnJob?.status === "queued" || learnJob?.status === "running";
+  const learnJobId = learnJob?.id;
+  const learnJobStatus = learnJob?.status;
+  const learnInProgress = learnJobStatus === "queued" || learnJobStatus === "running";
   const learnInProgressRef = useRef(learnInProgress);
   learnInProgressRef.current = learnInProgress;
   const preferKoreanName = localeTag.startsWith("ko");
 
   useEffect(() => {
+    const unlearnEffectTimers = unlearnEffectTimersRef.current;
     return () => {
-      for (const timerId of Object.values(unlearnEffectTimersRef.current)) {
+      for (const timerId of Object.values(unlearnEffectTimers)) {
         if (typeof timerId === "number") {
           window.clearTimeout(timerId);
         }
@@ -281,12 +284,12 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
   }, []);
 
   useEffect(() => {
-    if (!learnJob || (learnJob.status !== "queued" && learnJob.status !== "running")) {
+    if (!learnJobId || (learnJobStatus !== "queued" && learnJobStatus !== "running")) {
       return;
     }
     let cancelled = false;
     const timer = window.setInterval(() => {
-      getSkillLearningJob(learnJob.id)
+      getSkillLearningJob(learnJobId)
         .then((job) => {
           if (!cancelled) {
             setLearnJob(job);
@@ -302,14 +305,14 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [learnJob]);
+  }, [learnJobId, learnJobStatus]);
 
   useEffect(() => {
-    if (!learnJob) return;
-    if (learnJob.status === "succeeded" || learnJob.status === "failed") {
+    if (!learnJobId) return;
+    if (learnJobStatus === "succeeded" || learnJobStatus === "failed") {
       setHistoryRefreshToken((prev) => prev + 1);
     }
-  }, [learnJob?.id, learnJob?.status]);
+  }, [learnJobId, learnJobStatus]);
 
   const openLearningModal = useCallback(
     (skill: CategorizedSkill) => {

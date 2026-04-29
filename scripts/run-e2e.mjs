@@ -5,12 +5,16 @@ import { spawn } from "node:child_process";
 const isWindows = process.platform === "win32";
 const corepackBin = isWindows ? "corepack.cmd" : "corepack";
 const nodeBin = process.execPath;
+const e2eEnv = {
+  ...process.env,
+  NODE_OPTIONS: [process.env.NODE_OPTIONS, "--disable-warning=ExperimentalWarning"].filter(Boolean).join(" "),
+};
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: "inherit",
-      env: process.env,
+      env: e2eEnv,
       shell: isWindows && command.toLowerCase().endsWith(".cmd"),
     });
 

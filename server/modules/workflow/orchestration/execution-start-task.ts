@@ -86,9 +86,9 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     deptId: string | null,
     deptName: string,
   ): void {
-    let execAgent = requestedAgent;
-    let effectiveDeptId = deptId;
-    let effectiveDeptName = deptName;
+    const execAgent = requestedAgent;
+    const effectiveDeptId = deptId;
+    const effectiveDeptName = deptName;
     if (
       String(execAgent.status ?? "").toLowerCase() === "working" &&
       String(execAgent.current_task_id ?? "").trim() &&

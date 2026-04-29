@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { checkProjectPath, createPrnDraft, getProjects, isApiRequestError } from "../api";
 import { useI18n } from "../i18n";
@@ -946,11 +946,8 @@ export function ChatPanel({
       setProjectSaving(false);
     }
   }, [
-    isDirectivePending,
-    isPrnPending,
     newProjectGoal,
     newProjectPath,
-    pendingSend?.content,
     projectQuery,
     projectSaving,
     resolvePathHelperErrorMessage,

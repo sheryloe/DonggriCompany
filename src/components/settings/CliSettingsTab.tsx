@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { OfficeExecutionProvider } from "../../api";
 import { withCliModelFallback } from "../../app/cli-model-fallbacks";
 import type { CliModelInfo } from "../../types";
@@ -294,7 +294,7 @@ export default function CliSettingsTab({
     }
   };
 
-  const handleSyncCodexPools = async () => {
+  const handleSyncCodexPools = useCallback(async () => {
     if (!onSyncCodexPoolsFromMultiAuth) return;
     const response = await onSyncCodexPoolsFromMultiAuth(true);
     setCodexSyncedAccounts(
@@ -353,7 +353,7 @@ export default function CliSettingsTab({
         ...verifyMessages,
       }));
     }
-  };
+  }, [onSyncCodexPoolsFromMultiAuth]);
 
   const codexSyncBusy = cliAuthBusyKey === "codex:sync";
 
@@ -362,7 +362,7 @@ export default function CliSettingsTab({
     if (!onSyncCodexPoolsFromMultiAuth) return;
     codexAutoSyncRef.current = true;
     void handleSyncCodexPools();
-  }, [onSyncCodexPoolsFromMultiAuth]);
+  }, [handleSyncCodexPools, onSyncCodexPoolsFromMultiAuth]);
 
   return (
     <section

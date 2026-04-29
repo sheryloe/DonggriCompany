@@ -3,6 +3,7 @@ import { bootstrapSession, del, patch, post, request } from "./core";
 import type {
   Agent,
   Department,
+  GoalCommandPreset,
   MeetingPresence,
   Project,
   SubTask,
@@ -10,7 +11,6 @@ import type {
   TaskLog,
   TaskStatus,
   TaskType,
-  GoalCommandPreset,
   WorkflowPackKey,
 } from "../types";
 

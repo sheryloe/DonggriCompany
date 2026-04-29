@@ -4,8 +4,12 @@ import { createHash } from "node:crypto";
 type DbLike = Pick<DatabaseSync, "prepare">;
 
 const MAX_INTERRUPT_PROMPT_CHARS = 4000;
-const ANSI_ESCAPE_REGEX = /\u001b(?:\[[0-?]*[ -/]*[@-~]|][^\u0007]*(?:\u0007|\u001b\\)|[@-Z\\-_])/g;
-const CONTROL_CHAR_REGEX = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+const ANSI_ESCAPE_REGEX = new RegExp(
+  `${ESC}(?:\\[[0-?]*[ -/]*[@-~]|][^${BEL}]*(?:${BEL}|${ESC}\\\\)|[@-Z\\\\-_])`,
+  "g",
+);
 const TEMPLATE_BREAKOUT_PATTERNS = [
   /<\/?(system|assistant|developer|tool)>/i,
   /<\|(?:system|assistant|developer|tool)[^|]*\|>/i,
@@ -14,6 +18,16 @@ const COMMAND_INJECTION_PATTERNS = [
   /(?:^|\n)\s*```(?:bash|sh|zsh|cmd|powershell|pwsh)\b/i,
   /\b(?:curl|wget)\b[^\n]*\|\s*(?:sh|bash|zsh|pwsh|powershell)\b/i,
 ];
+
+function hasBlockedControlChar(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if ((code >= 0 && code <= 8) || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 127) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export type TaskInterruptInjectionRow = {
   id: number;
@@ -29,7 +43,7 @@ export function sanitizeInterruptPrompt(input: unknown): { ok: true; value: stri
   const normalized = input.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(ANSI_ESCAPE_REGEX, "").trim();
   if (!normalized) return { ok: false, error: "prompt_required" };
   if (normalized.length > MAX_INTERRUPT_PROMPT_CHARS) return { ok: false, error: "prompt_too_long" };
-  if (CONTROL_CHAR_REGEX.test(normalized)) return { ok: false, error: "prompt_control_chars_blocked" };
+  if (hasBlockedControlChar(normalized)) return { ok: false, error: "prompt_control_chars_blocked" };
   if (TEMPLATE_BREAKOUT_PATTERNS.some((re) => re.test(normalized))) {
     return { ok: false, error: "prompt_template_breakout_blocked" };
   }

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number = 3000, deps: unknown[] = []) {
+export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number = 3000) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +16,7 @@ export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number = 30
     } finally {
       setLoading(false);
     }
-  }, deps);
+  }, [fetcher]);
 
   useEffect(() => {
     refresh();

@@ -1,4 +1,9 @@
-﻿const ANSI_ESCAPE_REGEX = /\u001b(?:\[[0-?]*[ -/]*[@-~]|][^\u0007]*(?:\u0007|\u001b\\)|[@-Z\\-_])/g;
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+const ANSI_ESCAPE_REGEX = new RegExp(
+  `${ESC}(?:\\[[0-?]*[ -/]*[@-~]|][^${BEL}]*(?:${BEL}|${ESC}\\\\)|[@-Z\\\\-_])`,
+  "g",
+);
 const SUBTASK_EN_REGEX = /^sub[\s_-]*task(?:\s*title)?\s*(\d+)?$/i;
 const COMPLETED_SUBTASK_EN_REGEX = /^(?:done|complete|completed)\s*sub[\s_-]*task(?:\s*title)?\s*(\d+)?$/i;
 const SUBTASK_KO_REGEX = /^(?:\uC644\uB8CC\uB41C\s*)?\uC11C\uBE0C\uD0DC\uC2A4\uD06C(?:\s*\uC81C\uBAA9)?\s*(\d+)?$/u;

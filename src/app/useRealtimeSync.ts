@@ -468,7 +468,28 @@ export function useRealtimeSync({
       }),
     ];
     return () => unsubs.forEach((fn) => fn());
-  }, [on, scheduleLiveSync]);
+  }, [
+    activeChatRef,
+    agentsRef,
+    codexThreadBindingTsRef,
+    codexThreadToSubAgentIdRef,
+    on,
+    scheduleLiveSync,
+    setAgents,
+    setCeoOfficeCalls,
+    setCrossDeptDeliveries,
+    setMeetingPresence,
+    setMessages,
+    setStreamingMessage,
+    setSubAgents,
+    setSubtasks,
+    setTaskReport,
+    setUnreadAgentIds,
+    subAgentStreamTailRef,
+    subAgentsRef,
+    tasksRef,
+    viewRef,
+  ]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;

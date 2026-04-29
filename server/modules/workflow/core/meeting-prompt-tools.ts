@@ -44,9 +44,9 @@ export function createMeetingPromptTools(deps: CreateMeetingPromptToolsDeps) {
         ? lang === "ko"
           ? [
               "[Video Runtime Invariant]",
-              "- ?? ?? ???? Remotion?? ?????.",
-              "- ?? ??? Remotion ??(composition/scene/timeline/transition)? ?? ?????.",
-              "- Python(moviepy/Pillow) ?? ?-Remotion ?? ?????? ???? ???.",
+              "- 최종 영상 렌더링은 Remotion으로 고정합니다.",
+              "- 실행 항목은 Remotion 흐름(composition/scene/timeline/transition)을 기준으로 계획하세요.",
+              "- Python(moviepy/Pillow) 또는 비-Remotion 렌더링 파이프라인은 제안하지 마세요.",
             ].join("\n")
           : [
               "[Video Runtime Invariant]",
@@ -129,8 +129,10 @@ export function createMeetingPromptTools(deps: CreateMeetingPromptToolsDeps) {
 
   function buildCliFailureMessage(agent: AgentRow, lang: string, error?: string): string {
     const name = getAgentDisplayName(agent, lang);
-    const detail = error || (lang === "ko" ? "? ? ?? ??" : "unknown error");
-    return lang === "ko" ? `${name}: CLI ?? ??? ?????? (${detail}).` : `${name}: CLI response failed (${detail}).`;
+    const detail = error || (lang === "ko" ? "알 수 없는 오류" : "unknown error");
+    return lang === "ko"
+      ? `${name}: CLI 응답 생성에 실패했습니다 (${detail}).`
+      : `${name}: CLI response failed (${detail}).`;
   }
 
   return {

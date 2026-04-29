@@ -9,6 +9,10 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, "..");
 const [configPath, ...rawArgs] = process.argv.slice(2);
 const forwardedArgs = rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs;
+const testEnv = {
+  ...process.env,
+  NODE_OPTIONS: [process.env.NODE_OPTIONS, "--disable-warning=ExperimentalWarning"].filter(Boolean).join(" "),
+};
 
 if (!configPath) {
   console.error("[run-vitest] config path is required");
@@ -23,6 +27,7 @@ if (!fs.existsSync(vitestEntry)) {
 
 const result = spawnSync(process.execPath, [vitestEntry, "--config", configPath, ...forwardedArgs], {
   cwd: rootDir,
+  env: testEnv,
   stdio: "inherit",
 });
 

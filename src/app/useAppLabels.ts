@@ -1,4 +1,4 @@
-﻿import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import type * as api from "../api";
 import { normalizeLanguage, pickLang } from "../i18n";
 import type { CompanySettings, Department } from "../types";
@@ -26,7 +26,10 @@ export function useAppLabels({
   dismissedUpdateVersion,
 }: UseAppLabelsParams) {
   const uiLanguage = normalizeLanguage(settings.language);
-  const tr = (ko: string, en: string, ja = en, zh = en) => pickLang(uiLanguage, { ko, en, ja, zh });
+  const tr = useCallback(
+    (ko: string, en: string, ja = en, zh = en) => pickLang(uiLanguage, { ko, en, ja, zh }),
+    [uiLanguage],
+  );
 
   const loadingTitle = tr(
     "Claw-Empire 불러오는 중...",
@@ -74,7 +77,7 @@ export function useAppLabels({
         name: tr("휴게실", "Break Room", "休憩室", "休息室"),
       },
     ],
-    [departments, uiLanguage],
+    [departments, tr],
   );
 
   const reportLabel = `R ${tr("보고서", "Reports", "レポート", "报告")}`;

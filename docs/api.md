@@ -83,6 +83,8 @@ Runtime behavior highlights:
 | GET    | `/api/messenger/sessions`          | List runtime messenger sessions resolved from persisted settings |
 | GET    | `/api/messenger/receiver/telegram` | Telegram webhook/poll receiver status                            |
 | GET    | `/api/messenger/receiver/discord`  | Discord polling receiver status                                  |
+| GET    | `/api/messenger/receiver/gmail`    | Gmail `[DonggriCompany]` intake receiver status                  |
+| GET    | `/api/messenger/receiver/calendar` | Google Calendar intake receiver status                           |
 | POST   | `/api/messenger/discord/channels`  | Discover accessible Discord text channels by Bot token           |
 | POST   | `/api/messenger/send`              | Send message by `sessionKey` or (`channel` + `targetId`)         |
 
@@ -180,16 +182,22 @@ or
 
 ### Messaging / Inbox / Decision
 
-| Method | Path                            | Purpose                    |
-| ------ | ------------------------------- | -------------------------- |
-| GET    | `/api/messages`                 | Message history            |
-| POST   | `/api/messages`                 | Send message               |
-| POST   | `/api/announcements`            | Broadcast announcement     |
-| POST   | `/api/directives`               | Send directive             |
-| DELETE | `/api/messages`                 | Clear messages             |
-| POST   | `/api/inbox`                    | External webhook ingestion |
-| GET    | `/api/decision-inbox`           | Decision inbox items       |
-| POST   | `/api/decision-inbox/:id/reply` | Decision reply             |
+| Method | Path                               | Purpose                    |
+| ------ | ---------------------------------- | -------------------------- |
+| GET    | `/api/messages`                    | Message history            |
+| POST   | `/api/messages`                    | Send message               |
+| POST   | `/api/announcements`               | Broadcast announcement     |
+| POST   | `/api/directives`                  | Send directive             |
+| DELETE | `/api/messages`                    | Clear messages             |
+| POST   | `/api/inbox`                       | External webhook ingestion |
+| GET    | `/api/gmail-intake/items`          | Gmail intake item list     |
+| POST   | `/api/gmail-intake/:id/approve`    | Approve Gmail intake       |
+| POST   | `/api/gmail-intake/:id/reject`     | Reject Gmail intake        |
+| GET    | `/api/calendar-intake/items`       | Calendar intake item list  |
+| POST   | `/api/calendar-intake/:id/approve` | Approve Calendar intake    |
+| POST   | `/api/calendar-intake/:id/reject`  | Reject Calendar intake     |
+| GET    | `/api/decision-inbox`              | Decision inbox items       |
+| POST   | `/api/decision-inbox/:id/reply`    | Decision reply             |
 
 ### Skills / Providers / OAuth
 
@@ -216,7 +224,7 @@ or
 | POST   | `/api/oauth/disconnect`         | OAuth disconnect                                          |
 | POST   | `/api/oauth/refresh`            | OAuth token refresh                                       |
 | POST   | `/api/oauth/accounts/activate`  | Activate, add, remove, or toggle a stored OAuth account   |
-| PUT    | `/api/oauth/accounts/:id`       | Update OAuth account metadata and model override           |
+| PUT    | `/api/oauth/accounts/:id`       | Update OAuth account metadata and model override          |
 | GET    | `/api/oauth/models`             | OAuth-backed model catalog (Copilot/OpenCode/Antigravity) |
 | GET    | `/api/cli-models`               | Local CLI model catalog (Claude/Codex/Gemini/OpenCode)    |
 

@@ -380,6 +380,54 @@ CREATE TABLE IF NOT EXISTS skill_learning_history (
   UNIQUE(job_id, provider)
 );
 
+CREATE TABLE IF NOT EXISTS gmail_intake_messages (
+  id TEXT PRIMARY KEY,
+  gmail_message_id TEXT NOT NULL UNIQUE,
+  gmail_thread_id TEXT,
+  subject TEXT NOT NULL,
+  sender TEXT NOT NULL,
+  received_at INTEGER,
+  source_text TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  attachment_manifest_json TEXT NOT NULL DEFAULT '[]',
+  prn_markdown TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'received' CHECK(status IN ('received','parsed','approval_pending','approved','submitted','rejected','failed')),
+  project_id TEXT REFERENCES projects(id),
+  project_path TEXT,
+  created_task_id TEXT REFERENCES tasks(id),
+  error TEXT,
+  approved_at INTEGER,
+  rejected_at INTEGER,
+  submitted_at INTEGER,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000)
+);
+
+CREATE TABLE IF NOT EXISTS calendar_intake_events (
+  id TEXT PRIMARY KEY,
+  google_event_id TEXT NOT NULL UNIQUE,
+  calendar_id TEXT NOT NULL,
+  html_link TEXT,
+  summary TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  location TEXT NOT NULL DEFAULT '',
+  start_at TEXT,
+  end_at TEXT,
+  google_updated_at TEXT,
+  event_hash TEXT NOT NULL,
+  prn_markdown TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'received' CHECK(status IN ('received','parsed','approval_pending','approved','submitted','rejected','failed')),
+  project_id TEXT REFERENCES projects(id),
+  project_path TEXT,
+  created_task_id TEXT REFERENCES tasks(id),
+  error TEXT,
+  approved_at INTEGER,
+  rejected_at INTEGER,
+  submitted_at INTEGER,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000)
+);
+
 CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_report_archives_root ON task_report_archives(root_task_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_project_review_decision_states_updated
@@ -411,6 +459,14 @@ CREATE INDEX IF NOT EXISTS idx_skill_learning_history_provider_status_updated
   ON skill_learning_history(provider, status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_skill_learning_history_skill_lookup
   ON skill_learning_history(provider, repo, skill_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gmail_intake_status_updated
+  ON gmail_intake_messages(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gmail_intake_project
+  ON gmail_intake_messages(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_calendar_intake_status_updated
+  ON calendar_intake_events(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_calendar_intake_project
+  ON calendar_intake_events(project_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS api_providers (
   id TEXT PRIMARY KEY,
@@ -436,10 +492,7 @@ function ensureCanonicalCompatibilityColumns(db: DbLike): void {
   execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN family TEXT;");
   execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN career_stage TEXT;");
   execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN specialization_key TEXT;");
-  execIgnoreDuplicateColumn(
-    db,
-    "ALTER TABLE agents ADD COLUMN authority_level INTEGER NOT NULL DEFAULT 0;",
-  );
+  execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN authority_level INTEGER NOT NULL DEFAULT 0;");
   execIgnoreDuplicateColumn(
     db,
     "ALTER TABLE projects ADD COLUMN canonical_pack_profile TEXT NOT NULL DEFAULT 'development';",

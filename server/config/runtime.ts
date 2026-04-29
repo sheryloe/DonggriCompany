@@ -92,6 +92,47 @@ export const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
   .map((v) => v.trim())
   .filter(Boolean);
 
+function normalizePositiveIntEnv(raw: string | undefined, fallback: number): number {
+  const numeric = Number((raw ?? "").trim());
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
+  return Math.trunc(numeric);
+}
+
+export const GMAIL_INTAKE_ENABLED = process.env.GMAIL_INTAKE_ENABLED === "1";
+export const GMAIL_INTAKE_SUBJECT_TOKEN = (process.env.GMAIL_INTAKE_SUBJECT_TOKEN ?? "[DonggriCompany]").trim();
+export const GMAIL_INTAKE_ALLOWED_SENDERS = (process.env.GMAIL_INTAKE_ALLOWED_SENDERS ?? "")
+  .split(",")
+  .map((v) => v.trim().toLowerCase())
+  .filter(Boolean);
+export const GMAIL_INTAKE_POLL_INTERVAL_MS = normalizePositiveIntEnv(process.env.GMAIL_INTAKE_POLL_INTERVAL_MS, 60_000);
+export const GMAIL_INTAKE_LOOKBACK_DAYS = normalizePositiveIntEnv(process.env.GMAIL_INTAKE_LOOKBACK_DAYS, 14);
+export const GMAIL_INTAKE_MAX_ATTACHMENT_MB = normalizePositiveIntEnv(process.env.GMAIL_INTAKE_MAX_ATTACHMENT_MB, 10);
+export const GMAIL_INTAKE_TELEGRAM_SESSION_KEY = (
+  process.env.GMAIL_INTAKE_TELEGRAM_SESSION_KEY ?? "telegram:global"
+).trim();
+export const GMAIL_INTAKE_DEFAULT_PROJECT_PATH =
+  normalizePathEnv(process.env.GMAIL_INTAKE_DEFAULT_PROJECT_PATH) || process.cwd();
+
+export const CALENDAR_INTAKE_ENABLED = process.env.CALENDAR_INTAKE_ENABLED === "1";
+export const CALENDAR_INTAKE_CALENDAR_ID = (process.env.CALENDAR_INTAKE_CALENDAR_ID ?? "primary").trim();
+export const CALENDAR_INTAKE_MATCH_TOKENS = (
+  process.env.CALENDAR_INTAKE_MATCH_TOKENS ?? "[DonggriCompany],[Hackathon],[해커톤],해커톤,hackathon"
+)
+  .split(",")
+  .map((v) => v.trim().toLowerCase())
+  .filter(Boolean);
+export const CALENDAR_INTAKE_POLL_INTERVAL_MS = normalizePositiveIntEnv(
+  process.env.CALENDAR_INTAKE_POLL_INTERVAL_MS,
+  60_000,
+);
+export const CALENDAR_INTAKE_LOOKBACK_DAYS = normalizePositiveIntEnv(process.env.CALENDAR_INTAKE_LOOKBACK_DAYS, 1);
+export const CALENDAR_INTAKE_LOOKAHEAD_DAYS = normalizePositiveIntEnv(process.env.CALENDAR_INTAKE_LOOKAHEAD_DAYS, 60);
+export const CALENDAR_INTAKE_TELEGRAM_SESSION_KEY = (
+  process.env.CALENDAR_INTAKE_TELEGRAM_SESSION_KEY ?? "telegram:global"
+).trim();
+export const CALENDAR_INTAKE_DEFAULT_PROJECT_PATH =
+  normalizePathEnv(process.env.CALENDAR_INTAKE_DEFAULT_PROJECT_PATH) || process.cwd();
+
 // ---------------------------------------------------------------------------
 // Production static file serving
 // ---------------------------------------------------------------------------

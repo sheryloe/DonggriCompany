@@ -26,6 +26,8 @@
     "subagents:sync": "node scripts/sync-awesome-codex-subagents.mjs",
     "preflight:public": "bash scripts/preflight-public.sh",
     "audit:verify": "node scripts/verify-security-audit-log.mjs",
+    "gmail:intake:oauth": "node scripts/gmail-intake-oauth.mjs",
+    "google:intake:oauth": "node scripts/gmail-intake-oauth.mjs",
     "test:comm:llm": "node scripts/qa/llm-comm-test.mjs",
     "test:comm:oauth": "node scripts/qa/oauth-comm-test.mjs",
     "test:comm:api": "node scripts/qa/api-comm-test.mjs",

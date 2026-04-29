@@ -661,9 +661,10 @@ export function registerDirectiveAndInboxRoutes(
 
     if (shouldDelegate) {
       // 4. Auto-delegate to PMO chair, with legacy planning fallback.
-      const chairLeader = DIRECTIVE_CHAIR_DEPARTMENT_IDS.map((deptId) =>
-        findTeamLeader(deptId) ??
-        findDirectiveLeader(deptId, resolvedExplicitProject.projectId ?? null, getDirectiveLeaderScope(deptId)),
+      const chairLeader = DIRECTIVE_CHAIR_DEPARTMENT_IDS.map(
+        (deptId) =>
+          findTeamLeader(deptId) ??
+          findDirectiveLeader(deptId, resolvedExplicitProject.projectId ?? null, getDirectiveLeaderScope(deptId)),
       ).find((leader): leader is AgentRow => Boolean(leader));
       if (chairLeader) {
         const delegationDelay = 3000 + Math.random() * 2000;
@@ -778,13 +779,17 @@ export function registerDirectiveAndInboxRoutes(
     });
     const inboxSource = normalizeTextField(body.source);
     const inboxChat = normalizeTextField(body.chat);
+    const inboxRouteSource =
+      (inboxSource === "gmail" || inboxSource === "calendar") && inboxChat?.toLowerCase().startsWith("telegram:")
+        ? "telegram"
+        : inboxSource;
     const directiveSessionRoute = resolveSessionTargetRouteFromDb({
       db,
-      source: inboxSource,
+      source: inboxRouteSource,
       chat: inboxChat,
     });
     const directiveFallbackRoute = resolveSourceChatRoute({
-      source: inboxSource,
+      source: inboxRouteSource,
       chat: inboxChat,
     });
     const directiveReplyRoute = directiveSessionRoute ?? directiveFallbackRoute;
@@ -844,7 +849,7 @@ export function registerDirectiveAndInboxRoutes(
     let sessionRoute = !isDirective
       ? resolveSessionAgentRouteFromDb({
           db,
-          source: inboxSource,
+          source: inboxRouteSource,
           chat: inboxChat,
         })
       : null;
@@ -856,18 +861,20 @@ export function registerDirectiveAndInboxRoutes(
 
     const agentDelegationMatch = inboxSource === "agent_delegation" ? content.match(/\[Assignee:\s*([^\]]+)\]/i) : null;
     if (agentDelegationMatch) {
-       const assigneeName = agentDelegationMatch[1].trim();
-       const targetAgent = db.prepare("SELECT id FROM agents WHERE name LIKE ? OR department_id LIKE ? COLLATE NOCASE LIMIT 1").get(`%${assigneeName}%`, `%${assigneeName}%`) as { id: string } | undefined;
-       if (targetAgent) {
-          routedAgent = targetAgent;
-          sessionRoute = {
-            agentId: targetAgent.id,
-            channel: "telegram",
-            sessionId: "delegated",
-            sessionName: "Agent Delegation",
-            targetId: "delegated",
-          };
-       }
+      const assigneeName = agentDelegationMatch[1].trim();
+      const targetAgent = db
+        .prepare("SELECT id FROM agents WHERE name LIKE ? OR department_id LIKE ? COLLATE NOCASE LIMIT 1")
+        .get(`%${assigneeName}%`, `%${assigneeName}%`) as { id: string } | undefined;
+      if (targetAgent) {
+        routedAgent = targetAgent;
+        sessionRoute = {
+          agentId: targetAgent.id,
+          channel: "telegram",
+          sessionId: "delegated",
+          sessionName: "Agent Delegation",
+          targetId: "delegated",
+        };
+      }
     }
     const shouldRouteToSessionAgent = Boolean(sessionRoute && routedAgent);
     if (sessionRoute && !routedAgent) {
@@ -1110,7 +1117,9 @@ export function registerDirectiveAndInboxRoutes(
     const directivePolicy = isDirective ? analyzeDirectivePolicy(content) : null;
     const inboxExplicitSkip = body.skipPlannedMeeting === true;
     const shouldDelegateDirective =
-      isDirective && directivePolicy ? !directivePolicy.skipDelegation && shouldExecuteDirectiveDelegation(content) : false;
+      isDirective && directivePolicy
+        ? !directivePolicy.skipDelegation && shouldExecuteDirectiveDelegation(content)
+        : false;
     const directiveDelegationOptions: DelegationOptions = {
       skipPlannedMeeting: inboxExplicitSkip || !!directivePolicy?.skipPlannedMeeting,
       skipPlanSubtasks: inboxExplicitSkip || !!directivePolicy?.skipPlanSubtasks,
@@ -1138,9 +1147,10 @@ export function registerDirectiveAndInboxRoutes(
 
     if (shouldDelegateDirective) {
       // Auto-delegate to PMO chair, with legacy planning fallback.
-      const chairLeader = DIRECTIVE_CHAIR_DEPARTMENT_IDS.map((deptId) =>
-        findTeamLeader(deptId) ??
-        findDirectiveLeader(deptId, resolvedInboxProject.projectId ?? null, getDirectiveLeaderScope(deptId)),
+      const chairLeader = DIRECTIVE_CHAIR_DEPARTMENT_IDS.map(
+        (deptId) =>
+          findTeamLeader(deptId) ??
+          findDirectiveLeader(deptId, resolvedInboxProject.projectId ?? null, getDirectiveLeaderScope(deptId)),
       ).find((leader): leader is AgentRow => Boolean(leader));
       if (chairLeader) {
         const delegationDelay = 3000 + Math.random() * 2000;

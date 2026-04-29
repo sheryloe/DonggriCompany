@@ -12,7 +12,9 @@ import {
   sendMessengerMessage,
   sendMessengerSessionMessage,
 } from "../../gateway/client.ts";
+import { getCalendarIntakeReceiverStatus } from "../../messenger/calendar-intake-receiver.ts";
 import { isMessengerChannel, isNativeMessengerChannel } from "../../messenger/channels.ts";
+import { getGmailIntakeReceiverStatus } from "../../messenger/gmail-intake-receiver.ts";
 import { getTelegramReceiverStatus } from "../../messenger/telegram-receiver.ts";
 import {
   BUILTIN_GITHUB_CLIENT_ID,
@@ -36,6 +38,8 @@ import { registerTaskCrudRoutes } from "./core/tasks/crud.ts";
 import { registerTaskExecutionRoutes } from "./core/tasks/execution.ts";
 import { registerTaskSubtaskRoutes } from "./core/tasks/subtasks.ts";
 import { registerUpdateAutoRoutes } from "./core/update-auto/register.ts";
+import { registerCalendarIntakeRoutes } from "./ops/calendar-intake-routes.ts";
+import { registerGmailIntakeRoutes } from "./ops/gmail-intake-routes.ts";
 import type { AgentRow, MeetingMinuteEntryRow, MeetingMinutesRow, MeetingReviewDecision } from "./shared/types.ts";
 import { getDiscordReceiverStatus } from "../../messenger/discord-receiver.ts";
 
@@ -226,6 +230,8 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
   // ===========================================================================
 
   registerUpdateAutoRoutes(__ctx);
+  registerCalendarIntakeRoutes(__ctx);
+  registerGmailIntakeRoutes(__ctx);
 
   // ---------------------------------------------------------------------------
   // Direct messenger channels
@@ -250,6 +256,22 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
   app.get("/api/messenger/receiver/discord", (_req, res) => {
     try {
       res.json({ ok: true, status: getDiscordReceiverStatus() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || String(err) });
+    }
+  });
+
+  app.get("/api/messenger/receiver/gmail", (_req, res) => {
+    try {
+      res.json({ ok: true, status: getGmailIntakeReceiverStatus() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || String(err) });
+    }
+  });
+
+  app.get("/api/messenger/receiver/calendar", (_req, res) => {
+    try {
+      res.json({ ok: true, status: getCalendarIntakeReceiverStatus() });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: err?.message || String(err) });
     }

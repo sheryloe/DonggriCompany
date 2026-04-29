@@ -17,13 +17,13 @@ services:
         max-size: ${DOCKER_LOG_MAX_SIZE:-10m}
         max-file: "${DOCKER_LOG_MAX_FILE:-3}"
     environment:
-      PORT: 7777
+      PORT: 8900
       HOST: 0.0.0.0
       API_AUTH_TOKEN: ${API_AUTH_TOKEN:-}
       DB_PATH: /app/data/claw-empire.sqlite
       LOGS_DIR: /app/data/logs
       OAUTH_ENCRYPTION_SECRET: ${OAUTH_ENCRYPTION_SECRET:-}
-      OAUTH_BASE_URL: ${OAUTH_BASE_URL:-http://localhost:7777}
+      OAUTH_BASE_URL: ${OAUTH_BASE_URL:-http://127.0.0.1:8900}
       OAUTH_GITHUB_CLIENT_ID: ${OAUTH_GITHUB_CLIENT_ID:-}
       OAUTH_GITHUB_CLIENT_SECRET: ${OAUTH_GITHUB_CLIENT_SECRET:-}
       OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID:-}
@@ -34,13 +34,13 @@ services:
       OFFICE_RUNNER_IDLE_TTL_MS: 900000
       OFFICE_RUNNER_NETWORK: bridge
     ports:
-      - "7777:7777"
+      - "8900:8900"
     volumes:
       - ./data:/app/data
       - ./data/office-accounts:/app/.office-accounts
     working_dir: /app
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7777/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8900/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 5

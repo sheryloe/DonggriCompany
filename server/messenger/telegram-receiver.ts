@@ -1,5 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { INBOX_WEBHOOK_SECRET, OAUTH_BASE_HOST, PORT } from "../config/runtime.ts";
+import { handleCalendarIntakeTelegramCommand } from "./calendar-intake-receiver.ts";
+import { handleGmailIntakeTelegramCommand } from "./gmail-intake-receiver.ts";
 import { buildMessengerSourceWithTokenHint, buildMessengerTokenKey } from "./token-hint.ts";
 import { decryptMessengerTokenForRuntime } from "./token-crypto.ts";
 
@@ -304,13 +306,14 @@ function isTelegramConflictError(message: string): boolean {
 }
 
 async function forwardTelegramUpdate(params: {
+  db: DatabaseSync;
   update: TelegramUpdate;
   source: string;
   allowedChatIds: Set<string>;
   fetchImpl: typeof fetch;
   token: string;
 }): Promise<"forwarded" | "skipped"> {
-  const { update, source, allowedChatIds, fetchImpl, token } = params;
+  const { db, update, source, allowedChatIds, fetchImpl, token } = params;
   const message = extractMessage(update);
   if (!message) return "skipped";
 
@@ -326,6 +329,34 @@ async function forwardTelegramUpdate(params: {
   const text = normalizeText(message.text) || normalizeText(message.caption);
   if (!text) {
     return "skipped";
+  }
+
+  const gmailIntakeCommand = await handleGmailIntakeTelegramCommand({ db, text, fetchImpl });
+  if (gmailIntakeCommand?.handled) {
+    await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        reply_to_message_id: message.message_id,
+        text: gmailIntakeCommand.text,
+      }),
+    }).catch(console.error);
+    return "forwarded";
+  }
+
+  const calendarIntakeCommand = await handleCalendarIntakeTelegramCommand({ db, text, fetchImpl });
+  if (calendarIntakeCommand?.handled) {
+    await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        reply_to_message_id: message.message_id,
+        text: calendarIntakeCommand.text,
+      }),
+    }).catch(console.error);
+    return "forwarded";
   }
 
   const messageId =
@@ -354,19 +385,19 @@ async function forwardTelegramUpdate(params: {
   }
 
   // CEO Notification Auto-Reply Logic for Directives and Tasks
-  if (text.startsWith('$') || text.startsWith('#')) {
-    const replyStr = text.startsWith('$') 
+  if (text.startsWith("$") || text.startsWith("#")) {
+    const replyStr = text.startsWith("$")
       ? "✅ CEO 지시 수신 완료. 기획팀장(PM)에게 업무를 이관 및 회의 소집 대기 중입니다."
       : "✅ 태스크 등록 완료. 에이전트 인박스로 이관되었습니다.";
-    
+
     await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
         reply_to_message_id: message.message_id,
-        text: replyStr
-      })
+        text: replyStr,
+      }),
     }).catch(console.error);
   }
 
@@ -448,6 +479,7 @@ export async function pollTelegramReceiverOnce(options: {
       if (updateId < nextOffset) continue;
 
       const result = await forwardTelegramUpdate({
+        db,
         update,
         source: route.source,
         allowedChatIds: route.allowedChatIds,

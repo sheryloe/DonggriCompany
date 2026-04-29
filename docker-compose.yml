@@ -17,16 +17,32 @@ services:
         max-size: ${DOCKER_LOG_MAX_SIZE:-10m}
         max-file: "${DOCKER_LOG_MAX_FILE:-3}"
     environment:
-      PORT: 7777
+      PORT: 8900
       HOST: 0.0.0.0
       API_AUTH_TOKEN: ${API_AUTH_TOKEN:-}
       INBOX_WEBHOOK_SECRET: ${INBOX_WEBHOOK_SECRET:-}
       OAUTH_ENCRYPTION_SECRET: ${OAUTH_ENCRYPTION_SECRET:-}
-      OAUTH_BASE_URL: ${OAUTH_BASE_URL}
+      OAUTH_BASE_URL: ${OAUTH_BASE_URL:-http://127.0.0.1:8900}
       OAUTH_GITHUB_CLIENT_ID: ${OAUTH_GITHUB_CLIENT_ID}
       OAUTH_GITHUB_CLIENT_SECRET: ${OAUTH_GITHUB_CLIENT_SECRET:-}
       OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID}
       OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET}
+      GMAIL_INTAKE_ENABLED: ${GMAIL_INTAKE_ENABLED:-0}
+      GMAIL_INTAKE_SUBJECT_TOKEN: ${GMAIL_INTAKE_SUBJECT_TOKEN:-[DonggriCompany]}
+      GMAIL_INTAKE_ALLOWED_SENDERS: ${GMAIL_INTAKE_ALLOWED_SENDERS:-}
+      GMAIL_INTAKE_POLL_INTERVAL_MS: ${GMAIL_INTAKE_POLL_INTERVAL_MS:-60000}
+      GMAIL_INTAKE_LOOKBACK_DAYS: ${GMAIL_INTAKE_LOOKBACK_DAYS:-14}
+      GMAIL_INTAKE_MAX_ATTACHMENT_MB: ${GMAIL_INTAKE_MAX_ATTACHMENT_MB:-10}
+      GMAIL_INTAKE_TELEGRAM_SESSION_KEY: ${GMAIL_INTAKE_TELEGRAM_SESSION_KEY:-telegram:global}
+      GMAIL_INTAKE_DEFAULT_PROJECT_PATH: ${GMAIL_INTAKE_DEFAULT_PROJECT_PATH:-D:\Donggri_Platform\DonggriCompany}
+      CALENDAR_INTAKE_ENABLED: ${CALENDAR_INTAKE_ENABLED:-0}
+      CALENDAR_INTAKE_CALENDAR_ID: ${CALENDAR_INTAKE_CALENDAR_ID:-primary}
+      CALENDAR_INTAKE_MATCH_TOKENS: ${CALENDAR_INTAKE_MATCH_TOKENS:-[DonggriCompany],[Hackathon],[해커톤],해커톤,hackathon}
+      CALENDAR_INTAKE_POLL_INTERVAL_MS: ${CALENDAR_INTAKE_POLL_INTERVAL_MS:-60000}
+      CALENDAR_INTAKE_LOOKBACK_DAYS: ${CALENDAR_INTAKE_LOOKBACK_DAYS:-1}
+      CALENDAR_INTAKE_LOOKAHEAD_DAYS: ${CALENDAR_INTAKE_LOOKAHEAD_DAYS:-60}
+      CALENDAR_INTAKE_TELEGRAM_SESSION_KEY: ${CALENDAR_INTAKE_TELEGRAM_SESSION_KEY:-telegram:global}
+      CALENDAR_INTAKE_DEFAULT_PROJECT_PATH: ${CALENDAR_INTAKE_DEFAULT_PROJECT_PATH:-D:\Donggri_Platform\DonggriCompany}
       DB_PATH: /app/data/claw-empire.sqlite
       LOGS_DIR: /app/data/logs
       OFFICE_RUNNER_DOCKER_ENABLED: 0
@@ -36,15 +52,14 @@ services:
       OFFICE_RUNNER_NETWORK: bridge
       CLAW_AGENT_AUTO_TOPUP: 0
     ports:
-      - "7777:7777"
-      - "8790:7777"
+      - "8900:8900"
     volumes:
       - ./data:/app/data
       - ./data/office-accounts:/app/.office-accounts
       - ${USERPROFILE}/.codex/multi-auth:/home/app/.codex/multi-auth:ro
     working_dir: /app
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7777/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8900/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 5

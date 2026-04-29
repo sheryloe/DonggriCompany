@@ -36,6 +36,7 @@ COPY scripts ./scripts
 COPY public ./public
 COPY assets ./assets
 COPY agents ./agents
+COPY skills ./skills
 COPY docs ./docs
 COPY restructing ./restructing
 COPY templates ./templates
@@ -50,7 +51,7 @@ RUN mkdir -p /app/data /home/app/.claude /home/app/.codex /home/app/.gemini /hom
 ENV HOME=/home/app
 USER app
 
-EXPOSE 7777
+EXPOSE 8900
 
 CMD ["pnpm", "start:tailscale"]
 

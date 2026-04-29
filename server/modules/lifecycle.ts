@@ -5,7 +5,9 @@ import fs from "node:fs";
 import path from "path";
 import { HOST, PKG_VERSION, PORT } from "../config/runtime.ts";
 import { notifyTaskStatus } from "../gateway/client.ts";
+import { startCalendarIntakeReceiver } from "../messenger/calendar-intake-receiver.ts";
 import { startDiscordReceiver } from "../messenger/discord-receiver.ts";
+import { startGmailIntakeReceiver } from "../messenger/gmail-intake-receiver.ts";
 import { startTelegramReceiver } from "../messenger/telegram-receiver.ts";
 import { registerGracefulShutdownHandlers } from "./lifecycle/register-graceful-shutdown.ts";
 
@@ -468,9 +470,9 @@ export function startLifecycle(ctx: RuntimeContext): void {
           .get() as { name?: string } | undefined;
         if (table?.name !== "cli_account_pools") return [];
         return (
-          db
-            .prepare("SELECT DISTINCT provider FROM cli_account_pools WHERE status = 'connected'")
-            .all() as Array<{ provider?: string | null }>
+          db.prepare("SELECT DISTINCT provider FROM cli_account_pools WHERE status = 'connected'").all() as Array<{
+            provider?: string | null;
+          }>
         )
           .map((row) => String(row.provider ?? "").trim())
           .filter(Boolean);
@@ -522,6 +524,8 @@ export function startLifecycle(ctx: RuntimeContext): void {
   setTimeout(autoAssignAgentProviders, 4_000);
   const telegramReceiver = startTelegramReceiver({ db });
   const discordReceiver = startDiscordReceiver({ db });
+  const gmailIntakeReceiver = startGmailIntakeReceiver({ db });
+  const calendarIntakeReceiver = startCalendarIntakeReceiver({ db });
 
   // ---------------------------------------------------------------------------
   // Start HTTP server + WebSocket

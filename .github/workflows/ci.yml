@@ -108,7 +108,7 @@ jobs:
         run: pnpm run build
 
       - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Run all tests
         run: pnpm run test:ci

@@ -317,4 +317,66 @@ describe("telegram receiver", () => {
       db.close();
     }
   });
+
+  it("does not poll send-only department bot tokens", async () => {
+    const dbPath = createTestDb({
+      messengerChannels: {
+        telegram: {
+          token: "global-token",
+          receiveEnabled: true,
+          sessions: [{ id: "global", name: "Global", targetId: "1001", enabled: true }],
+          departmentBots: {
+            development: { token: "department-dev-token", targetId: "1001", enabled: true },
+          },
+        },
+      },
+      offset: 0,
+    });
+    const db = new DatabaseSync(dbPath);
+
+    try {
+      const receiver = await importReceiverModule({
+        DB_PATH: dbPath,
+        INBOX_WEBHOOK_SECRET: "inbox-secret",
+      });
+      const status: import("./telegram-receiver.ts").TelegramReceiverStatus = {
+        running: true,
+        configured: false,
+        receiveEnabled: true,
+        enabled: false,
+        allowedChatCount: 0,
+        nextOffset: 0,
+        lastPollAt: null,
+        lastForwardAt: null,
+        lastUpdateId: null,
+        lastError: null,
+      };
+
+      const fetchMock = vi.fn(async (input: string | URL) => {
+        const url = String(input);
+        expect(url).not.toContain("botdepartment-dev-token/getUpdates");
+        if (url.includes("botglobal-token/getUpdates")) {
+          return new Response(JSON.stringify({ ok: true, result: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response("not found", { status: 404 });
+      });
+
+      await receiver.pollTelegramReceiverOnce({
+        db,
+        status,
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[0]).toContain("botglobal-token/getUpdates");
+      expect(status.enabled).toBe(true);
+      expect(status.allowedChatCount).toBe(1);
+      expect(status.lastError).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
 });

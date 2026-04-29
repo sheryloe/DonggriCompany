@@ -311,7 +311,9 @@ function buildSkillsContent(input: AgentGuideInput): string {
     `# ${safeName}_skills`,
     "",
     "## Active Skills",
-    ...(skills.length > 0 ? skills.map((skill) => `- ${skill}`) : ["- learned snapshot: none", "- installed snapshot: none"]),
+    ...(skills.length > 0
+      ? skills.map((skill) => `- ${skill}`)
+      : ["- learned snapshot: none", "- installed snapshot: none"]),
     "",
     "## Notes",
     "- This file records durable skill history for the agent bundle.",
@@ -335,7 +337,8 @@ function buildSettingsContent(input: AgentGuideInput): string {
       version: "donggri_goal_commands_v1",
       native_commands_only: true,
       octopus_aliases_enabled: false,
-      bottleneck_rule: "Use required_departments first; add extra departments only when a verification gate requires them.",
+      bottleneck_rule:
+        "Use required_departments first; add extra departments only when a verification gate requires them.",
       parallelism_rule: "Split independent work up to max_parallel_workstreams with one owner per workstream.",
     },
     class_path: extras.classPath,

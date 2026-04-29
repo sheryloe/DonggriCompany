@@ -262,9 +262,9 @@ function upsertSeedAgent(db: DbLike, seed: OrganizationAgentSeed, agentId?: stri
     seed.personality,
   );
   syncDefaultSkillHistory(db, seed);
-  const statsRow = db
-    .prepare("SELECT stats_tasks_done, stats_xp FROM agents WHERE id = ? LIMIT 1")
-    .get(id) as { stats_tasks_done?: number; stats_xp?: number } | undefined;
+  const statsRow = db.prepare("SELECT stats_tasks_done, stats_xp FROM agents WHERE id = ? LIMIT 1").get(id) as
+    | { stats_tasks_done?: number; stats_xp?: number }
+    | undefined;
   syncSeedAgentArtifacts(seed, Number(statsRow?.stats_tasks_done ?? 0), Number(statsRow?.stats_xp ?? 0));
 }
 
@@ -292,7 +292,10 @@ function buildPreview(db: DbLike): CanonicalResetPreview {
   );
   const warnings: string[] = [];
   for (const departmentId of existingDepartments) {
-    if (!ORGANIZATION_DEPARTMENTS.some((department) => department.id === departmentId) && !LEGACY_DEPARTMENT_ID_MAP[departmentId]) {
+    if (
+      !ORGANIZATION_DEPARTMENTS.some((department) => department.id === departmentId) &&
+      !LEGACY_DEPARTMENT_ID_MAP[departmentId]
+    ) {
       warnings.push(`unknown_department:${departmentId}`);
     }
   }
@@ -361,9 +364,12 @@ export function applyCanonicalResetOrganization(db: DbLike): CanonicalResetApply
       insertedAgents += 1;
     }
 
-    db.prepare("INSERT INTO settings (key, value) VALUES ('defaultProvider', 'codex') ON CONFLICT(key) DO UPDATE SET value = 'codex'").run();
-    db.prepare("INSERT INTO settings (key, value) VALUES ('roomThemes', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-      .run(JSON.stringify(DEFAULT_ROOM_THEMES));
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('defaultProvider', 'codex') ON CONFLICT(key) DO UPDATE SET value = 'codex'",
+    ).run();
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('roomThemes', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    ).run(JSON.stringify(DEFAULT_ROOM_THEMES));
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");

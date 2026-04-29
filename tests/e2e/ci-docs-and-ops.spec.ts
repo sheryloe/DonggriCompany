@@ -214,7 +214,7 @@ test.describe("CI docs and operational API coverage", () => {
       const createTaskRes = await request.post("/api/tasks", {
         data: {
           title: `ci-docs-task-${seed}`,
-          department_id: "planning",
+          department_id: "planning-architecture",
           project_id: projectId,
           status: "inbox",
         },

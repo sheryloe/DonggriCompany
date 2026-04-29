@@ -44,10 +44,17 @@ function ensureSkillBundleHistory(db: DbLike, agentId: string, provider: string,
   }
 }
 
-function syncSeedGuideFiles(db: DbLike, agentId: string, agentName: string, role: string, departmentId: string, workflowProfile: string): void {
-  const row = db
-    .prepare("SELECT stats_tasks_done, stats_xp FROM agents WHERE id = ? LIMIT 1")
-    .get(agentId) as { stats_tasks_done?: number; stats_xp?: number } | undefined;
+function syncSeedGuideFiles(
+  db: DbLike,
+  agentId: string,
+  agentName: string,
+  role: string,
+  departmentId: string,
+  workflowProfile: string,
+): void {
+  const row = db.prepare("SELECT stats_tasks_done, stats_xp FROM agents WHERE id = ? LIMIT 1").get(agentId) as
+    | { stats_tasks_done?: number; stats_xp?: number }
+    | undefined;
   upsertAgentGuideFile({
     id: agentId,
     name: agentName,
@@ -155,7 +162,9 @@ export function applyDefaultSeeds(db: DbLike): void {
     insertSetting.run("roomThemes", JSON.stringify(DEFAULT_ROOM_THEMES));
     console.log("[Claw-Empire] Seeded canonical default settings");
   } else {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('defaultProvider', 'codex') ON CONFLICT(key) DO NOTHING").run();
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('defaultProvider', 'codex') ON CONFLICT(key) DO NOTHING",
+    ).run();
     db.prepare("INSERT INTO settings (key, value) VALUES ('roomThemes', ?) ON CONFLICT(key) DO NOTHING").run(
       JSON.stringify(DEFAULT_ROOM_THEMES),
     );

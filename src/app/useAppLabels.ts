@@ -28,7 +28,12 @@ export function useAppLabels({
   const uiLanguage = normalizeLanguage(settings.language);
   const tr = (ko: string, en: string, ja = en, zh = en) => pickLang(uiLanguage, { ko, en, ja, zh });
 
-  const loadingTitle = tr("Claw-Empire 불러오는 중...", "Loading Claw-Empire...", "Claw-Empire を読み込み中...", "正在加载 Claw-Empire...");
+  const loadingTitle = tr(
+    "Claw-Empire 불러오는 중...",
+    "Loading Claw-Empire...",
+    "Claw-Empire を読み込み中...",
+    "正在加载 Claw-Empire...",
+  );
   const loadingSubtitle = tr(
     "AI 에이전트 시스템을 준비하고 있습니다",
     "Preparing your AI agent system",
@@ -92,9 +97,9 @@ export function useAppLabels({
 
   const updateBannerVisible = Boolean(
     effectiveUpdateStatus?.enabled &&
-      effectiveUpdateStatus.update_available &&
-      effectiveUpdateStatus.latest_version &&
-      (forceUpdateBanner || effectiveUpdateStatus.latest_version !== dismissedUpdateVersion),
+    effectiveUpdateStatus.update_available &&
+    effectiveUpdateStatus.latest_version &&
+    (forceUpdateBanner || effectiveUpdateStatus.latest_version !== dismissedUpdateVersion),
   );
 
   const updateReleaseUrl =

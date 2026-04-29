@@ -5,6 +5,28 @@ import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const ORIGINAL_ENV = { ...process.env };
+const TELEGRAM_DEPARTMENT_ENV_KEYS = [
+  "TELEGRAM_DEPARTMENT_BOT_ROUTING",
+  "TELEGRAM_GLOBAL_GROUP_CHAT_ID",
+  "TELEGRAM_BOT_TOKEN_DEV",
+  "TELEGRAM_CHAT_ID_DEV",
+  "TELEGRAM_BOT_TOKEN_QA",
+  "TELEGRAM_CHAT_ID_QA",
+  "TELEGRAM_BOT_TOKEN_DESIGN",
+  "TELEGRAM_CHAT_ID_DESIGN",
+  "TELEGRAM_BOT_TOKEN_PLANNING",
+  "TELEGRAM_CHAT_ID_PLANNING",
+  "TELEGRAM_BOT_TOKEN_PMO",
+  "TELEGRAM_CHAT_ID_PMO",
+  "TELEGRAM_BOT_TOKEN_CEO_PMO",
+  "TELEGRAM_CHAT_ID_CEO_PMO",
+  "TELEGRAM_BOT_TOKEN_PM",
+  "TELEGRAM_CHAT_ID_PM",
+  "TELEGRAM_BOT_TOKEN_OPERATIONS",
+  "TELEGRAM_CHAT_ID_OPERATIONS",
+  "TELEGRAM_BOT_TOKEN_DEVSECOPS",
+  "TELEGRAM_CHAT_ID_DEVSECOPS",
+];
 
 function createTestDb(options?: { messengerChannels?: unknown }): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "claw-empire-messenger-test-"));
@@ -26,11 +48,17 @@ function createTestDb(options?: { messengerChannels?: unknown }): string {
 async function importGatewayModule(env: Record<string, string | undefined>) {
   vi.resetModules();
 
-  process.env = {
-    ...ORIGINAL_ENV,
-    DB_PATH: env.DB_PATH,
-    OPENCLAW_CONFIG: env.OPENCLAW_CONFIG,
-  };
+  process.env = { ...ORIGINAL_ENV };
+  for (const key of TELEGRAM_DEPARTMENT_ENV_KEYS) {
+    process.env[key] = "";
+  }
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
 
   return import("./client.ts");
 }
@@ -143,8 +171,17 @@ describe("gateway client", () => {
       messengerChannels: {
         telegram: {
           token: "tg-db-token",
+          departmentBots: {
+            development: { token: "tg-dev-token", targetId: "-100999", enabled: true },
+          },
           sessions: [
             { id: "ops", name: "Ops Alert", targetId: "-100999", enabled: true },
+            {
+              id: "global-group-chat",
+              name: "Claw-Empire 통합 그룹방 (동그리컴퍼티 회의실)",
+              targetId: "-100777",
+              enabled: true,
+            },
             { id: "silent", name: "Silent", targetId: "-100000", enabled: false },
           ],
         },
@@ -169,7 +206,7 @@ describe("gateway client", () => {
       {
         sessionKey: "telegram:global",
         channel: "telegram",
-        targetId: "-100999",
+        targetId: "-100777",
         enabled: true,
         displayName: "Global Telegram Group",
       },
@@ -350,6 +387,200 @@ describe("gateway client", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.telegram.org/bottg-session-token/sendMessage");
+  });
+
+  it("sendDepartmentTelegramMessage routes a department through its send-only bot", async () => {
+    const dbPath = createTestDb({
+      messengerChannels: {
+        telegram: {
+          token: "tg-channel-token",
+          sessions: [{ id: "global", name: "Global", targetId: "-100333", enabled: true, token: "tg-session-token" }],
+          departmentBots: {
+            development: { token: "tg-dev-token", targetId: "-100999", enabled: true },
+          },
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const gateway = await importGatewayModule({
+      DB_PATH: dbPath,
+      OPENCLAW_CONFIG: undefined,
+    });
+
+    const result = await gateway.sendDepartmentTelegramMessage({
+      sessionKey: "telegram:global",
+      departmentId: "development",
+      text: "hello department",
+    });
+
+    expect(result).toEqual({ routed: "department_bot", departmentId: "development" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.telegram.org/bottg-dev-token/sendMessage");
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as { chat_id?: string };
+    expect(body.chat_id).toBe("-100333");
+  });
+
+  it("sendDepartmentTelegramMessage preserves Korean text in the Telegram JSON payload", async () => {
+    const dbPath = createTestDb({
+      messengerChannels: {
+        telegram: {
+          token: "tg-channel-token",
+          sessions: [{ id: "global", name: "Global", targetId: "-100333", enabled: true, token: "tg-session-token" }],
+          departmentBots: {
+            development: { token: "tg-dev-token", targetId: "-100999", enabled: true },
+          },
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const gateway = await importGatewayModule({
+      DB_PATH: dbPath,
+      OPENCLAW_CONFIG: undefined,
+    });
+
+    const text = "[development][task-1][planned]\n아리아 (개발팀장): 한글 발신 테스트";
+    await gateway.sendDepartmentTelegramMessage({
+      sessionKey: "telegram:global",
+      departmentId: "development",
+      text,
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as { text?: string };
+    expect(body.text).toBe(text);
+    expect(body.text).not.toMatch(/[�]|[?]{4,}|媛|硫|蹂|洹|濡/);
+  });
+
+  it("sendDepartmentTelegramMessage falls back to the global bot when no department bot is mapped", async () => {
+    const dbPath = createTestDb({
+      messengerChannels: {
+        telegram: {
+          token: "tg-channel-token",
+          sessions: [{ id: "global", name: "Global", targetId: "-100333", enabled: true, token: "tg-session-token" }],
+          departmentBots: {
+            development: { token: "tg-dev-token", targetId: "-100333", enabled: true },
+          },
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const gateway = await importGatewayModule({
+      DB_PATH: dbPath,
+      OPENCLAW_CONFIG: undefined,
+    });
+
+    const result = await gateway.sendDepartmentTelegramMessage({
+      sessionKey: "telegram:global",
+      departmentId: "qa",
+      text: "hello fallback",
+    });
+
+    expect(result).toEqual({ routed: "global", departmentId: "qa", fallbackReason: "department_bot_missing" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.telegram.org/bottg-session-token/sendMessage");
+  });
+
+  it("sendDepartmentTelegramMessage falls back to the global bot when a department bot send fails", async () => {
+    const dbPath = createTestDb({
+      messengerChannels: {
+        telegram: {
+          token: "tg-channel-token",
+          sessions: [{ id: "global", name: "Global", targetId: "-100333", enabled: true, token: "tg-session-token" }],
+          departmentBots: {
+            qa: { token: "tg-qa-token", targetId: "-100333", enabled: true },
+          },
+        },
+      },
+    });
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      if (url.includes("bottg-qa-token")) {
+        return new Response(JSON.stringify({ ok: false, description: "bot blocked" }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const gateway = await importGatewayModule({
+      DB_PATH: dbPath,
+      OPENCLAW_CONFIG: undefined,
+    });
+
+    const result = await gateway.sendDepartmentTelegramMessage({
+      sessionKey: "telegram:global",
+      departmentId: "qa",
+      text: "hello fallback",
+    });
+
+    expect(result).toEqual({ routed: "global", departmentId: "qa", fallbackReason: "bot_blocked" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.telegram.org/bottg-qa-token/sendMessage");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://api.telegram.org/bottg-session-token/sendMessage");
+  });
+
+  it("sendDepartmentTelegramMessage can load department bot routes from environment", async () => {
+    const dbPath = createTestDb({
+      messengerChannels: {
+        telegram: {
+          token: "tg-channel-token",
+          sessions: [{ id: "global", name: "Global", targetId: "-100333", enabled: true, token: "tg-session-token" }],
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const gateway = await importGatewayModule({
+      DB_PATH: dbPath,
+      OPENCLAW_CONFIG: undefined,
+      TELEGRAM_DEPARTMENT_BOT_ROUTING: "1",
+      TELEGRAM_GLOBAL_GROUP_CHAT_ID: "-100999",
+      TELEGRAM_BOT_TOKEN_DEV: "tg-env-dev-token",
+      TELEGRAM_CHAT_ID_DEV: "-100111",
+    });
+
+    const result = await gateway.sendDepartmentTelegramMessage({
+      sessionKey: "telegram:global",
+      departmentId: "development",
+      text: "hello env",
+    });
+
+    expect(result).toEqual({ routed: "department_bot", departmentId: "development" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.telegram.org/bottg-env-dev-token/sendMessage");
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as { chat_id?: string };
+    expect(body.chat_id).toBe("-100999");
   });
 
   it("sendMessengerMessage sends through WhatsApp Cloud API", async () => {

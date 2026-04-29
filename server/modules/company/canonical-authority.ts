@@ -66,11 +66,16 @@ function requiresSecurityQuorum(context: CanonicalAuthorityContext): boolean {
 }
 
 function requiresDocsQuorum(context: CanonicalAuthorityContext): boolean {
-  return includesPattern(buildTaskSignalText(context), /report|documentation|document|brief|summary|governance|decision|status/) ||
+  return (
+    includesPattern(
+      buildTaskSignalText(context),
+      /report|documentation|document|brief|summary|governance|decision|status/,
+    ) ||
     context.workflowPackKey === "report" ||
     context.workflowPackKey === "web_research_report" ||
     context.workflowPackKey === "novel" ||
-    context.workflowPackKey === "roleplay";
+    context.workflowPackKey === "roleplay"
+  );
 }
 
 function isSeniorPlus(stage: string | null | undefined): boolean {
@@ -177,7 +182,9 @@ export function evaluateCanonicalMeetingAuthority<TAgent extends CanonicalAuthor
   }
 
   if (requiresReleaseQuorum(context)) {
-    const qaLeader = enriched.find(({ canonical, department_id }) => department_id === "qa" && isSeniorPlus(canonical.career_stage));
+    const qaLeader = enriched.find(
+      ({ canonical, department_id }) => department_id === "qa" && isSeniorPlus(canonical.career_stage),
+    );
     const hasReleaseDiscipline = enriched.some(({ department_id }) => department_id === "cicd-repo");
     const releaseLeader = enriched.find(
       ({ canonical, department_id }) =>
@@ -196,7 +203,9 @@ export function evaluateCanonicalMeetingAuthority<TAgent extends CanonicalAuthor
   }
 
   if (requiresSecurityQuorum(context)) {
-    const qaLeader = enriched.find(({ canonical, department_id }) => department_id === "qa" && isSeniorPlus(canonical.career_stage));
+    const qaLeader = enriched.find(
+      ({ canonical, department_id }) => department_id === "qa" && isSeniorPlus(canonical.career_stage),
+    );
     const securityLeader = enriched.find(
       ({ canonical, department_id }) =>
         department_id === "security-approval" &&
@@ -214,9 +223,7 @@ export function evaluateCanonicalMeetingAuthority<TAgent extends CanonicalAuthor
     );
     const pmoLeader = enriched.find(
       ({ canonical, department_id }) =>
-        department_id === "pmo" &&
-        canonical.family === "orchestrator" &&
-        canonical.career_stage === "team-lead",
+        department_id === "pmo" && canonical.family === "orchestrator" && canonical.career_stage === "team-lead",
     );
     if (!docsLeader || !pmoLeader) blockedBy.push("docs_quorum_not_met");
     else selectedBy.push(`docs_quorum:${docsLeader.canonical.career_stage}:${pmoLeader.canonical.career_stage}`);

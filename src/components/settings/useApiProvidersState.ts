@@ -48,13 +48,7 @@ function resolveAssignablePackKeysFromProjection(
   return orderedKeys;
 }
 
-export function useApiProvidersState({
-  tab,
-  t,
-}: {
-  tab: SettingsTab;
-  t: TFunction;
-}): ApiStateBundle {
+export function useApiProvidersState({ tab, t }: { tab: SettingsTab; t: TFunction }): ApiStateBundle {
   const [apiProviders, setApiProviders] = useState<ApiProvider[]>([]);
   const [apiProvidersLoading, setApiProvidersLoading] = useState(false);
   const [apiOfficialPresets, setApiOfficialPresets] = useState<Record<string, api.ApiProviderOfficialPreset>>({});
@@ -214,32 +208,29 @@ export function useApiProvidersState({
     });
   }, []);
 
-  const handleApiModelAssign = useCallback(
-    async (providerId: string, model: string) => {
-      setApiAssignTarget({ providerId, model });
-      try {
-        const workflowPackProjection = await api.getWorkflowPacks();
-        const assignPackKeys = resolveAssignablePackKeysFromProjection(workflowPackProjection.packs);
-        const [agents, deptLists] = await Promise.all([
-          api.getAgents({ includeSeed: true }),
-          Promise.all(
-            assignPackKeys.map(async (packKey) => {
-              const depts = await api.getDepartments({ workflowPackKey: packKey });
-              return depts.map((dept) => ({ ...dept, workflow_pack_key: packKey }));
-            }),
-          ),
-        ]);
-        const allowedPackKeys = new Set(assignPackKeys);
-        setApiAssignAgents(
-          agents.filter((agent) => allowedPackKeys.has(normalizeWorkflowPackKey(agent.workflow_pack_key))),
-        );
-        setApiAssignDepts(deptLists.flat());
-      } catch (error) {
-        console.error("Failed to load agents:", error);
-      }
-    },
-    [],
-  );
+  const handleApiModelAssign = useCallback(async (providerId: string, model: string) => {
+    setApiAssignTarget({ providerId, model });
+    try {
+      const workflowPackProjection = await api.getWorkflowPacks();
+      const assignPackKeys = resolveAssignablePackKeysFromProjection(workflowPackProjection.packs);
+      const [agents, deptLists] = await Promise.all([
+        api.getAgents({ includeSeed: true }),
+        Promise.all(
+          assignPackKeys.map(async (packKey) => {
+            const depts = await api.getDepartments({ workflowPackKey: packKey });
+            return depts.map((dept) => ({ ...dept, workflow_pack_key: packKey }));
+          }),
+        ),
+      ]);
+      const allowedPackKeys = new Set(assignPackKeys);
+      setApiAssignAgents(
+        agents.filter((agent) => allowedPackKeys.has(normalizeWorkflowPackKey(agent.workflow_pack_key))),
+      );
+      setApiAssignDepts(deptLists.flat());
+    } catch (error) {
+      console.error("Failed to load agents:", error);
+    }
+  }, []);
 
   const handleApiAssignToAgent = useCallback(
     async (agentId: string) => {

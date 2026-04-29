@@ -222,7 +222,8 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     if (!isValidGitHubRepoName(repoName)) {
       return res.status(400).json({
         error: "invalid_repo_name",
-        reason: "Use 1-100 lowercase letters, numbers, dots, underscores, or hyphens. Slashes and .git suffixes are not allowed.",
+        reason:
+          "Use 1-100 lowercase letters, numbers, dots, underscores, or hyphens. Slashes and .git suffixes are not allowed.",
       });
     }
 

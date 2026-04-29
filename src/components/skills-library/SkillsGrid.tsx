@@ -209,9 +209,7 @@ export default function SkillsGrid({
                     className="px-2 py-1 text-[10px] bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-md hover:bg-blue-600/30 transition-all"
                     title={isDonggriSkill ? "Copy Codex sync command" : `npx skills add ${skill.repo}`}
                   >
-                    {copiedSkill === skill.name
-                      ? skillText(t, "grid.copied")
-                      : skillText(t, "grid.copy")}
+                    {copiedSkill === skill.name ? skillText(t, "grid.copied") : skillText(t, "grid.copy")}
                   </button>
                 </div>
               </div>
@@ -234,15 +232,15 @@ export default function SkillsGrid({
                   )}
 
                   {detail === "error" && (
-                    <div className="text-slate-500 text-xs">
-                      {skillText(t, "grid.detailsError")}
-                    </div>
+                    <div className="text-slate-500 text-xs">{skillText(t, "grid.detailsError")}</div>
                   )}
 
                   {detail && typeof detail === "object" && (
                     <div className="space-y-3">
                       {detail.title && <div className="text-sm font-semibold text-white">{detail.title}</div>}
-                      {detail.description && <p className="text-xs text-slate-300 leading-relaxed">{detail.description}</p>}
+                      {detail.description && (
+                        <p className="text-xs text-slate-300 leading-relaxed">{detail.description}</p>
+                      )}
 
                       {detail.whenToUse.length > 0 && (
                         <div className="space-y-1.5">
@@ -266,8 +264,7 @@ export default function SkillsGrid({
                         )}
                         {detail.firstSeen && (
                           <span className="text-slate-500">
-                            {skillText(t, "grid.firstSeen")}:{" "}
-                            {formatFirstSeen(detail.firstSeen, localeTag)}
+                            {skillText(t, "grid.firstSeen")}: {formatFirstSeen(detail.firstSeen, localeTag)}
                           </span>
                         )}
                       </div>
@@ -324,12 +321,8 @@ export default function SkillsGrid({
       {filtered.length === 0 && (
         <div className="text-center py-16">
           <div className="text-xs font-semibold text-slate-500 mb-3">NO RESULTS</div>
-          <div className="text-slate-400 text-sm">
-            {skillText(t, "grid.noResults")}
-          </div>
-          <div className="text-slate-500 text-xs mt-1">
-            {skillText(t, "grid.tryDifferentKeyword")}
-          </div>
+          <div className="text-slate-400 text-sm">{skillText(t, "grid.noResults")}</div>
+          <div className="text-slate-500 text-xs mt-1">{skillText(t, "grid.tryDifferentKeyword")}</div>
         </div>
       )}
     </>

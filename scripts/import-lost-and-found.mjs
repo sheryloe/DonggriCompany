@@ -157,20 +157,23 @@ function getTargetTableColumns(db, tableName) {
 
 function findTableRootAndDefinition(sourceDb, tableName) {
   const row = sourceDb
-    .prepare(`
+    .prepare(
+      `
       SELECT CAST(c3 AS INTEGER) AS rootpgno, c4 AS ddl, id
       FROM lost_and_found
       WHERE c0='table' AND c1=?
       ORDER BY id DESC
       LIMIT 1
-    `)
+    `,
+    )
     .get(tableName);
   return row ?? null;
 }
 
 function selectSourceRows(sourceDb, rootpgno, nfield) {
   return sourceDb
-    .prepare(`
+    .prepare(
+      `
       SELECT rootpgno, pgno, nfield, id,
              c0, c1, c2, c3, c4, c5, c6, c7, c8, c9,
              c10, c11, c12, c13, c14, c15, c16, c17, c18, c19,
@@ -178,7 +181,8 @@ function selectSourceRows(sourceDb, rootpgno, nfield) {
       FROM lost_and_found
       WHERE rootpgno = ? AND nfield = ?
       ORDER BY COALESCE(id, 0), pgno
-    `)
+    `,
+    )
     .all(rootpgno, nfield);
 }
 

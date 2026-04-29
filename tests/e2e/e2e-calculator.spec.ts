@@ -1,7 +1,6 @@
 import { expect, test, type APIRequestContext, type APIResponse } from "@playwright/test";
 import http from "node:http";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { cleanupE2EResources } from "./cleanup";
 
 type ApiAuthHeaders = {
@@ -70,14 +69,24 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function bindAgentApiProviderInLocalE2EDb(agentId: string, providerId: string, model: string): void {
-  const dbPath = path.resolve(process.cwd(), ".tmp", "e2e-runtime", "claw-empire.e2e.sqlite");
-  const db = new DatabaseSync(dbPath);
-  try {
-    db.prepare("UPDATE agents SET api_provider_id = ?, api_model = ? WHERE id = ?").run(providerId, model, agentId);
-  } finally {
-    db.close();
-  }
+async function bindAgentApiProvider(
+  request: APIRequestContext,
+  requestHeaders: Record<string, string>,
+  agentId: string,
+  providerId: string,
+  model: string,
+): Promise<void> {
+  await expectOkJson(
+    await request.patch(`/api/agents/${agentId}`, {
+      headers: requestHeaders,
+      data: {
+        cli_provider: "api",
+        api_provider_id: providerId,
+        api_model: model,
+      },
+    }),
+    `PATCH /api/agents/${agentId}`,
+  );
 }
 
 function normalizeToken(raw: string | null | undefined): string {
@@ -103,8 +112,7 @@ async function expectOkJson<T>(response: APIResponse, label: string): Promise<T>
 }
 
 async function establishApiSession(request: APIRequestContext): Promise<ApiAuthHeaders> {
-  const runtimeAuthToken =
-    normalizeToken(process.env.API_AUTH_TOKEN) || normalizeToken(process.env.SESSION_AUTH_TOKEN);
+  const runtimeAuthToken = normalizeToken(process.env.API_AUTH_TOKEN) || normalizeToken(process.env.SESSION_AUTH_TOKEN);
   if (runtimeAuthToken && runtimeAuthToken !== "__CHANGE_ME__") {
     const authorization = `Bearer ${runtimeAuthToken}`;
     return {
@@ -238,9 +246,7 @@ async function waitForTaskAssignment(params: {
         `${task.id}:${task.title}:${task.department_id ?? "null"}:${task.assigned_agent_id ?? "null"}:${task.status}`,
     )
     .join(" | ");
-  throw new Error(
-    `task assignment timed out (project=${projectId}, titleToken=${titleToken}, tasks=${debugSummary})`,
-  );
+  throw new Error(`task assignment timed out (project=${projectId}, titleToken=${titleToken}, tasks=${debugSummary})`);
 }
 
 async function settleSiblingDirectiveTasks(params: {
@@ -454,7 +460,7 @@ async function createDirectiveExecutionFixture(params: {
       "POST /api/agents(leader)",
     );
     cleanup.agentIds.push(leader.agent.id);
-    bindAgentApiProviderInLocalE2EDb(leader.agent.id, provider.id, "e2e-mock-model");
+    await bindAgentApiProvider(request, apiAuth.write, leader.agent.id, provider.id, "e2e-mock-model");
 
     const member = await expectOkJson<AgentResponse>(
       await request.post("/api/agents", {
@@ -472,7 +478,7 @@ async function createDirectiveExecutionFixture(params: {
       "POST /api/agents(member)",
     );
     cleanup.agentIds.push(member.agent.id);
-    bindAgentApiProviderInLocalE2EDb(member.agent.id, provider.id, "e2e-mock-model");
+    await bindAgentApiProvider(request, apiAuth.write, member.agent.id, provider.id, "e2e-mock-model");
 
     const gateOrchestrator = await expectOkJson<AgentResponse>(
       await request.post("/api/agents", {
@@ -496,7 +502,7 @@ async function createDirectiveExecutionFixture(params: {
       "POST /api/agents(gate orchestrator)",
     );
     cleanup.agentIds.push(gateOrchestrator.agent.id);
-    bindAgentApiProviderInLocalE2EDb(gateOrchestrator.agent.id, provider.id, "e2e-mock-model");
+    await bindAgentApiProvider(request, apiAuth.write, gateOrchestrator.agent.id, provider.id, "e2e-mock-model");
 
     const gateReviewer = await expectOkJson<AgentResponse>(
       await request.post("/api/agents", {
@@ -520,7 +526,7 @@ async function createDirectiveExecutionFixture(params: {
       "POST /api/agents(gate reviewer)",
     );
     cleanup.agentIds.push(gateReviewer.agent.id);
-    bindAgentApiProviderInLocalE2EDb(gateReviewer.agent.id, provider.id, "e2e-mock-model");
+    await bindAgentApiProvider(request, apiAuth.write, gateReviewer.agent.id, provider.id, "e2e-mock-model");
 
     const gateArchitect = await expectOkJson<AgentResponse>(
       await request.post("/api/agents", {
@@ -538,7 +544,7 @@ async function createDirectiveExecutionFixture(params: {
       "POST /api/agents(gate architect)",
     );
     cleanup.agentIds.push(gateArchitect.agent.id);
-    bindAgentApiProviderInLocalE2EDb(gateArchitect.agent.id, provider.id, "e2e-mock-model");
+    await bindAgentApiProvider(request, apiAuth.write, gateArchitect.agent.id, provider.id, "e2e-mock-model");
 
     const project = await expectOkJson<ProjectResponse>(
       await request.post("/api/projects", {
@@ -638,9 +644,7 @@ test.describe("E2E PM orchestration (simulation + conditional live telegram)", (
       });
       await sleep(8_000);
 
-      let lifecycle:
-        | { outcome: "done" | "failed"; detail: TaskDetail; seenStatuses: Set<string> }
-        | null = null;
+      let lifecycle: { outcome: "done" | "failed"; detail: TaskDetail; seenStatuses: Set<string> } | null = null;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         await expectOkJson(
           await request.patch(`/api/tasks/${task.id}`, {
@@ -693,7 +697,10 @@ test.describe("E2E PM orchestration (simulation + conditional live telegram)", (
         });
       }
       if (!lifecycle || lifecycle.outcome !== "done") {
-        const logs = (lifecycle?.detail.logs ?? []).slice(0, 16).map((entry) => entry.message).join(" | ");
+        const logs = (lifecycle?.detail.logs ?? [])
+          .slice(0, 16)
+          .map((entry) => entry.message)
+          .join(" | ");
         const terminal = await expectOkJson<{ text?: string }>(
           await request.get(`/api/tasks/${task.id}/terminal?lines=120&log_limit=40`, {
             headers: apiAuth.read,

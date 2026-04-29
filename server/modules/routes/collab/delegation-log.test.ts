@@ -38,4 +38,3 @@ describe("formatDelegationTrace", () => {
     expect(message).toContain("blocking_reason=none");
   });
 });
-

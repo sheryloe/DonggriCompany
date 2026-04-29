@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
+  sendDepartmentTelegramMessage,
   sendMessengerMessage,
   sendMessengerSessionMessage,
   sendMessengerSessionTyping,
@@ -66,7 +67,7 @@ function splitMessageByLimit(text: string, limit: number): string[] {
 }
 
 function localeInstructionForDirect(lang: Lang): string {
-  return lang === "ko" ? "???? ?????." : "Respond in English.";
+  return lang === "ko" ? "한국어로 답하세요." : "Respond in English.";
 }
 
 export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
@@ -81,7 +82,13 @@ export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
 
     const chunks = splitMessageByLimit(cleaned, getMessengerChunkLimit(channel));
     for (const chunk of chunks) {
-      if (sessionKey) {
+      if (channel === "telegram" && sessionKey) {
+        await sendDepartmentTelegramMessage({
+          sessionKey,
+          departmentId: agent.department_id,
+          text: chunk,
+        });
+      } else if (sessionKey) {
         await sendMessengerSessionMessage(sessionKey, chunk);
       } else {
         await sendMessengerMessage({
@@ -229,7 +236,12 @@ export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {
     });
   }
 
-  function insertStreamingMessage(msgId: string, agent: AgentRow, content: string, projectId: string | null = null): void {
+  function insertStreamingMessage(
+    msgId: string,
+    agent: AgentRow,
+    content: string,
+    projectId: string | null = null,
+  ): void {
     const endedAt = deps.nowMs();
     deps.db
       .prepare(

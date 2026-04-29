@@ -41,16 +41,13 @@ export function resolveProviderExecutionPolicy(input: ResolveProviderExecutionPo
     .trim()
     .toLowerCase();
   const canonicalOverride =
-    input.canonicalOverride &&
-    (!canonicalProvider || !provider || canonicalProvider === provider)
+    input.canonicalOverride && (!canonicalProvider || !provider || canonicalProvider === provider)
       ? input.canonicalOverride
       : null;
   return {
     model: normalizeOptionalString(canonicalOverride?.model),
     subModel: normalizeOptionalString(canonicalOverride?.subModel),
-    reasoningLevel:
-      normalizeOptionalString(canonicalOverride?.reasoningLevel),
-    subModelReasoningLevel:
-      normalizeOptionalString(canonicalOverride?.subReasoningLevel),
+    reasoningLevel: normalizeOptionalString(canonicalOverride?.reasoningLevel),
+    subModelReasoningLevel: normalizeOptionalString(canonicalOverride?.subReasoningLevel),
   };
 }

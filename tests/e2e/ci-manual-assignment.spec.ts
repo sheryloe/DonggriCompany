@@ -62,11 +62,11 @@ async function expectOkJson<T>(response: APIResponse, label: string): Promise<T>
     try {
       parsed = JSON.parse(text);
     } catch {
-      throw new Error(`${label}: JSON 파싱 실패 (status=${response.status()}): ${text.slice(0, 500)}`);
+      throw new Error(`${label}: JSON parse failed (status=${response.status()}): ${text.slice(0, 500)}`);
     }
   }
   if (!response.ok()) {
-    throw new Error(`${label}: 요청 실패 (status=${response.status()}): ${text.slice(0, 1000)}`);
+    throw new Error(`${label}: request failed (status=${response.status()}): ${text.slice(0, 1000)}`);
   }
   return parsed as T;
 }
@@ -89,10 +89,10 @@ async function establishApiSession(request: APIRequestContext): Promise<void> {
       await sleep(500);
       continue;
     }
-    throw new Error(`GET /api/auth/session 실패 (status=${lastStatus}): ${lastText.slice(0, 1000)}`);
+    throw new Error(`GET /api/auth/session failed (status=${lastStatus}): ${lastText.slice(0, 1000)}`);
   }
 
-  throw new Error(`GET /api/auth/session 타임아웃 (status=${lastStatus}): ${lastText.slice(0, 1000)}`);
+  throw new Error(`GET /api/auth/session timed out (status=${lastStatus}): ${lastText.slice(0, 1000)}`);
 }
 
 async function fetchProjectTasks(request: APIRequestContext, projectId: string): Promise<TaskRow[]> {
@@ -122,16 +122,16 @@ async function waitForTaskAssignment(
   }
   const debugSummary = lastTasks.map((task) => `${task.title}:${task.assigned_agent_id ?? "null"}`).join(" | ");
   throw new Error(
-    `작업 배정 대기 시간 초과 (project=${projectId}, expectedAgent=${assignedAgentId}, department=${departmentId}, title=${title}, tasks=${debugSummary})`,
+    `Timed out waiting for task assignment (project=${projectId}, expectedAgent=${assignedAgentId}, department=${departmentId}, title=${title}, tasks=${debugSummary})`,
   );
 }
 
 test.describe("CI manual assignment coverage", () => {
   test.setTimeout(150_000);
 
-  test("신규 부서/팀원 추가 + 수동 배정(선택 팀원/팀장 fallback) 실행 검증", async ({ request }) => {
-    const seed = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-    const deptId = `ci_dept_${seed}`;
+  test("new department and manual assignment delegation stay executable", async ({ request }) => {
+    const seed = `${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 6)}`;
+    const deptId = `ci_${seed}`;
     const cleanup = {
       taskIds: [] as string[],
       agentIds: [] as string[],
@@ -151,8 +151,8 @@ test.describe("CI manual assignment coverage", () => {
         data: {
           id: deptId,
           name: `CI Department ${seed}`,
-          name_ko: `CI부서-${seed}`,
-          icon: "🧪",
+          name_ko: `CI Department ${seed}`,
+          icon: "R",
           color: "#16a34a",
           description: "CI scenario department",
         },
@@ -163,11 +163,14 @@ test.describe("CI manual assignment coverage", () => {
       const createLeaderRes = await request.post("/api/agents", {
         data: {
           name: leaderName,
-          name_ko: `팀장-${seed}`,
+          name_ko: `CI Leader ${seed}`,
           department_id: deptId,
           role: "team_leader",
+          family: "orchestrator",
+          career_stage: "team-lead",
+          authority_level: 7,
           cli_provider: "api",
-          avatar_emoji: "🧪",
+          avatar_emoji: "R",
         },
       });
       const createLeader = await expectOkJson<AgentCreateResponse>(createLeaderRes, "POST /api/agents(team_leader)");
@@ -180,11 +183,14 @@ test.describe("CI manual assignment coverage", () => {
       const createMemberRes = await request.post("/api/agents", {
         data: {
           name: memberName,
-          name_ko: `팀원-${seed}`,
+          name_ko: `CI Member ${seed}`,
           department_id: deptId,
           role: "senior",
+          family: "backend",
+          career_stage: "senior",
+          authority_level: 3,
           cli_provider: "api",
-          avatar_emoji: "🧪",
+          avatar_emoji: "R",
         },
       });
       const createMember = await expectOkJson<AgentCreateResponse>(createMemberRes, "POST /api/agents(member)");
@@ -218,7 +224,7 @@ test.describe("CI manual assignment coverage", () => {
       const subProjectId = subProject.project.id;
       cleanup.projectIds.push(subProjectId);
 
-      const subordinateTaskTitle = `ci-sub-${seed} @${deptId} 작업`;
+      const subordinateTaskTitle = `implement ci-sub-${seed} @${deptId} task`;
       const subordinateDirectiveRes = await request.post("/api/directives", {
         data: {
           content: subordinateTaskTitle,
@@ -260,7 +266,7 @@ test.describe("CI manual assignment coverage", () => {
       const leaderProjectId = leaderProject.project.id;
       cleanup.projectIds.push(leaderProjectId);
 
-      const leaderTaskTitle = `ci-leader-${seed} @${deptId} 작업`;
+      const leaderTaskTitle = `implement ci-leader-${seed} @${deptId} task`;
       const leaderDirectiveRes = await request.post("/api/directives", {
         data: {
           content: leaderTaskTitle,

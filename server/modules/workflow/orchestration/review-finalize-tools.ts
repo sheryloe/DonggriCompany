@@ -91,7 +91,8 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
     const reason = String(rawReason ?? "").trim();
     if (reason.startsWith("quorum_not_met")) return "quorum_not_met";
     if (reason.includes("approval_gate")) return "approval_gate_blocked";
-    if (reason.includes("authority") || reason.includes("orchestrator") || reason.includes("missing_")) return "authority_missing";
+    if (reason.includes("authority") || reason.includes("orchestrator") || reason.includes("missing_"))
+      return "authority_missing";
     if (reason.length === 0) return "authority_missing";
     return reason;
   }
@@ -162,7 +163,9 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
       appendTaskLog(taskId, "system", `Delegated subtask sync: marked ${subtaskCount} linked subtask(s) as done`);
 
       for (const parentTaskId of touchedParents) {
-        const parent = db.prepare("SELECT id, title, status, assigned_agent_id FROM tasks WHERE id = ?").get(parentTaskId) as
+        const parent = db
+          .prepare("SELECT id, title, status, assigned_agent_id FROM tasks WHERE id = ?")
+          .get(parentTaskId) as
           | {
               id: string;
               title: string;
@@ -173,13 +176,15 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
         if (!parent) continue;
 
         const progress = db
-          .prepare(`
+          .prepare(
+            `
             SELECT
               COUNT(*) AS total,
               SUM(CASE WHEN status = 'done' OR status = 'cancelled' THEN 1 ELSE 0 END) AS done_cnt
             FROM subtasks
             WHERE task_id = ?
-          `)
+          `,
+          )
           .get(parentTaskId) as { total: number; done_cnt: number };
 
         const leader = db.prepare("SELECT * FROM agents WHERE id = ?").get(parent.assigned_agent_id);
@@ -189,11 +194,13 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
           const relayMsg = pickL(
             l(
               [`[상태 중계] '${parent.title}' 공정률 ${percent}% 달성 (${progress.done_cnt}/${progress.total} 완료).`],
-              [`[Status Relay] '${parent.title}' progress reached ${percent}% (${progress.done_cnt}/${progress.total} done).`],
+              [
+                `[Status Relay] '${parent.title}' progress reached ${percent}% (${progress.done_cnt}/${progress.total} done).`,
+              ],
               [`[進捗中継] '${parent.title}' 進捗率 ${percent}% 達成 (${progress.done_cnt}/${progress.total} 完了)。`],
-              [`[状态中继] '${parent.title}' 进度达成 ${percent}% (${progress.done_cnt}/${progress.total} 已完成)。`]
+              [`[状态中继] '${parent.title}' 进度达成 ${percent}% (${progress.done_cnt}/${progress.total} 已完成)。`],
             ),
-            lang
+            lang,
           );
           // Relay to messenger via notifyCeo (which handles Telegram routing)
           notifyCeo(relayMsg, parentTaskId);
@@ -429,7 +436,9 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
         notifyCeo(
           pickL(
             l(
-              [`'${taskTitle}'은(는) 하위 협업 태스크 ${waiting}건이 Review에 도달할 때까지 단일 팀장 회의를 대기합니다.`],
+              [
+                `'${taskTitle}'은(는) 하위 협업 태스크 ${waiting}건이 Review에 도달할 때까지 단일 팀장 회의를 대기합니다.`,
+              ],
               [
                 `'${taskTitle}' is waiting for ${waiting} collaboration child task(s) to reach review before the single team-lead meeting starts.`,
               ],
@@ -639,7 +648,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
       let mergeBlocked = false;
       let mergeBlockedReasons: string[] = [];
       if (wtInfo) {
-      // Check if this is a GitHub project - merge to dev + PR flow
+        // Check if this is a GitHub project - merge to dev + PR flow
         const projectRow = currentTask.project_id
           ? (db.prepare("SELECT github_repo FROM projects WHERE id = ?").get(currentTask.project_id) as
               | { github_repo: string | null }

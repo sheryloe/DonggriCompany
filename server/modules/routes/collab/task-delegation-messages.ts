@@ -43,8 +43,12 @@ export function buildLeaderAckMessage(params: LeaderAckParams): string {
   if (skipPlannedMeeting && isPlanningLead && crossDeptNames) {
     return pickL(
       l(
-        [`확인했습니다. 기획 회의를 생략하고 ${crossDeptNames} 선행 조율 후 ${subRole} ${subName}에게 바로 위임하겠습니다.`],
-        [`Understood. I will skip the planning meeting, pre-coordinate with ${crossDeptNames}, and delegate to ${subRole} ${subName}.`],
+        [
+          `확인했습니다. 기획 회의를 생략하고 ${crossDeptNames} 선행 조율 후 ${subRole} ${subName}에게 바로 위임하겠습니다.`,
+        ],
+        [
+          `Understood. I will skip the planning meeting, pre-coordinate with ${crossDeptNames}, and delegate to ${subRole} ${subName}.`,
+        ],
       ),
       lang,
     );
@@ -84,7 +88,9 @@ export function buildLeaderAckMessage(params: LeaderAckParams): string {
     return pickL(
       l(
         [`확인했습니다. 팀장 회의 후 ${subRole} ${subName}에게 위임하고 ${crossDeptNames}와 정렬하겠습니다.`],
-        [`Understood. After the team-lead meeting, I will delegate to ${subRole} ${subName} and align with ${crossDeptNames}.`],
+        [
+          `Understood. After the team-lead meeting, I will delegate to ${subRole} ${subName} and align with ${crossDeptNames}.`,
+        ],
       ),
       lang,
     );

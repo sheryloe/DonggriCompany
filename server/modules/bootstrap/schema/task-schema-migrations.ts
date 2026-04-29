@@ -261,7 +261,9 @@ export function applyTaskSchemaMigrations(db: DbLike): void {
   }
   try {
     const rows = db
-      .prepare("SELECT id, department_id, specialization_key FROM agents WHERE family IS NULL OR TRIM(COALESCE(family, '')) = ''")
+      .prepare(
+        "SELECT id, department_id, specialization_key FROM agents WHERE family IS NULL OR TRIM(COALESCE(family, '')) = ''",
+      )
       .all() as Array<{ id: string; department_id?: string | null; specialization_key?: string | null }>;
     const updateFamily = db.prepare("UPDATE agents SET family = ? WHERE id = ?");
     for (const row of rows) {
@@ -346,7 +348,6 @@ function ensureOfficePackScopedDepartmentSchema(db: DbLike): void {
       // ignore
     }
   }
-
 }
 function ensureConversationProjectContextSchema(db: DbLike): void {
   try {
@@ -776,5 +777,3 @@ function ensureMessagesIdempotencySchema(db: DbLike): void {
     WHERE idempotency_key IS NOT NULL
   `);
 }
-
-

@@ -54,9 +54,9 @@ export function registerWorkflowPackRoutes(
     const projectId = normalizeTextField(body.project_id ?? body.projectId);
 
     const enabledSet = new Set<WorkflowPackKey>(
-      CANONICAL_PACK_SOURCES
-        .map((pack) => pack.key)
-        .filter((packKey): packKey is WorkflowPackKey => isWorkflowPackKey(packKey)),
+      CANONICAL_PACK_SOURCES.map((pack) => pack.key).filter((packKey): packKey is WorkflowPackKey =>
+        isWorkflowPackKey(packKey),
+      ),
     );
     const isEnabled = (packKey: WorkflowPackKey): boolean => enabledSet.has(packKey);
 

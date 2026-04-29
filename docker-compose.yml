@@ -43,6 +43,26 @@ services:
       CALENDAR_INTAKE_LOOKAHEAD_DAYS: ${CALENDAR_INTAKE_LOOKAHEAD_DAYS:-60}
       CALENDAR_INTAKE_TELEGRAM_SESSION_KEY: ${CALENDAR_INTAKE_TELEGRAM_SESSION_KEY:-telegram:global}
       CALENDAR_INTAKE_DEFAULT_PROJECT_PATH: ${CALENDAR_INTAKE_DEFAULT_PROJECT_PATH:-D:\Donggri_Platform\DonggriCompany}
+      TELEGRAM_DEPARTMENT_BOT_ROUTING: ${TELEGRAM_DEPARTMENT_BOT_ROUTING:-0}
+      TELEGRAM_GLOBAL_GROUP_CHAT_ID: ${TELEGRAM_GLOBAL_GROUP_CHAT_ID:-}
+      TELEGRAM_BOT_TOKEN_DEV: ${TELEGRAM_BOT_TOKEN_DEV:-}
+      TELEGRAM_CHAT_ID_DEV: ${TELEGRAM_CHAT_ID_DEV:-}
+      TELEGRAM_BOT_TOKEN_QA: ${TELEGRAM_BOT_TOKEN_QA:-}
+      TELEGRAM_CHAT_ID_QA: ${TELEGRAM_CHAT_ID_QA:-}
+      TELEGRAM_BOT_TOKEN_DESIGN: ${TELEGRAM_BOT_TOKEN_DESIGN:-}
+      TELEGRAM_CHAT_ID_DESIGN: ${TELEGRAM_CHAT_ID_DESIGN:-}
+      TELEGRAM_BOT_TOKEN_PLANNING: ${TELEGRAM_BOT_TOKEN_PLANNING:-}
+      TELEGRAM_CHAT_ID_PLANNING: ${TELEGRAM_CHAT_ID_PLANNING:-}
+      TELEGRAM_BOT_TOKEN_PMO: ${TELEGRAM_BOT_TOKEN_PMO:-}
+      TELEGRAM_CHAT_ID_PMO: ${TELEGRAM_CHAT_ID_PMO:-}
+      TELEGRAM_BOT_TOKEN_CEO_PMO: ${TELEGRAM_BOT_TOKEN_CEO_PMO:-}
+      TELEGRAM_CHAT_ID_CEO_PMO: ${TELEGRAM_CHAT_ID_CEO_PMO:-}
+      TELEGRAM_BOT_TOKEN_PM: ${TELEGRAM_BOT_TOKEN_PM:-}
+      TELEGRAM_CHAT_ID_PM: ${TELEGRAM_CHAT_ID_PM:-}
+      TELEGRAM_BOT_TOKEN_OPERATIONS: ${TELEGRAM_BOT_TOKEN_OPERATIONS:-}
+      TELEGRAM_CHAT_ID_OPERATIONS: ${TELEGRAM_CHAT_ID_OPERATIONS:-}
+      TELEGRAM_BOT_TOKEN_DEVSECOPS: ${TELEGRAM_BOT_TOKEN_DEVSECOPS:-}
+      TELEGRAM_CHAT_ID_DEVSECOPS: ${TELEGRAM_CHAT_ID_DEVSECOPS:-}
       DB_PATH: /app/data/claw-empire.sqlite
       LOGS_DIR: /app/data/logs
       OFFICE_RUNNER_DOCKER_ENABLED: 0
@@ -59,7 +79,13 @@ services:
       - ${USERPROFILE}/.codex/multi-auth:/home/app/.codex/multi-auth:ro
     working_dir: /app
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8900/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8900/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 5

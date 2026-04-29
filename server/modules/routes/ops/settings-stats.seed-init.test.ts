@@ -214,7 +214,10 @@ describe("ops settings seed init guard", () => {
           },
         }),
       );
-      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("officeWorkflowPack", JSON.stringify("video_preprod"));
+      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+        "officeWorkflowPack",
+        JSON.stringify("video_preprod"),
+      );
 
       const { getRoutes } = createHarness(db);
       const getHandler = getRoutes.get("/api/settings");
@@ -314,7 +317,10 @@ describe("ops settings seed init guard", () => {
       expect(putHandler).toBeTypeOf("function");
 
       const res = createFakeResponse();
-      putHandler?.({ body: { officePackHydratedPacks: ["video_preprod", "novel"], officeWorkflowPack: "video_preprod" } }, res);
+      putHandler?.(
+        { body: { officePackHydratedPacks: ["video_preprod", "novel"], officeWorkflowPack: "video_preprod" } },
+        res,
+      );
 
       expect(res.statusCode).toBe(409);
       expect(res.payload).toEqual({

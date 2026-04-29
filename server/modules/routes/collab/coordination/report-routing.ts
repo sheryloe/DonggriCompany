@@ -512,12 +512,14 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
     sendAgentMessage(
       reportAssignee,
       pickL(
-          l(
-            [`${assigneeName}\uC785\uB2C8\uB2E4. \uBCF4\uACE0 \uC694\uCCAD\uC744 \uC811\uC218\uD588\uC2B5\uB2C8\uB2E4. ${outputLabel} \uD615\uC2DD\uC73C\uB85C \uC791\uC131\uD574 \uC81C\uCD9C\uD558\uACA0\uC2B5\uB2C8\uB2E4.`],
-            [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
-            [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
-            [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
-          ),
+        l(
+          [
+            `${assigneeName}\uC785\uB2C8\uB2E4. \uBCF4\uACE0 \uC694\uCCAD\uC744 \uC811\uC218\uD588\uC2B5\uB2C8\uB2E4. ${outputLabel} \uD615\uC2DD\uC73C\uB85C \uC791\uC131\uD574 \uC81C\uCD9C\uD558\uACA0\uC2B5\uB2C8\uB2E4.`,
+          ],
+          [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
+          [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
+          [`${assigneeName} here. Report request received. I'll deliver it in ${outputLabel} format.`],
+        ),
         lang,
       ),
       "report",
@@ -528,18 +530,20 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
 
     notifyCeo(
       pickL(
-          l(
-            [
-              `[REPORT ROUTING] '${taskTitle}' \uC694\uCCAD\uC744 ${assigneeName}(${providerLabel})\uC5D0\uAC8C \uBC30\uC815\uD588\uC2B5\uB2C8\uB2E4. \uCD9C\uB825 \uD615\uC2DD: ${outputLabel}`,
-            ],
-            [
-              `[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`,
-            ],
-            [
-              `[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`,
-            ],
-            [`[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`],
-          ),
+        l(
+          [
+            `[REPORT ROUTING] '${taskTitle}' \uC694\uCCAD\uC744 ${assigneeName}(${providerLabel})\uC5D0\uAC8C \uBC30\uC815\uD588\uC2B5\uB2C8\uB2E4. \uCD9C\uB825 \uD615\uC2DD: ${outputLabel}`,
+          ],
+          [
+            `[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`,
+          ],
+          [
+            `[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`,
+          ],
+          [
+            `[REPORT ROUTING] Assigned '${taskTitle}' to ${assigneeName} (${providerLabel}). Output format: ${outputLabel}`,
+          ],
+        ),
         lang,
       ),
       taskId,
@@ -548,20 +552,20 @@ export function createReportRoutingTools(deps: ReportRoutingDeps) {
       const requestedName = getAgentDisplayName(routing.requestedAgent, lang);
       notifyCeo(
         pickL(
-            l(
-              [
-                `[CLAUDE RECOMMENDATION] \uC694\uCCAD \uB300\uC0C1 ${requestedName}(${routing.requestedAgent.cli_provider || "unknown"})\uC740 Claude Code\uAC00 \uC544\uB2C8\uC5B4\uC11C Claude Code \uC6B0\uC120 \uB77C\uC6B0\uD305\uC744 \uC801\uC6A9\uD588\uC2B5\uB2C8\uB2E4. \uC6B0\uC120\uC21C\uC704 \uCD94\uCC9C: ${recommendationText}`,
-              ],
-              [
-                `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
-              ],
-              [
-                `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
-              ],
-              [
-                `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
-              ],
-            ),
+          l(
+            [
+              `[CLAUDE RECOMMENDATION] \uC694\uCCAD \uB300\uC0C1 ${requestedName}(${routing.requestedAgent.cli_provider || "unknown"})\uC740 Claude Code\uAC00 \uC544\uB2C8\uC5B4\uC11C Claude Code \uC6B0\uC120 \uB77C\uC6B0\uD305\uC744 \uC801\uC6A9\uD588\uC2B5\uB2C8\uB2E4. \uC6B0\uC120\uC21C\uC704 \uCD94\uCC9C: ${recommendationText}`,
+            ],
+            [
+              `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
+            ],
+            [
+              `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
+            ],
+            [
+              `[CLAUDE RECOMMENDATION] Requested agent ${requestedName} (${routing.requestedAgent.cli_provider || "unknown"}) is not on Claude Code, so Claude-priority routing was applied. Priority recommendations: ${recommendationText}`,
+            ],
+          ),
           lang,
         ),
         taskId,

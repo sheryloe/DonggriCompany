@@ -36,7 +36,15 @@ describe("CanonicalInspectorTab", () => {
         stages: [{ key: "senior", sourcePath: "y" }],
         approvalGates: [{ id: "human-approval-general", summary: "approval", sourcePath: "z" }],
         routingRules: [],
-        modelTierRules: [{ id: "tier-2-default", condition: "default", tier: "tier-2", summary: "default tier", sourcePath: "tier.ts" }],
+        modelTierRules: [
+          {
+            id: "tier-2-default",
+            condition: "default",
+            tier: "tier-2",
+            summary: "default tier",
+            sourcePath: "tier.ts",
+          },
+        ],
         packProfiles: [
           {
             key: "donggri",
@@ -76,7 +84,18 @@ describe("CanonicalInspectorTab", () => {
       diagnostics: [],
     });
     apiMocks.getProjects.mockResolvedValue({
-      projects: [{ id: "p1", name: "Proj", project_path: "D:/p", core_goal: "goal", created_at: 1, updated_at: 1, last_used_at: 1, assignment_mode: "auto" }],
+      projects: [
+        {
+          id: "p1",
+          name: "Proj",
+          project_path: "D:/p",
+          core_goal: "goal",
+          created_at: 1,
+          updated_at: 1,
+          last_used_at: 1,
+          assignment_mode: "auto",
+        },
+      ],
       page: 1,
       page_size: 20,
       total: 1,

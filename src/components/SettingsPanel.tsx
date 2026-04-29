@@ -777,9 +777,7 @@ export default function SettingsPanel({
         <GatewaySettingsTab t={t} form={form} setForm={setForm} persistSettings={persistSettings} />
       )}
 
-      {tab === "organization" && (
-        <OrganizationDefaultsTab t={t} departments={departments} />
-      )}
+      {tab === "organization" && <OrganizationDefaultsTab t={t} departments={departments} />}
     </div>
   );
 }

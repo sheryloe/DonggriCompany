@@ -188,9 +188,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       career_stage: hasAgentCareerStageColumn ? row.career_stage : null,
       specialization_key: hasAgentSpecializationKeyColumn ? row.specialization_key : null,
       authority_level: hasAgentAuthorityLevelColumn ? row.authority_level : null,
-      execution_capability_profile: hasAgentExecutionCapabilityProfileColumn
-        ? row.execution_capability_profile
-        : null,
+      execution_capability_profile: hasAgentExecutionCapabilityProfileColumn ? row.execution_capability_profile : null,
       workflow_profile: row.workflow_profile,
     });
     if (canonicalIdentity.canonical_identity_source === "derived" && row.id) {
@@ -525,7 +523,11 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       if ("career_stage" in body && body.career_stage !== null && typeof body.career_stage !== "string") {
         return res.status(400).json({ error: "invalid_career_stage" });
       }
-      if ("specialization_key" in body && body.specialization_key !== null && typeof body.specialization_key !== "string") {
+      if (
+        "specialization_key" in body &&
+        body.specialization_key !== null &&
+        typeof body.specialization_key !== "string"
+      ) {
         return res.status(400).json({ error: "invalid_specialization_key" });
       }
       if (
@@ -972,7 +974,11 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             ? existing.specialization_key
             : null,
       authority_level:
-        "authority_level" in body ? body.authority_level : hasAgentAuthorityLevelColumn ? existing.authority_level : null,
+        "authority_level" in body
+          ? body.authority_level
+          : hasAgentAuthorityLevelColumn
+            ? existing.authority_level
+            : null,
       execution_capability_profile:
         "execution_capability_profile" in body
           ? body.execution_capability_profile
@@ -981,7 +987,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
             : null,
       workflow_profile:
         "workflow_profile" in body
-          ? parsedWorkflowProfileForCanonical ?? body.workflow_profile
+          ? (parsedWorkflowProfileForCanonical ?? body.workflow_profile)
           : existing.workflow_profile,
     });
     if (hasAgentFamilyColumn) body.family = canonicalIdentity.family;

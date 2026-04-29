@@ -67,7 +67,8 @@ export function buildCanonicalActorLabel(
   lang: Lang,
   departmentName?: string | null,
 ): string {
-  const displayName = lang === "ko" ? normalizeText(agent.name_ko) || normalizeText(agent.name) : normalizeText(agent.name);
+  const displayName =
+    lang === "ko" ? normalizeText(agent.name_ko) || normalizeText(agent.name) : normalizeText(agent.name);
   const capabilityLabel = buildCanonicalCapabilityLabel(agent, lang);
   const department = normalizeText(departmentName);
   if (lang === "ko") {

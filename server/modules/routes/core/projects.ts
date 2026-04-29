@@ -639,9 +639,7 @@ export function registerProjectRoutes({
       const state = applyProjectArtifactPatch({
         projectId: project.id,
         projectPath: project.project_path,
-        actor:
-          (typeof body.actor === "string" && body.actor.trim()) ||
-          "api.project.artifact-apply",
+        actor: (typeof body.actor === "string" && body.actor.trim()) || "api.project.artifact-apply",
         note: typeof body.note === "string" ? body.note : null,
         packProfile:
           (typeof body.packProfile === "string" && body.packProfile.trim()) ||

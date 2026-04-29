@@ -319,7 +319,9 @@ export function handleReviewRoundDecisionReply(input: ReviewRoundReplyInput): bo
           [
             `レビューラウンド ${reviewRound} 意思決定: ${selectedAction === "apply_all_feedback" ? "全フィードバック反映" : "選択フィードバック反映"}`,
           ],
-          [`评审轮次 ${reviewRound} 决策：${selectedAction === "apply_all_feedback" ? "全部反馈采纳" : "选择反馈采纳"}`],
+          [
+            `评审轮次 ${reviewRound} 决策：${selectedAction === "apply_all_feedback" ? "全部反馈采纳" : "选择反馈采纳"}`,
+          ],
         ),
         lang,
       ),

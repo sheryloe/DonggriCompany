@@ -110,13 +110,13 @@ export default function ChatComposer({
                 ? "border-indigo-500/50 focus-within:border-indigo-400"
                 : isTaskPreview
                   ? "border-blue-500/50 focus-within:border-blue-400"
-                : isAnnouncementMode
-                  ? "border-yellow-500/50 focus-within:border-yellow-400"
-                  : mode === "task"
-                    ? "border-blue-500/50 focus-within:border-blue-400"
-                    : mode === "report"
-                      ? "border-emerald-500/50 focus-within:border-emerald-400"
-                      : "border-gray-600 focus-within:border-blue-500"
+                  : isAnnouncementMode
+                    ? "border-yellow-500/50 focus-within:border-yellow-400"
+                    : mode === "task"
+                      ? "border-blue-500/50 focus-within:border-blue-400"
+                      : mode === "report"
+                        ? "border-emerald-500/50 focus-within:border-emerald-400"
+                        : "border-gray-600 focus-within:border-blue-500"
           }`}
         >
           <textarea
@@ -158,13 +158,13 @@ export default function ChatComposer({
                     ? "bg-indigo-600 text-white hover:bg-indigo-500"
                     : isTaskPreview
                       ? "bg-blue-600 text-white hover:bg-blue-500"
-                    : isAnnouncementMode
-                      ? "bg-yellow-500 text-gray-900 hover:bg-yellow-400"
-                      : mode === "task"
-                        ? "bg-blue-600 text-white hover:bg-blue-500"
-                        : mode === "report"
-                          ? "bg-emerald-600 text-white hover:bg-emerald-500"
-                          : "bg-blue-600 text-white hover:bg-blue-500"
+                      : isAnnouncementMode
+                        ? "bg-yellow-500 text-gray-900 hover:bg-yellow-400"
+                        : mode === "task"
+                          ? "bg-blue-600 text-white hover:bg-blue-500"
+                          : mode === "report"
+                            ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                            : "bg-blue-600 text-white hover:bg-blue-500"
                 : "cursor-not-allowed bg-gray-700 text-gray-600"
             }`}
             aria-label={tr("전송", "Send")}

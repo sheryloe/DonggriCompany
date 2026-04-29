@@ -59,9 +59,9 @@ describe("session review tools policy pinning", () => {
     } as never);
 
     const session = tools.ensureTaskExecutionSession("task-1", "agent-1", "claude");
-    const taskRow = db.prepare("SELECT policy_version, resolved_execution_policy_json FROM tasks WHERE id = ?").get("task-1") as
-      | { policy_version?: string | null; resolved_execution_policy_json?: string | null }
-      | undefined;
+    const taskRow = db
+      .prepare("SELECT policy_version, resolved_execution_policy_json FROM tasks WHERE id = ?")
+      .get("task-1") as { policy_version?: string | null; resolved_execution_policy_json?: string | null } | undefined;
 
     expect(session.policyVersion).toBeTruthy();
     expect(session.policySnapshotHash).toBe(getCanonicalSnapshotByVersion(session.policyVersion)?.policy.hash ?? null);

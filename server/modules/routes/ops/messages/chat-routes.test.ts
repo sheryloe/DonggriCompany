@@ -136,23 +136,30 @@ describe("chat-routes project_id persistence and filtering", () => {
     const { app, db } = await createHarness();
 
     try {
-      await request(app).post("/api/messages").send({
-        sender_type: "ceo",
-        receiver_type: "all",
-        content: "hello-a",
-        project_id: "project-a",
-      }).expect(200);
+      await request(app)
+        .post("/api/messages")
+        .send({
+          sender_type: "ceo",
+          receiver_type: "all",
+          content: "hello-a",
+          project_id: "project-a",
+        })
+        .expect(200);
 
-      await request(app).post("/api/messages").send({
-        sender_type: "ceo",
-        receiver_type: "all",
-        content: "hello-b",
-        project_id: "project-b",
-      }).expect(200);
+      await request(app)
+        .post("/api/messages")
+        .send({
+          sender_type: "ceo",
+          receiver_type: "all",
+          content: "hello-b",
+          project_id: "project-b",
+        })
+        .expect(200);
 
-      const saved = db
-        .prepare("SELECT content, project_id FROM messages ORDER BY created_at ASC")
-        .all() as Array<{ content: string; project_id: string | null }>;
+      const saved = db.prepare("SELECT content, project_id FROM messages ORDER BY created_at ASC").all() as Array<{
+        content: string;
+        project_id: string | null;
+      }>;
       expect(saved).toEqual([
         { content: "hello-a", project_id: "project-a" },
         { content: "hello-b", project_id: "project-b" },
@@ -173,12 +180,15 @@ describe("chat-routes project_id persistence and filtering", () => {
     const { app, db, broadcasts } = await createHarness();
 
     try {
-      await request(app).post("/api/messages").send({
-        sender_type: "ceo",
-        receiver_type: "all",
-        content: "broadcast-project",
-        project_id: "project-a",
-      }).expect(200);
+      await request(app)
+        .post("/api/messages")
+        .send({
+          sender_type: "ceo",
+          receiver_type: "all",
+          content: "broadcast-project",
+          project_id: "project-a",
+        })
+        .expect(200);
 
       const event = broadcasts.find((item) => item.event === "new_message");
       expect(event).toBeDefined();

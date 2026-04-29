@@ -66,6 +66,28 @@ function mapMessengerChannelsTokens(
         return nextSession;
       });
     }
+    for (const departmentBotsKey of ["departmentBots", "department_bots"]) {
+      const rawDepartmentBots = nextChannelConfig[departmentBotsKey];
+      if (!isRecord(rawDepartmentBots)) continue;
+      const nextDepartmentBots: Record<string, unknown> = {};
+      for (const [departmentId, rawBot] of Object.entries(rawDepartmentBots)) {
+        if (!isRecord(rawBot)) {
+          nextDepartmentBots[departmentId] = rawBot;
+          continue;
+        }
+        if (!hasOwn(rawBot, "token")) {
+          nextDepartmentBots[departmentId] = rawBot;
+          continue;
+        }
+        const nextBot: Record<string, unknown> = { ...rawBot };
+        nextBot.token =
+          mode === "encrypt"
+            ? encryptMessengerToken(nextBot.token)
+            : decryptMessengerToken(nextBot.token, onDecryptError);
+        nextDepartmentBots[departmentId] = nextBot;
+      }
+      nextChannelConfig[departmentBotsKey] = nextDepartmentBots;
+    }
     nextChannels[channel] = nextChannelConfig;
   }
 

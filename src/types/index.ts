@@ -587,10 +587,17 @@ export interface MessengerSessionConfig {
   workflowPackKey?: WorkflowPackKey;
 }
 
+export interface MessengerDepartmentBotConfig {
+  token: string;
+  targetId?: string;
+  enabled?: boolean;
+}
+
 export interface MessengerChannelConfig {
   token: string;
   sessions: MessengerSessionConfig[];
   receiveEnabled?: boolean;
+  departmentBots?: Record<string, MessengerDepartmentBotConfig>;
 }
 
 export type MessengerChannelsConfig = Record<MessengerChannelType, MessengerChannelConfig>;

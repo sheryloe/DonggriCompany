@@ -39,11 +39,13 @@ export function createSessionReviewTools(deps: CreateSessionReviewToolsDeps) {
 
   function ensureTaskExecutionSession(taskId: string, agentId: string, provider: string): any {
     const now = nowMs();
-    const taskRow = db.prepare(
-      `SELECT id, title, description, project_path, workflow_pack_key, policy_version, resolved_execution_policy_json
+    const taskRow = db
+      .prepare(
+        `SELECT id, title, description, project_path, workflow_pack_key, policy_version, resolved_execution_policy_json
        FROM tasks
        WHERE id = ?`,
-    ).get(taskId) as
+      )
+      .get(taskId) as
       | {
           id: string;
           title: string | null;
@@ -114,7 +116,12 @@ export function createSessionReviewTools(deps: CreateSessionReviewToolsDeps) {
       policyVersion,
     });
     const existing = taskExecutionSessions.get(taskId);
-    if (existing && existing.agentId === agentId && existing.provider === provider && existing.policyVersion === policyVersion) {
+    if (
+      existing &&
+      existing.agentId === agentId &&
+      existing.provider === provider &&
+      existing.policyVersion === policyVersion
+    ) {
       existing.lastTouchedAt = now;
       existing.policySnapshotHash = pinnedSnapshot.policy.hash;
       existing.policyResolutionJson = JSON.stringify(policyResolution);

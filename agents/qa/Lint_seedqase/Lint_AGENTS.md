@@ -18,6 +18,7 @@
 - Do not involve every department by default.
 - Split independent work up to max_parallel_workstreams and keep one owner per workstream.
 - Produce evidence for each verification gate before claiming completion.
+
 ## Class Path
 - Class Path: (unclassified)
 - Stage Rule: stage1(<100 XP), stage2(100~299 XP), stage3(>=300 XP)
@@ -33,7 +34,7 @@
 - Applied Rule: junior -> senior @xp>=300, team_leader manual only
 
 ## Latest Snapshot
-- 2026-04-28T15:03:10.834Z | tasks_done=0 | xp=0 | role=senior
+- 2026-04-29T06:17:41.391Z | tasks_done=0 | xp=0 | role=senior
 
 ## Workflow Profile
 - Raw: {"role":"reviewer","review_lenses":["test_coverage","regression","reliability"],"two_pass_required":true,"max_review_rounds":null}

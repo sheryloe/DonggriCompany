@@ -270,7 +270,8 @@ export function resolveGoalCommandForTaskCreate(input: {
   }
 
   const titleSlash = parseGoalCommandSlash(input.title);
-  if (titleSlash.error) return { preset: null, workflowMetaJson: null, workflowMeta: existingMeta, error: titleSlash.error };
+  if (titleSlash.error)
+    return { preset: null, workflowMetaJson: null, workflowMeta: existingMeta, error: titleSlash.error };
 
   const descriptionSlash = parseGoalCommandSlash(input.description);
   if (descriptionSlash.error) {

@@ -105,7 +105,6 @@ function createDeps(db: DatabaseSync, logsDir = "/tmp") {
 }
 
 describe("run complete handler - video preprod review transition", () => {
-
   it("overwrites stale review_consensus hard-block state when entering review", () => {
     const db = createDb();
     try {
@@ -175,7 +174,7 @@ describe("run complete handler - video preprod review transition", () => {
           INSERT INTO subtasks (id, task_id, status, target_department_id, delegated_task_id, cli_tool_use_id)
           VALUES ('sub-1', ?, 'pending', 'dev', NULL, NULL)
         `,
-          ).run(taskId);
+      ).run(taskId);
       db.prepare(
         `
           INSERT INTO agents (id, name, name_ko, status, current_task_id, department_id, stats_tasks_done, stats_xp)
@@ -201,7 +200,7 @@ describe("run complete handler - video preprod review transition", () => {
         blocked: false,
         state: "awaiting_review",
       });
-      expect((meta.review_consent.blocked_by as string[])).toEqual([]);
+      expect(meta.review_consent.blocked_by as string[]).toEqual([]);
       expect(typeof meta.review_consent.entered_review_at).toBe("number");
       expect(deps.appendTaskLog).toHaveBeenCalledWith(
         taskId,
@@ -266,7 +265,13 @@ describe("run complete handler - video preprod review transition", () => {
           )
           VALUES (?, ?, ?, 'in_progress', 'video_preprod', 'parent-task', ?, 'dev', 'project-1', ?, 1)
         `,
-      ).run(taskId, "[VIDEO_FINAL_RENDER] final render validation", "Should fail when remotion engine not allowed", "video-preprod-seed-2", "/tmp/project");
+      ).run(
+        taskId,
+        "[VIDEO_FINAL_RENDER] final render validation",
+        "Should fail when remotion engine not allowed",
+        "video-preprod-seed-2",
+        "/tmp/project",
+      );
       db.prepare(
         `
           INSERT INTO agents (id, name, name_ko, status, current_task_id, department_id, stats_tasks_done, stats_xp)
@@ -317,7 +322,13 @@ describe("run complete handler - video preprod review transition", () => {
           )
           VALUES (?, ?, ?, 'in_progress', 'video_preprod', 'parent-task', ?, 'dev', 'project-1', ?, 1)
         `,
-      ).run(taskId, "[VIDEO_FINAL_RENDER] final render validation", "Should recover with thinking stream", "video-preprod-seed-2", projectPath);
+      ).run(
+        taskId,
+        "[VIDEO_FINAL_RENDER] final render validation",
+        "Should recover with thinking stream",
+        "video-preprod-seed-2",
+        projectPath,
+      );
       db.prepare(
         `
           INSERT INTO agents (id, name, name_ko, status, current_task_id, department_id, stats_tasks_done, stats_xp)
@@ -384,18 +395,20 @@ describe("run complete handler - video preprod review transition", () => {
           )
           VALUES (?, ?, ?, 'in_progress', 'video_preprod', 'parent-task', ?, 'dev', 'project-1', ?, 1)
         `,
-      ).run(taskId, "[VIDEO_FINAL_RENDER] final render validation", "Negated remotion mention must fail", "video-preprod-seed-2", projectPath);
+      ).run(
+        taskId,
+        "[VIDEO_FINAL_RENDER] final render validation",
+        "Negated remotion mention must fail",
+        "video-preprod-seed-2",
+        projectPath,
+      );
       db.prepare(
         `
           INSERT INTO agents (id, name, name_ko, status, current_task_id, department_id, stats_tasks_done, stats_xp)
           VALUES ('video-preprod-seed-2', 'Liam', '리암', 'working', ?, 'dev', 0, 0)
         `,
       ).run(taskId);
-      fs.writeFileSync(
-        path.join(logsDir, `${taskId}.log`),
-        "policy: do not use remotion for this context",
-        "utf8",
-      );
+      fs.writeFileSync(path.join(logsDir, `${taskId}.log`), "policy: do not use remotion for this context", "utf8");
       fs.mkdirSync(path.join(worktreeDir, "video_output"), { recursive: true });
       fs.writeFileSync(path.join(worktreeDir, "video_output", "final.mp4"), "rendered-video", "utf8");
 
@@ -452,7 +465,13 @@ describe("run complete handler - video preprod review transition", () => {
           )
           VALUES (?, ?, ?, 'in_progress', 'video_preprod', 'parent-task', ?, 'dev', 'project-1', ?, 1)
         `,
-      ).run(taskId, "[VIDEO_FINAL_RENDER] final render recovery", "Recoverable final render", "video-preprod-seed-2", projectPath);
+      ).run(
+        taskId,
+        "[VIDEO_FINAL_RENDER] final render recovery",
+        "Recoverable final render",
+        "video-preprod-seed-2",
+        projectPath,
+      );
       db.prepare(
         `
           INSERT INTO agents (id, name, name_ko, status, current_task_id, department_id, stats_tasks_done, stats_xp)

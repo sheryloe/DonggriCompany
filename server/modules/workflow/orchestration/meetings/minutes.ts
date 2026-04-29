@@ -94,7 +94,9 @@ export function createMeetingMinutesTools(deps: MeetingMinutesDeps) {
       | { policy_version?: string | null }
       | undefined;
     const policyVersion = String(taskPolicyRow?.policy_version ?? "").trim() || null;
-    const policySnapshotHash = policyVersion ? (getCanonicalSnapshotByVersion(policyVersion)?.policy.hash ?? null) : null;
+    const policySnapshotHash = policyVersion
+      ? (getCanonicalSnapshotByVersion(policyVersion)?.policy.hash ?? null)
+      : null;
     const columns = ["id", "task_id", "meeting_type", "round", "title", "status"];
     const values: unknown[] = [meetingId, taskId, meetingType, round, title, "in_progress"];
     if (hasMeetingPolicyVersionColumn) {
@@ -107,9 +109,9 @@ export function createMeetingMinutesTools(deps: MeetingMinutesDeps) {
     }
     columns.push("started_at", "created_at");
     values.push(t, t);
-    db.prepare(
-      `INSERT INTO meeting_minutes (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
-    ).run(...values);
+    db.prepare(`INSERT INTO meeting_minutes (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`).run(
+      ...values,
+    );
     if (policyVersion) {
       appendTaskLog(taskId, "system", `policy_snapshot_bound_to_meeting (${policyVersion})`);
       console.info("[workflow] policy_snapshot_bound_to_meeting", { taskId, meetingId, policyVersion });

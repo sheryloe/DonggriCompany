@@ -148,7 +148,9 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
           setCoreGoal(res.project.core_goal);
           setAssignmentMode(res.project.assignment_mode || "auto");
           setSelectedAgentIds(new Set(res.project.assigned_agent_ids || []));
-          setStaffingPolicyJson(res.project.staffing_policy_json ? JSON.stringify(res.project.staffing_policy_json, null, 2) : "");
+          setStaffingPolicyJson(
+            res.project.staffing_policy_json ? JSON.stringify(res.project.staffing_policy_json, null, 2) : "",
+          );
         }
       })
       .catch((err) => {
@@ -257,7 +259,9 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     setCoreGoal(viewedProject.core_goal);
     setAssignmentMode(viewedProject.assignment_mode || "auto");
     setSelectedAgentIds(new Set(viewedProject.assigned_agent_ids || []));
-    setStaffingPolicyJson(viewedProject.staffing_policy_json ? JSON.stringify(viewedProject.staffing_policy_json, null, 2) : "");
+    setStaffingPolicyJson(
+      viewedProject.staffing_policy_json ? JSON.stringify(viewedProject.staffing_policy_json, null, 2) : "",
+    );
     setManualAssignmentWarning(null);
     setGithubConnectReason(null);
     setPendingGitHubSave(null);
@@ -500,7 +504,11 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
                       setName(viewedProject.name);
                       setProjectPath(viewedProject.project_path);
                       setCoreGoal(viewedProject.core_goal);
-                      setStaffingPolicyJson(viewedProject.staffing_policy_json ? JSON.stringify(viewedProject.staffing_policy_json, null, 2) : "");
+                      setStaffingPolicyJson(
+                        viewedProject.staffing_policy_json
+                          ? JSON.stringify(viewedProject.staffing_policy_json, null, 2)
+                          : "",
+                      );
                     }
                   }}
                   onStartEditSelected={startEditSelected}

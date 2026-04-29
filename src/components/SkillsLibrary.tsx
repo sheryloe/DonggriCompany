@@ -185,9 +185,7 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
         }}
       />
 
-      <div className="text-center text-xs text-slate-600 py-4">
-        {skillText(t, "footer.sources")}
-      </div>
+      <div className="text-center text-xs text-slate-600 py-4">{skillText(t, "footer.sources")}</div>
     </div>
   );
 }

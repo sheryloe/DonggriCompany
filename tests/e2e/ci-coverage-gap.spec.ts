@@ -240,7 +240,7 @@ test.describe("CI coverage gap expansion", () => {
     const leaderName = `ci-cov-leader-${seed}`;
     const memberName = `ci-cov-member-${seed}`;
     const projectPath = path.resolve("test-results", "ci-e2e", "coverage", seed, "main");
-    const directiveTitle = `ci-directive-${seed} @${deptA}`;
+    const directiveTitle = `implement ci-directive-${seed} @${deptA}`;
 
     try {
       await establishApiSession(request);
@@ -516,7 +516,7 @@ test.describe("CI coverage gap expansion", () => {
       const createTaskRes = await request.post("/api/tasks", {
         data: {
           title: `ci-cov-ws-task-${seed}`,
-          department_id: "planning",
+          department_id: "planning-architecture",
           status: "inbox",
         },
       });

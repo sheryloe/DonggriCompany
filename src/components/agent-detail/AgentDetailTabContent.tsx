@@ -54,7 +54,12 @@ function infoField(label: string, value: string | number | null | undefined) {
 function canonicalSourceLabel(value: string | null | undefined, language: UiLanguage): string {
   const normalized = String(value ?? "derived").trim();
   if (language !== "ko") return normalized || "-";
-  const labels: Record<string, string> = { stored: "저장됨", derived: "파생됨", default: "기본값", canonical: "표준 규칙" };
+  const labels: Record<string, string> = {
+    stored: "저장됨",
+    derived: "파생됨",
+    default: "기본값",
+    canonical: "표준 규칙",
+  };
   return (labels[normalized] ?? normalized) || "-";
 }
 
@@ -99,10 +104,26 @@ export default function AgentDetailTabContent({
     : t({ ko: "설정 없음", en: "Not set", ja: "Not set", zh: "Not set" });
   const executionCapability = String(agent.execution_capability_profile ?? "").trim() || "-";
   const capabilityBars = [
-    { key: "execution", label: t({ ko: "실행", en: "Execution", ja: "Execution", zh: "Execution" }), value: profile.capabilities.execution },
-    { key: "architecture", label: t({ ko: "아키텍처", en: "Architecture", ja: "Architecture", zh: "Architecture" }), value: profile.capabilities.architecture },
-    { key: "review", label: t({ ko: "리뷰", en: "Review", ja: "Review", zh: "Review" }), value: profile.capabilities.review },
-    { key: "leadership", label: t({ ko: "리더십", en: "Leadership", ja: "Leadership", zh: "Leadership" }), value: profile.capabilities.leadership },
+    {
+      key: "execution",
+      label: t({ ko: "실행", en: "Execution", ja: "Execution", zh: "Execution" }),
+      value: profile.capabilities.execution,
+    },
+    {
+      key: "architecture",
+      label: t({ ko: "아키텍처", en: "Architecture", ja: "Architecture", zh: "Architecture" }),
+      value: profile.capabilities.architecture,
+    },
+    {
+      key: "review",
+      label: t({ ko: "리뷰", en: "Review", ja: "Review", zh: "Review" }),
+      value: profile.capabilities.review,
+    },
+    {
+      key: "leadership",
+      label: t({ ko: "리더십", en: "Leadership", ja: "Leadership", zh: "Leadership" }),
+      value: profile.capabilities.leadership,
+    },
   ] as const;
 
   if (tab === "info") {
@@ -114,11 +135,25 @@ export default function AgentDetailTabContent({
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             {infoField(t({ ko: "직군", en: "Family", ja: "Family", zh: "Family" }), canonicalFamily)}
-            {infoField(t({ ko: "경력 단계", en: "Career Stage", ja: "Career Stage", zh: "Career Stage" }), canonicalStage)}
-            {infoField(t({ ko: "전문화", en: "Specialization", ja: "Specialization", zh: "Specialization" }), agent.specialization_key ?? "-")}
-            {infoField(t({ ko: "권한 레벨", en: "Authority Level", ja: "Authority Level", zh: "Authority Level" }), agent.authority_level ?? "-")}
             {infoField(
-              t({ ko: "실행 역량", en: "Execution Capability", ja: "Execution Capability", zh: "Execution Capability" }),
+              t({ ko: "경력 단계", en: "Career Stage", ja: "Career Stage", zh: "Career Stage" }),
+              canonicalStage,
+            )}
+            {infoField(
+              t({ ko: "전문화", en: "Specialization", ja: "Specialization", zh: "Specialization" }),
+              agent.specialization_key ?? "-",
+            )}
+            {infoField(
+              t({ ko: "권한 레벨", en: "Authority Level", ja: "Authority Level", zh: "Authority Level" }),
+              agent.authority_level ?? "-",
+            )}
+            {infoField(
+              t({
+                ko: "실행 역량",
+                en: "Execution Capability",
+                ja: "Execution Capability",
+                zh: "Execution Capability",
+              }),
               agent.execution_capability_profile ?? "-",
             )}
             {infoField(t({ ko: "출처", en: "Source", ja: "Source", zh: "Source" }), canonicalSource)}
@@ -127,10 +162,18 @@ export default function AgentDetailTabContent({
 
         <div className="rounded-lg bg-slate-700/30 p-3">
           <div className="mb-1 text-xs text-slate-500">
-            {t({ ko: "레거시 호환 정보", en: "Legacy Compatibility", ja: "Legacy Compatibility", zh: "Legacy Compatibility" })}
+            {t({
+              ko: "레거시 호환 정보",
+              en: "Legacy Compatibility",
+              ja: "Legacy Compatibility",
+              zh: "Legacy Compatibility",
+            })}
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            {infoField(t({ ko: "레거시 역할", en: "Legacy Role", ja: "Legacy Role", zh: "Legacy Role" }), getRoleDisplayLabel(agent.role, language))}
+            {infoField(
+              t({ ko: "레거시 역할", en: "Legacy Role", ja: "Legacy Role", zh: "Legacy Role" }),
+              getRoleDisplayLabel(agent.role, language),
+            )}
             {infoField(
               t({
                 ko: "워크플로우 역량(호환)",
@@ -149,12 +192,18 @@ export default function AgentDetailTabContent({
               }),
               workflowRoleMirror,
             )}
-            {infoField(t({ ko: "적용 티어", en: "Applied Tier", ja: "Applied Tier", zh: "Applied Tier" }), tierLabel(profile.growth_tier, language))}
+            {infoField(
+              t({ ko: "적용 티어", en: "Applied Tier", ja: "Applied Tier", zh: "Applied Tier" }),
+              tierLabel(profile.growth_tier, language),
+            )}
             {infoField(
               t({ ko: "추천 티어", en: "Recommended Tier", ja: "Recommended Tier", zh: "Recommended Tier" }),
               tierLabel(recommendedTier, language),
             )}
-            {infoField(t({ ko: "클래스 경로", en: "Class Path", ja: "Class Path", zh: "Class Path" }), classPath || "-")}
+            {infoField(
+              t({ ko: "클래스 경로", en: "Class Path", ja: "Class Path", zh: "Class Path" }),
+              classPath || "-",
+            )}
           </div>
           <div className="mt-2 text-sm text-slate-300">{capabilitySummary}</div>
           {specialtiesText ? <div className="mt-2 text-xs text-slate-400">{specialtiesText}</div> : null}
@@ -182,7 +231,12 @@ export default function AgentDetailTabContent({
 
         <div className="rounded-lg bg-slate-700/30 p-3">
           <div className="mb-1 text-xs text-slate-500">
-            {t({ ko: "사용자 프롬프트 보정", en: "Custom Prompt Override", ja: "Custom Prompt Override", zh: "Custom Prompt Override" })}
+            {t({
+              ko: "사용자 프롬프트 보정",
+              en: "Custom Prompt Override",
+              ja: "Custom Prompt Override",
+              zh: "Custom Prompt Override",
+            })}
           </div>
           <div className="text-sm text-slate-300">
             {overrideText || t({ ko: "설정 없음", en: "Not set", ja: "Not set", zh: "Not set" })}
@@ -192,15 +246,21 @@ export default function AgentDetailTabContent({
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-lg bg-slate-700/30 p-3 text-center">
             <div className="text-lg font-bold text-white">{agent.stats_tasks_done}</div>
-            <div className="text-[10px] text-slate-500">{t({ ko: "완료 작업", en: "Completed", ja: "Completed", zh: "Completed" })}</div>
+            <div className="text-[10px] text-slate-500">
+              {t({ ko: "완료 작업", en: "Completed", ja: "Completed", zh: "Completed" })}
+            </div>
           </div>
           <div className="rounded-lg bg-slate-700/30 p-3 text-center">
             <div className="text-lg font-bold text-white">{xpLevel}</div>
             <div className="text-[10px] text-slate-500">{t({ ko: "레벨", en: "Level", ja: "Level", zh: "Level" })}</div>
           </div>
           <div className="rounded-lg bg-slate-700/30 p-3 text-center">
-            <div className="text-lg font-bold text-white">{agentSubAgents.filter((subAgent) => subAgent.status === "working").length}</div>
-            <div className="text-[10px] text-slate-500">{t({ ko: "서브에이전트", en: "Sub-agents", ja: "Sub-agents", zh: "Sub-agents" })}</div>
+            <div className="text-lg font-bold text-white">
+              {agentSubAgents.filter((subAgent) => subAgent.status === "working").length}
+            </div>
+            <div className="text-[10px] text-slate-500">
+              {t({ ko: "서브에이전트", en: "Sub-agents", ja: "Sub-agents", zh: "Sub-agents" })}
+            </div>
           </div>
         </div>
 
@@ -236,7 +296,12 @@ export default function AgentDetailTabContent({
       <div className="space-y-2">
         {agentTasks.length === 0 ? (
           <div className="py-8 text-center text-sm text-slate-500">
-            {t({ ko: "배정된 작업이 없습니다", en: "No assigned tasks", ja: "No assigned tasks", zh: "No assigned tasks" })}
+            {t({
+              ko: "배정된 작업이 없습니다",
+              en: "No assigned tasks",
+              ja: "No assigned tasks",
+              zh: "No assigned tasks",
+            })}
           </div>
         ) : (
           agentTasks.map((taskItem) => {
@@ -246,10 +311,17 @@ export default function AgentDetailTabContent({
             const subDone = taskItem.subtask_done ?? taskSubtasks.filter((subtask) => subtask.status === "done").length;
             return (
               <div key={taskItem.id} className="rounded-lg bg-slate-700/30 p-3">
-                <button onClick={() => setExpandedTaskId(isExpanded ? null : taskItem.id)} className="flex w-full items-start gap-3 text-left">
+                <button
+                  onClick={() => setExpandedTaskId(isExpanded ? null : taskItem.id)}
+                  className="flex w-full items-start gap-3 text-left"
+                >
                   <div
                     className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
-                      taskItem.status === "done" ? "bg-green-500" : taskItem.status === "in_progress" ? "bg-blue-500" : "bg-slate-500"
+                      taskItem.status === "done"
+                        ? "bg-green-500"
+                        : taskItem.status === "in_progress"
+                          ? "bg-blue-500"
+                          : "bg-slate-500"
                     }`}
                   />
                   <div className="min-w-0 flex-1">
@@ -298,7 +370,10 @@ export default function AgentDetailTabContent({
                             </span>
                           ) : null}
                           {subtask.status === "blocked" && subtask.blocked_reason ? (
-                            <span className="max-w-[80px] truncate text-[10px] text-red-400" title={subtask.blocked_reason}>
+                            <span
+                              className="max-w-[80px] truncate text-[10px] text-red-400"
+                              title={subtask.blocked_reason}
+                            >
                               {subtask.blocked_reason}
                             </span>
                           ) : null}
@@ -319,7 +394,12 @@ export default function AgentDetailTabContent({
     <div className="space-y-2">
       {agentSubAgents.length === 0 ? (
         <div className="py-8 text-center text-sm text-slate-500">
-          {t({ ko: "현재 서브 에이전트가 없습니다", en: "No sub-agents currently", ja: "No sub-agents currently", zh: "No sub-agents currently" })}
+          {t({
+            ko: "현재 서브 에이전트가 없습니다",
+            en: "No sub-agents currently",
+            ja: "No sub-agents currently",
+            zh: "No sub-agents currently",
+          })}
           <div className="mt-1 text-xs text-slate-600">
             {t({
               ko: "병렬 처리 중에 자동으로 생성됩니다.",

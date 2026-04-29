@@ -145,16 +145,14 @@ describe("review consensus authority hard block", () => {
 
   it("blocks review meeting when quorum is not met", async () => {
     db = createMemoryDb();
-    db.prepare("INSERT INTO tasks (id, description, project_path, workflow_pack_key, status) VALUES (?, ?, ?, ?, ?)").run(
-      "task-1",
-      "Review task",
-      "/repo",
-      "video_preprod",
-      "review",
-    );
+    db.prepare(
+      "INSERT INTO tasks (id, description, project_path, workflow_pack_key, status) VALUES (?, ?, ?, ?, ?)",
+    ).run("task-1", "Review task", "/repo", "video_preprod", "review");
 
     const { tools, onApproved, onBlocked, notifyCeo, appendTaskLog } = makeTools(db, {
-      getTaskReviewLeaders: () => [{ id: "lead-1", name: "Lead", role: "team_leader", department_id: "planning", status: "idle" }],
+      getTaskReviewLeaders: () => [
+        { id: "lead-1", name: "Lead", role: "team_leader", department_id: "planning", status: "idle" },
+      ],
     });
 
     tools.startReviewConsensusMeeting("task-1", "Need consensus", "planning", onApproved, onBlocked);
@@ -169,13 +167,9 @@ describe("review consensus authority hard block", () => {
 
   it("blocks review meeting when canonical authority is not satisfied", async () => {
     db = createMemoryDb();
-    db.prepare("INSERT INTO tasks (id, description, project_path, workflow_pack_key, status) VALUES (?, ?, ?, ?, ?)").run(
-      "task-2",
-      "Release task",
-      "/repo",
-      "video_preprod",
-      "review",
-    );
+    db.prepare(
+      "INSERT INTO tasks (id, description, project_path, workflow_pack_key, status) VALUES (?, ?, ?, ?, ?)",
+    ).run("task-2", "Release task", "/repo", "video_preprod", "review");
 
     const { tools, onApproved, onBlocked, notifyCeo, appendTaskLog } = makeTools(db, {
       getTaskReviewLeaders: () => [
@@ -187,11 +181,7 @@ describe("review consensus authority hard block", () => {
     tools.startReviewConsensusMeeting("task-2", "Need consensus", "planning", onApproved, onBlocked);
     await flush();
 
-    expect(appendTaskLog).toHaveBeenCalledWith(
-      "task-2",
-      "error",
-      expect.stringContaining("missing_reviewer_senior"),
-    );
+    expect(appendTaskLog).toHaveBeenCalledWith("task-2", "error", expect.stringContaining("missing_reviewer_senior"));
     const blockedBy = onBlocked.mock.calls[0]?.[0] as string[];
     expect([...blockedBy].sort()).toEqual(
       ["missing_orchestrator_team_lead", "missing_qa_senior", "missing_reviewer_senior"].sort(),
@@ -203,18 +193,16 @@ describe("review consensus authority hard block", () => {
 
   it("blocks review meeting when approval gate is hard-blocked", async () => {
     db = createMemoryDb();
-    db
-      .prepare(
-        "INSERT INTO tasks (id, description, project_path, workflow_pack_key, status, approval_gate_state_json) VALUES (?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        "task-3",
-        "Release task",
-        "/repo",
-        "video_preprod",
-        "review",
-        JSON.stringify({ blocked: true, gates: ["human-approval-general", "artifact-health-block"] }),
-      );
+    db.prepare(
+      "INSERT INTO tasks (id, description, project_path, workflow_pack_key, status, approval_gate_state_json) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(
+      "task-3",
+      "Release task",
+      "/repo",
+      "video_preprod",
+      "review",
+      JSON.stringify({ blocked: true, gates: ["human-approval-general", "artifact-health-block"] }),
+    );
 
     const { tools, onApproved, onBlocked, notifyCeo, appendTaskLog } = makeTools(db, {
       getTaskReviewLeaders: () => [
@@ -245,11 +233,7 @@ describe("review consensus authority hard block", () => {
     tools.startReviewConsensusMeeting("task-3", "Need consensus", "planning", onApproved, onBlocked);
     await flush();
 
-    expect(appendTaskLog).toHaveBeenCalledWith(
-      "task-3",
-      "error",
-      expect.stringContaining("approval_gate_blocked"),
-    );
+    expect(appendTaskLog).toHaveBeenCalledWith("task-3", "error", expect.stringContaining("approval_gate_blocked"));
     const blockedBy = onBlocked.mock.calls[0]?.[0] as string[];
     expect([...blockedBy].sort()).toEqual(
       ["approval_gate_blocked", "approval_gate=artifact-health-block", "approval_gate=human-approval-general"].sort(),
@@ -261,13 +245,9 @@ describe("review consensus authority hard block", () => {
 
   it("does not hard-block when quorum, authority, and approval gates are all satisfied", async () => {
     db = createMemoryDb();
-    db.prepare("INSERT INTO tasks (id, description, project_path, workflow_pack_key, status) VALUES (?, ?, ?, ?, ?)").run(
-      "task-4",
-      "General implementation task",
-      "/repo",
-      "development",
-      "review",
-    );
+    db.prepare(
+      "INSERT INTO tasks (id, description, project_path, workflow_pack_key, status) VALUES (?, ?, ?, ?, ?)",
+    ).run("task-4", "General implementation task", "/repo", "development", "review");
 
     const { tools, onApproved, onBlocked, appendTaskLog } = makeTools(db, {
       getReviewRoundMode: () => "round2_final",

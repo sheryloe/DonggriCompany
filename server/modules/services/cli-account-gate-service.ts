@@ -177,7 +177,9 @@ export class CliAccountGateService {
     throw new CliAccountGateError(
       "cli_sync_failed",
       502,
-      reportErrors.length > 0 ? `codex_multi_auth_sync_failed:${reportErrors.join("|")}` : "codex_multi_auth_accounts_empty",
+      reportErrors.length > 0
+        ? `codex_multi_auth_sync_failed:${reportErrors.join("|")}`
+        : "codex_multi_auth_accounts_empty",
     );
   }
 
@@ -228,7 +230,10 @@ export class CliAccountGateService {
 
       const poolId = mappedIndex === 0 ? "codex-main" : `codex-main-${mappedIndex + 1}`;
       const fallbackLabel = mappedIndex === 0 ? "Codex Main" : `Codex Account ${mappedIndex + 1}`;
-      const preferredLabel = normalizeCodexLabel(forecast.label ?? accountMeta.accountLabel ?? accountMeta.email, fallbackLabel);
+      const preferredLabel = normalizeCodexLabel(
+        forecast.label ?? accountMeta.accountLabel ?? accountMeta.email,
+        fallbackLabel,
+      );
       this.ensureCodexPoolExists(poolId, preferredLabel, now);
 
       const verified = this.verifyPool("codex", poolId).pool;

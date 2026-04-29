@@ -24,7 +24,11 @@ function pickVariant(value: unknown): string {
   return String(value ?? "");
 }
 
-function seedCollaborationFixture(db: DatabaseSync, provider: ProviderCase["provider"], projectPath: string): SeededAgents {
+function seedCollaborationFixture(
+  db: DatabaseSync,
+  provider: ProviderCase["provider"],
+  projectPath: string,
+): SeededAgents {
   const safeProjectPath = projectPath.replace(/'/g, "''");
   db.exec(`
     INSERT INTO departments (id, name, name_ko, icon, color, sort_order)

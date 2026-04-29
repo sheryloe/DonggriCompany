@@ -40,9 +40,17 @@ type PersistedSession = {
   department_id?: string;
 };
 
+type PersistedDepartmentTelegramBot = {
+  token?: string;
+  targetId?: string;
+  enabled?: boolean;
+};
+
 type PersistedChannelConfig = {
   token?: string;
   sessions?: PersistedSession[];
+  departmentBots?: Record<string, PersistedDepartmentTelegramBot>;
+  department_bots?: Record<string, PersistedDepartmentTelegramBot>;
 };
 
 type PersistedMessengerChannels = Partial<Record<MessengerChannel, PersistedChannelConfig>>;
@@ -61,9 +69,22 @@ type MessengerSession = {
 type MessengerChannelConfig = {
   token: string;
   sessions: MessengerSession[];
+  departmentBots?: Record<string, DepartmentTelegramBotRoute>;
 };
 
 type MessengerRuntimeConfig = Record<MessengerChannel, MessengerChannelConfig>;
+
+type DepartmentTelegramBotRoute = {
+  token: string;
+  targetId: string;
+  enabled: boolean;
+};
+
+export type DepartmentTelegramSendResult = {
+  routed: "department_bot" | "global";
+  departmentId: string | null;
+  fallbackReason?: string;
+};
 
 export type MessengerRuntimeSession = {
   sessionKey: string;
@@ -83,6 +104,68 @@ export type DiscordDiscoverableChannel = {
   guildName: string;
   type: number;
 };
+
+const TELEGRAM_DEPARTMENT_BOT_ENV_MAP: Array<{
+  departmentId: string;
+  tokenEnv: string[];
+  targetEnv: string[];
+}> = [
+  {
+    departmentId: "pmo",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_PMO", "TELEGRAM_BOT_TOKEN_CEO_PMO", "TELEGRAM_BOT_TOKEN_PM"],
+    targetEnv: ["TELEGRAM_CHAT_ID_PMO", "TELEGRAM_CHAT_ID_CEO_PMO", "TELEGRAM_CHAT_ID_PM"],
+  },
+  {
+    departmentId: "planning-architecture",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_PLANNING", "TELEGRAM_BOT_TOKEN_ARCHITECTURE"],
+    targetEnv: ["TELEGRAM_CHAT_ID_PLANNING", "TELEGRAM_CHAT_ID_ARCHITECTURE"],
+  },
+  {
+    departmentId: "development",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_DEV", "TELEGRAM_BOT_TOKEN_DEVELOPMENT"],
+    targetEnv: ["TELEGRAM_CHAT_ID_DEV", "TELEGRAM_CHAT_ID_DEVELOPMENT"],
+  },
+  {
+    departmentId: "qa",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_QA"],
+    targetEnv: ["TELEGRAM_CHAT_ID_QA"],
+  },
+  {
+    departmentId: "ui-ux",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_DESIGN", "TELEGRAM_BOT_TOKEN_UI_UX"],
+    targetEnv: ["TELEGRAM_CHAT_ID_DESIGN", "TELEGRAM_CHAT_ID_UI_UX"],
+  },
+  {
+    departmentId: "cicd-repo",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_CICD_REPO", "TELEGRAM_BOT_TOKEN_DEVSECOPS"],
+    targetEnv: ["TELEGRAM_CHAT_ID_CICD_REPO", "TELEGRAM_CHAT_ID_DEVSECOPS"],
+  },
+  {
+    departmentId: "security-approval",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_SECURITY_APPROVAL", "TELEGRAM_BOT_TOKEN_DEVSECOPS"],
+    targetEnv: ["TELEGRAM_CHAT_ID_SECURITY_APPROVAL", "TELEGRAM_CHAT_ID_DEVSECOPS"],
+  },
+  {
+    departmentId: "management",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_MANAGEMENT", "TELEGRAM_BOT_TOKEN_OPERATIONS"],
+    targetEnv: ["TELEGRAM_CHAT_ID_MANAGEMENT", "TELEGRAM_CHAT_ID_OPERATIONS"],
+  },
+  {
+    departmentId: "knowledge-docs",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_KNOWLEDGE_DOCS", "TELEGRAM_BOT_TOKEN_PLANNING"],
+    targetEnv: ["TELEGRAM_CHAT_ID_KNOWLEDGE_DOCS", "TELEGRAM_CHAT_ID_PLANNING"],
+  },
+  {
+    departmentId: "api-research",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_API_RESEARCH", "TELEGRAM_BOT_TOKEN_OPERATIONS"],
+    targetEnv: ["TELEGRAM_CHAT_ID_API_RESEARCH", "TELEGRAM_CHAT_ID_OPERATIONS"],
+  },
+  {
+    departmentId: "bloggent",
+    tokenEnv: ["TELEGRAM_BOT_TOKEN_BLOGGENT", "TELEGRAM_BOT_TOKEN_OPERATIONS"],
+    targetEnv: ["TELEGRAM_CHAT_ID_BLOGGENT", "TELEGRAM_CHAT_ID_OPERATIONS"],
+  },
+];
 
 function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -144,8 +227,87 @@ function normalizeSession(
   };
 }
 
-function isScopedMessengerSession(session: Pick<MessengerSession, "agentId" | "workflowPackKey" | "departmentId">): boolean {
+function normalizeDepartmentId(value: unknown): string {
+  return normalizeText(value).toLowerCase();
+}
+
+function firstEnvValue(names: string[]): string {
+  for (const name of names) {
+    const value = normalizeText(process.env[name]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function isScopedMessengerSession(
+  session: Pick<MessengerSession, "agentId" | "workflowPackKey" | "departmentId">,
+): boolean {
   return Boolean(session.agentId || session.workflowPackKey || session.departmentId);
+}
+
+function isTelegramUnifiedGroupCandidate(session: Pick<MessengerSession, "id" | "name">): boolean {
+  const id = normalizeText(session.id).toLowerCase();
+  if (id === "global" || id === "global-group-chat") return true;
+  const name = normalizeText(session.name).toLowerCase();
+  return name.includes("global") || name.includes("통합") || name.includes("회의실");
+}
+
+function pickPreferredTelegramSession(sessions: MessengerSession[]): MessengerSession | null {
+  return (
+    sessions.find((session) => session.id.toLowerCase() === "global") ??
+    sessions.find((session) => session.id.toLowerCase() === "global-group-chat") ??
+    sessions.find((session) => session.enabled && isTelegramUnifiedGroupCandidate(session)) ??
+    sessions.find((session) => session.enabled && !isScopedMessengerSession(session)) ??
+    sessions.find((session) => session.enabled) ??
+    sessions[0] ??
+    null
+  );
+}
+
+function resolveTelegramGlobalTargetId(sessions: MessengerSession[]): string {
+  const envTarget = normalizeText(process.env.TELEGRAM_GLOBAL_GROUP_CHAT_ID);
+  if (envTarget) return envTarget;
+  return pickPreferredTelegramSession(sessions)?.targetId ?? "";
+}
+
+function normalizePersistedDepartmentTelegramBots(
+  rawBots: unknown,
+  defaultTargetId: string,
+): Record<string, DepartmentTelegramBotRoute> {
+  if (!isRecord(rawBots)) return {};
+
+  const bots: Record<string, DepartmentTelegramBotRoute> = {};
+  for (const [rawDepartmentId, rawBot] of Object.entries(rawBots)) {
+    const departmentId = normalizeDepartmentId(rawDepartmentId);
+    if (!departmentId || !isRecord(rawBot)) continue;
+    const token = decryptMessengerTokenForRuntime("telegram", rawBot.token);
+    const targetId = defaultTargetId;
+    if (!token || !targetId) continue;
+    bots[departmentId] = {
+      token,
+      targetId,
+      enabled: rawBot.enabled !== false,
+    };
+  }
+  return bots;
+}
+
+function resolveTelegramDepartmentBotsFromEnv(defaultTargetId: string): Record<string, DepartmentTelegramBotRoute> {
+  if (normalizeText(process.env.TELEGRAM_DEPARTMENT_BOT_ROUTING) !== "1") return {};
+
+  const bots: Record<string, DepartmentTelegramBotRoute> = {};
+  const globalTargetId = normalizeText(process.env.TELEGRAM_GLOBAL_GROUP_CHAT_ID) || defaultTargetId;
+  if (!globalTargetId) return bots;
+  for (const entry of TELEGRAM_DEPARTMENT_BOT_ENV_MAP) {
+    const token = firstEnvValue(entry.tokenEnv);
+    if (!token) continue;
+    bots[entry.departmentId] = {
+      token,
+      targetId: globalTargetId,
+      enabled: true,
+    };
+  }
+  return bots;
 }
 
 function normalizeMessengerChannelsForSingleGroupRuntime(
@@ -162,12 +324,7 @@ function normalizeMessengerChannelsForSingleGroupRuntime(
         .filter((session): session is MessengerSession => Boolean(session))
     : [];
 
-  const preferredSession =
-    normalizedSessions.find((session) => session.id.toLowerCase() === "global") ??
-    normalizedSessions.find((session) => session.enabled && !isScopedMessengerSession(session)) ??
-    normalizedSessions.find((session) => session.enabled) ??
-    normalizedSessions[0] ??
-    null;
+  const preferredSession = pickPreferredTelegramSession(normalizedSessions);
 
   return {
     ...channels,
@@ -184,6 +341,8 @@ function normalizeMessengerChannelsForSingleGroupRuntime(
             },
           ]
         : [],
+      ...(telegramRaw.departmentBots ? { departmentBots: telegramRaw.departmentBots } : {}),
+      ...(telegramRaw.department_bots ? { department_bots: telegramRaw.department_bots } : {}),
     },
   };
 }
@@ -197,6 +356,10 @@ function buildEmptyConfig(): MessengerRuntimeConfig {
 
 function hasOwn(obj: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function readPersistedMessengerChannels(): PersistedMessengerChannels | null {
@@ -241,7 +404,12 @@ function mergeChannelConfig(
 ): MessengerChannelConfig {
   const persisted = persistedChannels?.[channel];
   if (!persisted || typeof persisted !== "object") {
-    return base;
+    if (channel !== "telegram") {
+      return base;
+    }
+    const defaultTargetId = resolveTelegramGlobalTargetId(base.sessions);
+    const envDepartmentBots = resolveTelegramDepartmentBotsFromEnv(defaultTargetId);
+    return Object.keys(envDepartmentBots).length > 0 ? { ...base, departmentBots: envDepartmentBots } : base;
   }
 
   const nextToken = hasOwn(persisted, "token") ? decryptMessengerTokenForRuntime(channel, persisted.token) : base.token;
@@ -253,9 +421,22 @@ function mergeChannelConfig(
       .filter((session): session is MessengerSession => Boolean(session));
   }
 
+  const defaultTargetId = channel === "telegram" ? resolveTelegramGlobalTargetId(nextSessions) : "";
+  const envDepartmentBots = channel === "telegram" ? resolveTelegramDepartmentBotsFromEnv(defaultTargetId) : {};
+  const rawDepartmentBots =
+    channel === "telegram"
+      ? hasOwn(persisted, "departmentBots")
+        ? persisted.departmentBots
+        : persisted.department_bots
+      : undefined;
+  const persistedDepartmentBots =
+    channel === "telegram" ? normalizePersistedDepartmentTelegramBots(rawDepartmentBots, defaultTargetId) : {};
+  const departmentBots = { ...envDepartmentBots, ...persistedDepartmentBots };
+
   return {
     token: nextToken,
     sessions: nextSessions,
+    ...(channel === "telegram" && Object.keys(departmentBots).length > 0 ? { departmentBots } : {}),
   };
 }
 
@@ -937,6 +1118,71 @@ export async function sendMessengerSessionMessage(sessionKey: string, text: stri
 
   const token = normalizeText(resolved.session.token) || config[resolved.channel].token;
   await sendByChannel(resolved.channel, token, resolved.session.targetId, payload);
+}
+
+function normalizeSendFallbackReason(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "send_failed");
+  return raw.trim().replace(/\s+/g, "_").slice(0, 120) || "send_failed";
+}
+
+export async function sendDepartmentTelegramMessage(params: {
+  sessionKey: string;
+  departmentId?: string | null;
+  text: string;
+}): Promise<DepartmentTelegramSendResult> {
+  const normalizedKey = normalizeText(params.sessionKey);
+  if (!normalizedKey) {
+    throw new Error("sessionKey required");
+  }
+  const payload = normalizeText(params.text);
+  if (!payload) {
+    throw new Error("message text required");
+  }
+
+  const config = loadMessengerConfig();
+  const resolved = resolveSessionFromKey(config, normalizedKey);
+  if (!resolved) {
+    throw new Error("session not found");
+  }
+
+  const departmentId = normalizeDepartmentId(params.departmentId);
+  const globalToken = normalizeText(resolved.session.token) || config[resolved.channel].token;
+
+  if (resolved.channel !== "telegram") {
+    await sendByChannel(resolved.channel, globalToken, resolved.session.targetId, payload);
+    return {
+      routed: "global",
+      departmentId: departmentId || null,
+      fallbackReason: "non_telegram_session",
+    };
+  }
+
+  const departmentBot = departmentId ? config.telegram.departmentBots?.[departmentId] : undefined;
+  if (departmentBot?.enabled && departmentBot.token && departmentBot.targetId) {
+    try {
+      await sendByChannel("telegram", departmentBot.token, departmentBot.targetId, payload);
+      return { routed: "department_bot", departmentId };
+    } catch (err) {
+      const fallbackReason = normalizeSendFallbackReason(err);
+      try {
+        await sendByChannel("telegram", globalToken, resolved.session.targetId, payload);
+      } catch (fallbackErr) {
+        throw new Error(
+          `department telegram bot failed (${fallbackReason}); global fallback failed (${normalizeSendFallbackReason(
+            fallbackErr,
+          )})`,
+        );
+      }
+      return { routed: "global", departmentId, fallbackReason };
+    }
+  }
+
+  await sendByChannel("telegram", globalToken, resolved.session.targetId, payload);
+  return {
+    routed: "global",
+    departmentId: departmentId || null,
+    fallbackReason: departmentId ? "department_bot_missing" : "department_id_missing",
+  };
 }
 
 async function sendMessengerWake(text: string): Promise<void> {

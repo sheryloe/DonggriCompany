@@ -125,9 +125,13 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
         }))
         .sort((left, right) => {
           const leftPmoRank =
-            left.canonical.family === "orchestrator" && mapLegacyDepartmentId(left.leader.department_id) === "pmo" ? 0 : 1;
+            left.canonical.family === "orchestrator" && mapLegacyDepartmentId(left.leader.department_id) === "pmo"
+              ? 0
+              : 1;
           const rightPmoRank =
-            right.canonical.family === "orchestrator" && mapLegacyDepartmentId(right.leader.department_id) === "pmo" ? 0 : 1;
+            right.canonical.family === "orchestrator" && mapLegacyDepartmentId(right.leader.department_id) === "pmo"
+              ? 0
+              : 1;
           if (leftPmoRank !== rightPmoRank) return leftPmoRank - rightPmoRank;
 
           const leftFamilyRank = left.canonical.family === "orchestrator" ? 0 : 1;
@@ -173,12 +177,14 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
 
     try {
       const agentColumns = new Set(
-        (db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: string }>).map((row) => String(row.name ?? "")),
+        (db.prepare("PRAGMA table_info(agents)").all() as Array<{ name?: string }>).map((row) =>
+          String(row.name ?? ""),
+        ),
       );
       if (agentColumns.has("workflow_pack_key")) {
-        const byPackColumn = db
-          .prepare("SELECT id FROM agents WHERE workflow_pack_key = ?")
-          .all(packKey) as Array<{ id?: string }>;
+        const byPackColumn = db.prepare("SELECT id FROM agents WHERE workflow_pack_key = ?").all(packKey) as Array<{
+          id?: string;
+        }>;
         const ids = byPackColumn.map((row) => String(row.id ?? "").trim()).filter(Boolean);
         if (ids.length > 0) return ids;
       }
@@ -186,9 +192,9 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
       // ignore legacy schema gaps
     }
 
-    const bySeedPrefix = db
-      .prepare("SELECT id FROM agents WHERE id LIKE ?")
-      .all(`${packKey}-%`) as Array<{ id?: string }>;
+    const bySeedPrefix = db.prepare("SELECT id FROM agents WHERE id LIKE ?").all(`${packKey}-%`) as Array<{
+      id?: string;
+    }>;
     const ids = bySeedPrefix.map((row) => String(row.id ?? "").trim()).filter(Boolean);
     return ids.length > 0 ? ids : null;
   }
@@ -250,7 +256,10 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
         const stageRank = getCanonicalStageRank(canonical?.career_stage);
         if (canonical?.family === "reviewer" && stageRank >= getCanonicalStageRank("senior")) return true;
         if (canonical?.family === "qa" && stageRank >= getCanonicalStageRank("senior")) return true;
-        if ((canonical?.family === "documenter" || canonical?.family === "product-manager") && stageRank >= getCanonicalStageRank("senior")) {
+        if (
+          (canonical?.family === "documenter" || canonical?.family === "product-manager") &&
+          stageRank >= getCanonicalStageRank("senior")
+        ) {
           return true;
         }
         return profile?.role === "reviewer";
@@ -304,7 +313,9 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
     const includePlanning = opts?.includePlanning ?? true;
     const minLeaders = opts?.minLeaders ?? 2;
     const fallbackAll = opts?.fallbackAll ?? true;
-    const requiredDepartmentIds = (opts?.requiredDepartmentIds ?? []).map((id) => String(id ?? "").trim()).filter(Boolean);
+    const requiredDepartmentIds = (opts?.requiredDepartmentIds ?? [])
+      .map((id) => String(id ?? "").trim())
+      .filter(Boolean);
 
     const taskColumns = getTaskColumns();
     const selectColumns = [
@@ -381,14 +392,14 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
         const leaders = getLeadersByDepartmentIds(desiredDeptIds, constrainedAgentIds);
         const seen = new Set(leaders.map((l) => l.id));
 
-          for (const deptId of relatedDeptIds) {
-            const hasDeptLeader = leaders.some((leader) => leader.department_id === deptId);
-            if (hasDeptLeader) continue;
-           const fallbackLeader = getLeadersByDepartmentIds([deptId], packScopedAgentIds)[0];
-           if (!fallbackLeader || seen.has(fallbackLeader.id)) continue;
-           leaders.push(fallbackLeader);
-           seen.add(fallbackLeader.id);
-          }
+        for (const deptId of relatedDeptIds) {
+          const hasDeptLeader = leaders.some((leader) => leader.department_id === deptId);
+          if (hasDeptLeader) continue;
+          const fallbackLeader = getLeadersByDepartmentIds([deptId], packScopedAgentIds)[0];
+          if (!fallbackLeader || seen.has(fallbackLeader.id)) continue;
+          leaders.push(fallbackLeader);
+          seen.add(fallbackLeader.id);
+        }
 
         if (includePlanning) {
           const planningLeader =
@@ -415,7 +426,9 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
       }
     }
 
-    const deptIds = [...new Set([...getTaskRelatedDepartmentIds(taskId, fallbackDeptId, taskMeta), ...requiredDepartmentIds])];
+    const deptIds = [
+      ...new Set([...getTaskRelatedDepartmentIds(taskId, fallbackDeptId, taskMeta), ...requiredDepartmentIds]),
+    ];
     const leaders = getLeadersByDepartmentIds(deptIds, constrainedAgentIds);
 
     const seen = new Set(leaders.map((l) => l.id));
@@ -455,6 +468,3 @@ export function createMeetingLeaderSelectionTools(deps: LeaderSelectionDeps) {
     getTaskReviewLeaders,
   };
 }
-
-
-

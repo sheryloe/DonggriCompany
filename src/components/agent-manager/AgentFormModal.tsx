@@ -21,11 +21,15 @@ type CanonicalEditableField =
   | "execution_capability_profile";
 
 function isKoLocale(locale: UiLanguage | string): boolean {
-  return String(locale ?? "en").toLowerCase().startsWith("ko");
+  return String(locale ?? "en")
+    .toLowerCase()
+    .startsWith("ko");
 }
 
 function getCanonicalSourceDisplayLabel(source: string | null | undefined, locale: UiLanguage | string): string {
-  const normalized = String(source ?? "").trim().toLowerCase();
+  const normalized = String(source ?? "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return "-";
   if (normalized === "stored") return isKoLocale(locale) ? "저장됨" : "stored";
   if (normalized === "derived") return isKoLocale(locale) ? "파생됨" : "derived";
@@ -477,9 +481,7 @@ export default function AgentFormModal({
                   <input
                     id={capabilityProfileFieldId}
                     value={form.execution_capability_profile}
-                    onChange={(event) =>
-                      updateCanonicalIdentity("execution_capability_profile", event.target.value)
-                    }
+                    onChange={(event) => updateCanonicalIdentity("execution_capability_profile", event.target.value)}
                     className={inputClass}
                     style={inputStyle}
                     placeholder={tr("예: reviewer", "reviewer")}
@@ -518,7 +520,11 @@ export default function AgentFormModal({
               <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
                 {tr("아바타", "Avatar")}
               </label>
-              <EmojiPicker tr={tr} value={form.avatar_emoji} onChange={(emoji) => setForm({ ...form, avatar_emoji: emoji })} />
+              <EmojiPicker
+                tr={tr}
+                value={form.avatar_emoji}
+                onChange={(emoji) => setForm({ ...form, avatar_emoji: emoji })}
+              />
             </div>
           </div>
 
@@ -581,7 +587,12 @@ export default function AgentFormModal({
                       className="flex h-24 items-center justify-center rounded-lg p-2"
                       style={{ background: "var(--th-input-bg)", border: "1px solid var(--th-input-border)" }}
                     >
-                      <img src={previews[dir]} alt={dir} className="max-h-20 object-contain" style={{ imageRendering: "pixelated" }} />
+                      <img
+                        src={previews[dir]}
+                        alt={dir}
+                        className="max-h-20 object-contain"
+                        style={{ imageRendering: "pixelated" }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -635,7 +646,11 @@ export default function AgentFormModal({
             disabled={saving || !canSave}
             className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-40"
           >
-            {saving ? tr("저장 중...", "Saving...") : isEdit ? tr("변경 저장", "Save Changes") : tr("에이전트 생성", "Create Agent")}
+            {saving
+              ? tr("저장 중...", "Saving...")
+              : isEdit
+                ? tr("변경 저장", "Save Changes")
+                : tr("에이전트 생성", "Create Agent")}
           </button>
           <button
             type="button"

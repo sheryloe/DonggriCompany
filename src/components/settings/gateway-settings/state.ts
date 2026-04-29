@@ -1,6 +1,7 @@
 import {
   MESSENGER_CHANNELS,
   type MessengerChannelConfig,
+  type MessengerDepartmentBotConfig,
   type MessengerChannelType,
   type MessengerChannelsConfig,
   type MessengerSessionConfig,
@@ -75,14 +76,35 @@ function normalizeSession(
   };
 }
 
+function normalizeDepartmentBots(
+  bots: Record<string, MessengerDepartmentBotConfig> | undefined,
+): Record<string, MessengerDepartmentBotConfig> | undefined {
+  if (!bots) return undefined;
+  const normalized = Object.entries(bots).reduce<Record<string, MessengerDepartmentBotConfig>>((acc, [key, bot]) => {
+    const departmentId = key.trim().toLowerCase();
+    const token = bot.token?.trim?.() ?? "";
+    const targetId = bot.targetId?.trim?.() ?? "";
+    if (!departmentId || !token) return acc;
+    acc[departmentId] = {
+      token,
+      ...(targetId ? { targetId } : {}),
+      enabled: bot.enabled !== false,
+    };
+    return acc;
+  }, {});
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
 export function normalizeChannelsConfig(config: MessengerChannelsConfig): MessengerChannelsConfig {
   return MESSENGER_CHANNELS.reduce((acc, channel) => {
     const channelConfig = config[channel] ?? emptyChannelConfig(channel);
+    const departmentBots = channel === "telegram" ? normalizeDepartmentBots(channelConfig.departmentBots) : undefined;
     acc[channel] = {
       token: channelConfig.token?.trim?.() ?? "",
       receiveEnabled:
         channel === "telegram" ? channelConfig.receiveEnabled !== false : channelConfig.receiveEnabled === true,
       sessions: (channelConfig.sessions ?? []).map((session, idx) => normalizeSession(session, channel, idx)),
+      ...(departmentBots ? { departmentBots } : {}),
     };
     return acc;
   }, {} as MessengerChannelsConfig);
@@ -97,6 +119,9 @@ export function resolveChannelsConfig(
       ...defaults[channel],
       ...(raw?.[channel] ?? {}),
       sessions: raw?.[channel]?.sessions ?? defaults[channel].sessions,
+      ...(channel === "telegram" && raw?.[channel]?.departmentBots
+        ? { departmentBots: raw[channel].departmentBots }
+        : {}),
     };
     return acc;
   }, {} as MessengerChannelsConfig);

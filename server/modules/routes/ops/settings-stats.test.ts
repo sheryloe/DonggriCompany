@@ -223,6 +223,12 @@ describe("settings-stats projection write guard", () => {
                     enabled: true,
                     workflowPackKey: "development",
                   },
+                  {
+                    id: "global-group-chat",
+                    name: "Claw-Empire 통합 그룹방 (동그리컴퍼티 회의실)",
+                    targetId: "-100999",
+                    enabled: true,
+                  },
                 ],
               },
               discord: {
@@ -248,7 +254,7 @@ describe("settings-stats projection write guard", () => {
       expect(telegramSessions).toHaveLength(1);
       expect(telegramSessions[0]).toMatchObject({
         id: "global",
-        targetId: "-100111",
+        targetId: "-100999",
         enabled: true,
       });
 
@@ -279,12 +285,12 @@ describe("settings-stats projection write guard", () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.payload).toEqual({ ok: true, warnings: [] });
-      expect((db.prepare("SELECT value FROM settings WHERE key = 'officeWorkflowPack'").get() as { value: string }).value).toBe(
-        "development",
-      );
-      expect((db.prepare("SELECT value FROM settings WHERE key = 'dashboardDensity'").get() as { value: string }).value).toBe(
-        "wide",
-      );
+      expect(
+        (db.prepare("SELECT value FROM settings WHERE key = 'officeWorkflowPack'").get() as { value: string }).value,
+      ).toBe("development");
+      expect(
+        (db.prepare("SELECT value FROM settings WHERE key = 'dashboardDensity'").get() as { value: string }).value,
+      ).toBe("wide");
     } finally {
       db.close();
     }

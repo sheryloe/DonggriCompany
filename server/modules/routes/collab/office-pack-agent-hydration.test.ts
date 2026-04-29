@@ -206,9 +206,7 @@ describe("office-pack-agent-hydration", () => {
     const result = syncOfficePackAgentsFromProfiles(db, profiles, () => 1700000002000);
     expect(result).toEqual({ departmentsSynced: 1, agentsSynced: 1 });
 
-    const row = db
-      .prepare("SELECT COUNT(*) AS c FROM agents WHERE id = 'novel-seed-1'")
-      .get() as
+    const row = db.prepare("SELECT COUNT(*) AS c FROM agents WHERE id = 'novel-seed-1'").get() as
       | { c: number }
       | undefined;
     const dept = db.prepare("SELECT COUNT(*) AS c FROM departments WHERE id = 'design'").get() as

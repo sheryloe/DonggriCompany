@@ -93,8 +93,16 @@ function parseSkillFrontmatter(content: string): { name: string; description: st
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return { name: "", description: "" };
   const yaml = match[1];
-  const name = yaml.match(/^name:\s*(.+)$/m)?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
-  const description = yaml.match(/^description:\s*(.+)$/m)?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
+  const name =
+    yaml
+      .match(/^name:\s*(.+)$/m)?.[1]
+      ?.trim()
+      .replace(/^["']|["']$/g, "") ?? "";
+  const description =
+    yaml
+      .match(/^description:\s*(.+)$/m)?.[1]
+      ?.trim()
+      .replace(/^["']|["']$/g, "") ?? "";
   return { name, description };
 }
 

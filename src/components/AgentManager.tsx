@@ -147,9 +147,7 @@ export default function AgentManager({
         : ["general"];
       const twoPassRequired = existingWorkflowProfile?.two_pass_required ?? true;
       const maxReviewRounds =
-        role === "primary_author"
-          ? Math.max(1, Math.min(existingWorkflowProfile?.max_review_rounds ?? 2, 2))
-          : null;
+        role === "primary_author" ? Math.max(1, Math.min(existingWorkflowProfile?.max_review_rounds ?? 2, 2)) : null;
       return {
         role,
         review_lenses: reviewLenses,
@@ -298,7 +296,7 @@ export default function AgentManager({
     deriveCompatibilityWorkflowProfile,
     form,
     modalAgent,
-    onAgentsChange
+    onAgentsChange,
   ]);
 
   const handleDelete = useCallback(
@@ -315,11 +313,7 @@ export default function AgentManager({
         setSaving(false);
       }
     },
-    [
-      closeModal,
-      modalAgent,
-      onAgentsChange,
-    ],
+    [closeModal, modalAgent, onAgentsChange],
   );
 
   const openCreateDept = useCallback(() => {
@@ -571,7 +565,3 @@ export default function AgentManager({
     </div>
   );
 }
-
-
-
-

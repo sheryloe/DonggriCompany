@@ -72,7 +72,11 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
     const current = row ? parseWorkflowMeta(row.workflow_meta_json) : {};
     const next = { ...current };
     mutate(next);
-    db.prepare("UPDATE tasks SET workflow_meta_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(next), nowMs(), taskId);
+    db.prepare("UPDATE tasks SET workflow_meta_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify(next),
+      nowMs(),
+      taskId,
+    );
   }
 
   function setReviewConsentMetaForRunComplete(taskId: string): void {
@@ -668,7 +672,9 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
               reportBody = pretty.length > 500 ? "..." + pretty.slice(-500) : pretty;
             }
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
 
         const wtInfo = taskWorktrees.get(taskId);
         let diffSummary = "";
@@ -747,7 +753,9 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
                 const pretty = prettyStreamJson(raw);
                 errorBody = pretty.length > 300 ? "..." + pretty.slice(-300) : pretty;
               }
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
 
             const failLang = resolveLang(task.description ?? task.title);
             const failContent = errorBody

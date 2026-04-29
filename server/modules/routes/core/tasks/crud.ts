@@ -134,7 +134,10 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     return new Date(timestamp).toISOString();
   }
 
-  function updateTaskCanonicalProjection(taskId: string, policyFields: ReturnType<typeof buildCanonicalTaskFields>): void {
+  function updateTaskCanonicalProjection(
+    taskId: string,
+    policyFields: ReturnType<typeof buildCanonicalTaskFields>,
+  ): void {
     const updates: string[] = [];
     const params: SQLInputValue[] = [];
     if (hasTaskPolicyVersionColumn) {
@@ -158,13 +161,17 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     db.prepare(`UPDATE tasks SET ${updates.join(", ")} WHERE id = ?`).run(...params);
   }
 
-  function bindLegacyTaskPolicyVersion(taskRow: Record<string, unknown>, reason: string): ReturnType<typeof buildCanonicalTaskFields> {
+  function bindLegacyTaskPolicyVersion(
+    taskRow: Record<string, unknown>,
+    reason: string,
+  ): ReturnType<typeof buildCanonicalTaskFields> {
     const taskId = String(taskRow.id ?? "");
     const policyFields = buildCanonicalTaskFields({
       title: normalizeTextField(taskRow.title) ?? "",
       description: normalizeTextField(taskRow.description) ?? "",
       projectPath: normalizeProjectPathInput(taskRow.project_path),
-      workflowPackKey: (normalizeTextField(taskRow.workflow_pack_key) as WorkflowPackKey | null) ?? DEFAULT_WORKFLOW_PACK_KEY,
+      workflowPackKey:
+        (normalizeTextField(taskRow.workflow_pack_key) as WorkflowPackKey | null) ?? DEFAULT_WORKFLOW_PACK_KEY,
     });
     updateTaskCanonicalProjection(taskId, policyFields);
     appendTaskLog(
@@ -216,7 +223,10 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     };
   }
 
-  function readProjectContextByTaskFields(projectId: string | null, projectPath: string | null): {
+  function readProjectContextByTaskFields(
+    projectId: string | null,
+    projectPath: string | null,
+  ): {
     projectId: string | null;
     projectPath: string | null;
   } {
@@ -830,7 +840,8 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
 
       if (updatedProjectContext.projectId && updatedProjectContext.projectPath) {
         try {
-          const effectivePolicyVersion = normalizeTextField(updated?.policy_version) ?? canonicalTaskFields?.policy.policyVersion ?? "";
+          const effectivePolicyVersion =
+            normalizeTextField(updated?.policy_version) ?? canonicalTaskFields?.policy.policyVersion ?? "";
           const artifactState = applyProjectArtifactPatch({
             projectId: updatedProjectContext.projectId,
             projectPath: updatedProjectContext.projectPath,

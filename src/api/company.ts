@@ -1,4 +1,5 @@
 import { post, request } from "./core";
+
 import type { Project } from "../types";
 
 export interface CanonicalDiagnostic {

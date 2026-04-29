@@ -82,9 +82,7 @@ function asObject(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function normalizeDepartmentOverrides(
-  value: unknown,
-): Record<string, ProjectStaffingDepartmentOverride> {
+function normalizeDepartmentOverrides(value: unknown): Record<string, ProjectStaffingDepartmentOverride> {
   const objectValue = asObject(value);
   if (!objectValue) return {};
   const out: Record<string, ProjectStaffingDepartmentOverride> = {};
@@ -105,9 +103,7 @@ function normalizeDepartmentOverrides(
   return out;
 }
 
-function normalizeTaskTypeOverrides(
-  value: unknown,
-): Record<string, ProjectStaffingTaskTypeOverride> {
+function normalizeTaskTypeOverrides(value: unknown): Record<string, ProjectStaffingTaskTypeOverride> {
   const objectValue = asObject(value);
   if (!objectValue) return {};
   const out: Record<string, ProjectStaffingTaskTypeOverride> = {};
@@ -158,9 +154,9 @@ export function serializeProjectStaffingPolicy(raw: unknown): string | null {
 }
 
 function loadManualProjectAgentIds(db: DbLike, projectId: string): string[] {
-  const rows = db
-    .prepare("SELECT agent_id FROM project_agents WHERE project_id = ?")
-    .all(projectId) as Array<{ agent_id?: unknown }>;
+  const rows = db.prepare("SELECT agent_id FROM project_agents WHERE project_id = ?").all(projectId) as Array<{
+    agent_id?: unknown;
+  }>;
   return rows
     .map((row) => normalizeText(row.agent_id))
     .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
@@ -211,7 +207,10 @@ function loadAgentIdsByDepartments(db: DbLike, departmentIds: string[]): string[
     .filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
 }
 
-export function loadProjectStaffingPolicy(db: DbLike, projectId: string | null | undefined): ProjectStaffingPolicy | null {
+export function loadProjectStaffingPolicy(
+  db: DbLike,
+  projectId: string | null | undefined,
+): ProjectStaffingPolicy | null {
   const normalizedProjectId = normalizeText(projectId);
   if (!normalizedProjectId) return null;
   try {
@@ -265,7 +264,8 @@ export function resolveProjectRoutingConstraint(
     activeDepartmentIds.add(departmentId);
     if (!preferredDepartmentIds.includes(departmentId)) preferredDepartmentIds.push(departmentId);
     for (const family of override.preferred_families ?? []) preferredFamilySet.add(family);
-    for (const specialization of override.preferred_specializations ?? []) preferredSpecializationSet.add(specialization);
+    for (const specialization of override.preferred_specializations ?? [])
+      preferredSpecializationSet.add(specialization);
     for (const agentId of override.candidate_agent_ids ?? []) overlayCandidateIds.add(agentId);
   }
 

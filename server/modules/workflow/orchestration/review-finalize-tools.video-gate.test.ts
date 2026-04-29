@@ -102,9 +102,9 @@ describe("review finalize video gate", () => {
         trigger: "test",
       });
 
-      const updated = db
-        .prepare("SELECT workflow_meta_json FROM tasks WHERE id = ?")
-        .get(taskId) as { workflow_meta_json: string | null };
+      const updated = db.prepare("SELECT workflow_meta_json FROM tasks WHERE id = ?").get(taskId) as {
+        workflow_meta_json: string | null;
+      };
       const meta = updated.workflow_meta_json ? JSON.parse(updated.workflow_meta_json) : {};
       expect(meta.review_consent).toMatchObject({
         stage: "review_consensus",
@@ -298,18 +298,20 @@ describe("review finalize video gate", () => {
       ).run(
         taskId,
         "Review clear meta",
-        JSON.stringify({ review_consent: { stage: "review_consensus", blocked: true, blocked_by: ["authority_missing"], state: "blocked" } }),
+        JSON.stringify({
+          review_consent: {
+            stage: "review_consensus",
+            blocked: true,
+            blocked_by: ["authority_missing"],
+            state: "blocked",
+          },
+        }),
       );
 
       const appendTaskLog = vi.fn();
       const notifyCeo = vi.fn();
       const startReviewConsensusMeeting = vi.fn(
-        (
-          _taskId: string,
-          _taskTitle: string,
-          _departmentId: string | null,
-          onApproved: () => void,
-        ) => {
+        (_taskId: string, _taskTitle: string, _departmentId: string | null, onApproved: () => void) => {
           onApproved();
         },
       );
@@ -354,9 +356,10 @@ describe("review finalize video gate", () => {
         trigger: "test-clear",
       });
 
-      const updated = db
-        .prepare("SELECT status, workflow_meta_json FROM tasks WHERE id = ?")
-        .get(taskId) as { status: string; workflow_meta_json: string | null };
+      const updated = db.prepare("SELECT status, workflow_meta_json FROM tasks WHERE id = ?").get(taskId) as {
+        status: string;
+        workflow_meta_json: string | null;
+      };
       const meta = updated.workflow_meta_json ? JSON.parse(updated.workflow_meta_json) : {};
       expect(updated.status).toBe("done");
       expect(meta.review_consent.blocked).toBe(false);
@@ -390,12 +393,7 @@ describe("review finalize video gate", () => {
       ).run(taskId, "Video intro pass", projectRoot);
 
       const startReviewConsensusMeeting = vi.fn(
-        (
-          _taskId: string,
-          _taskTitle: string,
-          _departmentId: string | null,
-          onApproved: () => void,
-        ) => {
+        (_taskId: string, _taskTitle: string, _departmentId: string | null, onApproved: () => void) => {
           onApproved();
         },
       );

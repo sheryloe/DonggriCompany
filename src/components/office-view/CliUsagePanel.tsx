@@ -298,7 +298,9 @@ export default function CliUsagePanel({
                     </span>
                     <div className="min-w-0">
                       <div className={`truncate text-xs font-semibold ${card.color}`}>{card.title}</div>
-                      {card.subtitle && <div className="break-all text-[9px] leading-tight text-slate-400">{card.subtitle}</div>}
+                      {card.subtitle && (
+                        <div className="break-all text-[9px] leading-tight text-slate-400">{card.subtitle}</div>
+                      )}
                     </div>
                   </div>
                   <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${statusDotClass}`} />
@@ -381,7 +383,8 @@ export default function CliUsagePanel({
                     </div>
                     {sessionUsage.lastActive && (
                       <div className="break-all text-[8px] text-slate-500">
-                        {language === "ko" ? "마지막 활동" : "Last active"}: {formatReset(sessionUsage.lastActive, language)}
+                        {language === "ko" ? "마지막 활동" : "Last active"}:{" "}
+                        {formatReset(sessionUsage.lastActive, language)}
                       </div>
                     )}
                   </div>

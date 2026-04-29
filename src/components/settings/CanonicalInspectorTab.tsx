@@ -1,6 +1,11 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import * as api from "../../api";
-import { getCanonicalBadgeLabel, getCanonicalFamilyLabel, getCanonicalStageLabel, validateCanonicalLabels } from "../../i18n/canonical-label-registry";
+import {
+  getCanonicalBadgeLabel,
+  getCanonicalFamilyLabel,
+  getCanonicalStageLabel,
+  validateCanonicalLabels,
+} from "../../i18n/canonical-label-registry";
 import type { UiLanguage } from "../../i18n";
 import type { Project } from "../../types";
 import type { TFunction } from "./types";
@@ -31,21 +36,75 @@ const TAB_OPTIONS: TabOption[] = [
   { key: "routing", label: { ko: "???", en: "Routing", ja: "Routing", zh: "Routing" } },
   { key: "model-tiers", label: { ko: "?? ??", en: "Model Tiers", ja: "Model Tiers", zh: "Model Tiers" } },
   { key: "approval-gates", label: { ko: "?? ???", en: "Approval Gates", ja: "Approval Gates", zh: "Approval Gates" } },
-  { key: "specialization-registry", label: { ko: "??? ?????", en: "Specialization Registry", ja: "Specialization Registry", zh: "Specialization Registry" } },
-  { key: "pm-artifact-state", label: { ko: "PM ??? ??", en: "PM Artifact State", ja: "PM Artifact State", zh: "PM Artifact State" } },
+  {
+    key: "specialization-registry",
+    label: {
+      ko: "??? ?????",
+      en: "Specialization Registry",
+      ja: "Specialization Registry",
+      zh: "Specialization Registry",
+    },
+  },
+  {
+    key: "pm-artifact-state",
+    label: { ko: "PM ??? ??", en: "PM Artifact State", ja: "PM Artifact State", zh: "PM Artifact State" },
+  },
   { key: "validation", label: { ko: "??", en: "Validation", ja: "Validation", zh: "Validation" } },
-  { key: "reload-rollback", label: { ko: "???/??", en: "Reload / Rollback", ja: "Reload / Rollback", zh: "Reload / Rollback" } },
+  {
+    key: "reload-rollback",
+    label: { ko: "???/??", en: "Reload / Rollback", ja: "Reload / Rollback", zh: "Reload / Rollback" },
+  },
 ];
 
 const TAB_DESCRIPTIONS: Record<InspectorKey, Record<UiLanguage, string>> = {
-  governance: { ko: "?? ?? ?? ?? ?? ??, ?? ??, ?? ??? ?????.", en: "Inspect the active policy version, governance baseline, and label health.", ja: "Inspect the active policy version, governance baseline, and label health.", zh: "Inspect the active policy version, governance baseline, and label health." },
-  routing: { ko: "?? ??? ?? ???? ??, ??, ?? ??? ????? ?? ?????.", en: "Preview how an input maps to department, family, and model policy.", ja: "Preview how an input maps to department, family, and model policy.", zh: "Preview how an input maps to department, family, and model policy." },
-  "model-tiers": { ko: "?? ??? ?? ?? ??? ??? ?????.", en: "Review model tier rules and summaries by work type.", ja: "Review model tier rules and summaries by work type.", zh: "Review model tier rules and summaries by work type." },
-  "approval-gates": { ko: "??, ??, ?? ???? ?? ???? ????? ?????.", en: "Review when authority, quorum, and approval gates block work.", ja: "Review when authority, quorum, and approval gates block work.", zh: "Review when authority, quorum, and approval gates block work." },
-  "specialization-registry": { ko: "??? ?? ?? ?? ??? ?? ???? ????? ?????.", en: "Inspect how specialization keys map to families and execution capability.", ja: "Inspect how specialization keys map to families and execution capability.", zh: "Inspect how specialization keys map to families and execution capability." },
-  "pm-artifact-state": { ko: "???? ???, ?? ??, projection ??? ???? ?????.", en: "Inspect project artifacts, decision logs, and projection health.", ja: "Inspect project artifacts, decision logs, and projection health.", zh: "Inspect project artifacts, decision logs, and projection health." },
-  validation: { ko: "???/?? ?? ????? ??? fallback ??? ?????.", en: "Validate Korean/English label registry coverage and fallback health.", ja: "Validate Korean/English label registry coverage and fallback health.", zh: "Validate Korean/English label registry coverage and fallback health." },
-  "reload-rollback": { ko: "?? ??? ?????? ?? ???? ?????.", en: "Reload canonical policy rules or roll back to a target version.", ja: "Reload canonical policy rules or roll back to a target version.", zh: "Reload canonical policy rules or roll back to a target version." },
+  governance: {
+    ko: "?? ?? ?? ?? ?? ??, ?? ??, ?? ??? ?????.",
+    en: "Inspect the active policy version, governance baseline, and label health.",
+    ja: "Inspect the active policy version, governance baseline, and label health.",
+    zh: "Inspect the active policy version, governance baseline, and label health.",
+  },
+  routing: {
+    ko: "?? ??? ?? ???? ??, ??, ?? ??? ????? ?? ?????.",
+    en: "Preview how an input maps to department, family, and model policy.",
+    ja: "Preview how an input maps to department, family, and model policy.",
+    zh: "Preview how an input maps to department, family, and model policy.",
+  },
+  "model-tiers": {
+    ko: "?? ??? ?? ?? ??? ??? ?????.",
+    en: "Review model tier rules and summaries by work type.",
+    ja: "Review model tier rules and summaries by work type.",
+    zh: "Review model tier rules and summaries by work type.",
+  },
+  "approval-gates": {
+    ko: "??, ??, ?? ???? ?? ???? ????? ?????.",
+    en: "Review when authority, quorum, and approval gates block work.",
+    ja: "Review when authority, quorum, and approval gates block work.",
+    zh: "Review when authority, quorum, and approval gates block work.",
+  },
+  "specialization-registry": {
+    ko: "??? ?? ?? ?? ??? ?? ???? ????? ?????.",
+    en: "Inspect how specialization keys map to families and execution capability.",
+    ja: "Inspect how specialization keys map to families and execution capability.",
+    zh: "Inspect how specialization keys map to families and execution capability.",
+  },
+  "pm-artifact-state": {
+    ko: "???? ???, ?? ??, projection ??? ???? ?????.",
+    en: "Inspect project artifacts, decision logs, and projection health.",
+    ja: "Inspect project artifacts, decision logs, and projection health.",
+    zh: "Inspect project artifacts, decision logs, and projection health.",
+  },
+  validation: {
+    ko: "???/?? ?? ????? ??? fallback ??? ?????.",
+    en: "Validate Korean/English label registry coverage and fallback health.",
+    ja: "Validate Korean/English label registry coverage and fallback health.",
+    zh: "Validate Korean/English label registry coverage and fallback health.",
+  },
+  "reload-rollback": {
+    ko: "?? ??? ?????? ?? ???? ?????.",
+    en: "Reload canonical policy rules or roll back to a target version.",
+    ja: "Reload canonical policy rules or roll back to a target version.",
+    zh: "Reload canonical policy rules or roll back to a target version.",
+  },
 };
 
 function pick(locale: UiLanguage, messages: Record<UiLanguage, string>): string {
@@ -84,13 +143,21 @@ function renderList(items: string[]): React.ReactNode {
 
 export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorTabProps) {
   const [tab, setTab] = useState<InspectorKey>("governance");
-  const [policyResponse, setPolicyResponse] = useState<Awaited<ReturnType<typeof api.getCanonicalCompanyPolicy>> | null>(null);
-  const [registryResponse, setRegistryResponse] = useState<Awaited<ReturnType<typeof api.getCanonicalSpecializationRegistry>> | null>(null);
+  const [policyResponse, setPolicyResponse] = useState<Awaited<
+    ReturnType<typeof api.getCanonicalCompanyPolicy>
+  > | null>(null);
+  const [registryResponse, setRegistryResponse] = useState<Awaited<
+    ReturnType<typeof api.getCanonicalSpecializationRegistry>
+  > | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [artifactState, setArtifactState] = useState<Awaited<ReturnType<typeof api.getProjectArtifactState>>["state"] | null>(null);
+  const [artifactState, setArtifactState] = useState<
+    Awaited<ReturnType<typeof api.getProjectArtifactState>>["state"] | null
+  >(null);
   const [previewText, setPreviewText] = useState("Ship the backend review flow and keep PM artifacts healthy.");
-  const [previewResult, setPreviewResult] = useState<Awaited<ReturnType<typeof api.previewCanonicalRouting>> | null>(null);
+  const [previewResult, setPreviewResult] = useState<Awaited<ReturnType<typeof api.previewCanonicalRouting>> | null>(
+    null,
+  );
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [reloading, setReloading] = useState<"dry-run" | "apply" | "rollback" | null>(null);
   const [reloadResult, setReloadResult] = useState<Awaited<ReturnType<typeof api.reloadCanonicalRules>> | null>(null);
@@ -194,8 +261,16 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
         </button>
       </div>
 
-      {error ? <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</div> : null}
-      {loading ? <div className="text-sm text-slate-400">{t({ ko: "불러오는 중...", en: "Loading...", ja: "Loading...", zh: "Loading..." })}</div> : null}
+      {error ? (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          {error}
+        </div>
+      ) : null}
+      {loading ? (
+        <div className="text-sm text-slate-400">
+          {t({ ko: "불러오는 중...", en: "Loading...", ja: "Loading...", zh: "Loading..." })}
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {TAB_OPTIONS.map((option) => (
@@ -231,11 +306,19 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
             <div className="space-y-3 text-xs text-slate-300">
               <div>
                 <div className="mb-1 font-medium text-slate-200">Families</div>
-                {renderList(policyResponse.policy.families.map((family) => `${getCanonicalFamilyLabel(family.key, locale)} (${family.key})`))}
+                {renderList(
+                  policyResponse.policy.families.map(
+                    (family) => `${getCanonicalFamilyLabel(family.key, locale)} (${family.key})`,
+                  ),
+                )}
               </div>
               <div>
                 <div className="mb-1 font-medium text-slate-200">Stages</div>
-                {renderList(policyResponse.policy.stages.map((stage) => `${getCanonicalStageLabel(stage.key, locale)} (${stage.key})`))}
+                {renderList(
+                  policyResponse.policy.stages.map(
+                    (stage) => `${getCanonicalStageLabel(stage.key, locale)} (${stage.key})`,
+                  ),
+                )}
               </div>
             </div>
           </Panel>
@@ -275,7 +358,9 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
                 onClick={() => void runPreview()}
                 className="rounded-lg border border-blue-400/40 bg-blue-500/10 px-3 py-2 text-xs text-blue-200 transition hover:border-blue-300"
               >
-                {loadingPreview ? t({ ko: "실행 중...", en: "Running...", ja: "Running...", zh: "Running..." }) : t({ ko: "???? ??", en: "Run Preview", ja: "Run Preview", zh: "Run Preview" })}
+                {loadingPreview
+                  ? t({ ko: "실행 중...", en: "Running...", ja: "Running...", zh: "Running..." })
+                  : t({ ko: "???? ??", en: "Run Preview", ja: "Run Preview", zh: "Run Preview" })}
               </button>
             </div>
           </Panel>
@@ -349,7 +434,9 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
                   {previewResult.policy.whyNot.length > 0 ? (
                     <ul className="space-y-1 text-xs text-slate-300">
                       {previewResult.policy.whyNot.map((entry) => (
-                        <li key={`${entry.candidate}:${entry.reason}`}>- {entry.candidate}: {entry.reason}</li>
+                        <li key={`${entry.candidate}:${entry.reason}`}>
+                          - {entry.candidate}: {entry.reason}
+                        </li>
                       ))}
                     </ul>
                   ) : (
@@ -358,7 +445,14 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-slate-500">{t({ ko: "????? ???? ?? ???? ??? ?????.", en: "Run the preview to inspect canonical precedence results.", ja: "Run the preview to inspect canonical precedence results.", zh: "Run the preview to inspect canonical precedence results." })}</div>
+              <div className="text-sm text-slate-500">
+                {t({
+                  ko: "????? ???? ?? ???? ??? ?????.",
+                  en: "Run the preview to inspect canonical precedence results.",
+                  ja: "Run the preview to inspect canonical precedence results.",
+                  zh: "Run the preview to inspect canonical precedence results.",
+                })}
+              </div>
             )}
           </Panel>
         </div>
@@ -366,7 +460,9 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
 
       {tab === "model-tiers" && policyResponse ? (
         <Panel title="Model Tiers">
-          {renderList(policyResponse.policy.modelTierRules.map((rule) => `${rule.tier} - ${rule.summary} (${rule.id})`))}
+          {renderList(
+            policyResponse.policy.modelTierRules.map((rule) => `${rule.tier} - ${rule.summary} (${rule.id})`),
+          )}
         </Panel>
       ) : null}
 
@@ -382,11 +478,19 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
             <div className="space-y-1 text-sm text-slate-300">
               <div>Total: {registryResponse.registry.total}</div>
               <div>Version: {registryResponse.registry.version}</div>
-              <div>Source: {registryResponse.registry.sourceRepo}@{registryResponse.registry.sourceRef}</div>
+              <div>
+                Source: {registryResponse.registry.sourceRepo}@{registryResponse.registry.sourceRef}
+              </div>
             </div>
           </Panel>
-          <Panel title={t({ ko: "?? ??", en: "Family Assignments", ja: "Family Assignments", zh: "Family Assignments" })}>
-            {renderList(Object.entries(registryResponse.registry.familyAssignments).map(([family, count]) => `${getCanonicalFamilyLabel(family, locale)} (${family}) - ${count}`))}
+          <Panel
+            title={t({ ko: "?? ??", en: "Family Assignments", ja: "Family Assignments", zh: "Family Assignments" })}
+          >
+            {renderList(
+              Object.entries(registryResponse.registry.familyAssignments).map(
+                ([family, count]) => `${getCanonicalFamilyLabel(family, locale)} (${family}) - ${count}`,
+              ),
+            )}
           </Panel>
         </div>
       ) : null}
@@ -417,7 +521,12 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
                 }
                 className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {t({ ko: "??? ?????", en: "Bootstrap Artifacts", ja: "Bootstrap Artifacts", zh: "Bootstrap Artifacts" })}
+                {t({
+                  ko: "??? ?????",
+                  en: "Bootstrap Artifacts",
+                  ja: "Bootstrap Artifacts",
+                  zh: "Bootstrap Artifacts",
+                })}
               </button>
             </div>
           </Panel>
@@ -432,14 +541,22 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
                   <ul className="space-y-1 text-xs text-slate-300">
                     {Object.entries(artifactState.artifactHealth).map(([key, health]) => (
                       <li key={key}>
-                        - {key}: exists={String(health.exists)} parseOk={String(health.parseOk)} blocking={String(health.blocking)}
+                        - {key}: exists={String(health.exists)} parseOk={String(health.parseOk)} blocking=
+                        {String(health.blocking)}
                       </li>
                     ))}
                   </ul>
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-slate-500">{t({ ko: "프로젝트를 선택하세요.", en: "Select a project.", ja: "Select a project.", zh: "Select a project." })}</div>
+              <div className="text-sm text-slate-500">
+                {t({
+                  ko: "프로젝트를 선택하세요.",
+                  en: "Select a project.",
+                  ja: "Select a project.",
+                  zh: "Select a project.",
+                })}
+              </div>
             )}
           </Panel>
         </div>
@@ -450,11 +567,20 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
           {labelIssues.length > 0 ? (
             <ul className="space-y-1 text-xs text-slate-300">
               {labelIssues.map((issue) => (
-                <li key={`${issue.key}:${issue.message}`}>- {issue.key}: {issue.message}</li>
+                <li key={`${issue.key}:${issue.message}`}>
+                  - {issue.key}: {issue.message}
+                </li>
               ))}
             </ul>
           ) : (
-            <div className="text-sm text-slate-300">{t({ ko: "???/?? ?? ?????? ?????.", en: "All KO/EN/JA/ZH label registry entries are valid.", ja: "All KO/EN/JA/ZH label registry entries are valid.", zh: "All KO/EN/JA/ZH label registry entries are valid." })}</div>
+            <div className="text-sm text-slate-300">
+              {t({
+                ko: "???/?? ?? ?????? ?????.",
+                en: "All KO/EN/JA/ZH label registry entries are valid.",
+                ja: "All KO/EN/JA/ZH label registry entries are valid.",
+                zh: "All KO/EN/JA/ZH label registry entries are valid.",
+              })}
+            </div>
           )}
         </Panel>
       ) : null}
@@ -485,7 +611,13 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
                     onClick={() => void runReload(mode)}
                     className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 transition hover:border-slate-500"
                   >
-                    {reloading === mode ? `${mode}...` : mode === "dry-run" ? "Dry Run" : mode === "apply" ? "Apply" : "Rollback"}
+                    {reloading === mode
+                      ? `${mode}...`
+                      : mode === "dry-run"
+                        ? "Dry Run"
+                        : mode === "apply"
+                          ? "Apply"
+                          : "Rollback"}
                   </button>
                 ))}
               </div>
@@ -500,7 +632,14 @@ export default function CanonicalInspectorTab({ t, locale }: CanonicalInspectorT
                 <div>Target Version: {reloadResult.targetVersion ?? "-"}</div>
               </div>
             ) : (
-              <div className="text-sm text-slate-500">{t({ ko: "?? ?? ??? ????.", en: "No reload result yet.", ja: "No reload result yet.", zh: "No reload result yet." })}</div>
+              <div className="text-sm text-slate-500">
+                {t({
+                  ko: "?? ?? ??? ????.",
+                  en: "No reload result yet.",
+                  ja: "No reload result yet.",
+                  zh: "No reload result yet.",
+                })}
+              </div>
             )}
           </Panel>
         </div>

@@ -131,7 +131,11 @@ export default function AppHeaderBar({
         )}
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
-        <button onClick={onOpenTasks} className="header-action-btn header-action-btn-primary" aria-label={tasksPrimaryLabel}>
+        <button
+          onClick={onOpenTasks}
+          className="header-action-btn header-action-btn-primary"
+          aria-label={tasksPrimaryLabel}
+        >
           <span className="sm:hidden">📋</span>
           <span className="hidden sm:inline">📋 {tasksPrimaryLabel}</span>
         </button>

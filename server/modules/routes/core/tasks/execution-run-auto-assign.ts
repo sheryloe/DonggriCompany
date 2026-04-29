@@ -58,10 +58,27 @@ const PACK_DEPARTMENT_PRIORITIES: Record<WorkflowPackKey, string[]> = {
   ],
   donggri: ["planning-architecture", "planning", "development", "dev", "ui-ux", "design", "qa", "management"],
   report: ["knowledge-docs", "planning-architecture", "planning", "qa", "development", "dev", "pmo", "management"],
-  web_research_report: ["api-research", "development", "dev", "planning-architecture", "planning", "qa", "knowledge-docs"],
+  web_research_report: [
+    "api-research",
+    "development",
+    "dev",
+    "planning-architecture",
+    "planning",
+    "qa",
+    "knowledge-docs",
+  ],
   video_preprod: ["ui-ux", "design", "planning-architecture", "planning", "development", "dev", "qa", "management"],
   novel: ["bloggent", "ui-ux", "design", "planning-architecture", "planning", "knowledge-docs", "development", "dev"],
-  roleplay: ["bloggent", "ui-ux", "design", "planning-architecture", "planning", "knowledge-docs", "development", "dev"],
+  roleplay: [
+    "bloggent",
+    "ui-ux",
+    "design",
+    "planning-architecture",
+    "planning",
+    "knowledge-docs",
+    "development",
+    "dev",
+  ],
 };
 
 function normalizePackKey(raw: string | null | undefined): WorkflowPackKey {

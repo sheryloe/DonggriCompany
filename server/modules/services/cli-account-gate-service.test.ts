@@ -103,8 +103,20 @@ describe("CliAccountGateService", () => {
           "\uFEFF" +
           JSON.stringify({
             accounts: [
-              { enabled: true, accountLabel: "Account 1", email: "a1@example.com", lastUsed: 1710000000000, expiresAt: 1711000000000 },
-              { enabled: true, accountLabel: "Account 2", email: "a2@example.com", lastUsed: 1710000001000, expiresAt: 1711000001000 },
+              {
+                enabled: true,
+                accountLabel: "Account 1",
+                email: "a1@example.com",
+                lastUsed: 1710000000000,
+                expiresAt: 1711000000000,
+              },
+              {
+                enabled: true,
+                accountLabel: "Account 2",
+                email: "a2@example.com",
+                lastUsed: 1710000001000,
+                expiresAt: 1711000001000,
+              },
             ],
             activeIndex: 0,
             forecast: {
@@ -155,9 +167,23 @@ describe("CliAccountGateService", () => {
       storagePath,
       JSON.stringify({
         accounts: [
-          { enabled: true, accountLabel: "Primary", email: "p@example.com", lastUsed: 1710100000000, expiresAt: 1711100000000, refreshToken: "secret" },
+          {
+            enabled: true,
+            accountLabel: "Primary",
+            email: "p@example.com",
+            lastUsed: 1710100000000,
+            expiresAt: 1711100000000,
+            refreshToken: "secret",
+          },
           { enabled: false, accountLabel: "Disabled", email: "x@example.com", refreshToken: "secret" },
-          { enabled: true, accountLabel: "Backup", email: "b@example.com", lastUsed: 1710100001000, expiresAt: 1711100001000, refreshToken: "secret" },
+          {
+            enabled: true,
+            accountLabel: "Backup",
+            email: "b@example.com",
+            lastUsed: 1710100001000,
+            expiresAt: 1711100001000,
+            refreshToken: "secret",
+          },
         ],
         activeIndex: 2,
       }),

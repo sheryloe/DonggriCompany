@@ -243,8 +243,7 @@ export function createTaskDelegationHandler(deps: TaskDelegationDeps) {
         const mentionedDepts = [...new Set(detectTargetDepartments(ceoMessage).filter((d) => d !== leaderDeptId))];
         const leaderCanonicalIdentity = resolveCanonicalIdentity(teamLeader);
         const isPlanningLead =
-          leaderCanonicalIdentity.family === "orchestrator" &&
-          leaderCanonicalIdentity.career_stage === "team-lead";
+          leaderCanonicalIdentity.family === "orchestrator" && leaderCanonicalIdentity.career_stage === "team-lead";
 
         if (isPlanningLead) {
           const relatedLabel =

@@ -44,8 +44,10 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
     const text = summarizeDecisionText(input, 220);
     if (!text || text === "-") return pickDecisionL10n("세부 내용 확인", "Check details");
     if (/skip|next|다음|건너|보류/i.test(text)) return pickDecisionL10n("다음 라운드로 이동", "Move to next round");
-    if (/hold|pending|rework|remediation|보완|수정|재작업|추가/i.test(text)) return pickDecisionL10n("보완 후 재검토", "Remediate then review");
-    if (/approve|approved|ready|merge|go\b|승인|진행|완료/i.test(text)) return pickDecisionL10n("승인/즉시 진행 가능", "Approved / ready now");
+    if (/hold|pending|rework|remediation|보완|수정|재작업|추가/i.test(text))
+      return pickDecisionL10n("보완 후 재검토", "Remediate then review");
+    if (/approve|approved|ready|merge|go\b|승인|진행|완료/i.test(text))
+      return pickDecisionL10n("승인/즉시 진행 가능", "Approved / ready now");
     const firstClause = text.split(/(?<=[.!?。])\s+|[,，]\s+/)[0] || text;
     return truncateLine(firstClause, 70);
   }
@@ -112,11 +114,19 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
       return fromSummaryNumbers
         .map((number) => options.find((option) => option.number === number) || null)
         .filter((option): option is (typeof options)[number] => option !== null)
-        .map((option) => ({ number: option.number, title: truncateLine(splitDecisionLabel(option.label || option.action || "-").title, 42) }));
+        .map((option) => ({
+          number: option.number,
+          title: truncateLine(splitDecisionLabel(option.label || option.action || "-").title, 42),
+        }));
     }
     const fallback = options.find((option) => !isSkipOption(option)) || options[0] || null;
     if (!fallback) return [];
-    return [{ number: fallback.number, title: truncateLine(splitDecisionLabel(fallback.label || fallback.action || "-").title, 42) }];
+    return [
+      {
+        number: fallback.number,
+        title: truncateLine(splitDecisionLabel(fallback.label || fallback.action || "-").title, 42),
+      },
+    ];
   }
 
   function buildDecisionOptionPreview(option: { number: number; label: string; action: string }): string {
@@ -132,7 +142,11 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
   }
 
   function buildDecisionMessengerNotice(item: DecisionInboxRouteItem): string {
-    const projectLabel = normalizeTextField(item.project_name) || normalizeTextField(item.project_path) || normalizeTextField(item.project_id) || "-";
+    const projectLabel =
+      normalizeTextField(item.project_name) ||
+      normalizeTextField(item.project_path) ||
+      normalizeTextField(item.project_id) ||
+      "-";
     const taskLabel = normalizeTextField(item.task_title);
     const plannerSummaryLines = buildPlannerSummaryLines(item);
     const recommendedOptions = resolveRecommendedOptions(item);
@@ -142,13 +156,20 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
     const defaultOption = String(item.options[0]?.number ?? options[0]?.match(/^(\d+)/)?.[1] ?? 1);
     const isMultiPick =
       item.kind === "review_round_pick" &&
-      item.options.some((option) => option.action === "apply_review_pick" || option.action === "apply_selected_feedback");
-    const replyGuide = options.length > 0
-      ? pickDecisionL10n(
-          isMultiPick ? `회신: 번호를 하나 또는 여러 개 보내주세요. 예: ${defaultOption} 또는 ${defaultOption},3` : `회신: 숫자만 보내주세요. 예: ${defaultOption}`,
-          isMultiPick ? `Reply: send one or multiple option numbers (e.g., ${defaultOption} or ${defaultOption},3)` : `Reply: send only the option number (e.g., ${defaultOption})`,
-        )
-      : pickDecisionL10n("회신: 선택 번호를 보내주세요.", "Reply with an option number");
+      item.options.some(
+        (option) => option.action === "apply_review_pick" || option.action === "apply_selected_feedback",
+      );
+    const replyGuide =
+      options.length > 0
+        ? pickDecisionL10n(
+            isMultiPick
+              ? `회신: 번호를 하나 또는 여러 개 보내주세요. 예: ${defaultOption} 또는 ${defaultOption},3`
+              : `회신: 숫자만 보내주세요. 예: ${defaultOption}`,
+            isMultiPick
+              ? `Reply: send one or multiple option numbers (e.g., ${defaultOption} or ${defaultOption},3)`
+              : `Reply: send only the option number (e.g., ${defaultOption})`,
+          )
+        : pickDecisionL10n("회신: 선택 번호를 보내주세요.", "Reply with an option number");
     const lines = [
       pickDecisionL10n("의사결정 요청", "Decision Request"),
       `${pickDecisionL10n("프로젝트", "Project")}: ${projectLabel}`,

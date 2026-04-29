@@ -448,7 +448,10 @@ function loadFamilyMapRules(): { rules: FamilyMapRules; diagnostics: CanonicalDi
   return { rules, diagnostics };
 }
 
-function resolveFamilyForSpecialization(agent: CatalogAgent, rules: FamilyMapRules): {
+function resolveFamilyForSpecialization(
+  agent: CatalogAgent,
+  rules: FamilyMapRules,
+): {
   family: CanonicalFamilyKey | null;
   matchedBy: "override" | "stage2" | "stage1" | "department" | null;
   ruleKey: string | null;
@@ -483,40 +486,40 @@ function buildRegistry(compiledAt: string): CanonicalSpecializationRegistry {
 
   const specializations = catalog.agents
     .map<CanonicalSpecialization | null>((agent) => {
-    if (agent.class_stage_1) stage1.add(agent.class_stage_1);
-    if (agent.class_stage_2) stage2.add(agent.class_stage_2);
-    if (agent.class_stage_3) stage3.add(agent.class_stage_3);
-    const resolution = resolveFamilyForSpecialization(agent, rules);
-    if (!resolution.family || !resolution.matchedBy || !resolution.ruleKey) {
-      diagnostics.push({
-        code: "specialization_unmapped",
-        severity: "error",
-        message: `Specialization ${agent.name} is not mapped to a canonical family.`,
-        sourcePath: FAMILY_MAP_PATH,
-        details: { specialization: agent.name },
-      });
-      return null;
-    }
-    familyAssignments[resolution.family] = (familyAssignments[resolution.family] ?? 0) + 1;
-    const classStageTree: CanonicalSpecialization["classStageTree"] = {};
-    if (agent.class_stage_1) classStageTree.stage1 = agent.class_stage_1;
-    if (agent.class_stage_2) classStageTree.stage2 = agent.class_stage_2;
-    if (agent.class_stage_3) classStageTree.stage3 = agent.class_stage_3;
-    return {
-      key: agent.name,
-      description: agent.description,
-      family: resolution.family,
-      department: agent.department,
-      classStageTree,
-      upstreamMetadata: {
-        upstreamCategory: agent.upstreamCategory,
-        upstreamPath: agent.upstreamPath,
-      },
-      resolution: {
-        matchedBy: resolution.matchedBy,
-        ruleKey: resolution.ruleKey,
-      },
-    };
+      if (agent.class_stage_1) stage1.add(agent.class_stage_1);
+      if (agent.class_stage_2) stage2.add(agent.class_stage_2);
+      if (agent.class_stage_3) stage3.add(agent.class_stage_3);
+      const resolution = resolveFamilyForSpecialization(agent, rules);
+      if (!resolution.family || !resolution.matchedBy || !resolution.ruleKey) {
+        diagnostics.push({
+          code: "specialization_unmapped",
+          severity: "error",
+          message: `Specialization ${agent.name} is not mapped to a canonical family.`,
+          sourcePath: FAMILY_MAP_PATH,
+          details: { specialization: agent.name },
+        });
+        return null;
+      }
+      familyAssignments[resolution.family] = (familyAssignments[resolution.family] ?? 0) + 1;
+      const classStageTree: CanonicalSpecialization["classStageTree"] = {};
+      if (agent.class_stage_1) classStageTree.stage1 = agent.class_stage_1;
+      if (agent.class_stage_2) classStageTree.stage2 = agent.class_stage_2;
+      if (agent.class_stage_3) classStageTree.stage3 = agent.class_stage_3;
+      return {
+        key: agent.name,
+        description: agent.description,
+        family: resolution.family,
+        department: agent.department,
+        classStageTree,
+        upstreamMetadata: {
+          upstreamCategory: agent.upstreamCategory,
+          upstreamPath: agent.upstreamPath,
+        },
+        resolution: {
+          matchedBy: resolution.matchedBy,
+          ruleKey: resolution.ruleKey,
+        },
+      };
     })
     .filter((item): item is CanonicalSpecialization => item !== null);
 
@@ -558,13 +561,33 @@ function compileSnapshot(): CanonicalSnapshot {
   const { rules: modelTierRules, diagnostics: modelTierDiagnostics } = buildModelTierRules();
   const { profiles: packProfiles, diagnostics: packDiagnostics } = buildPackProfiles();
   const registry = buildRegistry(compiledAt);
-  diagnostics.push(...familyDiagnostics, ...stageDiagnostics, ...routingDiagnostics, ...modelTierDiagnostics, ...packDiagnostics);
+  diagnostics.push(
+    ...familyDiagnostics,
+    ...stageDiagnostics,
+    ...routingDiagnostics,
+    ...modelTierDiagnostics,
+    ...packDiagnostics,
+  );
   diagnostics.push(...buildAgentsSourceDiagnostics());
   diagnostics.push(...registry.diagnostics);
-  policyDiagnostics.push(...familyDiagnostics, ...stageDiagnostics, ...routingDiagnostics, ...modelTierDiagnostics, ...packDiagnostics);
+  policyDiagnostics.push(
+    ...familyDiagnostics,
+    ...stageDiagnostics,
+    ...routingDiagnostics,
+    ...modelTierDiagnostics,
+    ...packDiagnostics,
+  );
   policyDiagnostics.push(...buildAgentsSourceDiagnostics());
 
-  const hash = stableHash([policySourceParts, families, stages, approvalGates, routingRules, modelTierRules, packProfiles]);
+  const hash = stableHash([
+    policySourceParts,
+    families,
+    stages,
+    approvalGates,
+    routingRules,
+    modelTierRules,
+    packProfiles,
+  ]);
   const policy: CanonicalCompanyPolicy = {
     version: toVersion(hash, compiledAt),
     hash,
@@ -713,7 +736,9 @@ export function reloadCanonicalSnapshot(
   const normalizedTargetVersion = String(targetVersion ?? "").trim() || null;
   if (mode === "rollback") {
     const rollbackSnapshot =
-      normalizedTargetVersion !== null ? getCanonicalSnapshotByVersion(normalizedTargetVersion) : loadLastGoodSnapshot();
+      normalizedTargetVersion !== null
+        ? getCanonicalSnapshotByVersion(normalizedTargetVersion)
+        : loadLastGoodSnapshot();
     if (!rollbackSnapshot) {
       return {
         mode,
@@ -728,7 +753,8 @@ export function reloadCanonicalSnapshot(
               normalizedTargetVersion !== null
                 ? `Canonical snapshot version '${normalizedTargetVersion}' is not available for rollback.`
                 : "No last-good canonical snapshot is available for rollback.",
-            sourcePath: normalizedTargetVersion !== null ? getSnapshotArchivePath(normalizedTargetVersion) : LAST_GOOD_PATH,
+            sourcePath:
+              normalizedTargetVersion !== null ? getSnapshotArchivePath(normalizedTargetVersion) : LAST_GOOD_PATH,
           },
         ],
         restoredFromLastGood: normalizedTargetVersion === null,
@@ -903,7 +929,10 @@ function scoreHintMatches(text: string, hints: string[]): number {
     .reduce((count, hint) => count + (normalized.includes(hint) ? 1 : 0), 0);
 }
 
-function resolvePackProfile(snapshot: CanonicalSnapshot, workflowPackKey?: WorkflowPackKey | null): CanonicalPackProfile {
+function resolvePackProfile(
+  snapshot: CanonicalSnapshot,
+  workflowPackKey?: WorkflowPackKey | null,
+): CanonicalPackProfile {
   const packKey = String(workflowPackKey ?? "donggri").trim() || "donggri";
   return snapshot.policy.packProfiles.find((item) => item.key === packKey) ?? snapshot.policy.packProfiles[0];
 }
@@ -950,10 +979,17 @@ function resolveFamilyCandidateScores(
       reason: `pack_bias:${packProfile.key}`,
     });
   }
-  return [...scoresByFamily.values()].sort((left, right) => right.score - left.score || FAMILY_ORDER.indexOf(left.family) - FAMILY_ORDER.indexOf(right.family));
+  return [...scoresByFamily.values()].sort(
+    (left, right) => right.score - left.score || FAMILY_ORDER.indexOf(left.family) - FAMILY_ORDER.indexOf(right.family),
+  );
 }
 
-function resolveTier(text: string, family: CanonicalFamilyKey, packProfile: CanonicalPackProfile, snapshot: CanonicalSnapshot): {
+function resolveTier(
+  text: string,
+  family: CanonicalFamilyKey,
+  packProfile: CanonicalPackProfile,
+  snapshot: CanonicalSnapshot,
+): {
   tier: CanonicalTierKey;
   selectedBy: string;
   whyNot: Array<{ candidate: string; reason: string }>;
@@ -961,7 +997,10 @@ function resolveTier(text: string, family: CanonicalFamilyKey, packProfile: Cano
   const ranked = snapshot.policy.modelTierRules
     .map((rule) => ({
       rule,
-      score: scoreHintMatches(text, buildCandidateHints(rule.condition, MODEL_TIER_HINTS[rule.condition.toLowerCase().trim()] ?? [])),
+      score: scoreHintMatches(
+        text,
+        buildCandidateHints(rule.condition, MODEL_TIER_HINTS[rule.condition.toLowerCase().trim()] ?? []),
+      ),
     }))
     .sort((left, right) => right.score - left.score);
   const top = ranked[0];
@@ -1000,7 +1039,11 @@ function resolveStage(family: CanonicalFamilyKey, tier: CanonicalTierKey, text: 
   return "senior";
 }
 
-function pickSpecialization(text: string, family: CanonicalFamilyKey, registry: CanonicalSpecializationRegistry): string | null {
+function pickSpecialization(
+  text: string,
+  family: CanonicalFamilyKey,
+  registry: CanonicalSpecializationRegistry,
+): string | null {
   const normalized = text.toLowerCase();
   const familyItems = registry.specializations.filter((item) => item.family === family);
   let bestKey: string | null = null;
@@ -1037,7 +1080,10 @@ function pickApprovalGates(text: string, artifactBlocking: boolean): string[] {
 function chooseCanonicalProvider(tier: CanonicalTierKey, defaultProvider?: string | null): CompiledProviderDefault {
   const selected = COMPILED_PROVIDER_DEFAULTS[tier];
   if (selected.provider) return selected;
-  const fallbackProvider = String(defaultProvider ?? DEFAULT_PROVIDER).trim().toLowerCase() || DEFAULT_PROVIDER;
+  const fallbackProvider =
+    String(defaultProvider ?? DEFAULT_PROVIDER)
+      .trim()
+      .toLowerCase() || DEFAULT_PROVIDER;
   const fallbackConfig = normalizeProviderConfig(null)[fallbackProvider] ?? {};
   return {
     provider: fallbackProvider,
@@ -1087,7 +1133,8 @@ function constrainFamilies(
     selectedBy.push(`manual allowlist=${allowlist.join(",")}`);
   }
 
-  const selected = filtered[0] ?? rankedFamilies[0] ?? { family: "backend" as const, score: 0, reason: "fallback:backend" };
+  const selected = filtered[0] ??
+    rankedFamilies[0] ?? { family: "backend" as const, score: 0, reason: "fallback:backend" };
   if (selected.reason.startsWith("routing_rule:")) {
     selectedBy.push(`family=${selected.family} (${selected.reason})`);
   } else if (selected.reason.startsWith("pack_bias:")) {
@@ -1141,7 +1188,9 @@ export function previewCanonicalRouting(input: {
     `stage=${stage} (family_default)`,
     specialization ? `specialization=${specialization}` : "specialization=none",
     `provider/model tier=${tier} -> ${providerDefaults.provider}`,
-    input.providerModelConfig ? "providerModelConfig treated as projection-only" : "providerModelConfig projection absent",
+    input.providerModelConfig
+      ? "providerModelConfig treated as projection-only"
+      : "providerModelConfig projection absent",
   ];
   const blockedBy = [
     ...constrainedFamily.blockedBy,

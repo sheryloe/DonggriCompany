@@ -88,7 +88,8 @@ function readExistingOAuthClient(dbPath, encryptionSecret) {
     const clientId = normalizeSecret(parsed.clientId || parsed.client_id);
     const rawClientSecret = normalizeSecret(parsed.clientSecret || parsed.client_secret);
     const encryptedClientSecret = normalizeSecret(parsed.clientSecretEnc || parsed.client_secret_enc);
-    const clientSecret = rawClientSecret || (encryptedClientSecret ? decryptSecret(encryptedClientSecret, encryptionSecret) : "");
+    const clientSecret =
+      rawClientSecret || (encryptedClientSecret ? decryptSecret(encryptedClientSecret, encryptionSecret) : "");
     if (!clientId || !clientSecret) return null;
     return { clientId, clientSecret };
   } finally {

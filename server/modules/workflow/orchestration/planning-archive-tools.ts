@@ -295,11 +295,15 @@ export function createPlanningArchiveTools(deps: CreatePlanningArchiveToolsDeps)
         leader,
         pickL(
           l(
-            [`대표님, ${deptName} 팀장으로서 최종 취합본을 생성해 아카이빙했습니다. 보고서 팝업에서 확인하실 수 있습니다.`],
+            [
+              `대표님, ${deptName} 팀장으로서 최종 취합본을 생성해 아카이빙했습니다. 보고서 팝업에서 확인하실 수 있습니다.`,
+            ],
             [
               `CEO, as the ${deptName} lead, I have generated and archived the consolidated final report. You can review it from the report popup.`,
             ],
-            [`CEO、${deptName} リードとして最終統合レポートを生成し、アーカイブしました。レポートポップアップから確認できます。`],
+            [
+              `CEO、${deptName} リードとして最終統合レポートを生成し、アーカイブしました。レポートポップアップから確認できます。`,
+            ],
             [`CEO，作为 ${deptName} 负责人，我已生成并归档最终汇总报告，可在报告弹窗中查看。`],
           ),
           lang,

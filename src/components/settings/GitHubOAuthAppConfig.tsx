@@ -40,9 +40,7 @@ export default function GitHubOAuthAppConfig({ t }: { t: TFunction }) {
           })}
         </h4>
         {saved && (
-          <span className="text-[10px] text-green-400">
-            {t({ ko: "???", en: "Saved", ja: "Saved", zh: "Saved" })}
-          </span>
+          <span className="text-[10px] text-green-400">{t({ ko: "???", en: "Saved", ja: "Saved", zh: "Saved" })}</span>
         )}
       </div>
 

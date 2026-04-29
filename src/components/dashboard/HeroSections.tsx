@@ -106,7 +106,10 @@ export function DashboardHeroHeader({
           >
             <span aria-hidden="true">🚀</span>
             <span>{primaryCtaLabel}</span>
-            <span className="text-xs text-white/80 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
+            <span
+              className="text-xs text-white/80 transition-transform duration-200 group-hover:translate-x-0.5"
+              aria-hidden="true"
+            >
               →
             </span>
           </button>
@@ -139,7 +142,10 @@ export function DashboardHudStats({ hudStats, numberFormatter }: DashboardHudSta
               <p className="text-[9px] font-bold uppercase tracking-[0.15em]" style={{ color: "var(--th-text-muted)" }}>
                 {stat.label}
               </p>
-              <p className="mt-1 text-3xl font-black tracking-tight" style={{ color: stat.color, textShadow: `0 0 20px ${stat.color}40` }}>
+              <p
+                className="mt-1 text-3xl font-black tracking-tight"
+                style={{ color: stat.color, textShadow: `0 0 20px ${stat.color}40` }}
+              >
                 {typeof stat.value === "number" ? numberFormatter.format(stat.value) : stat.value}
               </p>
               <p className="mt-0.5 text-[10px]" style={{ color: "var(--th-text-muted)" }}>
@@ -184,7 +190,10 @@ export function DashboardRankingBoard({
 
       <div className="relative mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="animate-crown-wiggle text-2xl" style={{ display: "inline-block", filter: "drop-shadow(0 0 8px rgba(255,215,0,0.5))" }}>
+          <span
+            className="animate-crown-wiggle text-2xl"
+            style={{ display: "inline-block", filter: "drop-shadow(0 0 8px rgba(255,215,0,0.5))" }}
+          >
             👑
           </span>
           <div>
@@ -207,9 +216,19 @@ export function DashboardRankingBoard({
       </div>
 
       {topAgents.length === 0 ? (
-        <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 text-sm" style={{ color: "var(--th-text-muted)" }}>
+        <div
+          className="flex min-h-[200px] flex-col items-center justify-center gap-3 text-sm"
+          style={{ color: "var(--th-text-muted)" }}
+        >
           <span className="text-4xl opacity-30">📭</span>
-          <p>{t({ ko: "등록된 에이전트가 없습니다.", en: "No agents registered.", ja: "登録されたエージェントがありません。", zh: "暂无已注册代理。" })}</p>
+          <p>
+            {t({
+              ko: "등록된 에이전트가 없습니다.",
+              en: "No agents registered.",
+              ja: "登録されたエージェントがありません。",
+              zh: "暂无已注册代理。",
+            })}
+          </p>
         </div>
       ) : (
         <div className="relative space-y-5">
@@ -224,7 +243,10 @@ export function DashboardRankingBoard({
                 const podiumHeight = isFirst ? "h-24" : rank === 2 ? "h-16" : "h-12";
 
                 return (
-                  <div key={agent.id} className={`flex flex-col items-center gap-2 ${isFirst ? "animate-rank-float" : ""}`}>
+                  <div
+                    key={agent.id}
+                    className={`flex flex-col items-center gap-2 ${isFirst ? "animate-rank-float" : ""}`}
+                  >
                     {rank === 1 && <span className="text-2xl">🥇</span>}
                     {rank === 2 && <span className="text-lg">🥈</span>}
                     {rank === 3 && <span className="text-lg">🥉</span>}
@@ -239,7 +261,10 @@ export function DashboardRankingBoard({
                       <AgentAvatar agent={agentMap.get(agent.id)} agents={agents} size={avatarSize} rounded="2xl" />
                     </div>
 
-                    <span className={`max-w-[80px] truncate text-center font-bold ${isFirst ? "text-sm" : "text-xs"}`} style={{ color: tier.color }}>
+                    <span
+                      className={`max-w-[80px] truncate text-center font-bold ${isFirst ? "text-sm" : "text-xs"}`}
+                      style={{ color: tier.color }}
+                    >
                       {agent.name}
                     </span>
 
@@ -283,7 +308,10 @@ export function DashboardRankingBoard({
                     <span className="w-8 text-center font-mono text-sm font-black" style={{ color: `${tier.color}80` }}>
                       #{rank}
                     </span>
-                    <div className="flex-shrink-0 overflow-hidden rounded-xl" style={{ border: `1px solid ${tier.color}40` }}>
+                    <div
+                      className="flex-shrink-0 overflow-hidden rounded-xl"
+                      style={{ border: `1px solid ${tier.color}40` }}
+                    >
                       <AgentAvatar agent={agentMap.get(agent.id)} agents={agents} size={36} rounded="xl" />
                     </div>
                     <div className="min-w-0 flex-1">

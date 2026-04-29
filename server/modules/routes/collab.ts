@@ -3,6 +3,7 @@ import type { Lang } from "../../types/lang.ts";
 import { createHash, randomUUID } from "node:crypto";
 import {
   listMessengerSessions,
+  sendDepartmentTelegramMessage,
   sendMessengerMessage,
   sendMessengerSessionMessage,
   type MessengerChannel,
@@ -18,13 +19,20 @@ import { initializeCollabLanguagePolicy } from "./collab/language-policy.ts";
 import { initializeProjectResolution, type DelegationOptions } from "./collab/project-resolution.ts";
 import { initializeSubtaskDelegation } from "./collab/subtask-delegation.ts";
 import { createTaskDelegationHandler } from "./collab/task-delegation.ts";
-import { deriveFamilyFromDepartment, getCanonicalStageRank, resolveCanonicalIdentity } from "../company/canonical-identity.ts";
+import {
+  deriveFamilyFromDepartment,
+  getCanonicalStageRank,
+  resolveCanonicalIdentity,
+} from "../company/canonical-identity.ts";
 import { pickCanonicalMeetingChair } from "../company/canonical-authority.ts";
 import { getDepartmentForPack, readActiveOfficeWorkflowPackKey } from "../workflow/packs/department-scope.ts";
 import { getDepartmentResponsibilityText, mapLegacyDepartmentId } from "../bootstrap/schema/organization-manifest.ts";
 
 export function buildMessengerRelayPayloadHash(text: string): string {
-  return createHash("sha256").update(String(text ?? ""), "utf8").digest("hex").slice(0, 24);
+  return createHash("sha256")
+    .update(String(text ?? ""), "utf8")
+    .digest("hex")
+    .slice(0, 24);
 }
 
 export function hasDuplicateMessengerRelayLog(
@@ -233,6 +241,26 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     return mapLegacyDepartmentId(raw) ?? raw;
   }
 
+  function isPreferredSingleGroupTelegramSession(session: {
+    id?: string;
+    name?: string;
+    enabled?: boolean;
+    agentId?: string;
+    workflowPackKey?: string;
+    departmentId?: string;
+    department_id?: string;
+  }): boolean {
+    if (session.enabled === false) return false;
+    const id = String(session.id ?? "")
+      .trim()
+      .toLowerCase();
+    if (id === "global" || id === "global-group-chat") return true;
+    const name = String(session.name ?? "")
+      .trim()
+      .toLowerCase();
+    return name.includes("global") || name.includes("통합") || name.includes("회의실");
+  }
+
   function readSingleGroupTelegramRouteFromSettings(): {
     channel: "telegram";
     targetId: string;
@@ -251,6 +279,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
           token?: string;
           sessions?: Array<{
             id?: string;
+            name?: string;
             targetId?: string;
             enabled?: boolean;
             token?: string;
@@ -265,7 +294,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       if (!telegram || typeof telegram !== "object") return null;
       const sessions = Array.isArray(telegram.sessions) ? telegram.sessions : [];
       const preferred =
-        sessions.find((session) => String(session.id ?? "").trim().toLowerCase() === "global") ??
+        sessions.find((session) => isPreferredSingleGroupTelegramSession(session)) ??
         sessions.find(
           (session) =>
             session.enabled !== false &&
@@ -322,12 +351,14 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     departmentId: string;
     taskStatus: string;
   } | null {
-    const taskRow = db
-      .prepare("SELECT department_id, status FROM tasks WHERE id = ?")
-      .get(taskId) as { department_id?: string | null; status?: string | null } | undefined;
+    const taskRow = db.prepare("SELECT department_id, status FROM tasks WHERE id = ?").get(taskId) as
+      | { department_id?: string | null; status?: string | null }
+      | undefined;
 
     const departmentId =
-      normalizeMessengerDepartmentId(speakerDepartmentId) || normalizeMessengerDepartmentId(taskRow?.department_id) || "unknown";
+      normalizeMessengerDepartmentId(speakerDepartmentId) ||
+      normalizeMessengerDepartmentId(taskRow?.department_id) ||
+      "unknown";
     const taskStatus =
       typeof taskRow?.status === "string" && taskRow.status.trim().length > 0 ? taskRow.status.trim() : "unknown";
 
@@ -337,11 +368,15 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
         (session) =>
           session.enabled &&
           session.channel === "telegram" &&
-          String(session.sessionKey ?? "").trim().toLowerCase() === "telegram:global" &&
+          String(session.sessionKey ?? "")
+            .trim()
+            .toLowerCase() === "telegram:global" &&
           String(session.targetId ?? "").trim().length > 0,
       ) ??
       sessions.find((session) => {
-        const sessionKey = String(session.sessionKey ?? "").trim().toLowerCase();
+        const sessionKey = String(session.sessionKey ?? "")
+          .trim()
+          .toLowerCase();
         const departmentId = String((session as Record<string, unknown>).departmentId ?? "")
           .trim()
           .toLowerCase();
@@ -374,9 +409,9 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
         }
       : settingsRoute
         ? settingsRoute
-      : fallbackRoute && fallbackRoute.channel === "telegram" && fallbackRoute.targetId
-        ? fallbackRoute
-        : null;
+        : fallbackRoute && fallbackRoute.channel === "telegram" && fallbackRoute.targetId
+          ? fallbackRoute
+          : null;
 
     if (!candidateRoute) return null;
 
@@ -490,9 +525,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     const plainLines = rawLines.map((line) => normalizeMessengerTextLine(line));
 
     const requestLine =
-      plainLines.find((line) =>
-        /(업무 완료 보고|reporting completion|completion result)/i.test(line),
-      ) ?? "";
+      plainLines.find((line) => /(업무 완료 보고|reporting completion|completion result)/i.test(line)) ?? "";
     const identityIntro = buildMessengerReportIdentityIntro(agent, content, requestLine);
     const progressLine =
       plainLines.find((line) =>
@@ -631,8 +664,18 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
 
     try {
       const chunks = splitMessageByLimit(taggedContent, getMessengerChunkLimit(relayRoute.channel));
+      let senderRoute: "department_bot" | "global" | "mixed" | null = null;
+      let fallbackReason: string | null = null;
       for (const chunk of chunks) {
-        if (relayRoute.channel === "telegram" && relayRoute.token) {
+        if (relayRoute.channel === "telegram" && relayRoute.sessionKey) {
+          const result = await sendDepartmentTelegramMessage({
+            sessionKey: relayRoute.sessionKey,
+            departmentId: relayRoute.departmentId,
+            text: chunk,
+          });
+          senderRoute = senderRoute && senderRoute !== result.routed ? "mixed" : result.routed;
+          fallbackReason = fallbackReason ?? result.fallbackReason ?? null;
+        } else if (relayRoute.channel === "telegram" && relayRoute.token) {
           await sendTelegramMessageWithToken(relayRoute.token, relayRoute.targetId, chunk);
         } else if (relayRoute.sessionKey) {
           await sendMessengerSessionMessage(relayRoute.sessionKey, chunk);
@@ -644,10 +687,12 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
           });
         }
       }
+      const senderRouteSuffix = senderRoute ? ` sender_route=${senderRoute}` : "";
+      const fallbackSuffix = fallbackReason ? ` department_bot_fallback_reason=${fallbackReason}` : "";
       appendTaskLog(
         taskId,
         "system",
-        `messenger_relay_success channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}${hashSuffix}`,
+        `messenger_relay_success channel=${relayRoute.channel} ${routeRef} task_id=${taskId} message_type=${messageType} route_kind=${relayRoute.routeKind}${reasonSuffix}${hashSuffix}${senderRouteSuffix}${fallbackSuffix}`,
       );
     } catch (err: unknown) {
       const errorCode = err instanceof Error ? err.message.replace(/\s+/g, "_").slice(0, 120) : "send_failed";
@@ -695,9 +740,9 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     let persistedTaskId = taskId && taskExists(taskId) ? taskId : null;
     let persistedProjectId: string | null = null;
     if (persistedTaskId) {
-      const taskRow = db
-        .prepare("SELECT project_id FROM tasks WHERE id = ?")
-        .get(persistedTaskId) as { project_id?: string | null } | undefined;
+      const taskRow = db.prepare("SELECT project_id FROM tasks WHERE id = ?").get(persistedTaskId) as
+        | { project_id?: string | null }
+        | undefined;
       persistedProjectId = taskRow?.project_id ?? null;
     }
 
@@ -972,7 +1017,9 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
       .all(...(scopedIds ?? [])) as unknown as AgentRow[];
     if (leaders.length <= 0) return null;
 
-    const normalizedDeptId = String(deptId ?? "").trim().toLowerCase();
+    const normalizedDeptId = String(deptId ?? "")
+      .trim()
+      .toLowerCase();
     if (!normalizedDeptId || normalizedDeptId === "planning") {
       return pickCanonicalMeetingChair(leaders);
     }
@@ -1212,4 +1259,3 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     resetDirectChatState,
   };
 }
-

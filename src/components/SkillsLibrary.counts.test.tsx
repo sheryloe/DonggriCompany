@@ -274,7 +274,7 @@ describe("SkillsLibrary count aggregation", () => {
     fireEvent.change(screen.getByPlaceholderText(/Search skills/i), { target: { value: "custom-skill-2" } });
     fireEvent.click(screen.getByRole("button", { name: /Custom Skills.*2/ }));
 
-    expect(screen.getByText("1 skills shown · \"custom-skill-2\" search results")).toBeInTheDocument();
+    expect(screen.getByText('1 skills shown · "custom-skill-2" search results')).toBeInTheDocument();
     expect(screen.getByText("custom-skill-2")).toBeInTheDocument();
     expect(screen.queryByText("custom-skill-1")).not.toBeInTheDocument();
   });

@@ -238,7 +238,10 @@ export default function ProjectFlowDialog({
               </div>
               {!createNewProjectMode && (
                 <p className="text-[11px] text-slate-500">
-                  {tr("검색어가 없으면 최근 사용 프로젝트를 먼저 보여줍니다.", "Recent projects appear first when search is empty.")}
+                  {tr(
+                    "검색어가 없으면 최근 사용 프로젝트를 먼저 보여줍니다.",
+                    "Recent projects appear first when search is empty.",
+                  )}
                 </p>
               )}
             </div>
@@ -280,12 +283,17 @@ export default function ProjectFlowDialog({
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                     {projectQuery.trim() ? tr("검색 결과", "Search Results") : tr("프로젝트 목록", "Projects")}
                   </p>
-                  {projectsLoading && <span className="text-[11px] text-slate-500">{tr("불러오는 중", "Loading")}</span>}
+                  {projectsLoading && (
+                    <span className="text-[11px] text-slate-500">{tr("불러오는 중", "Loading")}</span>
+                  )}
                 </div>
                 <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
                   {filteredProjects.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/60 px-4 py-6 text-center text-sm text-slate-400">
-                      {tr("일치하는 프로젝트가 없습니다. 새 프로젝트로 생성할 수 있습니다.", "No matching project found. Create a new project instead.")}
+                      {tr(
+                        "일치하는 프로젝트가 없습니다. 새 프로젝트로 생성할 수 있습니다.",
+                        "No matching project found. Create a new project instead.",
+                      )}
                     </div>
                   ) : (
                     filteredProjects.map((project) => renderProjectCard(project, selectedProject, tr, onSelectProject))
@@ -320,7 +328,9 @@ export default function ProjectFlowDialog({
                           aria-checked={githubAutoCreateEnabled}
                           onClick={() => onGitHubAutoCreateEnabledChange(!githubAutoCreateEnabled)}
                           className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
-                            githubAutoCreateEnabled ? "border-emerald-400 bg-emerald-500/90" : "border-slate-600 bg-slate-700"
+                            githubAutoCreateEnabled
+                              ? "border-emerald-400 bg-emerald-500/90"
+                              : "border-slate-600 bg-slate-700"
                           }`}
                         >
                           <span
@@ -376,7 +386,8 @@ export default function ProjectFlowDialog({
                             <p className="mt-1 break-all text-xs text-slate-300">
                               {defaultProjectRootLoading
                                 ? tr("불러오는 중", "Loading")
-                                : defaultProjectRoot || tr("기본 루트를 확인할 수 없습니다.", "Default root is unavailable.")}
+                                : defaultProjectRoot ||
+                                  tr("기본 루트를 확인할 수 없습니다.", "Default root is unavailable.")}
                             </p>
                           </div>
                         </div>
@@ -385,7 +396,9 @@ export default function ProjectFlowDialog({
                   )}
 
                   <label className="block text-xs text-slate-400">
-                    {githubAutoPathLocked ? tr("프로젝트 경로 (자동)", "Project Path (Auto)") : tr("프로젝트 경로", "Project Path")}
+                    {githubAutoPathLocked
+                      ? tr("프로젝트 경로 (자동)", "Project Path (Auto)")
+                      : tr("프로젝트 경로", "Project Path")}
                     <input
                       type="text"
                       value={newProjectPath}
@@ -459,11 +472,15 @@ export default function ProjectFlowDialog({
                   {showPathTools && pathSuggestionsOpen && (
                     <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-2">
                       <p className="mb-2 text-[11px] text-slate-500">
-                        {pathSuggestionsLoading ? tr("추천 경로를 불러오는 중입니다.", "Loading suggestions...") : tr("추천 경로", "Suggested paths")}
+                        {pathSuggestionsLoading
+                          ? tr("추천 경로를 불러오는 중입니다.", "Loading suggestions...")
+                          : tr("추천 경로", "Suggested paths")}
                       </p>
                       <div className="max-h-40 space-y-1 overflow-y-auto">
                         {pathSuggestions.length === 0 ? (
-                          <p className="px-2 py-1 text-[11px] text-slate-500">{tr("추천 경로가 없습니다.", "No suggested paths.")}</p>
+                          <p className="px-2 py-1 text-[11px] text-slate-500">
+                            {tr("추천 경로가 없습니다.", "No suggested paths.")}
+                          </p>
                         ) : (
                           pathSuggestions.map((candidate) => (
                             <button
@@ -486,7 +503,8 @@ export default function ProjectFlowDialog({
                       <p className="mt-1 break-all">{missingPathPrompt.normalizedPath}</p>
                       {missingPathPrompt.nearestExistingParent && (
                         <p className="mt-1 break-all text-amber-200/80">
-                          {tr("가장 가까운 기존 폴더", "Nearest existing parent")}: {missingPathPrompt.nearestExistingParent}
+                          {tr("가장 가까운 기존 폴더", "Nearest existing parent")}:{" "}
+                          {missingPathPrompt.nearestExistingParent}
                         </p>
                       )}
                     </div>
@@ -506,8 +524,14 @@ export default function ProjectFlowDialog({
                   {(isDirectivePending || isPrnPending) && (
                     <p className="text-[11px] text-slate-500">
                       {isDirectivePending
-                        ? tr("$ 지시문 내용이 기본 핵심 목표로 들어갑니다.", "The directive text is used as the default core goal.")
-                        : tr("PRN 프롬프트를 기반으로 핵심 목표를 미리 채웠습니다.", "The PRN prompt prefilled the core goal.")}
+                        ? tr(
+                            "$ 지시문 내용이 기본 핵심 목표로 들어갑니다.",
+                            "The directive text is used as the default core goal.",
+                          )
+                        : tr(
+                            "PRN 프롬프트를 기반으로 핵심 목표를 미리 채웠습니다.",
+                            "The PRN prompt prefilled the core goal.",
+                          )}
                     </p>
                   )}
 
@@ -571,7 +595,9 @@ export default function ProjectFlowDialog({
                     {manualPathError}
                   </div>
                 ) : manualPathLoading ? (
-                  <div className="px-3 py-6 text-center text-sm text-slate-400">{tr("폴더 목록을 불러오는 중입니다.", "Loading folders...")}</div>
+                  <div className="px-3 py-6 text-center text-sm text-slate-400">
+                    {tr("폴더 목록을 불러오는 중입니다.", "Loading folders...")}
+                  </div>
                 ) : (
                   <div className="max-h-52 space-y-1 overflow-y-auto">
                     {manualPathEntries.map((entry) => (
@@ -586,7 +612,9 @@ export default function ProjectFlowDialog({
                       </button>
                     ))}
                     {manualPathEntries.length === 0 && (
-                      <p className="px-2 py-1 text-[11px] text-slate-500">{tr("표시할 폴더가 없습니다.", "No folders found.")}</p>
+                      <p className="px-2 py-1 text-[11px] text-slate-500">
+                        {tr("표시할 폴더가 없습니다.", "No folders found.")}
+                      </p>
                     )}
                   </div>
                 )}

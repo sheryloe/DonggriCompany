@@ -96,7 +96,8 @@ export default function AgentDetail({
     return summaryParts.join(" · ");
   }, [agent.career_stage, agent.family, agent.role, department, language, t]);
   const canSaveCli =
-    (!requiresOAuthAccount || Boolean(selectedOAuthAccountId)) && (!requiresCliPool || Boolean(selectedCliAccountPoolId));
+    (!requiresOAuthAccount || Boolean(selectedOAuthAccountId)) &&
+    (!requiresCliPool || Boolean(selectedCliAccountPoolId));
 
   const cliSummaryText = useMemo(() => {
     const providerLabel = CLI_LABELS[agent.cli_provider] ?? agent.cli_provider;
@@ -377,9 +378,7 @@ export default function AgentDetail({
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
             <div className="rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-1.5 text-slate-200">
-              <div className="text-[10px] text-slate-400">
-                {t({ ko: "직급", en: "Role", ja: "Role", zh: "Role" })}
-              </div>
+              <div className="text-[10px] text-slate-400">{t({ ko: "직급", en: "Role", ja: "Role", zh: "Role" })}</div>
               <div className="mt-0.5 font-semibold">{getRoleDisplayLabel(agent.role, language)}</div>
             </div>
             <div className="rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-1.5 text-slate-200">
@@ -387,7 +386,9 @@ export default function AgentDetail({
                 {t({ ko: "부서", en: "Department", ja: "Department", zh: "Department" })}
               </div>
               <div className="mt-0.5 font-semibold">
-                {department ? localeName(language, department) : t({ ko: "미지정", en: "Unassigned", ja: "Unassigned", zh: "Unassigned" })}
+                {department
+                  ? localeName(language, department)
+                  : t({ ko: "미지정", en: "Unassigned", ja: "Unassigned", zh: "Unassigned" })}
               </div>
             </div>
             <div className="rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-1.5 text-slate-200">

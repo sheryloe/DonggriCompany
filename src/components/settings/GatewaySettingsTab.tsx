@@ -5,7 +5,13 @@ import { getGatewaySettingsCopy, getSettingsCommonCopy } from "./settings-copy";
 import type { ChannelSettingsTabProps } from "./types";
 import ChatEditorModal from "./gateway-settings/ChatEditorModal";
 import { CHANNEL_META, isWorkflowPackKey } from "./gateway-settings/constants";
-import { type ChatRow, createEditorState, defaultWorkflowPackLabel, normalizeChannelsConfig, resolveChannelsConfig } from "./gateway-settings/state";
+import {
+  type ChatRow,
+  createEditorState,
+  defaultWorkflowPackLabel,
+  normalizeChannelsConfig,
+  resolveChannelsConfig,
+} from "./gateway-settings/state";
 
 const SINGLE_GROUP_CHANNEL = "telegram";
 const SINGLE_GROUP_SESSION_ID = "global";
@@ -51,7 +57,15 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
 
   const workflowPackOptions = useMemo(() => {
     const options = new Map<WorkflowPackKey, { key: WorkflowPackKey; name: string; enabled: boolean }>();
-    for (const key of ["development", "donggri", "novel", "report", "video_preprod", "web_research_report", "roleplay"] as const) {
+    for (const key of [
+      "development",
+      "donggri",
+      "novel",
+      "report",
+      "video_preprod",
+      "web_research_report",
+      "roleplay",
+    ] as const) {
       options.set(key, { key, name: defaultWorkflowPackLabel(t, key), enabled: true });
     }
     for (const pack of workflowPacks) {
@@ -59,7 +73,8 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
       const current = options.get(pack.key);
       options.set(pack.key, {
         key: pack.key,
-        name: typeof pack.name === "string" && pack.name.trim().length > 0 ? pack.name.trim() : current?.name ?? pack.key,
+        name:
+          typeof pack.name === "string" && pack.name.trim().length > 0 ? pack.name.trim() : (current?.name ?? pack.key),
         enabled: pack.enabled !== false,
       });
     }
@@ -195,10 +210,7 @@ export default function GatewaySettingsTab({ t, form, setForm, persistSettings }
     try {
       const sessions = await api.getMessengerRuntimeSessions();
       const telegram = sessions.find(
-        (session) =>
-          session.channel === SINGLE_GROUP_CHANNEL &&
-          session.enabled &&
-          session.targetId.trim().length > 0,
+        (session) => session.channel === SINGLE_GROUP_CHANNEL && session.enabled && session.targetId.trim().length > 0,
       );
       setRuntimeSessions(telegram ? [telegram] : []);
     } catch {

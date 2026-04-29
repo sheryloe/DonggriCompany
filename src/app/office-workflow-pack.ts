@@ -82,7 +82,12 @@ const PACK_META: Record<WorkflowPackKey, PackMeta> = {
     accent: 6,
   },
   video_preprod: {
-    label: { ko: "영상 프리프로덕션", en: "Video Pre-production", ja: "Video Pre-production", zh: "Video Pre-production" },
+    label: {
+      ko: "영상 프리프로덕션",
+      en: "Video Pre-production",
+      ja: "Video Pre-production",
+      zh: "Video Pre-production",
+    },
     summary: {
       ko: "기획/디자인/운영 조율 팩",
       en: "Planning, design, and operations coordination pack",
@@ -220,7 +225,9 @@ const PACK_ROOM_THEMES: Record<WorkflowPackKey, Record<string, RoomTheme>> = {
 };
 
 function normalizeLocale(locale: unknown): UiLanguageLike {
-  const value = String(locale ?? "").trim().toLowerCase();
+  const value = String(locale ?? "")
+    .trim()
+    .toLowerCase();
   if (value.startsWith("ko")) return "ko";
   return "en";
 }
@@ -253,7 +260,11 @@ function normalizeDepartmentText(department: Department, locale: UiLanguageLike)
   return department.name;
 }
 
-function buildSeedPlan(packKey: WorkflowPackKey, departments: Department[], targetCount: number): Array<{ department: Department; role: AgentRole }> {
+function buildSeedPlan(
+  packKey: WorkflowPackKey,
+  departments: Department[],
+  targetCount: number,
+): Array<{ department: Department; role: AgentRole }> {
   if (packKey === "development") return [];
   if (departments.length === 0 || targetCount <= 0) return [];
 
@@ -278,7 +289,12 @@ function buildSeedPlan(packKey: WorkflowPackKey, departments: Department[], targ
   return result;
 }
 
-function makeLocalizedPersonality(packKey: WorkflowPackKey, departmentId: string, role: AgentRole, locale: UiLanguageLike): string {
+function makeLocalizedPersonality(
+  packKey: WorkflowPackKey,
+  departmentId: string,
+  role: AgentRole,
+  locale: UiLanguageLike,
+): string {
   if (locale === "ko") {
     return `증거 품질을 우선하고 ${departmentId} 작업을 ${roleName(role, locale)} 기준으로 정리합니다. (${packKey})`;
   }
@@ -345,7 +361,8 @@ export function buildOfficePackPresentation(params: {
         ? `${pickLocalized(locale, copy.promptTitle)}\n${pickLocalized(locale, copy.promptBody)}`
         : department.prompt,
     };
-    roomThemes[department.id] = roomThemes[department.id] ?? getOfficePackRoomThemes(packKey)[department.id] ?? makeTheme(department.sort_order);
+    roomThemes[department.id] =
+      roomThemes[department.id] ?? getOfficePackRoomThemes(packKey)[department.id] ?? makeTheme(department.sort_order);
     return nextDepartment;
   });
 
@@ -363,7 +380,9 @@ export function resolveOfficePackSeedProvider(params: {
   seedIndex: number;
   seedOrderInDepartment?: number;
 }): Agent["cli_provider"] {
-  const departmentId = String(params.departmentId ?? "").trim().toLowerCase();
+  const departmentId = String(params.departmentId ?? "")
+    .trim()
+    .toLowerCase();
   const order = Number(params.seedOrderInDepartment ?? params.seedIndex ?? 1);
 
   if (departmentId === "planning") {
@@ -427,7 +446,14 @@ export function buildOfficePackStarterAgents(params: {
       run_mode: "standard",
       cli_account_pool_id: null,
       workflow_profile: null,
-      family: department.id === "planning" ? "orchestrator" : department.id === "qa" ? "qa" : department.id === "design" ? "frontend" : "backend",
+      family:
+        department.id === "planning"
+          ? "orchestrator"
+          : department.id === "qa"
+            ? "qa"
+            : department.id === "design"
+              ? "frontend"
+              : "backend",
       career_stage: role === "team_leader" ? "team-lead" : role === "senior" ? "senior" : "junior",
       specialization_key: null,
       authority_level: role === "team_leader" ? 3 : role === "senior" ? 2 : 1,

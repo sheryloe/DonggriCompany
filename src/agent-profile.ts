@@ -351,7 +351,10 @@ function localizeProfileToken(value: string, locale?: string): string {
 }
 
 function formatLocalizedList(values: string[], locale?: string): string {
-  return values.map((entry) => localizeProfileToken(entry, locale)).filter(Boolean).join(", ");
+  return values
+    .map((entry) => localizeProfileToken(entry, locale))
+    .filter(Boolean)
+    .join(", ");
 }
 
 function formatClassPath(value: AgentProfile["class_path"], locale?: string): string {
@@ -361,7 +364,10 @@ function formatClassPath(value: AgentProfile["class_path"], locale?: string): st
   const stage1 = normalizeString(value.stage1 ?? value.class_stage_1);
   const stage2 = normalizeString(value.stage2 ?? value.class_stage_2);
   const stage3 = normalizeString(value.stage3 ?? value.class_stage_3);
-  return [stage1, stage2, stage3].filter(Boolean).map((entry) => localizeProfileToken(entry, locale)).join(" > ");
+  return [stage1, stage2, stage3]
+    .filter(Boolean)
+    .map((entry) => localizeProfileToken(entry, locale))
+    .join(" > ");
 }
 
 function formatPromotionPolicy(value: AgentProfile["promotion_policy"], locale?: string): string {
@@ -374,11 +380,7 @@ function formatPromotionPolicy(value: AgentProfile["promotion_policy"], locale?:
     const noteLabels: Record<string, string> = {
       default_junior_to_senior: "주니어에서 시니어로 자동 승급",
     };
-    return [
-      xp !== null ? `${xp} XP 이상 자동 승급` : "",
-      manual ? "팀 리드 수동 승인" : "",
-      noteLabels[notes] ?? notes,
-    ]
+    return [xp !== null ? `${xp} XP 이상 자동 승급` : "", manual ? "팀 리드 수동 승인" : "", noteLabels[notes] ?? notes]
       .filter(Boolean)
       .join(" ");
   }

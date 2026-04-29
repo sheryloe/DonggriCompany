@@ -5,10 +5,7 @@ import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import AgentAvatar from "../AgentAvatar";
 import AgentSelect from "../AgentSelect";
 import DiffModal from "./DiffModal";
-import {
-  getGoalCommandTeamLabel,
-  getGoalCommandTitle,
-} from "./goal-command-text";
+import { getGoalCommandTeamLabel, getGoalCommandTitle } from "./goal-command-text";
 import type { GoalCommandKey, GoalCommandPreset } from "../../types";
 import {
   getTaskTypeBadge,
@@ -48,14 +45,17 @@ const SUBTASK_STATUS_ICON: Record<string, string> = {
   blocked: "\uD83D\uDEAB",
 };
 
-function resolveGoalCommandMeta(task: Task): Pick<GoalCommandPreset, "key" | "teamPreset" | "workflowPackKey" | "slashCommand"> | null {
+function resolveGoalCommandMeta(
+  task: Task,
+): Pick<GoalCommandPreset, "key" | "teamPreset" | "workflowPackKey" | "slashCommand"> | null {
   if (!task.workflow_meta_json) return null;
   try {
     const parsed = JSON.parse(task.workflow_meta_json);
     if (!parsed || typeof parsed !== "object") return null;
     const key = typeof parsed.goal_command === "string" ? parsed.goal_command : "";
     const teamPreset = typeof parsed.team_preset === "string" ? parsed.team_preset : "";
-    const workflowPackKey = typeof parsed.workflow_pack_key === "string" ? parsed.workflow_pack_key : task.workflow_pack_key;
+    const workflowPackKey =
+      typeof parsed.workflow_pack_key === "string" ? parsed.workflow_pack_key : task.workflow_pack_key;
     const slashCommand = typeof parsed.slash_command === "string" ? parsed.slash_command : `/dg-${key}`;
     if (!key || !teamPreset || !workflowPackKey) return null;
     return {

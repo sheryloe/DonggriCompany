@@ -89,7 +89,11 @@ describe("project artifacts", () => {
     expect(state.parsedState.manifest?.lastPatchedBy).toBe("test-suite");
     expect(state.parsedState.manifest?.policyVersion).toBe("policy-v2");
     expect(state.parsedState.documents.STATUS?.keyValues["Policy Version"]).toBe("policy-v2");
-    expect(state.parsedState.documents.NEXT_ACTIONS?.listItems.some((item) => item.includes("Stabilize canonical compiler"))).toBe(true);
-    expect(state.parsedState.documents.DAILY?.listItems.some((item) => item.includes("Task lifecycle changed"))).toBe(true);
+    expect(
+      state.parsedState.documents.NEXT_ACTIONS?.listItems.some((item) => item.includes("Stabilize canonical compiler")),
+    ).toBe(true);
+    expect(state.parsedState.documents.DAILY?.listItems.some((item) => item.includes("Task lifecycle changed"))).toBe(
+      true,
+    );
   });
 });

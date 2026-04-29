@@ -19,9 +19,7 @@ export default function SkillsMemorySection({
   return (
     <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <div className="text-sm font-semibold text-slate-100">
-          {skillText(t, "memory.title")}
-        </div>
+        <div className="text-sm font-semibold text-slate-100">{skillText(t, "memory.title")}</div>
         <div className="text-[11px] text-slate-500">{skillText(t, "memory.subtitle")}</div>
       </div>
       <SkillHistoryPanel

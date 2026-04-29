@@ -215,9 +215,7 @@ export async function processReviewConsensusOutcome(ctx: OutcomeContext): Promis
         [
           "A review hold signal was detected. Document residual risks against agreed quality gates and move to a final decision.",
         ],
-        [
-          "レビュー保留シグナルを検知しました。合意済み品質ゲート基準で残余リスクを文書化し、最終決定が必要です。",
-        ],
+        ["レビュー保留シグナルを検知しました。合意済み品質ゲート基準で残余リスクを文書化し、最終決定が必要です。"],
         ["检测到评审保留信号。请按既定质量门禁记录剩余风险，并进入最终决策。"],
       ),
       lang,

@@ -96,7 +96,14 @@ describe("planned approval gating", () => {
 
     const { tools, onApproved, notifyCeo, beginMeetingMinutes, appendTaskLog } = makeTools(db, {
       getTaskReviewLeaders: () => [
-        { id: "lead-1", name: "Lead", role: "team_leader", department_id: "planning", status: "idle", workflow_profile: "{}" },
+        {
+          id: "lead-1",
+          name: "Lead",
+          role: "team_leader",
+          department_id: "planning",
+          status: "idle",
+          workflow_profile: "{}",
+        },
       ],
     });
 
@@ -123,8 +130,22 @@ describe("planned approval gating", () => {
 
     const { tools, onApproved, notifyCeo, beginMeetingMinutes, appendTaskLog } = makeTools(db, {
       getTaskReviewLeaders: () => [
-        { id: "lead-1", name: "Lead", role: "team_leader", department_id: "planning", status: "idle", workflow_profile: "{}" },
-        { id: "lead-2", name: "Sub", role: "team_leader", department_id: "planning", status: "idle", workflow_profile: "{}" },
+        {
+          id: "lead-1",
+          name: "Lead",
+          role: "team_leader",
+          department_id: "planning",
+          status: "idle",
+          workflow_profile: "{}",
+        },
+        {
+          id: "lead-2",
+          name: "Sub",
+          role: "team_leader",
+          department_id: "planning",
+          status: "idle",
+          workflow_profile: "{}",
+        },
       ],
     });
 
@@ -152,8 +173,22 @@ describe("planned approval gating", () => {
 
     const { tools, onApproved, notifyCeo, beginMeetingMinutes, appendTaskLog } = makeTools(db, {
       getTaskReviewLeaders: () => [
-        { id: "lead-1", name: "Lead", role: "team_leader", department_id: "design", status: "idle", workflow_profile: "{}" },
-        { id: "lead-2", name: "Sub", role: "team_leader", department_id: "design", status: "idle", workflow_profile: "{}" },
+        {
+          id: "lead-1",
+          name: "Lead",
+          role: "team_leader",
+          department_id: "design",
+          status: "idle",
+          workflow_profile: "{}",
+        },
+        {
+          id: "lead-2",
+          name: "Sub",
+          role: "team_leader",
+          department_id: "design",
+          status: "idle",
+          workflow_profile: "{}",
+        },
       ],
     });
 
@@ -230,22 +265,8 @@ describe("planned approval gating", () => {
         requiredDepartmentIds: expect.arrayContaining(["development", "ui-ux", "qa", "knowledge-docs"]),
       }),
     );
-    expect(sendAgentMessage).toHaveBeenCalledWith(
-      leaders[1],
-      "ok",
-      "chat",
-      "all",
-      null,
-      "task-public",
-    );
-    expect(sendAgentMessage).toHaveBeenCalledWith(
-      leaders[2],
-      "ok",
-      "chat",
-      "all",
-      null,
-      "task-public",
-    );
+    expect(sendAgentMessage).toHaveBeenCalledWith(leaders[1], "ok", "chat", "all", null, "task-public");
+    expect(sendAgentMessage).toHaveBeenCalledWith(leaders[2], "ok", "chat", "all", null, "task-public");
     expect(appendTaskLog).toHaveBeenCalledWith(
       "task-public",
       "system",

@@ -201,13 +201,21 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
       greeting: isKo
         ? /(안녕|반가|좋은\s*(아침|오후|저녁|밤))/i.test(msg)
         : /(hello|hi|hey|good\s*(morning|afternoon|evening))/i.test(normalized),
-      presence: isKo ? /(있어|자리|응답|보여|어디)/i.test(msg) : /(are you there|available|around|present)/i.test(normalized),
+      presence: isKo
+        ? /(있어|자리|응답|보여|어디)/i.test(msg)
+        : /(are you there|available|around|present)/i.test(normalized),
       whatDoing: isKo
         ? /(뭐\s*해|무엇\s*하고|진행\s*중|바빠)/i.test(msg)
         : /(what are you doing|working on|busy|what'?s up)/i.test(normalized),
-      report: isKo ? /(상황|보고|진행|어떻게)/i.test(msg) : /(report|status|progress|how is it going)/i.test(normalized),
-      complaint: isKo ? /(왜\s*이렇게\s*느려|응답\s*없|문제)/i.test(msg) : /(why so slow|late|no response|problem)/i.test(normalized),
-      canDo: isKo ? /(할\s*수\s*있어|가능해)/i.test(msg) : /(can you do|possible|available to handle)/i.test(normalized),
+      report: isKo
+        ? /(상황|보고|진행|어떻게)/i.test(msg)
+        : /(report|status|progress|how is it going)/i.test(normalized),
+      complaint: isKo
+        ? /(왜\s*이렇게\s*느려|응답\s*없|문제)/i.test(msg)
+        : /(why so slow|late|no response|problem)/i.test(normalized),
+      canDo: isKo
+        ? /(할\s*수\s*있어|가능해)/i.test(msg)
+        : /(can you do|possible|available to handle)/i.test(normalized),
     };
   }
 
@@ -217,8 +225,7 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
       /(fix|build|implement|write|create|update|design|analyze|research|review|ship|make|배포|구현|수정|작성|분석|기획|개발|테스트|만들|제작|계산|계산기)/i.test(
         normalized,
       );
-    const lightweight =
-      /(hello|thanks|고마워|감사|안녕|what'?s up|ping|status only|인사만)/i.test(normalized);
+    const lightweight = /(hello|thanks|고마워|감사|안녕|what'?s up|ping|status only|인사만)/i.test(normalized);
 
     if (!hasTaskVerb) {
       return {
@@ -260,9 +267,9 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
     }
 
     try {
-      const rows = db
-        .prepare("SELECT id, name, name_ko, name_ja, name_zh FROM departments")
-        .all() as Array<Record<string, unknown>>;
+      const rows = db.prepare("SELECT id, name, name_ko, name_ja, name_zh FROM departments").all() as Array<
+        Record<string, unknown>
+      >;
 
       for (const row of rows) {
         const deptId = String(row.id ?? "").trim();

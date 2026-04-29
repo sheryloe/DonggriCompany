@@ -311,15 +311,17 @@ function handleRunnerRouteError(
   }
   const message = error instanceof Error ? error.message : String(error);
   if (message === "accountPoolId_required") {
-    res
-      .status(400)
-      .json({ error: "account_pool_required", message: localizeRunnerApiMessage("account_pool_required", message, lang) });
+    res.status(400).json({
+      error: "account_pool_required",
+      message: localizeRunnerApiMessage("account_pool_required", message, lang),
+    });
     return;
   }
   if (message.startsWith("unsupported_runner_provider:")) {
-    res
-      .status(400)
-      .json({ error: "unsupported_provider", message: localizeRunnerApiMessage("unsupported_provider", message, lang) });
+    res.status(400).json({
+      error: "unsupported_provider",
+      message: localizeRunnerApiMessage("unsupported_provider", message, lang),
+    });
     return;
   }
   res

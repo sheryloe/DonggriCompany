@@ -13,6 +13,18 @@ type E2ECleanupTargets = {
   requestHeaders?: Record<string, string>;
 };
 
+type DepartmentDetailResponse = {
+  agents?: Array<{ id?: string | null }>;
+};
+
+type TaskListResponse = {
+  tasks?: Array<{
+    id?: string | null;
+    department_id?: string | null;
+    project_id?: string | null;
+  }>;
+};
+
 function uniqueIds(ids: Array<string | null | undefined> | undefined): string[] {
   if (!ids) return [];
   return Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter((id) => id.length > 0)));
@@ -72,59 +84,137 @@ async function waitForTaskDeletion(
   }
 }
 
-function deleteSubtasksFromLocalE2EDb(subtaskIds: string[], errors: string[]): void {
-  if (subtaskIds.length === 0) return;
-
+async function runLocalE2EDbMutation(
+  label: string,
+  errors: string[],
+  mutate: (db: DatabaseSync) => void,
+): Promise<void> {
   const dbPath = path.resolve(process.cwd(), ".tmp", "e2e-runtime", "claw-empire.e2e.sqlite");
   if (!fs.existsSync(dbPath)) return;
 
-  let db: DatabaseSync | null = null;
-  try {
-    db = new DatabaseSync(dbPath);
-    const placeholders = subtaskIds.map(() => "?").join(", ");
-    db.prepare(`DELETE FROM subtasks WHERE id IN (${placeholders})`).run(...subtaskIds);
-  } catch (error) {
-    errors.push(`subtasks(local-db) -> ${String(error)}`);
-  } finally {
-    db?.close();
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    let db: DatabaseSync | null = null;
+    try {
+      db = new DatabaseSync(dbPath);
+      db.exec("PRAGMA busy_timeout = 5000");
+      mutate(db);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!String(error).toLowerCase().includes("database is locked")) {
+        errors.push(`${label}(local-db) -> ${String(error)}`);
+        return;
+      }
+      await sleep(250 * attempt);
+    } finally {
+      db?.close();
+    }
   }
+
+  errors.push(`${label}(local-db) -> ${String(lastError)}`);
 }
 
-function deleteMessagesForProjectsFromLocalE2EDb(projectIds: string[], errors: string[]): void {
+async function deleteSubtasksFromLocalE2EDb(subtaskIds: string[], errors: string[]): Promise<void> {
+  if (subtaskIds.length === 0) return;
+
+  await runLocalE2EDbMutation("subtasks", errors, (db) => {
+    const placeholders = subtaskIds.map(() => "?").join(", ");
+    db.prepare(`DELETE FROM subtasks WHERE id IN (${placeholders})`).run(...subtaskIds);
+  });
+}
+
+async function deleteMessagesForProjectsFromLocalE2EDb(projectIds: string[], errors: string[]): Promise<void> {
   if (projectIds.length === 0) return;
 
-  const dbPath = path.resolve(process.cwd(), ".tmp", "e2e-runtime", "claw-empire.e2e.sqlite");
-  if (!fs.existsSync(dbPath)) return;
-
-  let db: DatabaseSync | null = null;
-  try {
-    db = new DatabaseSync(dbPath);
+  await runLocalE2EDbMutation("messages", errors, (db) => {
     const placeholders = projectIds.map(() => "?").join(", ");
     db.prepare(`DELETE FROM messages WHERE project_id IN (${placeholders})`).run(...projectIds);
+  });
+}
+
+async function collectDepartmentAgentIds(
+  request: APIRequestContext,
+  departmentIds: string[],
+  errors: string[],
+  requestHeaders?: Record<string, string>,
+): Promise<string[]> {
+  const collected: string[] = [];
+  for (const id of departmentIds) {
+    try {
+      const response = await request.get(
+        `/api/departments/${id}?include_seed=1`,
+        requestHeaders ? { headers: requestHeaders } : {},
+      );
+      if (response.status() === 404) continue;
+      const text = await response.text();
+      if (!response.ok()) {
+        errors.push(`/api/departments/${id} -> ${response.status()}: ${text.slice(0, 300)}`);
+        continue;
+      }
+      const parsed = JSON.parse(text) as DepartmentDetailResponse;
+      collected.push(...uniqueIds((parsed.agents ?? []).map((agent) => agent.id)));
+    } catch (error) {
+      errors.push(`/api/departments/${id} -> ${String(error)}`);
+    }
+  }
+  return uniqueIds(collected);
+}
+
+async function collectRelatedTaskIds(
+  request: APIRequestContext,
+  projectIds: string[],
+  departmentIds: string[],
+  errors: string[],
+  requestHeaders?: Record<string, string>,
+): Promise<string[]> {
+  if (projectIds.length === 0 && departmentIds.length === 0) return [];
+  try {
+    const response = await request.get("/api/tasks", requestHeaders ? { headers: requestHeaders } : {});
+    const text = await response.text();
+    if (!response.ok()) {
+      errors.push(`/api/tasks -> ${response.status()}: ${text.slice(0, 300)}`);
+      return [];
+    }
+    const parsed = JSON.parse(text) as TaskListResponse;
+    const projectSet = new Set(projectIds);
+    const departmentSet = new Set(departmentIds);
+    return uniqueIds(
+      (parsed.tasks ?? [])
+        .filter(
+          (task) =>
+            projectSet.has(String(task.project_id ?? "")) || departmentSet.has(String(task.department_id ?? "")),
+        )
+        .map((task) => task.id),
+    );
   } catch (error) {
-    errors.push(`messages(local-db) -> ${String(error)}`);
-  } finally {
-    db?.close();
+    errors.push(`/api/tasks -> ${String(error)}`);
+    return [];
   }
 }
 
 export async function cleanupE2EResources(request: APIRequestContext, targets: E2ECleanupTargets): Promise<void> {
   const errors: string[] = [];
   const apiProviderIds = uniqueIds(targets.apiProviderIds);
-  const taskIds = uniqueIds(targets.taskIds);
   const subtaskIds = uniqueIds(targets.subtaskIds);
   const projectIds = uniqueIds(targets.projectIds);
-  const agentIds = uniqueIds(targets.agentIds);
   const departmentIds = uniqueIds(targets.departmentIds);
   const requestHeaders = targets.requestHeaders;
+  const relatedTaskIds = await collectRelatedTaskIds(request, projectIds, departmentIds, errors, requestHeaders);
+  const taskIds = uniqueIds([...(targets.taskIds ?? []), ...relatedTaskIds]);
 
   await deleteById(request, "/api/tasks", taskIds, errors, requestHeaders);
   await waitForTaskDeletion(request, taskIds, errors, requestHeaders);
   await sleep(300);
-  deleteSubtasksFromLocalE2EDb(subtaskIds, errors);
-  deleteMessagesForProjectsFromLocalE2EDb(projectIds, errors);
+  await deleteSubtasksFromLocalE2EDb(subtaskIds, errors);
+  await deleteMessagesForProjectsFromLocalE2EDb(projectIds, errors);
+  const departmentAgentIds = await collectDepartmentAgentIds(request, departmentIds, errors, requestHeaders);
+  const agentIds = uniqueIds([...(targets.agentIds ?? []), ...departmentAgentIds]);
   await deleteById(request, "/api/agents", agentIds, errors, requestHeaders);
   await deleteById(request, "/api/api-providers", apiProviderIds, errors, requestHeaders);
+  const leftoverTaskIds = await collectRelatedTaskIds(request, projectIds, departmentIds, errors, requestHeaders);
+  await deleteById(request, "/api/tasks", leftoverTaskIds, errors, requestHeaders);
+  await waitForTaskDeletion(request, leftoverTaskIds, errors, requestHeaders);
   await deleteById(request, "/api/projects", projectIds, errors, requestHeaders);
   await deleteById(request, "/api/departments", departmentIds, errors, requestHeaders);
 

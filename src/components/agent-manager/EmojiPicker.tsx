@@ -69,7 +69,10 @@ export default function EmojiPicker({
         >
           {EMOJI_GROUPS.map((group) => (
             <div key={group.labelEn} className="mb-2 last:mb-0">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--th-text-muted)" }}>
+              <div
+                className="mb-1 text-[10px] font-semibold uppercase tracking-widest"
+                style={{ color: "var(--th-text-muted)" }}
+              >
                 {tr(group.label, group.labelEn)}
               </div>
               <div className="grid grid-cols-8 gap-0.5">

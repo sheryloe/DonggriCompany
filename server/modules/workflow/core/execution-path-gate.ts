@@ -52,7 +52,10 @@ function parseAllowedRootsEnv(raw: string | undefined): string[] {
   if (!text) return [];
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const token of text.split(/[\n,;]+/g).map((entry) => entry.trim()).filter(Boolean)) {
+  for (const token of text
+    .split(/[\n,;]+/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean)) {
     const normalized = normalizeProjectPathInput(token);
     if (!normalized) continue;
     const key = normalizeForCompare(normalized);
@@ -167,4 +170,3 @@ export function evaluateExecutionPathGate(input: {
     allowedRoots,
   };
 }
-

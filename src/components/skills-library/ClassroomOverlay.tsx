@@ -81,9 +81,7 @@ export default function ClassroomOverlay({ t, show, skillName, providers, agents
           <div className="text-sm text-emerald-300 font-medium animate-pulse">
             {skillTextVars(t, "classroom.training", { skill: skillName })}
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            {skillText(t, "classroom.studying")}
-          </div>
+          <div className="text-[11px] text-slate-500 mt-1">{skillText(t, "classroom.studying")}</div>
         </div>
       </div>
     </div>,

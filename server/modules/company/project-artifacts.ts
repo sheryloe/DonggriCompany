@@ -277,8 +277,7 @@ function normalizeManifest(
       typeof raw?.lastGoodSnapshotHash === "string" && raw.lastGoodSnapshotHash.trim()
         ? raw.lastGoodSnapshotHash.trim()
         : fallback.lastGoodSnapshotHash,
-    lastPatchedBy:
-      typeof raw?.lastPatchedBy === "string" && raw.lastPatchedBy.trim() ? raw.lastPatchedBy.trim() : null,
+    lastPatchedBy: typeof raw?.lastPatchedBy === "string" && raw.lastPatchedBy.trim() ? raw.lastPatchedBy.trim() : null,
   };
 }
 
@@ -302,7 +301,10 @@ function splitLines(text: string): string[] {
 }
 
 function joinLines(lines: string[]): string {
-  return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;
+  return `${lines
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd()}\n`;
 }
 
 function findHeadingRange(lines: string[], heading: string): { start: number; end: number } | null {
@@ -815,7 +817,12 @@ export function applyProjectArtifactPatch(input: ApplyProjectArtifactPatchInput)
   ].filter((item): item is string => Boolean(item && item.trim()));
   const eventLabel =
     eventLabelParts.length > 0 ? `${isoNow()}: ${eventLabelParts.join(" | ")}` : `${isoNow()}: Artifact patch applied.`;
-  statusMarkdown = upsertSectionKeyValue(statusMarkdown, "Summary", "Last Event", eventLabelParts.join(" | ") || "Artifact patch applied.");
+  statusMarkdown = upsertSectionKeyValue(
+    statusMarkdown,
+    "Summary",
+    "Last Event",
+    eventLabelParts.join(" | ") || "Artifact patch applied.",
+  );
   statusMarkdown = appendSectionBullet(statusMarkdown, "Events", eventLabel);
 
   if (input.task?.title?.trim()) {
@@ -824,7 +831,11 @@ export function applyProjectArtifactPatch(input: ApplyProjectArtifactPatchInput)
         ? `[done] ${input.task.title.trim()}`
         : `[ ] ${input.task.title.trim()}${input.task.priority != null ? ` (priority ${input.task.priority})` : ""}`;
     nextActionsMarkdown = appendSectionBullet(nextActionsMarkdown, "Immediate", nextActionLine);
-    nextActionsMarkdown = appendSectionBullet(nextActionsMarkdown, "Recent Updates", eventLabelParts.join(" | ") || input.task.title.trim());
+    nextActionsMarkdown = appendSectionBullet(
+      nextActionsMarkdown,
+      "Recent Updates",
+      eventLabelParts.join(" | ") || input.task.title.trim(),
+    );
   } else if (input.note?.trim()) {
     nextActionsMarkdown = appendSectionBullet(nextActionsMarkdown, "Recent Updates", input.note.trim());
   }

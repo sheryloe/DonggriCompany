@@ -122,9 +122,7 @@ export function createHttpAgentTools(deps: CreateHttpAgentToolsDeps) {
       const accountName = getOAuthAccountDisplayName(account);
       const rawModel = defaultRawModel;
       const model = resolveCopilotModel(rawModel);
-      const overrideNote = account.modelOverride
-        ? ` (compat override ignored: ${account.modelOverride})`
-        : "";
+      const overrideNote = account.modelOverride ? ` (compat override ignored: ${account.modelOverride})` : "";
       const header = `[copilot] Account: ${accountName}${overrideNote}\n`;
       safeWrite(header);
       if (taskId) broadcast("cli_output", { task_id: taskId, stream: "stderr", data: header });
@@ -231,9 +229,7 @@ export function createHttpAgentTools(deps: CreateHttpAgentToolsDeps) {
       const accountName = getOAuthAccountDisplayName(account);
       const rawModel = defaultRawModel;
       const model = resolveAntigravityModel(rawModel);
-      const overrideNote = account.modelOverride
-        ? ` (compat override ignored: ${account.modelOverride})`
-        : "";
+      const overrideNote = account.modelOverride ? ` (compat override ignored: ${account.modelOverride})` : "";
       const header = `[antigravity] Account: ${accountName}${overrideNote}\n`;
       safeWrite(header);
       if (taskId) broadcast("cli_output", { task_id: taskId, stream: "stderr", data: header });

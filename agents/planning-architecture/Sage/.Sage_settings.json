@@ -5,16 +5,16 @@
   "department_id": "planning-architecture",
   "workflow_profile": "{\"role\":\"primary_author\",\"review_lenses\":[\"scope\",\"risk\",\"priority\"],\"two_pass_required\":true,\"max_review_rounds\":2}",
   "agent_profile_json": null,
-  "class_path": "(unclassified)",
-  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
-  "stats_tasks_done": 0,
-  "stats_xp": 0,
-  "updated_at": "2026-04-28T15:03:10.313Z",
   "goal_command_policy": {
     "version": "donggri_goal_commands_v1",
     "native_commands_only": true,
     "octopus_aliases_enabled": false,
     "bottleneck_rule": "Use required_departments first; add extra departments only when a verification gate requires them.",
     "parallelism_rule": "Split independent work up to max_parallel_workstreams with one owner per workstream."
-  }
+  },
+  "class_path": "(unclassified)",
+  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "updated_at": "2026-04-29T06:17:40.846Z"
 }

@@ -408,7 +408,7 @@ test.describe("CI API ops and docs coverage", () => {
     const repoPath = process.cwd();
     const deptId = `ci_run_dept_${seed}`;
     const taskTitle = `ci-run-task-${seed}`;
-    const directiveTitle = `ci-inbox-directive-${seed}`;
+    const directiveTitle = `implement ci-inbox-directive-${seed}`;
     const cleanup = {
       apiProviderIds: [] as string[],
       taskIds: [] as string[],

@@ -1,9 +1,4 @@
-import type {
-  Agent,
-  CanonicalAgentFamily,
-  CanonicalCareerStage,
-  CanonicalIdentitySource,
-} from "../../types";
+import type { Agent, CanonicalAgentFamily, CanonicalCareerStage, CanonicalIdentitySource } from "../../types";
 import type { FormData } from "./types";
 
 export const CANONICAL_FAMILY_OPTIONS: CanonicalAgentFamily[] = [
@@ -39,10 +34,7 @@ export interface ResolvedCanonicalIdentity {
   canonical_identity_source: CanonicalIdentitySource;
 }
 
-function deriveFamily(
-  departmentId: string,
-  specializationKey: string,
-): CanonicalAgentFamily {
+function deriveFamily(departmentId: string, specializationKey: string): CanonicalAgentFamily {
   const normalizedDepartmentId = departmentId.trim().toLowerCase();
   const normalizedSpecialization = specializationKey.trim().toLowerCase();
   switch (normalizedDepartmentId) {
@@ -102,7 +94,8 @@ export function resolveCanonicalIdentityFromForm(form: FormData): ResolvedCanoni
   const derivedFamily = deriveFamily(form.department_id, storedSpecializationKey);
   const derivedCareerStage = deriveCareerStage(form.role);
   const derivedAuthorityLevel = deriveAuthorityLevel(derivedCareerStage);
-  const derivedExecutionCapabilityProfile = readExecutionCapabilityProfile(form.execution_capability_profile) || "reviewer";
+  const derivedExecutionCapabilityProfile =
+    readExecutionCapabilityProfile(form.execution_capability_profile) || "reviewer";
   const storedFamily = CANONICAL_FAMILY_OPTIONS.includes(form.family) ? form.family : null;
   const storedCareerStage = CANONICAL_STAGE_OPTIONS.includes(form.career_stage) ? form.career_stage : null;
   const storedAuthorityLevel =
@@ -117,7 +110,8 @@ export function resolveCanonicalIdentityFromForm(form: FormData): ResolvedCanoni
 
   return {
     family: form.canonical_identity_source === "stored" && storedFamily ? storedFamily : derivedFamily,
-    career_stage: form.canonical_identity_source === "stored" && storedCareerStage ? storedCareerStage : derivedCareerStage,
+    career_stage:
+      form.canonical_identity_source === "stored" && storedCareerStage ? storedCareerStage : derivedCareerStage,
     specialization_key: storedSpecializationKey,
     authority_level:
       form.canonical_identity_source === "stored" && storedAuthorityLevel !== null
@@ -131,7 +125,9 @@ export function resolveCanonicalIdentityFromForm(form: FormData): ResolvedCanoni
   };
 }
 
-export function hydrateCanonicalIdentityFields(agent?: Partial<Agent> | null): Pick<
+export function hydrateCanonicalIdentityFields(
+  agent?: Partial<Agent> | null,
+): Pick<
   FormData,
   | "family"
   | "career_stage"

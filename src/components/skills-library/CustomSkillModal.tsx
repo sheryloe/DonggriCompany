@@ -53,7 +53,9 @@ export default function CustomSkillModal({
         <div className="flex items-start justify-between gap-4 border-b border-slate-700/60 px-5 py-4">
           <div>
             <h3 className="text-base font-semibold text-white flex items-center gap-2">
-              <span className="rounded-md border border-slate-600/60 px-1.5 py-0.5 text-[10px] text-slate-300">CUSTOM</span>
+              <span className="rounded-md border border-slate-600/60 px-1.5 py-0.5 text-[10px] text-slate-300">
+                CUSTOM
+              </span>
               {skillText(t, "custom.title")}
             </h3>
             <div className="mt-1 text-xs text-slate-400">{skillText(t, "custom.description")}</div>
@@ -69,9 +71,7 @@ export default function CustomSkillModal({
 
         <div className="space-y-4 overflow-y-auto px-5 py-4 max-h-[calc(90vh-72px)]">
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
-              {skillText(t, "custom.nameLabel")}
-            </label>
+            <label className="block text-xs text-slate-400 mb-1.5">{skillText(t, "custom.nameLabel")}</label>
             <input
               type="text"
               value={customSkillName}
@@ -79,15 +79,11 @@ export default function CustomSkillModal({
               placeholder={skillText(t, "custom.namePlaceholder")}
               className="w-full bg-slate-900/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/25"
             />
-            <div className="text-[10px] text-slate-500 mt-1">
-              {skillText(t, "custom.nameHelp")}
-            </div>
+            <div className="text-[10px] text-slate-500 mt-1">{skillText(t, "custom.nameHelp")}</div>
           </div>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
-              {skillText(t, "custom.fileLabel")}
-            </label>
+            <label className="block text-xs text-slate-400 mb-1.5">{skillText(t, "custom.fileLabel")}</label>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => customFileInputRef.current?.click()}
@@ -117,9 +113,7 @@ export default function CustomSkillModal({
           </div>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1.5">
-              {skillText(t, "custom.providersLabel")}
-            </label>
+            <label className="block text-xs text-slate-400 mb-1.5">{skillText(t, "custom.providersLabel")}</label>
             <div className="grid grid-cols-2 gap-2">
               {representatives.map((row) => {
                 const isSelected = customSkillProviders.includes(row.provider);

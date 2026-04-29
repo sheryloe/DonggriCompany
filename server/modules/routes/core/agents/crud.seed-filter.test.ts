@@ -188,7 +188,9 @@ describe("agent CRUD seed filter", () => {
   it("GET /api/agents excludes seed agents by default", () => {
     const { db, routes } = createHarness();
     try {
-      db.prepare("INSERT INTO departments (id, name, name_ko, color) VALUES ('dev', 'Dev', 'Development', '#3b82f6')").run();
+      db.prepare(
+        "INSERT INTO departments (id, name, name_ko, color) VALUES ('dev', 'Dev', 'Development', '#3b82f6')",
+      ).run();
       db.prepare(
         "INSERT INTO agents (id, name, department_id, role, status, created_at) VALUES (?, ?, 'dev', 'team_leader', 'idle', 1)",
       ).run("dev-leader", "Dev Leader");
@@ -213,7 +215,9 @@ describe("agent CRUD seed filter", () => {
   it("GET /api/agents?include_seed=true includes seed agents", () => {
     const { db, routes } = createHarness();
     try {
-      db.prepare("INSERT INTO departments (id, name, name_ko, color) VALUES ('dev', 'Dev', 'Development', '#3b82f6')").run();
+      db.prepare(
+        "INSERT INTO departments (id, name, name_ko, color) VALUES ('dev', 'Dev', 'Development', '#3b82f6')",
+      ).run();
       db.prepare(
         "INSERT INTO agents (id, name, department_id, role, status, created_at) VALUES (?, ?, 'dev', 'team_leader', 'idle', 1)",
       ).run("dev-leader", "Dev Leader");
@@ -399,9 +403,9 @@ describe("agent CRUD seed filter", () => {
       expect(res.statusCode).toBe(200);
       const payload = res.payload as { warnings?: string[] };
       expect(payload.warnings).toContain("role_ignored_compatibility_only");
-      const updated = db
-        .prepare("SELECT role, authority_level FROM agents WHERE id = ?")
-        .get("agent-role-compat") as { role: string; authority_level: number } | undefined;
+      const updated = db.prepare("SELECT role, authority_level FROM agents WHERE id = ?").get("agent-role-compat") as
+        | { role: string; authority_level: number }
+        | undefined;
       expect(updated?.role).toBe("team_leader");
       expect(updated?.authority_level).toBe(7);
     } finally {
@@ -518,7 +522,10 @@ describe("agent CRUD seed filter", () => {
       );
 
       expect(res.statusCode).toBe(201);
-      const payload = res.payload as { warnings?: string[]; agent?: { role?: string; canonical_identity_source?: string } };
+      const payload = res.payload as {
+        warnings?: string[];
+        agent?: { role?: string; canonical_identity_source?: string };
+      };
       expect(payload.warnings).toContain("role_ignored_compatibility_only");
       expect(payload.agent?.role).toBe("junior");
       expect(payload.agent?.canonical_identity_source).toBe("stored");
@@ -639,7 +646,9 @@ describe("agent CRUD seed filter", () => {
 
       const created = db
         .prepare("SELECT workflow_pack_key, acts_as_planning_leader FROM agents WHERE name = ?")
-        .get("Compatibility Legacy Agent") as { workflow_pack_key: string; acts_as_planning_leader: number } | undefined;
+        .get("Compatibility Legacy Agent") as
+        | { workflow_pack_key: string; acts_as_planning_leader: number }
+        | undefined;
       expect(created?.workflow_pack_key).toBe("development");
       expect(created?.acts_as_planning_leader).toBe(0);
     } finally {
@@ -1050,4 +1059,3 @@ describe("agent CRUD seed filter", () => {
     }
   });
 });
-

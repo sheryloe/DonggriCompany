@@ -239,4 +239,3 @@ describe("SkillsLibrary learning modal ESC close", () => {
     });
   });
 });
-

@@ -41,6 +41,21 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function isPreferredTelegramSingleGroupSession(entry: {
+  id: string;
+  name: string;
+  enabled: boolean;
+  agentId: string;
+  workflowPackKey: string;
+  departmentId: string;
+}): boolean {
+  if (!entry.enabled) return false;
+  const id = entry.id.trim().toLowerCase();
+  if (id === "global" || id === "global-group-chat") return true;
+  const name = entry.name.trim().toLowerCase();
+  return name.includes("global") || name.includes("통합") || name.includes("회의실");
+}
+
 function normalizeMessengerChannelsForSingleGroup(raw: unknown): { value: unknown; warnings: string[] } {
   const root = asRecord(raw);
   if (!root) return { value: raw, warnings: [] };
@@ -48,6 +63,7 @@ function normalizeMessengerChannelsForSingleGroup(raw: unknown): { value: unknow
   const telegramRaw = asRecord(root.telegram) ?? {};
   const telegramToken = typeof telegramRaw.token === "string" ? telegramRaw.token.trim() : "";
   const telegramSessionsRaw = Array.isArray(telegramRaw.sessions) ? telegramRaw.sessions : [];
+  const telegramDepartmentBotsRaw = asRecord(telegramRaw.departmentBots) ?? asRecord(telegramRaw.department_bots) ?? {};
 
   const normalizedTelegramSessions = telegramSessionsRaw
     .map((entry) => asRecord(entry))
@@ -82,9 +98,26 @@ function normalizeMessengerChannelsForSingleGroup(raw: unknown): { value: unknow
 
   const preferredSession =
     normalizedTelegramSessions.find((entry) => entry.id.toLowerCase() === "global") ??
+    normalizedTelegramSessions.find((entry) => entry.id.toLowerCase() === "global-group-chat") ??
+    normalizedTelegramSessions.find((entry) => isPreferredTelegramSingleGroupSession(entry)) ??
     normalizedTelegramSessions.find((entry) => entry.enabled) ??
     normalizedTelegramSessions[0] ??
     null;
+
+  const normalizedDepartmentBots: Record<string, unknown> = {};
+  for (const [rawDepartmentId, rawBot] of Object.entries(telegramDepartmentBotsRaw)) {
+    const departmentId = rawDepartmentId.trim().toLowerCase();
+    const bot = asRecord(rawBot);
+    if (!departmentId || !bot) continue;
+    const token = typeof bot.token === "string" ? bot.token.trim() : "";
+    const targetId = preferredSession?.targetId ?? "";
+    if (!token || !targetId) continue;
+    normalizedDepartmentBots[departmentId] = {
+      token,
+      targetId,
+      enabled: bot.enabled !== false,
+    };
+  }
 
   const nonTelegramConfigured = MESSENGER_CHANNEL_KEYS.some((channel) => {
     if (channel === "telegram") return false;
@@ -123,6 +156,7 @@ function normalizeMessengerChannelsForSingleGroup(raw: unknown): { value: unknow
         token: telegramToken,
         sessions: telegramSession ? [telegramSession] : [],
         receiveEnabled: true,
+        ...(Object.keys(normalizedDepartmentBots).length > 0 ? { departmentBots: normalizedDepartmentBots } : {}),
       };
       continue;
     }
@@ -167,8 +201,7 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
     const body = req.body ?? {};
     const warnings: string[] = [];
     const readOnlyKeys = [OFFICE_PACK_PROFILES_KEY, OFFICE_PACK_HYDRATED_PACKS_KEY, PROVIDER_MODEL_CONFIG_KEY].filter(
-      (key) =>
-      Object.prototype.hasOwnProperty.call(body, key),
+      (key) => Object.prototype.hasOwnProperty.call(body, key),
     );
     if (readOnlyKeys.length > 0) {
       return res.status(409).json({
@@ -209,7 +242,15 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
 
   type CommandLaneKey = "planning" | "meeting" | "delegation" | "progress" | "review" | "done" | "report";
 
-  const commandLaneKeys: CommandLaneKey[] = ["planning", "meeting", "delegation", "progress", "review", "done", "report"];
+  const commandLaneKeys: CommandLaneKey[] = [
+    "planning",
+    "meeting",
+    "delegation",
+    "progress",
+    "review",
+    "done",
+    "report",
+  ];
 
   const emptyCommandLane = () => ({
     count: 0,
@@ -325,7 +366,11 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
         summary.latest_at = latestAt;
         summary.latest_task_title = task.title ?? null;
       }
-      if (typeof task.department_id === "string" && task.department_id && !summary.departments.includes(task.department_id)) {
+      if (
+        typeof task.department_id === "string" &&
+        task.department_id &&
+        !summary.departments.includes(task.department_id)
+      ) {
         summary.departments.push(task.department_id);
       }
 
@@ -334,7 +379,11 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
       if (status === "planned" || status === "collaborating" || includesLogSignal(logs, "meeting_public_feedback")) {
         touchCommandLane(summary.lanes, "meeting", latestAt);
       }
-      if (Number(task.subtask_total ?? 0) > 0 || task.source_task_id || String(task.title ?? "").includes("서브태스크")) {
+      if (
+        Number(task.subtask_total ?? 0) > 0 ||
+        task.source_task_id ||
+        String(task.title ?? "").includes("서브태스크")
+      ) {
         touchCommandLane(summary.lanes, "delegation", latestAt);
       }
       if (status === "collaborating" || status === "in_progress") touchCommandLane(summary.lanes, "progress", latestAt);

@@ -64,9 +64,9 @@ describe("meeting minutes policy pinning", () => {
     } as never);
 
     const meetingId = tools.beginMeetingMinutes("task-1", "planned", 1, "Kickoff");
-    const row = db.prepare("SELECT policy_version, policy_snapshot_hash FROM meeting_minutes WHERE id = ?").get(meetingId) as
-      | { policy_version?: string | null; policy_snapshot_hash?: string | null }
-      | undefined;
+    const row = db
+      .prepare("SELECT policy_version, policy_snapshot_hash FROM meeting_minutes WHERE id = ?")
+      .get(meetingId) as { policy_version?: string | null; policy_snapshot_hash?: string | null } | undefined;
 
     expect(row?.policy_version).toBe(policy.version);
     expect(row?.policy_snapshot_hash).toBe(policy.hash);

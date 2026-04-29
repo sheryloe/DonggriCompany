@@ -163,5 +163,7 @@ export function getGoalCommandDescription(command: GoalCommandPreset, locale: st
 }
 
 export function getGoalCommandTeamLabel(command: GoalCommandPreset, locale: string): string {
-  return TEAM_PRESET_LABELS[command.teamPreset] ? pickLocale(TEAM_PRESET_LABELS[command.teamPreset], locale) : command.teamPreset;
+  return TEAM_PRESET_LABELS[command.teamPreset]
+    ? pickLocale(TEAM_PRESET_LABELS[command.teamPreset], locale)
+    : command.teamPreset;
 }

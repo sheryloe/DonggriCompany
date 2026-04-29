@@ -97,9 +97,19 @@ export default function ProjectInsightsPanel({
     const steps = [
       { key: "20A", label: "20-A Locale", done: groupedTaskCards.length > 0 || sampleMode, blocked: false },
       { key: "20B", label: "20-B Legacy Compat", done: sortedDecisionEvents.length > 0 || sampleMode, blocked: false },
-      { key: "20C", label: "20-C Authority", done: Boolean(latestDecisionAt) || sampleMode, blocked: Boolean(blockedEvent) },
+      {
+        key: "20C",
+        label: "20-C Authority",
+        done: Boolean(latestDecisionAt) || sampleMode,
+        blocked: Boolean(blockedEvent),
+      },
       { key: "20D", label: "20-D Delegation Log", done: groupedTaskCards.length >= 2 || sampleMode, blocked: false },
-      { key: "20E", label: "20-E Provider Read-only", done: groupedTaskCards.length >= 3 || sampleMode, blocked: false },
+      {
+        key: "20E",
+        label: "20-E Provider Read-only",
+        done: groupedTaskCards.length >= 3 || sampleMode,
+        blocked: false,
+      },
       { key: "20F", label: "20-F Integration Gate", done: Boolean(latestAt) || sampleMode, blocked: false },
     ];
     const doneCount = steps.filter((step) => step.done).length;
@@ -384,7 +394,12 @@ export default function ProjectInsightsPanel({
           <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-semibold text-white">
-                {t({ ko: "20단계 진행률", en: "Rollout 20 Progress", ja: "Rollout 20 Progress", zh: "Rollout 20 Progress" })}
+                {t({
+                  ko: "20단계 진행률",
+                  en: "Rollout 20 Progress",
+                  ja: "Rollout 20 Progress",
+                  zh: "Rollout 20 Progress",
+                })}
               </h4>
               {rollout20.sampleMode ? (
                 <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
@@ -398,12 +413,16 @@ export default function ProjectInsightsPanel({
                 <span className="font-semibold text-cyan-200">{rollout20.progress}%</span>
               </div>
               <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-700">
-                <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: `${rollout20.progress}%` }} />
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500"
+                  style={{ width: `${rollout20.progress}%` }}
+                />
               </div>
             </div>
             {rollout20.blockedReason ? (
               <div className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-                {t({ ko: "블록 사유", en: "Blocking Reason", ja: "Blocking Reason", zh: "Blocking Reason" })}: {rollout20.blockedReason}
+                {t({ ko: "블록 사유", en: "Blocking Reason", ja: "Blocking Reason", zh: "Blocking Reason" })}:{" "}
+                {rollout20.blockedReason}
               </div>
             ) : null}
           </div>

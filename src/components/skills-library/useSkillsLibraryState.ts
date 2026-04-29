@@ -444,9 +444,7 @@ export function useSkillsLibraryState({ agents, localeTag, t }: { agents: Agent[
         await installDonggriSkillToCodex(skill.skillId);
         setSkills((prev) =>
           prev.map((item) =>
-            item.origin === "donggri" && item.skillId === skill.skillId
-              ? { ...item, codexInstalled: true }
-              : item,
+            item.origin === "donggri" && item.skillId === skill.skillId ? { ...item, codexInstalled: true } : item,
           ),
         );
       } catch (error) {

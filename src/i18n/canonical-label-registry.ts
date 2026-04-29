@@ -61,7 +61,9 @@ export function getCanonicalBadgeLabel(
   key: keyof typeof BADGE_LABELS | "Source" | "Derived" | "Projection" | "Localized",
   locale: UiLanguage,
 ): string {
-  const normalized = String(key ?? "").trim().toLowerCase() as keyof typeof BADGE_LABELS;
+  const normalized = String(key ?? "")
+    .trim()
+    .toLowerCase() as keyof typeof BADGE_LABELS;
   return pickLocalized(BADGE_LABELS[normalized], locale, normalized);
 }
 

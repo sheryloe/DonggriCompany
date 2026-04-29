@@ -120,10 +120,7 @@ export function createChatReplyGenerator(deps: ChatResponseDeps): {
 
       if (intent.canDo) {
         return pickL(
-          l(
-            [`${currentTask}를 마친 뒤 바로 처리 가능합니다.`],
-            [`I can take it right after I finish ${currentTask}.`],
-          ),
+          l([`${currentTask}를 마친 뒤 바로 처리 가능합니다.`], [`I can take it right after I finish ${currentTask}.`]),
           lang,
         );
       }

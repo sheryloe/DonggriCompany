@@ -210,13 +210,18 @@ describe("skill catalog routes", () => {
       });
       vi.stubGlobal("fetch", secondFetchMock);
 
-      const response = await request(app).post("/api/skills/refresh").set("Authorization", "Bearer test-token").expect(200);
+      const response = await request(app)
+        .post("/api/skills/refresh")
+        .set("Authorization", "Bearer test-token")
+        .expect(200);
 
       expect(response.body.ok).toBe(true);
       expect(response.body.count).toBe(response.body.skills.length);
       expect(secondFetchMock).toHaveBeenCalledTimes(3);
       expect(response.body.skills.find((skill: any) => skill.skillId === "skill-2")).toBeTruthy();
-      expect(response.body.skills.find((skill: any) => skill.skillId === "donggri-codex-skill-authoring")).toMatchObject({
+      expect(
+        response.body.skills.find((skill: any) => skill.skillId === "donggri-codex-skill-authoring"),
+      ).toMatchObject({
         codexInstalled: true,
       });
     } finally {
@@ -228,13 +233,18 @@ describe("skill catalog routes", () => {
     const { app } = await createHarness();
     const { getCsrfToken } = await import("../../../../security/auth.ts");
 
-    await request(app).post("/api/skills/refresh").expect(403).expect((response) => {
-      expect(response.body.error).toBe("csrf_required");
-    });
+    await request(app)
+      .post("/api/skills/refresh")
+      .expect(403)
+      .expect((response) => {
+        expect(response.body.error).toBe("csrf_required");
+      });
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(makeSitemapXml(1), { status: 200, headers: { "content-type": "application/xml" } })),
+      vi.fn(
+        async () => new Response(makeSitemapXml(1), { status: 200, headers: { "content-type": "application/xml" } }),
+      ),
     );
     await request(app).post("/api/skills/refresh").set("x-csrf-token", getCsrfToken()).expect(200);
   });
@@ -295,9 +305,7 @@ describe("skill catalog routes", () => {
         installed: true,
       });
       expect(response.body.codexSkillPath).toBeUndefined();
-      expect(
-        fs.existsSync(path.join(codexHome, "skills", "donggri-codex-skill-authoring", "SKILL.md")),
-      ).toBe(true);
+      expect(fs.existsSync(path.join(codexHome, "skills", "donggri-codex-skill-authoring", "SKILL.md"))).toBe(true);
     } finally {
       fs.rmSync(codexHome, { recursive: true, force: true });
     }

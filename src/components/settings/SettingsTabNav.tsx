@@ -11,9 +11,19 @@ const TAB_ITEMS: Array<{ key: SettingsTab; label: (t: TFunction) => string }> = 
   { key: "cli", label: (t) => t({ ko: "CLI 계정", en: "CLI Accounts", ja: "CLI Accounts", zh: "CLI Accounts" }) },
   { key: "oauth", label: (t) => t({ ko: "OAuth 연동", en: "OAuth", ja: "OAuth", zh: "OAuth" }) },
   { key: "api", label: (t) => t({ ko: "API 연동", en: "API", ja: "API", zh: "API" }) },
-  { key: "workflow-packs", label: (t) => t({ ko: "워크플로 팩", en: "Workflow Packs", ja: "Workflow Packs", zh: "Workflow Packs" }) },
-  { key: "canonical", label: (t) => t({ ko: "정책 인스펙터", en: "Policy Inspector", ja: "Policy Inspector", zh: "Policy Inspector" }) },
-  { key: "organization", label: (t) => t({ ko: "조직 기본값", en: "Organization Defaults", ja: "Organization Defaults", zh: "Organization Defaults" }) },
+  {
+    key: "workflow-packs",
+    label: (t) => t({ ko: "워크플로 팩", en: "Workflow Packs", ja: "Workflow Packs", zh: "Workflow Packs" }),
+  },
+  {
+    key: "canonical",
+    label: (t) => t({ ko: "정책 인스펙터", en: "Policy Inspector", ja: "Policy Inspector", zh: "Policy Inspector" }),
+  },
+  {
+    key: "organization",
+    label: (t) =>
+      t({ ko: "조직 기본값", en: "Organization Defaults", ja: "Organization Defaults", zh: "Organization Defaults" }),
+  },
   { key: "gateway", label: (t) => t({ ko: "채널 메시지", en: "Channel", ja: "Channel", zh: "Channel" }) },
 ];
 

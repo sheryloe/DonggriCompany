@@ -186,16 +186,32 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         pickL(
           taskLang === "ko"
             ? l(
-                [`[EXECUTION BLOCKED] '${taskData.title}' 실행이 차단되었습니다. (${pathGate.error}) ${pathGate.message}`],
-                [`[EXECUTION BLOCKED] Blocked execution for '${taskData.title}' (${pathGate.error}): ${pathGate.message}`],
-                [`[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`],
-                [`[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`],
+                [
+                  `[EXECUTION BLOCKED] '${taskData.title}' 실행이 차단되었습니다. (${pathGate.error}) ${pathGate.message}`,
+                ],
+                [
+                  `[EXECUTION BLOCKED] Blocked execution for '${taskData.title}' (${pathGate.error}): ${pathGate.message}`,
+                ],
+                [
+                  `[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`,
+                ],
+                [
+                  `[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`,
+                ],
               )
             : l(
-                [`[EXECUTION BLOCKED] '${taskData.title}' 실행이 차단되었습니다. (${pathGate.error}) ${pathGate.message}`],
-                [`[EXECUTION BLOCKED] Blocked execution for '${taskData.title}' (${pathGate.error}): ${pathGate.message}`],
-                [`[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`],
-                [`[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`],
+                [
+                  `[EXECUTION BLOCKED] '${taskData.title}' 실행이 차단되었습니다. (${pathGate.error}) ${pathGate.message}`,
+                ],
+                [
+                  `[EXECUTION BLOCKED] Blocked execution for '${taskData.title}' (${pathGate.error}): ${pathGate.message}`,
+                ],
+                [
+                  `[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`,
+                ],
+                [
+                  `[EXECUTION BLOCKED] Blocked execution for "${taskData.title}" (${pathGate.error}): ${pathGate.message}`,
+                ],
               ),
           taskLang,
         ),
@@ -280,9 +296,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
       ? pickL(
           taskLang === "ko"
             ? l(
-                [
-                  "연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요.",
-                ],
+                ["연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요."],
                 [
                   "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
                 ],
@@ -294,9 +308,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
                 ],
               )
             : l(
-                [
-                  "연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요.",
-                ],
+                ["연속 실행입니다: 담당을 유지하고, 인사/시작 멘트는 생략하고, 미해결 리뷰 항목부터 즉시 처리하세요."],
                 [
                   "Continuation run: keep ownership, skip greetings/kickoff narration, and execute unresolved review items immediately.",
                 ],

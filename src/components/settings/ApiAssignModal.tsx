@@ -55,12 +55,7 @@ function getPackSectionLabel(packKey: WorkflowPackKey, t: TFunction): string {
 
 export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModalProps) {
   const common = getSettingsCommonCopy(t);
-  const {
-    apiAssignTarget,
-    apiAssignAgents,
-    apiAssignDepts,
-    setApiAssignTarget,
-  } = apiState;
+  const { apiAssignTarget, apiAssignAgents, apiAssignDepts, setApiAssignTarget } = apiState;
 
   if (!apiAssignTarget) return null;
 
@@ -135,9 +130,7 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
         <AgentAvatar agent={agent} spriteMap={spriteMap} size={28} rounded="xl" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-xs font-medium">
-              {resolveLocalizedName(localeTag, agent)}
-            </span>
+            <span className="truncate text-xs font-medium">{resolveLocalizedName(localeTag, agent)}</span>
             {roleBadge(agent)}
           </div>
           <div className="mt-0.5 truncate text-[10px] text-slate-500">
@@ -182,7 +175,12 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
         <div className="max-h-[55vh] space-y-3 overflow-y-auto p-2">
           {apiAssignAgents.length === 0 ? (
             <p className="py-4 text-center text-xs text-slate-500">
-              {t({ ko: "에이전트를 불러오는 중...", en: "Loading agents...", ja: "エージェントを読み込み中...", zh: "正在加载代理..." })}
+              {t({
+                ko: "에이전트를 불러오는 중...",
+                en: "Loading agents...",
+                ja: "エージェントを読み込み中...",
+                zh: "正在加载代理...",
+              })}
             </p>
           ) : (
             packSections.map(({ packKey, departments, unassigned }) => (
@@ -207,7 +205,9 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
                         type="button"
                         disabled
                         className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
-                          allAssigned ? "cursor-default bg-green-500/10 text-green-400" : "bg-slate-700/70 text-slate-400"
+                          allAssigned
+                            ? "cursor-default bg-green-500/10 text-green-400"
+                            : "bg-slate-700/70 text-slate-400"
                         } disabled:cursor-not-allowed disabled:opacity-60`}
                       >
                         {allAssigned
@@ -223,7 +223,9 @@ export default function ApiAssignModal({ t, localeTag, apiState }: ApiAssignModa
                   <div>
                     <div className="flex items-center gap-1.5 border-b border-slate-700/40 px-2 py-1.5">
                       <span className="text-sm text-slate-600">-</span>
-                      <span className="text-[11px] font-semibold tracking-wide text-slate-500">{common.unassigned}</span>
+                      <span className="text-[11px] font-semibold tracking-wide text-slate-500">
+                        {common.unassigned}
+                      </span>
                     </div>
                     {unassigned.map(renderAgentRow)}
                   </div>

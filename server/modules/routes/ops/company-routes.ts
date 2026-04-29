@@ -16,7 +16,9 @@ import { resolveProjectRoutingConstraint } from "../shared/project-staffing-poli
 type RegisterCompanyRoutesDeps = Pick<RuntimeContext, "app" | "db">;
 
 function readJsonSetting<T>(db: RegisterCompanyRoutesDeps["db"], key: string, fallback: T): T {
-  const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get(key) as { value?: unknown } | undefined;
+  const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get(key) as
+    | { value?: unknown }
+    | undefined;
   if (!row || typeof row.value !== "string") return fallback;
   try {
     return JSON.parse(row.value) as T;
@@ -26,7 +28,9 @@ function readJsonSetting<T>(db: RegisterCompanyRoutesDeps["db"], key: string, fa
 }
 
 function readStringSetting(db: RegisterCompanyRoutesDeps["db"], key: string, fallback: string): string {
-  const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get(key) as { value?: unknown } | undefined;
+  const row = db.prepare("SELECT value FROM settings WHERE key = ? LIMIT 1").get(key) as
+    | { value?: unknown }
+    | undefined;
   if (!row || typeof row.value !== "string") return fallback;
   const normalized = row.value.trim();
   return normalized || fallback;
@@ -35,7 +39,9 @@ function readStringSetting(db: RegisterCompanyRoutesDeps["db"], key: string, fal
 export function registerCompanyRoutes({ app, db }: RegisterCompanyRoutesDeps): void {
   app.post("/api/ops/canonical-reset-organization", (req, res) => {
     const body = (req.body as { mode?: string; target_seed_version?: string } | undefined) ?? {};
-    const mode = String(body.mode ?? "preview").trim().toLowerCase();
+    const mode = String(body.mode ?? "preview")
+      .trim()
+      .toLowerCase();
     const targetSeedVersion = String(body.target_seed_version ?? "").trim();
     if (targetSeedVersion && targetSeedVersion !== "org-v2") {
       return res.status(400).json({ error: "unsupported_seed_version", target_seed_version: targetSeedVersion });
@@ -44,8 +50,7 @@ export function registerCompanyRoutes({ app, db }: RegisterCompanyRoutesDeps): v
       return res.status(400).json({ error: "invalid_mode" });
     }
     try {
-      const result =
-        mode === "apply" ? applyCanonicalResetOrganization(db) : previewCanonicalResetOrganization(db);
+      const result = mode === "apply" ? applyCanonicalResetOrganization(db) : previewCanonicalResetOrganization(db);
       return res.json(result);
     } catch (error) {
       return res.status(500).json({
@@ -74,7 +79,9 @@ export function registerCompanyRoutes({ app, db }: RegisterCompanyRoutesDeps): v
 
   app.post("/api/company/reload-canonical-rules", (req, res) => {
     const body = (req.body as { mode?: string; target_version?: string } | undefined) ?? {};
-    const mode = String(body.mode ?? "dry-run").trim().toLowerCase();
+    const mode = String(body.mode ?? "dry-run")
+      .trim()
+      .toLowerCase();
     if (mode !== "dry-run" && mode !== "apply" && mode !== "rollback") {
       return res.status(400).json({ error: "invalid_reload_mode" });
     }
@@ -107,8 +114,11 @@ export function registerCompanyRoutes({ app, db }: RegisterCompanyRoutesDeps): v
     const projectPath =
       explicitProjectPath ||
       (projectId
-        ? (db.prepare("SELECT project_path FROM projects WHERE id = ? LIMIT 1").get(projectId) as { project_path?: string } | undefined)
-            ?.project_path ?? ""
+        ? ((
+            db.prepare("SELECT project_path FROM projects WHERE id = ? LIMIT 1").get(projectId) as
+              | { project_path?: string }
+              | undefined
+          )?.project_path ?? "")
         : "");
     const projectConstraint = resolveProjectRoutingConstraint(db, projectId || null);
 

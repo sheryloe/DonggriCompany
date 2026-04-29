@@ -576,7 +576,12 @@ export default function ProjectEditorPanel({
         <label className="block">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-200">
-              {t({ ko: "???? ?? ????(JSON)", en: "Staffing Overlay (JSON)", ja: "Staffing Overlay (JSON)", zh: "Staffing Overlay (JSON)" })}
+              {t({
+                ko: "???? ?? ????(JSON)",
+                en: "Staffing Overlay (JSON)",
+                ja: "Staffing Overlay (JSON)",
+                zh: "Staffing Overlay (JSON)",
+              })}
             </p>
             {(() => {
               if (!staffingPolicyJson.trim()) return null;

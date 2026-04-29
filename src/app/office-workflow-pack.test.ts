@@ -139,18 +139,18 @@ describe("resolveOfficePackSeedProvider", () => {
   });
 
   it("uses claude for dev/design and codex for others", () => {
-    expect(resolveOfficePackSeedProvider({ packKey: "report", departmentId: "dev", role: "senior", seedIndex: 2 })).toBe(
-      "claude",
-    );
-    expect(resolveOfficePackSeedProvider({ packKey: "report", departmentId: "design", role: "senior", seedIndex: 3 })).toBe(
-      "claude",
-    );
-    expect(resolveOfficePackSeedProvider({ packKey: "report", departmentId: "devsecops", role: "senior", seedIndex: 4 })).toBe(
-      "codex",
-    );
-    expect(resolveOfficePackSeedProvider({ packKey: "report", departmentId: "operations", role: "senior", seedIndex: 5 })).toBe(
-      "codex",
-    );
+    expect(
+      resolveOfficePackSeedProvider({ packKey: "report", departmentId: "dev", role: "senior", seedIndex: 2 }),
+    ).toBe("claude");
+    expect(
+      resolveOfficePackSeedProvider({ packKey: "report", departmentId: "design", role: "senior", seedIndex: 3 }),
+    ).toBe("claude");
+    expect(
+      resolveOfficePackSeedProvider({ packKey: "report", departmentId: "devsecops", role: "senior", seedIndex: 4 }),
+    ).toBe("codex");
+    expect(
+      resolveOfficePackSeedProvider({ packKey: "report", departmentId: "operations", role: "senior", seedIndex: 5 }),
+    ).toBe("codex");
     expect(resolveOfficePackSeedProvider({ packKey: "report", departmentId: "qa", role: "senior", seedIndex: 6 })).toBe(
       "codex",
     );

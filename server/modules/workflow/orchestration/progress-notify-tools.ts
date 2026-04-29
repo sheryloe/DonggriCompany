@@ -55,8 +55,11 @@ export function createProgressNotifyTools(deps: CreateProgressNotifyToolsDeps) {
     const t = nowMs();
     const projectId =
       taskId != null
-        ? ((db.prepare("SELECT project_id FROM tasks WHERE id = ?").get(taskId) as { project_id?: string | null } | undefined)
-            ?.project_id ?? null)
+        ? ((
+            db.prepare("SELECT project_id FROM tasks WHERE id = ?").get(taskId) as
+              | { project_id?: string | null }
+              | undefined
+          )?.project_id ?? null)
         : null;
     db.prepare(
       `INSERT INTO messages (id, sender_type, sender_id, receiver_type, receiver_id, content, message_type, task_id, project_id, created_at)

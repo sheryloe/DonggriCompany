@@ -54,7 +54,9 @@ function readPromotionPolicy(value: AgentProfile["promotion_policy"]): AgentProm
 }
 
 function isKoLocale(locale: string): boolean {
-  return String(locale ?? "en").toLowerCase().startsWith("ko");
+  return String(locale ?? "en")
+    .toLowerCase()
+    .startsWith("ko");
 }
 
 function formatTierLabel(value: number, locale: string): string {
@@ -68,7 +70,9 @@ function formatKeyWithDisplayLabel(label: string, raw: string | null | undefined
 }
 
 function getCanonicalSourceDisplayLabel(source: string | null | undefined, locale: string): string {
-  const normalized = String(source ?? "").trim().toLowerCase();
+  const normalized = String(source ?? "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return "-";
   if (normalized === "stored") return isKoLocale(locale) ? "저장됨" : "stored";
   if (normalized === "derived") return isKoLocale(locale) ? "파생됨" : "derived";
@@ -233,7 +237,10 @@ export default function AgentProfileBuilder({
             )}
           </div>
         </div>
-        <div className="rounded-lg border px-3 py-2 text-right text-xs" style={{ borderColor: "var(--th-input-border)" }}>
+        <div
+          className="rounded-lg border px-3 py-2 text-right text-xs"
+          style={{ borderColor: "var(--th-input-border)" }}
+        >
           <div style={{ color: "var(--th-text-muted)" }}>
             {tr("XP 기반 추천 티어", "Recommended Tier by XP", "XP ベース推奨ティア", "基于 XP 的推荐层级")}
           </div>
@@ -297,21 +304,41 @@ export default function AgentProfileBuilder({
         <div className="space-y-3">
           <div className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--th-input-border)" }}>
             <div className="text-sm font-semibold" style={{ color: "var(--th-text-heading)" }}>
-              {tr("해석된 표준 정체성", "Resolved Canonical Identity", "Resolved Canonical Identity", "Resolved Canonical Identity")}
+              {tr(
+                "해석된 표준 정체성",
+                "Resolved Canonical Identity",
+                "Resolved Canonical Identity",
+                "Resolved Canonical Identity",
+              )}
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
               {[
                 { label: tr("능력군", "Family", "ファミリー", "家族"), value: canonicalFamilyDisplay },
                 { label: tr("경력 단계", "Career Stage", "キャリア段階", "职业阶段"), value: canonicalStageDisplay },
-                { label: tr("권한 레벨", "Authority Level", "権限レベル", "权限等级"), value: String(canonicalIdentity.authority_level) },
-                { label: tr("소스", "Source", "ソース", "来源"), value: canonicalSourceDisplay },
-                { label: tr("전문화 키", "Specialization Key", "Specialization Key", "Specialization Key"), value: specializationDisplay },
                 {
-                  label: tr("실행 역량 프로필", "Execution Capability Profile", "Execution Capability Profile", "Execution Capability Profile"),
+                  label: tr("권한 레벨", "Authority Level", "権限レベル", "权限等级"),
+                  value: String(canonicalIdentity.authority_level),
+                },
+                { label: tr("소스", "Source", "ソース", "来源"), value: canonicalSourceDisplay },
+                {
+                  label: tr("전문화 키", "Specialization Key", "Specialization Key", "Specialization Key"),
+                  value: specializationDisplay,
+                },
+                {
+                  label: tr(
+                    "실행 역량 프로필",
+                    "Execution Capability Profile",
+                    "Execution Capability Profile",
+                    "Execution Capability Profile",
+                  ),
                   value: capabilityProfileDisplay,
                 },
               ].map((item) => (
-                <div key={item.label} className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--th-input-border)" }}>
+                <div
+                  key={item.label}
+                  className="rounded-lg border px-3 py-2"
+                  style={{ borderColor: "var(--th-input-border)" }}
+                >
                   <div className="text-[11px] font-medium" style={{ color: "var(--th-text-muted)" }}>
                     {item.label}
                   </div>
@@ -324,7 +351,11 @@ export default function AgentProfileBuilder({
 
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
-                <label htmlFor="agent-profile-specialization-key" className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
+                <label
+                  htmlFor="agent-profile-specialization-key"
+                  className="mb-1.5 block text-xs font-medium"
+                  style={{ color: "var(--th-text-secondary)" }}
+                >
                   {tr("전문화 키", "Profile Specialization Key", "プロファイル専門化キー", "配置专门化键")}
                 </label>
                 <input
@@ -347,7 +378,11 @@ export default function AgentProfileBuilder({
                 />
               </div>
               <div>
-                <label htmlFor="agent-profile-capability-profile" className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
+                <label
+                  htmlFor="agent-profile-capability-profile"
+                  className="mb-1.5 block text-xs font-medium"
+                  style={{ color: "var(--th-text-secondary)" }}
+                >
                   {tr("실행 역량 프로필", "Profile Execution Capability", "プロファイル実行能力", "配置执行能力")}
                 </label>
                 <input
@@ -515,7 +550,10 @@ export default function AgentProfileBuilder({
                   color: "var(--th-text-primary)",
                 }}
               />
-              <div className="rounded-lg border px-3 py-2 text-xs" style={{ borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" }}>
+              <div
+                className="rounded-lg border px-3 py-2 text-xs"
+                style={{ borderColor: "var(--th-input-border)", color: "var(--th-text-muted)" }}
+              >
                 <div>{tr("호환성 사유", "Compatibility reason", "互換理由", "兼容原因")}:</div>
                 <div className="mt-1" style={{ color: "var(--th-text-primary)" }}>
                   {formatKeyWithDisplayLabel(
@@ -538,7 +576,12 @@ export default function AgentProfileBuilder({
 
           <div>
             <label className="mb-1.5 block text-xs font-medium" style={{ color: "var(--th-text-secondary)" }}>
-              {tr("자동 생성 프롬프트 미리보기", "Generated Prompt Preview", "生成プロンプトプレビュー", "生成提示预览")}
+              {tr(
+                "자동 생성 프롬프트 미리보기",
+                "Generated Prompt Preview",
+                "生成プロンプトプレビュー",
+                "生成提示预览",
+              )}
             </label>
             <textarea
               value={promptPreview}

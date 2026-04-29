@@ -150,7 +150,10 @@ export type AgentOneShotResult = {
   text?: string | null;
 } & Record<string, unknown>;
 
-export type FindTeamLeader = (departmentKey: string | null, candidateAgentIds?: string[] | null) => AgentRow | undefined;
+export type FindTeamLeader = (
+  departmentKey: string | null,
+  candidateAgentIds?: string[] | null,
+) => AgentRow | undefined;
 export type RunAgentOneShot = (
   agent: AgentRow,
   prompt: string,

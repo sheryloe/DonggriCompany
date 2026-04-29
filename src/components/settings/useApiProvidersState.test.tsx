@@ -41,7 +41,11 @@ describe("useApiProvidersState preset loading", () => {
   beforeEach(() => {
     apiMocks.getApiProviders.mockResolvedValue([]);
     apiMocks.getApiProviderPresets.mockRejectedValue(new Error("preset load failed"));
-    apiMocks.getWorkflowPacks.mockResolvedValue({ packs: [{ key: "development", enabled: true }], source: "canonical_projection", readOnly: true });
+    apiMocks.getWorkflowPacks.mockResolvedValue({
+      packs: [{ key: "development", enabled: true }],
+      source: "canonical_projection",
+      readOnly: true,
+    });
     apiMocks.createApiProvider.mockResolvedValue({ ok: true, id: "provider-1" });
     apiMocks.deleteApiProvider.mockResolvedValue({ ok: true });
     apiMocks.getAgents.mockResolvedValue([]);

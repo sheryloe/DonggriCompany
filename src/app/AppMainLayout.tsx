@@ -492,5 +492,3 @@ export default function AppMainLayout({
     </I18nProvider>
   );
 }
-
-

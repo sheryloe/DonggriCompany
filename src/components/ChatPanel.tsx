@@ -362,7 +362,10 @@ export function ChatPanel({
       return {
         code: "task",
         label: tr("작업", "Task"),
-        description: tr(`${getAgentName(selectedAgent)}에게 작업 배정`, `Assign task to ${getAgentName(selectedAgent)}`),
+        description: tr(
+          `${getAgentName(selectedAgent)}에게 작업 배정`,
+          `Assign task to ${getAgentName(selectedAgent)}`,
+        ),
         routeLabel: "/api/messages task_assign",
       };
     }
@@ -370,7 +373,10 @@ export function ChatPanel({
       return {
         code: "report",
         label: tr("보고", "Report"),
-        description: tr(`${getAgentName(selectedAgent)}에게 보고 요청`, `Request report from ${getAgentName(selectedAgent)}`),
+        description: tr(
+          `${getAgentName(selectedAgent)}에게 보고 요청`,
+          `Request report from ${getAgentName(selectedAgent)}`,
+        ),
         routeLabel: "/api/messages report",
       };
     }
@@ -467,7 +473,14 @@ export function ChatPanel({
         setPrnDraft(draft);
       } catch (err) {
         console.error("Failed to create PRN draft:", err);
-        setPrnDraftError(tr("PRN 초안 생성에 실패했습니다.", "Failed to create PRN draft.", "PRN 下書きの生成に失敗しました。", "PRN 草稿生成失败。"));
+        setPrnDraftError(
+          tr(
+            "PRN 초안 생성에 실패했습니다.",
+            "Failed to create PRN draft.",
+            "PRN 下書きの生成に失敗しました。",
+            "PRN 草稿生成失败。",
+          ),
+        );
       } finally {
         setPrnDraftLoading(false);
       }
@@ -922,7 +935,12 @@ export function ChatPanel({
               ko: "프로젝트 생성에 실패했습니다.",
               en: "Failed to create a project.",
             })
-          : tr("프로젝트 생성에 실패했습니다.", "Failed to create a project.", "Failed to create a project.", "Failed to create a project."),
+          : tr(
+              "프로젝트 생성에 실패했습니다.",
+              "Failed to create a project.",
+              "Failed to create a project.",
+              "Failed to create a project.",
+            ),
       });
     } finally {
       setProjectSaving(false);
@@ -1218,11 +1236,15 @@ export function ChatPanel({
                     <p className="mt-1 break-all text-[11px] text-slate-400">{currentProject.project_path}</p>
                   </>
                 ) : (
-                  <p className="mt-1 text-sm text-slate-300">{tr("프로젝트 미선택", "No project selected", "プロジェクト未選択", "未选择项目")}</p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    {tr("프로젝트 미선택", "No project selected", "プロジェクト未選択", "未选择项目")}
+                  </p>
                 )}
               </div>
               <div className="rounded-full border border-slate-700 px-2.5 py-1 text-[11px] font-medium text-slate-200">
-                {currentSkipMeeting ? tr("회의 생략", "No Meeting", "会議なし", "无会议") : tr("기본 회의 정책", "Default Meeting", "既定の会議方針", "默认会议策略")}
+                {currentSkipMeeting
+                  ? tr("회의 생략", "No Meeting", "会議なし", "无会议")
+                  : tr("기본 회의 정책", "Default Meeting", "既定の会議方針", "默认会议策略")}
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1385,5 +1407,3 @@ export function ChatPanel({
     </div>
   );
 }
-
-

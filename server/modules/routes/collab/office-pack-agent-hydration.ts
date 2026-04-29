@@ -131,9 +131,7 @@ function normalizeOfficePackProfileAgent(raw: unknown, nowMs: number): OfficePac
     avatar_emoji: normalizeText(obj.avatar_emoji) || "BOT",
     sprite_number: normalizeNullablePositiveInt(obj.sprite_number),
     personality: normalizeOptionalText(obj.personality),
-    agent_profile_json: serializeAgentProfile(
-      normalizeAgentProfile(obj.agent_profile ?? obj.agent_profile_json, role),
-    ),
+    agent_profile_json: serializeAgentProfile(normalizeAgentProfile(obj.agent_profile ?? obj.agent_profile_json, role)),
     created_at: normalizePositiveInt(obj.created_at, nowMs),
   };
 }

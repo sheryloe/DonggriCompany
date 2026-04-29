@@ -16,4 +16,3 @@ export function formatDelegationTrace(input: DelegationTraceInput): string {
   const label = normalizeField(input.label).replace(/^none$/i, "Delegation decision");
   return `${label} family=${normalizeField(input.family)} specialization=${normalizeField(input.specialization)} fallback_reason=${normalizeField(input.fallbackReason)} authority_reason=${normalizeField(input.authorityReason)} blocking_reason=${normalizeField(input.blockingReason)}`;
 }
-

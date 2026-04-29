@@ -43,9 +43,7 @@ import { useAppViewEffects } from "./app/useAppViewEffects";
 import { useAppBootstrapData } from "./app/useAppBootstrapData";
 import { useLiveSyncScheduler } from "./app/useLiveSyncScheduler";
 import { resolvePackAgentViews, resolvePackDepartmentsForDisplay } from "./app/office-pack-display";
-import {
-  normalizeOfficeWorkflowPack,
-} from "./app/office-workflow-pack";
+import { normalizeOfficeWorkflowPack } from "./app/office-workflow-pack";
 
 export type { OAuthCallbackResult } from "./app/types";
 
@@ -163,10 +161,7 @@ export default function App() {
   };
 
   const { connected, on } = useWebSocket();
-  const shouldIncludeSeedAgents = useCallback(
-    () => false,
-    [],
-  );
+  const shouldIncludeSeedAgents = useCallback(() => false, []);
   const scheduleLiveSync = useLiveSyncScheduler({
     setTasks,
     setAgents,

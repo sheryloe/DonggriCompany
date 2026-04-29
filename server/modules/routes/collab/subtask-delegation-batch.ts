@@ -228,14 +228,16 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
       appendTaskLog(
         parentTask.id,
         "system",
-        `Subtask delegation blocked: target department has no team leader (dept=${targetDeptName}); ${formatDelegationTrace({
-          label: "Delegation decision",
-          family: "none",
-          specialization: "none",
-          fallbackReason: "department_fallback_none",
-          authorityReason: "missing_team_leader",
-          blockingReason: blockedReason,
-        })}`,
+        `Subtask delegation blocked: target department has no team leader (dept=${targetDeptName}); ${formatDelegationTrace(
+          {
+            label: "Delegation decision",
+            family: "none",
+            specialization: "none",
+            fallbackReason: "department_fallback_none",
+            authorityReason: "missing_team_leader",
+            blockingReason: blockedReason,
+          },
+        )}`,
       );
       for (const sid of subtaskIds) {
         db.prepare("UPDATE subtasks SET status = 'blocked', blocked_reason = ?, completed_at = NULL WHERE id = ?").run(
@@ -250,15 +252,11 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
             [
               `'${parentTask.title}'의 부서 협업 위임이 차단되었습니다. 대상 부서(${targetDeptName}) 팀장을 찾을 수 없습니다.`,
             ],
-            [
-              `Delegation for '${parentTask.title}' is blocked. No team leader was found in ${targetDeptName}.`,
-            ],
+            [`Delegation for '${parentTask.title}' is blocked. No team leader was found in ${targetDeptName}.`],
             [
               `'${parentTask.title}' の部門委任はブロックされました。対象部門(${targetDeptName})のチームリーダーが見つかりません。`,
             ],
-            [
-              `任务 '${parentTask.title}' 的跨部门委派已被阻止。未找到目标部门(${targetDeptName})的组长。`,
-            ],
+            [`任务 '${parentTask.title}' 的跨部门委派已被阻止。未找到目标部门(${targetDeptName})的组长。`],
           ),
           lang,
         ),
@@ -447,14 +445,13 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
             ? "department_fallback_manual_pool"
             : "department_fallback_leader";
       const authorityReason = `canonical_stage=${execCanonicalIdentity.career_stage};authority_level=${execCanonicalIdentity.authority_level}`;
-      const blockingReason =
-        crossSubAtRun
-          ? "none"
-          : crossLeaderAllowed
-            ? "no_subordinate_found"
-            : manualPoolFallbackAtRun
-              ? "team_lead_out_of_scope_manual_pool_used"
-              : "team_lead_out_of_scope_no_manual_pool";
+      const blockingReason = crossSubAtRun
+        ? "none"
+        : crossLeaderAllowed
+          ? "no_subordinate_found"
+          : manualPoolFallbackAtRun
+            ? "team_lead_out_of_scope_manual_pool_used"
+            : "team_lead_out_of_scope_no_manual_pool";
       appendTaskLog(delegatedTaskId, "system", `Subtask delegation from '${parentTask.title}' -> ${targetDeptName}`);
       appendTaskLog(
         delegatedTaskId,

@@ -41,7 +41,11 @@ export default function AgentCard({
   const isDeleting = confirmDeleteId === agent.id;
   const dept = departments.find((department) => department.id === agent.department_id);
   const profile = normalizeAgentProfile(agent.agent_profile, agent.role);
-  const capabilitySummary = buildAgentCapabilityCompactSummary(profile, locale, ["execution", "architecture", "review"]);
+  const capabilitySummary = buildAgentCapabilityCompactSummary(profile, locale, [
+    "execution",
+    "architecture",
+    "review",
+  ]);
   const language = normalizeLanguage(locale);
   const canonicalFamily = getCanonicalFamilyLabel(agent.family ?? "backend", language);
   const canonicalStage = getCanonicalStageLabel(agent.career_stage ?? "junior", language);
@@ -86,14 +90,23 @@ export default function AgentCard({
             <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${ROLE_BADGE[agent.role] || ""}`}>
               {getLegacyRoleLabel(agent.role, locale)}
             </span>
-            <span className="rounded-md px-1.5 py-0.5 text-[10px]" style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}>
+            <span
+              className="rounded-md px-1.5 py-0.5 text-[10px]"
+              style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
+            >
               A{agent.authority_level ?? 0}
             </span>
-            <span className="rounded-md px-1.5 py-0.5 text-[10px]" style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}>
+            <span
+              className="rounded-md px-1.5 py-0.5 text-[10px]"
+              style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
+            >
               Tier {profile.growth_tier}
             </span>
             {dept ? (
-              <span className="rounded-md px-1.5 py-0.5 text-[10px]" style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}>
+              <span
+                className="rounded-md px-1.5 py-0.5 text-[10px]"
+                style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
+              >
                 {dept.icon} {localeName(locale, dept)}
               </span>
             ) : null}
@@ -101,16 +114,26 @@ export default function AgentCard({
         </div>
       </div>
 
-      <div className="mt-3 space-y-1.5 rounded-xl border p-2.5" style={{ borderColor: "var(--th-card-border)", background: "var(--th-bg-surface)" }}>
+      <div
+        className="mt-3 space-y-1.5 rounded-xl border p-2.5"
+        style={{ borderColor: "var(--th-card-border)", background: "var(--th-bg-surface)" }}
+      >
         {[
           { key: "execution", label: tr("실행", "Execution", "実行", "执行"), value: profile.capabilities.execution },
           { key: "review", label: tr("리뷰", "Review", "レビュー", "评审"), value: profile.capabilities.review },
-          { key: "leadership", label: tr("리더십", "Leadership", "リーダーシップ", "领导力"), value: profile.capabilities.leadership },
+          {
+            key: "leadership",
+            label: tr("리더십", "Leadership", "リーダーシップ", "领导力"),
+            value: profile.capabilities.leadership,
+          },
         ].map((stat) => (
           <div key={stat.key} className="grid grid-cols-[68px_minmax(0,1fr)_30px] items-center gap-2 text-[10px]">
             <span style={{ color: "var(--th-text-muted)" }}>{stat.label}</span>
             <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
-              <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" style={{ width: statBar(stat.value) }} />
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500"
+                style={{ width: statBar(stat.value) }}
+              />
             </div>
             <span className="text-right tabular-nums" style={{ color: "var(--th-text-primary)" }}>
               {stat.value}/5
@@ -119,9 +142,15 @@ export default function AgentCard({
         ))}
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t pt-2.5" style={{ borderTop: "1px solid var(--th-card-border)" }}>
+      <div
+        className="mt-3 flex items-center justify-between border-t pt-2.5"
+        style={{ borderTop: "1px solid var(--th-card-border)" }}
+      >
         <div className="flex items-center gap-2">
-          <span className="rounded px-1.5 py-0.5 text-[10px] font-mono" style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}>
+          <span
+            className="rounded px-1.5 py-0.5 text-[10px] font-mono"
+            style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
+          >
             {agent.cli_provider}
           </span>
           <span className="text-[10px] tabular-nums" style={{ color: "var(--th-text-muted)" }}>
@@ -129,7 +158,11 @@ export default function AgentCard({
           </span>
         </div>
 
-        <div className="max-w-[190px] truncate text-[10px]" style={{ color: "var(--th-text-muted)" }} title={capabilitySummary}>
+        <div
+          className="max-w-[190px] truncate text-[10px]"
+          style={{ color: "var(--th-text-muted)" }}
+          title={capabilitySummary}
+        >
           {capabilitySummary}
         </div>
 
@@ -143,7 +176,11 @@ export default function AgentCard({
               >
                 {tr("삭제", "Delete", "削除", "删除")}
               </button>
-              <button onClick={onDeleteCancel} className="rounded px-2 py-0.5 text-[10px] transition-colors" style={{ color: "var(--th-text-muted)" }}>
+              <button
+                onClick={onDeleteCancel}
+                className="rounded px-2 py-0.5 text-[10px] transition-colors"
+                style={{ color: "var(--th-text-muted)" }}
+              >
                 {tr("취소", "Cancel", "キャンセル", "取消")}
               </button>
             </>

@@ -19,7 +19,9 @@ function parseApprovalGateState(raw?: string | null): { gates: string[]; blocked
   if (!raw || typeof raw !== "string") return { gates: [], blockedBy: [] };
   try {
     const parsed = JSON.parse(raw);
-    const gates = Array.isArray(parsed?.gates) ? parsed.gates.map((gate: unknown) => String(gate ?? "").trim()).filter(Boolean) : [];
+    const gates = Array.isArray(parsed?.gates)
+      ? parsed.gates.map((gate: unknown) => String(gate ?? "").trim()).filter(Boolean)
+      : [];
     const blockedBy = new Set<string>();
     if (parsed?.blocked === true || gates.includes("artifact-health-block")) blockedBy.add("approval_gate_blocked");
     if (gates.includes("human-approval-general")) blockedBy.add("approval_gate=human-approval-general");
@@ -204,18 +206,10 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
         notifyCeo(
           pickL(
             l(
-              [
-                `[CEO OFFICE] Review meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`,
-              ],
-              [
-                `[CEO OFFICE] Review meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`,
-              ],
-              [
-                `[CEO OFFICE] Review meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`,
-              ],
-              [
-                `[CEO OFFICE] Review meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`,
-              ],
+              [`[CEO OFFICE] Review meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
+              [`[CEO OFFICE] Review meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
+              [`[CEO OFFICE] Review meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
+              [`[CEO OFFICE] Review meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
             ),
             resolveLang(taskTitle),
           ),
@@ -257,12 +251,7 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
           const reviewMaxRoundMessage = `[CEO OFFICE] '${taskTitle}' exceeded max review rounds (${effectiveMaxReviewRounds}). Review consensus is blocked until manual intervention.`;
           notifyCeo(
             pickL(
-              l(
-                [reviewMaxRoundMessage],
-                [reviewMaxRoundMessage],
-                [reviewMaxRoundMessage],
-                [reviewMaxRoundMessage],
-              ),
+              l([reviewMaxRoundMessage], [reviewMaxRoundMessage], [reviewMaxRoundMessage], [reviewMaxRoundMessage]),
               cappedLang,
             ),
             taskId,
@@ -280,7 +269,9 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
         const taskColumns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
         const taskColumnSet = new Set(taskColumns.map((row) => String(row.name).trim()).filter(Boolean));
         const taskCtx = db
-          .prepare(`SELECT description, project_path, workflow_pack_key${taskColumnSet.has("approval_gate_state_json") ? ", approval_gate_state_json" : ""} FROM tasks WHERE id = ?`)
+          .prepare(
+            `SELECT description, project_path, workflow_pack_key${taskColumnSet.has("approval_gate_state_json") ? ", approval_gate_state_json" : ""} FROM tasks WHERE id = ?`,
+          )
           .get(taskId) as
           | {
               description: string | null;
@@ -291,7 +282,9 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
           | undefined;
         const taskDescription = taskCtx?.description ?? null;
         const taskWorkflowPackKey = taskCtx?.workflow_pack_key ?? null;
-        const approvalGateState = parseApprovalGateState((taskCtx as { approval_gate_state_json?: string | null } | undefined)?.approval_gate_state_json);
+        const approvalGateState = parseApprovalGateState(
+          (taskCtx as { approval_gate_state_json?: string | null } | undefined)?.approval_gate_state_json,
+        );
         const authorityEvaluation = evaluateCanonicalMeetingAuthority(leaders, {
           taskTitle,
           taskDescription,
@@ -469,48 +462,38 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
               ],
             )
           : isFinalDecisionRound
-            ? l(
-                [
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Final approval and documentation will be completed without additional remediation.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Final approval and documentation will be completed without additional remediation.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Final approval and documentation will be completed without additional remediation.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Final approval and documentation will be completed without additional remediation.`,
-                ],
-              )
-            : l(
-                [
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Continuing team-lead feedback and mutual approvals.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Continuing team-lead feedback and mutual approvals.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Continuing team-lead feedback and mutual approvals.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Continuing team-lead feedback and mutual approvals.`,
-                ],
-              );
+            ? l([
+                `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Final approval and documentation will be completed without additional remediation.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Final approval and documentation will be completed without additional remediation.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Final approval and documentation will be completed without additional remediation.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Final approval and documentation will be completed without additional remediation.`,
+              ])
+            : l([
+                `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Continuing team-lead feedback and mutual approvals.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Continuing team-lead feedback and mutual approvals.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Continuing team-lead feedback and mutual approvals.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} resumed. Continuing team-lead feedback and mutual approvals.`,
+              ]);
         const startNotice = isRound2Merge
-          ? l(
-              [
-                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Team leads are consolidating round 1 remediation outputs and making merge-readiness decisions.`,
-                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Team leads are consolidating round 1 remediation outputs and making merge-readiness decisions.`,
-                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Team leads are consolidating round 1 remediation outputs and making merge-readiness decisions.`,
-                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Team leads are consolidating round 1 remediation outputs and making merge-readiness decisions.`,
-              ],
-            )
+          ? l([
+              `[CEO OFFICE] '${taskTitle}' review round ${round} started. Team leads are consolidating round 1 remediation outputs and making merge-readiness decisions.`,
+              `[CEO OFFICE] '${taskTitle}' review round ${round} started. Team leads are consolidating round 1 remediation outputs and making merge-readiness decisions.`,
+              `[CEO OFFICE] '${taskTitle}' review round ${round} started. Team leads are consolidating round 1 remediation outputs and making merge-readiness decisions.`,
+              `[CEO OFFICE] '${taskTitle}' review round ${round} started. Team leads are consolidating round 1 remediation outputs and making merge-readiness decisions.`,
+            ])
           : isFinalDecisionRound
-            ? l(
-                [
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} started. Final approval and documentation package will be finalized without additional remediation.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} started. Final approval and documentation package will be finalized without additional remediation.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} started. Final approval and documentation package will be finalized without additional remediation.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} started. Final approval and documentation package will be finalized without additional remediation.`,
-                ],
-              )
-            : l(
-                [
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} started. Collecting team-lead feedback and mutual approvals.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} started. Collecting team-lead feedback and mutual approvals.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} started. Collecting team-lead feedback and mutual approvals.`,
-                  `[CEO OFFICE] '${taskTitle}' review round ${round} started. Collecting team-lead feedback and mutual approvals.`,
-                ],
-              );
+            ? l([
+                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Final approval and documentation package will be finalized without additional remediation.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Final approval and documentation package will be finalized without additional remediation.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Final approval and documentation package will be finalized without additional remediation.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Final approval and documentation package will be finalized without additional remediation.`,
+              ])
+            : l([
+                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Collecting team-lead feedback and mutual approvals.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Collecting team-lead feedback and mutual approvals.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Collecting team-lead feedback and mutual approvals.`,
+                `[CEO OFFICE] '${taskTitle}' review round ${round} started. Collecting team-lead feedback and mutual approvals.`,
+              ]);
         notifyCeo(pickL(resumeMeeting ? resumeNotice : startNotice, lang), taskId);
         const openingPrompt = buildMeetingPrompt(planningLeader, {
           meetingType: "review",
@@ -866,7 +849,12 @@ export function createReviewConsensusTools(deps: ReviewConsensusDeps) {
         const reviewRoundErrorMessage = `[CEO OFFICE] Error while processing review round for '${taskTitle}': ${msg}`;
         notifyCeo(
           pickL(
-            l([reviewRoundErrorMessage], [reviewRoundErrorMessage], [reviewRoundErrorMessage], [reviewRoundErrorMessage]),
+            l(
+              [reviewRoundErrorMessage],
+              [reviewRoundErrorMessage],
+              [reviewRoundErrorMessage],
+              [reviewRoundErrorMessage],
+            ),
             errLang,
           ),
           taskId,

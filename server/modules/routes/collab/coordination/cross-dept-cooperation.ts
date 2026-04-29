@@ -290,7 +290,9 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
       notifyCeo(
         pickL(
           l(
-            [`'${taskTitle}' \uD611\uC5C5 \uB77C\uC6B0\uD305 \uC911 ${getDeptName(crossDeptId)} \uBD80\uC11C\uC758 \uD300\uC7A5\uC744 \uCC3E\uC9C0 \uBABB\uD574 \uD574\uB2F9 \uBD80\uC11C \uC704\uC784\uC744 \uAC74\uB108\uB701\uB2C8\uB2E4. (${blockingReason})`],
+            [
+              `'${taskTitle}' \uD611\uC5C5 \uB77C\uC6B0\uD305 \uC911 ${getDeptName(crossDeptId)} \uBD80\uC11C\uC758 \uD300\uC7A5\uC744 \uCC3E\uC9C0 \uBABB\uD574 \uD574\uB2F9 \uBD80\uC11C \uC704\uC784\uC744 \uAC74\uB108\uB701\uB2C8\uB2E4. (${blockingReason})`,
+            ],
             [
               `While routing collaboration for '${taskTitle}', no team leader was found in ${getDeptName(crossDeptId)}. Skipping that department. (${blockingReason})`,
             ],
@@ -340,7 +342,9 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
       notifyCeo(
         pickL(
           l(
-            [`\uD611\uC5C5 \uC694\uCCAD \uC804\uB2EC \uC911: ${crossDeptName} (${index + 1}/${deptIds.length}, \uB300\uAE30 ${remaining}\uAC1C \uD300)`],
+            [
+              `\uD611\uC5C5 \uC694\uCCAD \uC804\uB2EC \uC911: ${crossDeptName} (${index + 1}/${deptIds.length}, \uB300\uAE30 ${remaining}\uAC1C \uD300)`,
+            ],
             [
               `Collaboration request in progress: ${crossDeptName} (${index + 1}/${deptIds.length}, ${remaining} team(s) remaining in queue)`,
             ],
@@ -367,8 +371,12 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
           `Hi ${crossCoordinatorName}! We are working on "${taskTitle}" per CEO directive and need ${crossDeptName} support. Please assign an available owner and share the scope plus verification criteria.`,
           `${crossCoordinatorName}, we need ${crossDeptName} input on "${taskTitle}". Please share the available owner and expected output.`,
         ],
-        [`Hi ${crossCoordinatorName}! We are working on "${taskTitle}" per CEO directive and need ${crossDeptName} support. Please assign an available owner and share the scope plus verification criteria.`],
-        [`Hi ${crossCoordinatorName}! We are working on "${taskTitle}" per CEO directive and need ${crossDeptName} support. Please assign an available owner and share the scope plus verification criteria.`],
+        [
+          `Hi ${crossCoordinatorName}! We are working on "${taskTitle}" per CEO directive and need ${crossDeptName} support. Please assign an available owner and share the scope plus verification criteria.`,
+        ],
+        [
+          `Hi ${crossCoordinatorName}! We are working on "${taskTitle}" per CEO directive and need ${crossDeptName} support. Please assign an available owner and share the scope plus verification criteria.`,
+        ],
       ),
       lang,
     );
@@ -417,14 +425,13 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
               ? "department_fallback_manual_pool"
               : "department_fallback_leader";
         const authorityReason = `canonical_stage=${execCanonicalIdentity.career_stage};authority_level=${execCanonicalIdentity.authority_level}`;
-        const blockingReason =
-          crossSubAtRun
-            ? "none"
-            : crossLeaderAllowed
-              ? "no_subordinate_found"
-              : manualPoolFallbackAtRun
-                ? "team_lead_out_of_scope_manual_pool_used"
-                : "team_lead_out_of_scope_no_manual_pool";
+        const blockingReason = crossSubAtRun
+          ? "none"
+          : crossLeaderAllowed
+            ? "no_subordinate_found"
+            : manualPoolFallbackAtRun
+              ? "team_lead_out_of_scope_manual_pool_used"
+              : "team_lead_out_of_scope_no_manual_pool";
         appendTaskLog(
           taskId,
           "system",
@@ -450,8 +457,12 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
                     `Sure, ${leaderName}! I'll assign ${execName} to support ${crossDeptName} right away and keep you posted.`,
                     `Got it! ${execName} will handle the ${crossDeptName} scope and report both output and verification results.`,
                   ],
-                  [`Sure, ${leaderName}! I'll assign ${execName} to support ${crossDeptName} right away and keep you posted.`],
-                  [`Sure, ${leaderName}! I'll assign ${execName} to support ${crossDeptName} right away and keep you posted.`],
+                  [
+                    `Sure, ${leaderName}! I'll assign ${execName} to support ${crossDeptName} right away and keep you posted.`,
+                  ],
+                  [
+                    `Sure, ${leaderName}! I'll assign ${execName} to support ${crossDeptName} right away and keep you posted.`,
+                  ],
                 ),
                 lang,
               )
@@ -656,7 +667,9 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
                 deptPromptBlock,
                 pickL(
                   l(
-                    ["\uC704 \uC791\uC5C5\uC744 \uCDA9\uBD84\uD788 \uC218\uD589\uD558\uACE0, \uD544\uC694\uD558\uBA74 \uC704 \uB300\uD654 \uB9E5\uB77D\uC744 \uCC38\uACE0\uD558\uC138\uC694."],
+                    [
+                      "\uC704 \uC791\uC5C5\uC744 \uCDA9\uBD84\uD788 \uC218\uD589\uD558\uACE0, \uD544\uC694\uD558\uBA74 \uC704 \uB300\uD654 \uB9E5\uB77D\uC744 \uCC38\uACE0\uD558\uC138\uC694.",
+                    ],
                     ["Please complete the task above thoroughly. Use the conversation context above if relevant."],
                     ["Please complete the task above thoroughly. Use the conversation context above if relevant."],
                     ["Please complete the task above thoroughly. Use the conversation context above if relevant."],
@@ -744,7 +757,9 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
             notifyCeo(
               pickL(
                 l(
-                  [`${crossDeptName} ${execName}\uAC00 '${taskTitle}' \uD611\uC5C5 \uC791\uC5C5\uC744 \uC2DC\uC791\uD588\uC2B5\uB2C8\uB2E4.`],
+                  [
+                    `${crossDeptName} ${execName}\uAC00 '${taskTitle}' \uD611\uC5C5 \uC791\uC5C5\uC744 \uC2DC\uC791\uD588\uC2B5\uB2C8\uB2E4.`,
+                  ],
                   [`${crossDeptName} ${execName} started collaboration work for '${taskTitle}'.`],
                   [`${crossDeptName} ${execName} started collaboration work for "${taskTitle}".`],
                   [`${crossDeptName} ${execName} started collaboration work for "${taskTitle}".`],

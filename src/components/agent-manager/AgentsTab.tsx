@@ -168,7 +168,14 @@ export default function AgentsTab({
           </div>
 
           {sortedAgents.length === 0 ? (
-            <div className="rounded-xl py-16 text-center" style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)", color: "var(--th-text-muted)" }}>
+            <div
+              className="rounded-xl py-16 text-center"
+              style={{
+                background: "var(--th-card-bg)",
+                border: "1px solid var(--th-card-border)",
+                color: "var(--th-text-muted)",
+              }}
+            >
               <div className="text-3xl mb-2">-</div>
               {tr("검색 결과 없음", "No agents found", "検索結果なし", "无搜索结果")}
             </div>
@@ -198,20 +205,32 @@ export default function AgentsTab({
           className="rounded-xl p-3"
           style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)" }}
         >
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--th-text-muted)" }}>
+          <div
+            className="mb-2 text-xs font-semibold uppercase tracking-[0.16em]"
+            style={{ color: "var(--th-text-muted)" }}
+          >
             {tr("부서 집계", "Department Summary", "部門集計", "部门汇总")}
           </div>
 
           <div className="mb-3 grid grid-cols-3 gap-1.5">
             {departmentGroups.map(([group, count]) => (
-              <div key={group} className="rounded-md px-2 py-1 text-[11px]" style={{ background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}>
+              <div
+                key={group}
+                className="rounded-md px-2 py-1 text-[11px]"
+                style={{ background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+              >
                 {group}: {count}
               </div>
             ))}
           </div>
 
           <div className="mb-2 text-xs" style={{ color: "var(--th-text-muted)" }}>
-            {tr("가상 스크롤(136+ 부서 대응)", "Virtual list (136+ departments)", "仮想スクロール（136+部門対応）", "虚拟列表（支持 136+ 部门）")}
+            {tr(
+              "가상 스크롤(136+ 부서 대응)",
+              "Virtual list (136+ departments)",
+              "仮想スクロール（136+部門対応）",
+              "虚拟列表（支持 136+ 部门）",
+            )}
           </div>
 
           <div
@@ -235,12 +254,20 @@ export default function AgentsTab({
                     isActive ? "bg-blue-500/20 text-blue-200" : "text-slate-300 hover:bg-slate-800/60"
                   }`}
                   style={{ height: `${DEPT_ROW_HEIGHT}px` }}
-                  title={tr("더블 클릭: 부서 편집", "Double-click: edit department", "ダブルクリック: 部門編集", "双击：编辑部门")}
+                  title={tr(
+                    "더블 클릭: 부서 편집",
+                    "Double-click: edit department",
+                    "ダブルクリック: 部門編集",
+                    "双击：编辑部门",
+                  )}
                 >
                   <span className="truncate">
                     {row.department.icon} {row.label}
                   </span>
-                  <span className="ml-2 shrink-0 rounded px-1.5 py-0.5 text-[10px]" style={{ background: "var(--th-card-bg)", color: "var(--th-text-muted)" }}>
+                  <span
+                    className="ml-2 shrink-0 rounded px-1.5 py-0.5 text-[10px]"
+                    style={{ background: "var(--th-card-bg)", color: "var(--th-text-muted)" }}
+                  >
                     {row.count.working}/{row.count.total}
                   </span>
                 </button>

@@ -30,7 +30,8 @@ function runnerChipClass(status: "active" | "idle" | "stopping" | "error"): stri
 
 function localizePoolStatus(status: CliPoolStatus, t: CliSettingsTabProps["t"]): string {
   if (status === "connected") return t({ ko: "연결됨", en: "Connected", ja: "Connected", zh: "Connected" });
-  if (status === "auth_required") return t({ ko: "인증 필요", en: "Auth required", ja: "Auth required", zh: "Auth required" });
+  if (status === "auth_required")
+    return t({ ko: "인증 필요", en: "Auth required", ja: "Auth required", zh: "Auth required" });
   if (status === "install_required") {
     return t({ ko: "CLI 설치 필요", en: "Install required", ja: "Install required", zh: "Install required" });
   }
@@ -38,7 +39,9 @@ function localizePoolStatus(status: CliPoolStatus, t: CliSettingsTabProps["t"]):
 }
 
 function isCliPoolStatus(value: string): value is CliPoolStatus {
-  return value === "connected" || value === "auth_required" || value === "install_required" || value === "profile_error";
+  return (
+    value === "connected" || value === "auth_required" || value === "install_required" || value === "profile_error"
+  );
 }
 
 function localizeVerifyResult(value: string, t: CliSettingsTabProps["t"]): string {
@@ -69,10 +72,12 @@ function localizeRunnerStatus(
 
 function localizeAvailability(value: string, t: CliSettingsTabProps["t"]): string {
   const normalized = value.trim().toLowerCase();
-  if (!normalized || normalized === "unknown") return t({ ko: "알 수 없음", en: "Unknown", ja: "Unknown", zh: "Unknown" });
+  if (!normalized || normalized === "unknown")
+    return t({ ko: "알 수 없음", en: "Unknown", ja: "Unknown", zh: "Unknown" });
   if (normalized === "ready") return t({ ko: "사용 가능", en: "Ready", ja: "Ready", zh: "Ready" });
   if (normalized === "delayed") return t({ ko: "지연", en: "Delayed", ja: "Delayed", zh: "Delayed" });
-  if (normalized === "unavailable") return t({ ko: "사용 불가", en: "Unavailable", ja: "Unavailable", zh: "Unavailable" });
+  if (normalized === "unavailable")
+    return t({ ko: "사용 불가", en: "Unavailable", ja: "Unavailable", zh: "Unavailable" });
   return normalized;
 }
 
@@ -181,9 +186,10 @@ export default function CliSettingsTab({
       subModel?: string;
       reasoningLevel?: string;
       subModelReasoningLevel?: string;
-    }) => {
-      void provider;
-      void updater;
+    },
+  ) => {
+    void provider;
+    void updater;
   };
 
   const activeRunnerCount = useMemo(
@@ -195,10 +201,7 @@ export default function CliSettingsTab({
     () => officeRunnerQueue.filter((item) => item.status === "queued").slice(0, 5),
     [officeRunnerQueue],
   );
-  const codexPools = useMemo(
-    () => cliAccountPools.filter((pool) => pool.provider === "codex"),
-    [cliAccountPools],
-  );
+  const codexPools = useMemo(() => cliAccountPools.filter((pool) => pool.provider === "codex"), [cliAccountPools]);
 
   const codexPoolRows = useMemo(() => {
     return codexPools.map((pool) => {
@@ -405,8 +408,18 @@ export default function CliSettingsTab({
             className="rounded border border-cyan-400/40 px-2 py-1 text-xs text-cyan-300 enabled:hover:bg-cyan-500/10 disabled:opacity-40"
           >
             {verifyAllCodexBusy
-              ? t({ ko: "Codex 전체 검증 중...", en: "Verifying Codex pools...", ja: "Verifying Codex pools...", zh: "Verifying Codex pools..." })
-              : t({ ko: "Codex 풀 전체 검증", en: "Verify All Codex Pools", ja: "Verify All Codex Pools", zh: "Verify All Codex Pools" })}
+              ? t({
+                  ko: "Codex 전체 검증 중...",
+                  en: "Verifying Codex pools...",
+                  ja: "Verifying Codex pools...",
+                  zh: "Verifying Codex pools...",
+                })
+              : t({
+                  ko: "Codex 풀 전체 검증",
+                  en: "Verify All Codex Pools",
+                  ja: "Verify All Codex Pools",
+                  zh: "Verify All Codex Pools",
+                })}
           </button>
           <button onClick={onRefresh} className="text-xs text-blue-400 transition-colors hover:text-blue-300">
             {t({ ko: "새로고침", en: "Refresh", ja: "更新", zh: "刷新" })}
@@ -416,11 +429,21 @@ export default function CliSettingsTab({
 
       <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
         <div className="mb-2 text-xs font-semibold text-cyan-200">
-          {t({ ko: "Codex 다중 인증 풀 상태", en: "Codex Multi-Auth Pools", ja: "Codex Multi-Auth Pools", zh: "Codex Multi-Auth Pools" })}
+          {t({
+            ko: "Codex 다중 인증 풀 상태",
+            en: "Codex Multi-Auth Pools",
+            ja: "Codex Multi-Auth Pools",
+            zh: "Codex Multi-Auth Pools",
+          })}
         </div>
         {codexPoolRows.length === 0 ? (
           <div className="text-xs text-slate-400">
-            {t({ ko: "등록된 Codex 계정풀이 없습니다.", en: "No Codex pools configured.", ja: "No Codex pools configured.", zh: "No Codex pools configured." })}
+            {t({
+              ko: "등록된 Codex 계정풀이 없습니다.",
+              en: "No Codex pools configured.",
+              ja: "No Codex pools configured.",
+              zh: "No Codex pools configured.",
+            })}
           </div>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
@@ -448,9 +471,7 @@ export default function CliSettingsTab({
                 <div className="mt-1 text-[10px] text-slate-400">
                   {t({ ko: "가용성", en: "Availability", ja: "Availability", zh: "Availability" })}:{" "}
                   {localizeAvailability(row.availability || "unknown", t)}
-                  {row.isCurrent
-                    ? ` · ${t({ ko: "현재 선택", en: "Current", ja: "Current", zh: "Current" })}`
-                    : ""}
+                  {row.isCurrent ? ` · ${t({ ko: "현재 선택", en: "Current", ja: "Current", zh: "Current" })}` : ""}
                 </div>
                 <div className="mt-1 text-[10px] text-slate-400">
                   {t({ ko: "리스크/대기", en: "Risk/Wait", ja: "Risk/Wait", zh: "Risk/Wait" })}: {row.riskScore}/
@@ -494,9 +515,7 @@ export default function CliSettingsTab({
                 >
                   <span className="truncate text-slate-200">
                     {account.label}
-                    {account.isCurrent
-                      ? ` · ${t({ ko: "현재", en: "Current", ja: "Current", zh: "Current" })}`
-                      : ""}
+                    {account.isCurrent ? ` · ${t({ ko: "현재", en: "Current", ja: "Current", zh: "Current" })}` : ""}
                   </span>
                   <span className="text-slate-400">
                     {account.usageSummary ?? t({ ko: "- (사용량 데이터 없음)", en: "-", ja: "-", zh: "-" })}
@@ -981,6 +1000,3 @@ export default function CliSettingsTab({
     </section>
   );
 }
-
-
-

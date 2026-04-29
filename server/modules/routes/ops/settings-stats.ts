@@ -53,7 +53,7 @@ function isPreferredTelegramSingleGroupSession(entry: {
   const id = entry.id.trim().toLowerCase();
   if (id === "global" || id === "global-group-chat") return true;
   const name = entry.name.trim().toLowerCase();
-  return name.includes("global") || name.includes("통합") || name.includes("회의실");
+  return name.includes("global") || name.includes("company") || name.includes("meeting");
 }
 
 function normalizeMessengerChannelsForSingleGroup(raw: unknown): { value: unknown; warnings: string[] } {

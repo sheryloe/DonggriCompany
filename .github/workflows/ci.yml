@@ -114,3 +114,5 @@ jobs:
         run: pnpm run test:ci
         env:
           CI: true
+          OAUTH_ENCRYPTION_SECRET: ci-test-encryption-secret
+          SESSION_SECRET: ci-test-session-secret

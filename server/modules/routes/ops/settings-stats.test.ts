@@ -225,7 +225,7 @@ describe("settings-stats projection write guard", () => {
                   },
                   {
                     id: "global-group-chat",
-                    name: "Claw-Empire 통합 그룹방 (동그리컴퍼티 회의실)",
+                    name: "Claw-Empire global company meeting room",
                     targetId: "-100999",
                     enabled: true,
                   },

@@ -25,6 +25,8 @@ type TaskListResponse = {
   }>;
 };
 
+const TRANSIENT_HTTP_STATUSES = new Set([502, 503, 504]);
+
 function uniqueIds(ids: Array<string | null | undefined> | undefined): string[] {
   if (!ids) return [];
   return Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter((id) => id.length > 0)));
@@ -45,7 +47,19 @@ async function deleteById(
 ): Promise<void> {
   for (const id of ids) {
     try {
-      const response = await request.delete(`${routePrefix}/${id}`, requestHeaders ? { headers: requestHeaders } : {});
+      let response = await request.delete(`${routePrefix}/${id}`, requestHeaders ? { headers: requestHeaders } : {});
+      if (response.status() === 401 && !requestHeaders) {
+        await request.get("/api/auth/session");
+        response = await request.delete(`${routePrefix}/${id}`);
+      }
+      for (let attempt = 1; attempt <= 8 && TRANSIENT_HTTP_STATUSES.has(response.status()); attempt += 1) {
+        await sleep(250 * attempt);
+        response = await request.delete(`${routePrefix}/${id}`, requestHeaders ? { headers: requestHeaders } : {});
+        if (response.status() === 401 && !requestHeaders) {
+          await request.get("/api/auth/session");
+          response = await request.delete(`${routePrefix}/${id}`);
+        }
+      }
       if (response.ok() || response.status() === 404) continue;
       const text = await response.text();
       errors.push(`${routePrefix}/${id} -> ${response.status()}: ${text.slice(0, 300)}`);
@@ -142,10 +156,25 @@ async function collectDepartmentAgentIds(
   const collected: string[] = [];
   for (const id of departmentIds) {
     try {
-      const response = await request.get(
+      let response = await request.get(
         `/api/departments/${id}?include_seed=1`,
         requestHeaders ? { headers: requestHeaders } : {},
       );
+      if (response.status() === 401 && !requestHeaders) {
+        await request.get("/api/auth/session");
+        response = await request.get(`/api/departments/${id}?include_seed=1`);
+      }
+      for (let attempt = 1; attempt <= 8 && TRANSIENT_HTTP_STATUSES.has(response.status()); attempt += 1) {
+        await sleep(250 * attempt);
+        response = await request.get(
+          `/api/departments/${id}?include_seed=1`,
+          requestHeaders ? { headers: requestHeaders } : {},
+        );
+        if (response.status() === 401 && !requestHeaders) {
+          await request.get("/api/auth/session");
+          response = await request.get(`/api/departments/${id}?include_seed=1`);
+        }
+      }
       if (response.status() === 404) continue;
       const text = await response.text();
       if (!response.ok()) {
@@ -170,7 +199,19 @@ async function collectRelatedTaskIds(
 ): Promise<string[]> {
   if (projectIds.length === 0 && departmentIds.length === 0) return [];
   try {
-    const response = await request.get("/api/tasks", requestHeaders ? { headers: requestHeaders } : {});
+    let response = await request.get("/api/tasks", requestHeaders ? { headers: requestHeaders } : {});
+    if (response.status() === 401 && !requestHeaders) {
+      await request.get("/api/auth/session");
+      response = await request.get("/api/tasks");
+    }
+    for (let attempt = 1; attempt <= 8 && TRANSIENT_HTTP_STATUSES.has(response.status()); attempt += 1) {
+      await sleep(250 * attempt);
+      response = await request.get("/api/tasks", requestHeaders ? { headers: requestHeaders } : {});
+      if (response.status() === 401 && !requestHeaders) {
+        await request.get("/api/auth/session");
+        response = await request.get("/api/tasks");
+      }
+    }
     const text = await response.text();
     if (!response.ok()) {
       errors.push(`/api/tasks -> ${response.status()}: ${text.slice(0, 300)}`);
@@ -200,6 +241,9 @@ export async function cleanupE2EResources(request: APIRequestContext, targets: E
   const projectIds = uniqueIds(targets.projectIds);
   const departmentIds = uniqueIds(targets.departmentIds);
   const requestHeaders = targets.requestHeaders;
+  if (!requestHeaders) {
+    await request.get("/api/auth/session").catch(() => undefined);
+  }
   const relatedTaskIds = await collectRelatedTaskIds(request, projectIds, departmentIds, errors, requestHeaders);
   const taskIds = uniqueIds([...(targets.taskIds ?? []), ...relatedTaskIds]);
 

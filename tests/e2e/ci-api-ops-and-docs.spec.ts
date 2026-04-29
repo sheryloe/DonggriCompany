@@ -99,6 +99,15 @@ async function waitForTask(
 
   while (Date.now() - startedAt < timeoutMs) {
     const tasksRes = await request.get("/api/tasks");
+    if ([502, 503, 504].includes(tasksRes.status())) {
+      await sleep(500);
+      continue;
+    }
+    if (tasksRes.status() === 401) {
+      await request.get("/api/auth/session");
+      await sleep(350);
+      continue;
+    }
     const tasksJson = await expectOkJson<{ tasks: TaskSummary[] }>(tasksRes, "GET /api/tasks");
     lastTasks = Array.isArray(tasksJson.tasks) ? tasksJson.tasks : [];
     const found = lastTasks.find(predicate);

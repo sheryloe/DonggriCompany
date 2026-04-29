@@ -1,5 +1,7 @@
 ﻿import { evaluateCanonicalMeetingAuthority } from "../../company/canonical-authority.ts";
 
+import { buildGoalCommandPromptBlock, resolveGoalCommandRuntimePolicy } from "../goal-commands.ts";
+
 type CreatePlannedApprovalToolsDeps = {
   reviewInFlight: Set<string>;
   reviewRoundState: Map<string, number>;
@@ -119,13 +121,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
 
     void (async () => {
       let meetingId: string | null = null;
-      const leaders = getTaskReviewLeaders(taskId, departmentId, {
-        minLeaders: 5,
-        includePlanning: true,
-        fallbackAll: true,
-        requiredDepartmentIds: PLANNED_PUBLIC_REQUIRED_DEPARTMENT_IDS,
-      });
-      const quorumReasons = leaders.length >= 2 ? [] : [`quorum_not_met:${leaders.length}/2`];
+      let leaders: any[] = [];
       try {
         const round = (reviewRoundState.get(lockKey) ?? 0) + 1;
         reviewRoundState.set(lockKey, round);
@@ -135,6 +131,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           "description",
           "project_path",
           "workflow_pack_key",
+          ...(taskColumns.has("workflow_meta_json") ? ["workflow_meta_json"] : []),
           ...(taskColumns.has("approval_gate_state_json") ? ["approval_gate_state_json"] : []),
         ];
         const taskCtx = db
@@ -144,14 +141,36 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
               description: string | null;
               project_path: string | null;
               workflow_pack_key: string | null;
+              workflow_meta_json?: string | null;
               approval_gate_state_json?: string | null;
             }
           | undefined;
         const taskDescription = taskCtx?.description ?? null;
+        const goalCommandPromptBlock = buildGoalCommandPromptBlock(taskCtx?.workflow_meta_json ?? null);
+        const goalRuntimePolicy = resolveGoalCommandRuntimePolicy(taskCtx?.workflow_meta_json ?? null);
+        const taskPlanningDescription = [taskDescription, goalCommandPromptBlock].filter(Boolean).join("\n\n") || null;
         const taskWorkflowPackKey = taskCtx?.workflow_pack_key ?? null;
+        const requiredDepartmentIds =
+          goalRuntimePolicy?.requiredDepartments && goalRuntimePolicy.requiredDepartments.length > 0
+            ? goalRuntimePolicy.requiredDepartments
+            : PLANNED_PUBLIC_REQUIRED_DEPARTMENT_IDS;
+        leaders = getTaskReviewLeaders(taskId, departmentId, {
+          minLeaders: goalRuntimePolicy ? Math.min(3, Math.max(2, requiredDepartmentIds.length)) : 5,
+          includePlanning: true,
+          fallbackAll: !goalRuntimePolicy,
+          requiredDepartmentIds,
+        });
+        if (goalRuntimePolicy) {
+          appendTaskLog(
+            taskId,
+            "system",
+            `Goal command meeting scope: ${goalRuntimePolicy.preset.key} required_departments=${requiredDepartmentIds.join(",")} max_parallel_workstreams=${goalRuntimePolicy.maxParallelWorkstreams}`,
+          );
+        }
+        const quorumReasons = leaders.length >= 2 ? [] : [`quorum_not_met:${leaders.length}/2`];
         const authorityEvaluation = evaluateCanonicalMeetingAuthority(leaders, {
           taskTitle,
-          taskDescription,
+          taskDescription: taskPlanningDescription,
           workflowPackKey: taskWorkflowPackKey,
           phase: "planned",
         });
@@ -172,7 +191,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
                 [`[CEO OFFICE] Planned meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
                 [`[CEO OFFICE] Planned meeting for '${taskTitle}' is blocked. Reason: ${reasonText}`],
               ),
-              resolveLang(taskDescription ?? taskTitle),
+              resolveLang(taskPlanningDescription ?? taskTitle),
             ),
             taskId,
           );
@@ -190,7 +209,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           description: taskDescription,
           project_path: taskCtx?.project_path ?? null,
         });
-        const lang = resolveLang(taskDescription ?? taskTitle);
+        const lang = resolveLang(taskPlanningDescription ?? taskTitle);
         const transcript: any[] = [];
         const publicFeedbackDeptIds = new Set<string>();
         const oneShotTimeoutMs = Math.max(5_000, Number(reviewMeetingOneShotTimeoutMs ?? 65_000));
@@ -343,7 +362,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           meetingType: "planned",
           round,
           taskTitle,
-          taskDescription,
+          taskDescription: taskPlanningDescription,
           workflowPackKey: taskWorkflowPackKey,
           transcript,
           turnObjective:
@@ -366,7 +385,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
             meetingType: "planned",
             round,
             taskTitle,
-            taskDescription,
+            taskDescription: taskPlanningDescription,
             workflowPackKey: taskWorkflowPackKey,
             transcript,
             turnObjective:
@@ -401,7 +420,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
           meetingType: "planned",
           round,
           taskTitle,
-          taskDescription,
+          taskDescription: taskPlanningDescription,
           workflowPackKey: taskWorkflowPackKey,
           transcript,
           turnObjective:
@@ -422,7 +441,7 @@ export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps)
             meetingType: "planned",
             round,
             taskTitle,
-            taskDescription,
+            taskDescription: taskPlanningDescription,
             workflowPackKey: taskWorkflowPackKey,
             transcript,
             turnObjective:

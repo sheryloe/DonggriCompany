@@ -23,7 +23,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 }
 
 describe("task workflow pack routing", () => {
-  it("활성 오피스팩에 맞는 업무만 필터링한다", () => {
+  it("filters tasks by the active office workflow pack", () => {
     const tasks = [
       makeTask({ id: "dev-default" }),
       makeTask({ id: "dev-explicit", workflow_pack_key: "development" }),
@@ -37,11 +37,28 @@ describe("task workflow pack routing", () => {
     expect(filterTasksByOfficePack(tasks, "report").map((task) => task.id)).toEqual(["report"]);
   });
 
-  it("업무 생성 입력값에 활성 오피스팩을 강제로 주입한다", () => {
+  it("does not override an explicitly selected goal command workflow pack", () => {
+    const input = {
+      title: "Research task",
+      description: "desc",
+      workflow_pack_key: "web_research_report" as const,
+      workflow_meta_json: { goal_command: "research" },
+      project_id: "project-1",
+    };
+
+    expect(applyOfficePackToTaskInput(input, "development")).toEqual({
+      title: "Research task",
+      description: "desc",
+      workflow_pack_key: "web_research_report",
+      workflow_meta_json: { goal_command: "research" },
+      project_id: "project-1",
+    });
+  });
+
+  it("uses the active office pack when the task has no explicit workflow pack", () => {
     const input = {
       title: "Pack task",
       description: "desc",
-      workflow_pack_key: "novel" as const,
       project_id: "project-1",
     };
 

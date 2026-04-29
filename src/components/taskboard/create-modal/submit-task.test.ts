@@ -52,6 +52,8 @@ describe("submitTaskWithProjectHandling GitHub project flow", () => {
       taskType: "general" as const,
       priority: 3,
       assignAgentId: "",
+      selectedGoalCommand: "",
+      selectedGoalCommandPreset: null,
       projectId: "",
       projectQuery: "Platform",
       createNewProjectMode: true,
@@ -118,6 +120,8 @@ describe("submitTaskWithProjectHandling GitHub project flow", () => {
       project_id: "project-1",
       project_path: "D:\\Projects\\platform",
       assigned_agent_id: undefined,
+      workflow_pack_key: undefined,
+      workflow_meta_json: undefined,
     });
     expect(context.onClose).toHaveBeenCalled();
   });
@@ -136,5 +140,55 @@ describe("submitTaskWithProjectHandling GitHub project flow", () => {
 
     expect(context.onRequireGitHubConnection).toHaveBeenCalledWith("missing_repo_scope", {});
     expect(context.onCreate).not.toHaveBeenCalled();
+  });
+
+  it("passes selected goal command metadata as canonical task workflow meta", async () => {
+    const context = createContext({
+      createNewProjectMode: false,
+      projectQuery: "",
+      selectedGoalCommand: "research",
+      selectedGoalCommandPreset: {
+        key: "research",
+        slashCommand: "/dg-research",
+        workflowPackKey: "web_research_report",
+        teamPreset: "research_report",
+        departmentId: "api-research",
+        taskType: "analysis",
+        priority: 3,
+        requiredDepartments: ["pmo", "api-research", "knowledge-docs"],
+        maxParallelWorkstreams: 2,
+        verificationGates: ["sources", "findings"],
+        routingTags: ["research"],
+      },
+    });
+
+    await submitTaskWithProjectHandling(context, { allowWithoutProject: true });
+
+    expect(context.onCreate).toHaveBeenCalledWith({
+      title: "Ship v1",
+      description: "Launch the platform",
+      department_id: undefined,
+      task_type: "general",
+      priority: 3,
+      project_id: undefined,
+      project_path: undefined,
+      assigned_agent_id: undefined,
+      workflow_pack_key: "web_research_report",
+      workflow_meta_json: {
+        goal_command: "research",
+        goal_command_version: "donggri_goal_commands_v1",
+        team_preset: "research_report",
+        route_source: "task_create_goal_chooser",
+        routing_reason: "user_selected_goal",
+        slash_command: "/dg-research",
+        workflow_pack_key: "web_research_report",
+        department_id: "api-research",
+        task_type: "analysis",
+        priority: 3,
+        required_departments: ["pmo", "api-research", "knowledge-docs"],
+        max_parallel_workstreams: 2,
+        verification_gates: ["sources", "findings"],
+      },
+    });
   });
 });

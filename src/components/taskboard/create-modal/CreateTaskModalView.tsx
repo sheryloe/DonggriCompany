@@ -1,6 +1,12 @@
 import type { ComponentProps, FormEventHandler } from "react";
-import type { Agent, Department, TaskType } from "../../../types";
+import type { Agent, Department, GoalCommandPreset, TaskType } from "../../../types";
 import { TASK_TYPE_OPTIONS, taskTypeLabel, type FormFeedback, type TFunction } from "../constants";
+import {
+  getGoalCommandDescription,
+  getGoalCommandTeamLabel,
+  getGoalCommandTitle,
+  goalCommandModalText,
+} from "../goal-command-text";
 import CreateTaskModalOverlays from "./Overlays";
 import type { CreateTaskModalOverlaysProps } from "./overlay-types";
 import { AssigneeSection, PrioritySection, ProjectSection } from "./Sections";
@@ -16,6 +22,9 @@ interface CreateTaskModalViewProps {
   taskType: TaskType;
   priority: number;
   assignAgentId: string;
+  selectedGoalCommand: string;
+  goalCommands: GoalCommandPreset[];
+  goalCommandsLoading: boolean;
   submitBusy: boolean;
   formFeedback: FormFeedback | null;
   departments: Department[];
@@ -31,6 +40,8 @@ interface CreateTaskModalViewProps {
   onTaskTypeChange: (value: TaskType) => void;
   onPriorityChange: (value: number) => void;
   onAssignAgentChange: (value: string) => void;
+  onGoalCommandSelect: (command: GoalCommandPreset) => void;
+  onGoalCommandClear: () => void;
 }
 
 export default function CreateTaskModalView({
@@ -44,6 +55,9 @@ export default function CreateTaskModalView({
   taskType,
   priority,
   assignAgentId,
+  selectedGoalCommand,
+  goalCommands,
+  goalCommandsLoading,
   submitBusy,
   formFeedback,
   departments,
@@ -59,7 +73,10 @@ export default function CreateTaskModalView({
   onTaskTypeChange,
   onPriorityChange,
   onAssignAgentChange,
+  onGoalCommandSelect,
+  onGoalCommandClear,
 }: CreateTaskModalViewProps) {
+  const goalText = goalCommandModalText(t);
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-3 backdrop-blur-sm sm:items-center sm:p-4"
@@ -143,6 +160,70 @@ export default function CreateTaskModalView({
                   className="w-full resize-none rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
+
+              <section className="rounded-xl border border-slate-700/80 bg-slate-950/60 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-white">{goalText.title}</div>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-400">{goalText.description}</p>
+                  </div>
+                  {selectedGoalCommand && (
+                    <button
+                      type="button"
+                      onClick={onGoalCommandClear}
+                      className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-1 text-[11px] text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    >
+                      {goalText.clear}
+                    </button>
+                  )}
+                </div>
+                {goalCommandsLoading ? (
+                  <div className="mt-3 rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs text-slate-400">
+                    {goalText.loading}
+                  </div>
+                ) : (
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {goalCommands.map((command) => {
+                      const active = selectedGoalCommand === command.key;
+                      return (
+                        <button
+                          key={command.key}
+                          type="button"
+                          onClick={() => onGoalCommandSelect(command)}
+                          className={`rounded-xl border p-3 text-left transition active:scale-[0.99] ${
+                            active
+                              ? "border-cyan-500/70 bg-cyan-500/10 text-cyan-50"
+                              : "border-slate-800 bg-slate-900/60 text-slate-200 hover:border-slate-600 hover:bg-slate-800/80"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold">{getGoalCommandTitle(command, locale)}</span>
+                            <span className="rounded-full bg-slate-950/70 px-2 py-0.5 font-mono text-[10px] text-slate-300">
+                              {command.slashCommand}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
+                            {getGoalCommandDescription(command, locale)}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                              {getGoalCommandTeamLabel(command, locale)}
+                            </span>
+                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                              {command.workflowPackKey}
+                            </span>
+                            {active && (
+                              <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-100">
+                                {goalText.selected}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

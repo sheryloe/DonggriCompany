@@ -9,6 +9,7 @@ import { resolveProviderExecutionPolicy } from "../agents/provider-policy-resolv
 import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
 import { previewCanonicalRouting } from "../../company/canonical-policy.ts";
 import { buildCanonicalCapabilityLabel } from "../../company/canonical-display.ts";
+import { buildGoalCommandPromptBlock } from "../goal-commands.ts";
 import { evaluateExecutionPathGate } from "../core/execution-path-gate.ts";
 import {
   buildInterruptPromptBlock,
@@ -127,6 +128,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
           department_id: string | null;
           base_branch: string | null;
           workflow_pack_key: string | null;
+          workflow_meta_json: string | null;
         }
       | undefined;
     if (!taskData) return;
@@ -353,6 +355,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
     );
     const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(provider);
     const agentProfileBlock = buildAgentPromptProfileBlock(execAgent);
+    const goalCommandPromptBlock = buildGoalCommandPromptBlock(taskData.workflow_meta_json);
     const canonicalExecutionPolicy =
       typeof executionSession.policyResolutionJson === "string" && executionSession.policyResolutionJson.trim()
         ? (JSON.parse(executionSession.policyResolutionJson) as ReturnType<typeof previewCanonicalRouting>)
@@ -372,6 +375,7 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         recentChanges ? `[Recent Changes]\n${recentChanges}` : "",
         `[Task] ${taskData.title}`,
         taskData.description ? `\n${taskData.description}` : "",
+        goalCommandPromptBlock,
         workflowPackGuidance ? `\n[Workflow Pack Execution Rules]\n${workflowPackGuidance}` : "",
         `\n[Canonical Policy]\nversion=${canonicalExecutionPolicy.policyVersion}\nfamily=${canonicalExecutionPolicy.family}\nstage=${canonicalExecutionPolicy.stage}\ntier=${canonicalExecutionPolicy.tier}\nspecialization=${canonicalExecutionPolicy.specialization ?? "none"}`,
         continuationCtx,

@@ -330,6 +330,124 @@ describe("task CRUD workflow pack behavior", () => {
     }
   });
 
+  it("stores canonical goal command metadata and applies preset defaults", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      const handler = routes.get("POST /api/tasks") as RouteHandler | undefined;
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            title: "Research provider options",
+            description: "Compare current docs",
+            workflow_meta_json: {
+              goal_command: "research",
+              route_source: "task_create_goal_chooser",
+              routing_reason: "user_selected_goal",
+            },
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as {
+        task: {
+          workflow_pack_key: string;
+          department_id: string;
+          task_type: string;
+          priority: number;
+          workflow_meta_json: string;
+        };
+      };
+      expect(payload.task.workflow_pack_key).toBe("web_research_report");
+      expect(payload.task.department_id).toBe("api-research");
+      expect(payload.task.task_type).toBe("analysis");
+      expect(payload.task.priority).toBe(3);
+      expect(JSON.parse(payload.task.workflow_meta_json)).toMatchObject({
+        goal_command: "research",
+        goal_command_version: "donggri_goal_commands_v1",
+        team_preset: "research_report",
+        route_source: "task_create_goal_chooser",
+        routing_reason: "user_selected_goal",
+        required_departments: ["pmo", "api-research", "knowledge-docs"],
+        max_parallel_workstreams: 2,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("parses native /dg commands in task text without enabling /octo aliases", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      const handler = routes.get("POST /api/tasks") as RouteHandler | undefined;
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            title: "/dg-release prepare release handoff",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { task: { workflow_meta_json: string; department_id: string } };
+      expect(payload.task.department_id).toBe("cicd-repo");
+      expect(JSON.parse(payload.task.workflow_meta_json)).toMatchObject({
+        goal_command: "release",
+        team_preset: "release_gate",
+        route_source: "slash_command_parser",
+        routing_reason: "slash_command_detected",
+        required_departments: ["pmo", "cicd-repo", "qa", "security-approval", "knowledge-docs"],
+        max_parallel_workstreams: 3,
+      });
+
+      const octoRes = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            title: "/octo-release prepare release handoff",
+          },
+        },
+        octoRes,
+      );
+      expect(octoRes.statusCode).toBe(200);
+      const octoPayload = octoRes.payload as { task: { workflow_meta_json: string | null } };
+      expect(octoPayload.task.workflow_meta_json).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects invalid native /dg commands", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      const handler = routes.get("POST /api/tasks") as RouteHandler | undefined;
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            title: "/dg-unknown do something",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(res.payload).toEqual({ error: "invalid_goal_command" });
+    } finally {
+      db.close();
+    }
+  });
+
   it("pins policy_version when creating a task", () => {
     const { db, routes } = createTaskCrudHarness();
     try {

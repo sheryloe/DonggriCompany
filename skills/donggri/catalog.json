@@ -36,6 +36,15 @@
       "supportedTargets": ["donggri", "codex"]
     },
     {
+      "skillName": "donggri-goal-command-orchestration",
+      "category": "donggri-operations",
+      "description": "Route Donggri tasks through native goal-first commands and team presets before agent collaboration starts.",
+      "requiredProviders": ["codex"],
+      "requiredOAuth": [],
+      "supportedTargets": ["donggri", "codex"],
+      "sourceUrl": "https://github.com/nyldn/claude-octopus"
+    },
+    {
       "skillName": "donggri-gemini-cli-operations",
       "category": "google-gemini",
       "description": "Operate Gemini CLI safely for Donggri tasks, MCP workflows, quotas, and agent handoffs.",

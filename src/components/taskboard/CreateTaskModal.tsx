@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Agent, Department, TaskType, WorkflowPackKey } from "../../types";
+import { getGoalCommands } from "../../api";
+import type { Agent, Department, GoalCommandPreset, TaskType, WorkflowPackKey } from "../../types";
 import { useI18n } from "../../i18n";
 import { type CreateTaskDraft, type FormFeedback } from "./constants";
 import type { CreateTaskModalOverlaysProps } from "./create-modal/overlay-types";
@@ -25,6 +26,7 @@ interface CreateModalProps {
     project_path?: string;
     assigned_agent_id?: string;
     workflow_pack_key?: WorkflowPackKey;
+    workflow_meta_json?: Record<string, unknown> | string;
   }) => void;
   onAssign: (taskId: string, agentId: string) => void;
 }
@@ -38,6 +40,9 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
   const [taskType, setTaskType] = useState<TaskType>("general");
   const [priority, setPriority] = useState(3);
   const [assignAgentId, setAssignAgentId] = useState("");
+  const [goalCommands, setGoalCommands] = useState<GoalCommandPreset[]>([]);
+  const [goalCommandsLoading, setGoalCommandsLoading] = useState(false);
+  const [selectedGoalCommand, setSelectedGoalCommand] = useState("");
   const [submitBusy, setSubmitBusy] = useState(false);
   const [submitWithoutProjectPromptOpen, setSubmitWithoutProjectPromptOpen] = useState(false);
   const [formFeedback, setFormFeedback] = useState<FormFeedback | null>(null);
@@ -47,6 +52,10 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
   const filteredAgents = useMemo(
     () => (departmentId ? agents.filter((agent) => agent.department_id === departmentId) : agents),
     [agents, departmentId],
+  );
+  const selectedGoalCommandPreset = useMemo(
+    () => goalCommands.find((command) => command.key === selectedGoalCommand) ?? null,
+    [goalCommands, selectedGoalCommand],
   );
 
   const { unsupportedPathApiMessage, resolvePathHelperErrorMessage } = usePathHelperMessages(t);
@@ -69,6 +78,26 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
     resetGitHubProjectScaffold({ enabled: false });
   }, [projectPicker.createNewProjectMode, resetGitHubProjectScaffold]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setGoalCommandsLoading(true);
+    getGoalCommands()
+      .then((result) => {
+        if (cancelled) return;
+        setGoalCommands(result.commands);
+      })
+      .catch((error) => {
+        console.error("Load goal commands failed:", error);
+        if (!cancelled) setGoalCommands([]);
+      })
+      .finally(() => {
+        if (!cancelled) setGoalCommandsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const applyFormStateFromDraft = useCallback(
     (draft: CreateTaskDraft) => {
       setTitle(draft.title);
@@ -77,6 +106,7 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
       setTaskType(draft.taskType);
       setPriority(draft.priority);
       setAssignAgentId(draft.assignAgentId);
+      setSelectedGoalCommand("");
       projectPicker.setProjectId(draft.projectId);
       projectPicker.setProjectQuery(draft.projectQuery);
       projectPicker.setCreateNewProjectMode(draft.createNewProjectMode);
@@ -130,6 +160,8 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
         taskType,
         priority,
         assignAgentId,
+        selectedGoalCommand,
+        selectedGoalCommandPreset,
         projectId: projectPicker.projectId,
         projectQuery: projectPicker.projectQuery,
         createNewProjectMode: projectPicker.createNewProjectMode,
@@ -165,6 +197,20 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
       options,
     );
   }
+
+  const handleGoalCommandSelect = useCallback((command: GoalCommandPreset) => {
+    setSelectedGoalCommand(command.key);
+    setDepartmentId(command.departmentId);
+    setTaskType(command.taskType);
+    setPriority(command.priority);
+    setAssignAgentId("");
+    setFormFeedback(null);
+  }, []);
+
+  const handleGoalCommandClear = useCallback(() => {
+    setSelectedGoalCommand("");
+    setFormFeedback(null);
+  }, []);
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -350,6 +396,9 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
       taskType={taskType}
       priority={priority}
       assignAgentId={assignAgentId}
+      selectedGoalCommand={selectedGoalCommand}
+      goalCommands={goalCommands}
+      goalCommandsLoading={goalCommandsLoading}
       submitBusy={submitBusy}
       formFeedback={formFeedback}
       departments={departments}
@@ -374,13 +423,17 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
         setFormFeedback(null);
         setDepartmentId(value);
         setAssignAgentId("");
+        setSelectedGoalCommand("");
       }}
       onTaskTypeChange={(value) => {
         setTaskType(value);
         setFormFeedback(null);
+        setSelectedGoalCommand("");
       }}
       onPriorityChange={handlePriorityChange}
       onAssignAgentChange={handleAssignAgentChange}
+      onGoalCommandSelect={handleGoalCommandSelect}
+      onGoalCommandClear={handleGoalCommandClear}
     />
   );
 }

@@ -106,6 +106,7 @@ interface AppMainLayoutProps {
     project_path?: string;
     assigned_agent_id?: string;
     workflow_pack_key?: WorkflowPackKey;
+    workflow_meta_json?: Record<string, unknown> | string;
   }) => Promise<void>;
   onUpdateTask: (id: string, data: Partial<Task>) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;

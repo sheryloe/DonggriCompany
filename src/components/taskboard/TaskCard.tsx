@@ -6,6 +6,11 @@ import AgentAvatar from "../AgentAvatar";
 import AgentSelect from "../AgentSelect";
 import DiffModal from "./DiffModal";
 import {
+  getGoalCommandTeamLabel,
+  getGoalCommandTitle,
+} from "./goal-command-text";
+import type { GoalCommandKey, GoalCommandPreset } from "../../types";
+import {
   getTaskTypeBadge,
   isHideableStatus,
   priorityIcon,
@@ -43,6 +48,27 @@ const SUBTASK_STATUS_ICON: Record<string, string> = {
   blocked: "\uD83D\uDEAB",
 };
 
+function resolveGoalCommandMeta(task: Task): Pick<GoalCommandPreset, "key" | "teamPreset" | "workflowPackKey" | "slashCommand"> | null {
+  if (!task.workflow_meta_json) return null;
+  try {
+    const parsed = JSON.parse(task.workflow_meta_json);
+    if (!parsed || typeof parsed !== "object") return null;
+    const key = typeof parsed.goal_command === "string" ? parsed.goal_command : "";
+    const teamPreset = typeof parsed.team_preset === "string" ? parsed.team_preset : "";
+    const workflowPackKey = typeof parsed.workflow_pack_key === "string" ? parsed.workflow_pack_key : task.workflow_pack_key;
+    const slashCommand = typeof parsed.slash_command === "string" ? parsed.slash_command : `/dg-${key}`;
+    if (!key || !teamPreset || !workflowPackKey) return null;
+    return {
+      key: key as GoalCommandKey,
+      teamPreset: teamPreset as GoalCommandPreset["teamPreset"],
+      workflowPackKey: workflowPackKey as GoalCommandPreset["workflowPackKey"],
+      slashCommand: slashCommand as GoalCommandPreset["slashCommand"],
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function TaskCard({
   task,
   agents,
@@ -79,6 +105,7 @@ export default function TaskCard({
   const assignedLabel = assignedDisplayName || fallbackAssignedName || null;
   const department = departments.find((d) => d.id === task.department_id);
   const typeBadge = getTaskTypeBadge(task.task_type, t);
+  const goalCommandMeta = resolveGoalCommandMeta(task);
 
   const canRun = task.status === "planned" || task.status === "inbox";
   const canStop = task.status === "in_progress";
@@ -126,6 +153,12 @@ export default function TaskCard({
         {department && (
           <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
             {department.icon} {locale === "ko" ? department.name_ko : department.name}
+          </span>
+        )}
+        {goalCommandMeta && (
+          <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100">
+            {getGoalCommandTitle(goalCommandMeta as GoalCommandPreset, locale)} ·{" "}
+            {getGoalCommandTeamLabel(goalCommandMeta as GoalCommandPreset, locale)}
           </span>
         )}
       </div>

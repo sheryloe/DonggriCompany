@@ -15,6 +15,7 @@ import { applyProjectArtifactPatch, syncProjectArtifactProjection } from "../../
 import { classifyWorkflowPackText } from "../../../workflow/packs/text-routing.ts";
 import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack-resolver.ts";
 import { normalizeSubtaskTitleForDisplay } from "../../../workflow/subtasks/title-normalizer.ts";
+import { resolveGoalCommandForTaskCreate } from "../../../workflow/goal-commands.ts";
 
 export type TaskCrudRouteDeps = Pick<
   RuntimeContext,
@@ -399,8 +400,17 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       }
     }
 
-    const explicitPackKey = normalizeTextField((body as any).workflow_pack_key);
     const descriptionText = normalizeTextField((body as any).description) ?? "";
+    const goalCommandResolution = resolveGoalCommandForTaskCreate({
+      title,
+      description: descriptionText,
+      workflowMeta: (body as any).workflow_meta_json,
+    });
+    if (goalCommandResolution.error) {
+      return res.status(400).json({ error: goalCommandResolution.error });
+    }
+    const goalPreset = goalCommandResolution.preset;
+    const explicitPackKey = normalizeTextField((body as any).workflow_pack_key) ?? goalPreset?.workflowPackKey ?? null;
     const routeText = `${title}\n${descriptionText}`.trim();
     const routedPackDecision = !explicitPackKey ? classifyWorkflowPackText(routeText) : null;
     const autoRoutedPackKey: WorkflowPackKey | null =
@@ -418,6 +428,18 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       projectPath: resolvedProjectPath,
       workflowPackKey: resolvedWorkflowPackKey,
     });
+    const resolvedDepartmentId = normalizeTextField((body as any).department_id) ?? goalPreset?.departmentId ?? null;
+    const resolvedAssignedAgentId = normalizeTextField((body as any).assigned_agent_id) ?? null;
+    const resolvedTaskType = normalizeTextField((body as any).task_type) ?? goalPreset?.taskType ?? "general";
+    const bodyPriority = Number((body as any).priority);
+    const resolvedPriority = Number.isFinite(bodyPriority) ? bodyPriority : (goalPreset?.priority ?? 0);
+    const resolvedWorkflowMetaJson =
+      goalCommandResolution.workflowMetaJson ??
+      (typeof (body as any).workflow_meta_json === "string"
+        ? (body as any).workflow_meta_json
+        : (body as any).workflow_meta_json
+          ? JSON.stringify((body as any).workflow_meta_json)
+          : null);
 
     const insertColumns = [
       "id",
@@ -441,18 +463,14 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       id,
       title,
       (body as any).description ?? null,
-      (body as any).department_id ?? null,
-      (body as any).assigned_agent_id ?? null,
+      resolvedDepartmentId,
+      resolvedAssignedAgentId,
       resolvedProjectId,
       (body as any).status ?? "inbox",
-      (body as any).priority ?? 0,
-      (body as any).task_type ?? "general",
+      resolvedPriority,
+      resolvedTaskType,
       resolvedWorkflowPackKey,
-      typeof (body as any).workflow_meta_json === "string"
-        ? (body as any).workflow_meta_json
-        : (body as any).workflow_meta_json
-          ? JSON.stringify((body as any).workflow_meta_json)
-          : null,
+      resolvedWorkflowMetaJson,
       typeof (body as any).output_format === "string" ? (body as any).output_format : null,
       resolvedProjectPath,
       (body as any).base_branch ?? null,
@@ -489,9 +507,9 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       taskId: id,
       taskTitle: title,
       taskStatus: String((body as any).status ?? "inbox"),
-      departmentId: typeof (body as any).department_id === "string" ? (body as any).department_id : null,
-      assignedAgentId: typeof (body as any).assigned_agent_id === "string" ? (body as any).assigned_agent_id : null,
-      taskType: typeof (body as any).task_type === "string" ? (body as any).task_type : "general",
+      departmentId: resolvedDepartmentId,
+      assignedAgentId: resolvedAssignedAgentId,
+      taskType: resolvedTaskType,
       projectPath: resolvedProjectPath,
       trigger: "api.tasks.create",
       triggerDetail: "POST /api/tasks",
@@ -515,8 +533,8 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
               id,
               title,
               status: String((body as any).status ?? "inbox"),
-              priority: Number((body as any).priority ?? 0),
-              taskType: typeof (body as any).task_type === "string" ? (body as any).task_type : "general",
+              priority: resolvedPriority,
+              taskType: resolvedTaskType,
             },
           });
           syncProjectArtifactProjection(db, artifactState, resolvedProjectId);
@@ -527,6 +545,9 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     }
 
     appendTaskLog(id, "system", `Task created: ${title}`);
+    if (goalPreset) {
+      appendTaskLog(id, "system", `Goal command routed: ${goalPreset.key} team=${goalPreset.teamPreset}`);
+    }
 
     const taskRow = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
     const task =

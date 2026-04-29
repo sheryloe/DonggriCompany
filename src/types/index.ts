@@ -205,6 +205,41 @@ export const WORKFLOW_PACK_KEYS = [
   "roleplay",
 ] as const;
 export type WorkflowPackKey = (typeof WORKFLOW_PACK_KEYS)[number];
+export type GoalCommandKey =
+  | "feature"
+  | "fix"
+  | "review"
+  | "debug"
+  | "refactor"
+  | "design"
+  | "research"
+  | "security"
+  | "docs"
+  | "release";
+export type GoalTeamPreset =
+  | "full_delivery"
+  | "bugfix_response"
+  | "multi_review"
+  | "incident_debug"
+  | "refactor_lane"
+  | "design_delivery"
+  | "research_report"
+  | "security_gate"
+  | "documentation"
+  | "release_gate";
+export interface GoalCommandPreset {
+  key: GoalCommandKey;
+  slashCommand: `/dg-${string}`;
+  workflowPackKey: WorkflowPackKey;
+  teamPreset: GoalTeamPreset;
+  departmentId: string;
+  taskType: TaskType;
+  priority: number;
+  requiredDepartments: string[];
+  maxParallelWorkstreams: number;
+  verificationGates: string[];
+  routingTags: string[];
+}
 
 export interface Task {
   id: string;
@@ -417,6 +452,43 @@ export interface CompanyStats {
     done_tasks: number;
   }>;
   recent_activity: Array<Record<string, unknown>>;
+  command_timeline?: DashboardCommandTimelineProject[];
+  runtime?: {
+    agents_source_mode?: string;
+  };
+}
+
+export type DashboardCommandTimelineLaneKey =
+  | "planning"
+  | "meeting"
+  | "delegation"
+  | "progress"
+  | "review"
+  | "done"
+  | "report";
+
+export interface DashboardCommandTimelineLane {
+  count: number;
+  active: boolean;
+  latest_at: number | null;
+  blocked_count?: number;
+  blocked_by?: string[];
+}
+
+export interface DashboardCommandTimelineProject {
+  project_id: string | null;
+  project_name: string;
+  task_count: number;
+  latest_at: number;
+  latest_task_title: string | null;
+  health: "planning" | "active" | "blocked" | "complete";
+  departments: string[];
+  lanes: Record<DashboardCommandTimelineLaneKey, DashboardCommandTimelineLane>;
+  signal_counts: {
+    meeting_public_feedback: number;
+    messenger_relay_success: number;
+    review_consent_blocked: number;
+  };
 }
 
 // SubTask

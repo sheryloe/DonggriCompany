@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import { checkProjectPath, createProject, getProjects, isApiRequestError } from "../../../api";
-import type { Project, TaskType, WorkflowPackKey } from "../../../types";
+import type { GoalCommandPreset, Project, TaskType, WorkflowPackKey } from "../../../types";
 import {
   createProjectWithGitHubAutomation,
   isGitHubProjectCreateError,
@@ -18,6 +18,7 @@ type CreateTaskHandler = (input: {
   project_path?: string;
   assigned_agent_id?: string;
   workflow_pack_key?: WorkflowPackKey;
+  workflow_meta_json?: Record<string, unknown> | string;
 }) => void | Promise<void>;
 
 type ResolvePathHelperErrorMessage = (error: unknown, fallback: Record<Locale, string>) => string;
@@ -34,6 +35,8 @@ interface SubmitTaskContext {
   taskType: TaskType;
   priority: number;
   assignAgentId: string;
+  selectedGoalCommand: string;
+  selectedGoalCommandPreset: GoalCommandPreset | null;
   projectId: string;
   projectQuery: string;
   createNewProjectMode: boolean;
@@ -99,6 +102,8 @@ export async function submitTaskWithProjectHandling(
     taskType,
     priority,
     assignAgentId,
+    selectedGoalCommand,
+    selectedGoalCommandPreset,
     projectId,
     projectQuery,
     createNewProjectMode,
@@ -436,6 +441,24 @@ export async function submitTaskWithProjectHandling(
     return;
   }
 
+  const selectedGoalMeta = selectedGoalCommand
+    ? {
+        goal_command: selectedGoalCommand,
+        goal_command_version: "donggri_goal_commands_v1",
+        team_preset: selectedGoalCommandPreset?.teamPreset,
+        route_source: "task_create_goal_chooser",
+        routing_reason: "user_selected_goal",
+        slash_command: selectedGoalCommandPreset?.slashCommand,
+        workflow_pack_key: selectedGoalCommandPreset?.workflowPackKey,
+        department_id: selectedGoalCommandPreset?.departmentId,
+        task_type: selectedGoalCommandPreset?.taskType,
+        priority: selectedGoalCommandPreset?.priority,
+        required_departments: selectedGoalCommandPreset?.requiredDepartments,
+        max_parallel_workstreams: selectedGoalCommandPreset?.maxParallelWorkstreams,
+        verification_gates: selectedGoalCommandPreset?.verificationGates,
+      }
+    : undefined;
+
   setSubmitBusy(true);
   try {
     await Promise.resolve(
@@ -448,6 +471,8 @@ export async function submitTaskWithProjectHandling(
         project_id: resolvedProject?.id,
         project_path: resolvedProject?.project_path,
         assigned_agent_id: assignAgentId || undefined,
+        workflow_pack_key: selectedGoalCommandPreset?.workflowPackKey,
+        workflow_meta_json: selectedGoalMeta,
       }),
     );
     onClose();

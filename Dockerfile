@@ -37,6 +37,7 @@ COPY public ./public
 COPY assets ./assets
 COPY agents ./agents
 COPY skills ./skills
+COPY modules ./modules
 COPY docs ./docs
 COPY restructing ./restructing
 COPY templates ./templates
@@ -54,4 +55,3 @@ USER app
 EXPOSE 8900
 
 CMD ["pnpm", "start:tailscale"]
-

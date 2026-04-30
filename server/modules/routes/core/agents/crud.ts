@@ -23,6 +23,7 @@ import {
 import { parseAgentRunModePayload, resolveAgentRunMode } from "../../../workflow/agents/run-mode.ts";
 import { archiveAgentGuideFile, upsertAgentGuideFile } from "./agent-guide-files.ts";
 import { resolveCanonicalIdentity } from "../../../company/canonical-identity.ts";
+import { mapLegacyDepartmentId } from "../../../bootstrap/schema/organization-manifest.ts";
 
 export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   const {
@@ -87,7 +88,10 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         id: String(row.id ?? ""),
         name: String(row.name ?? row.id ?? "agent"),
         role: row.role as string | null | undefined,
-        departmentId: row.department_id as string | null | undefined,
+        departmentId:
+          typeof row.department_id === "string" && row.department_id.trim()
+            ? mapLegacyDepartmentId(row.department_id.trim())
+            : null,
         workflowProfileJson: row.workflow_profile as string | null | undefined,
         agentProfileJson: row.agent_profile_json as string | null | undefined,
         statsTasksDone: Number(row.stats_tasks_done ?? 0),
@@ -426,7 +430,12 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       if (body.department_id !== undefined && body.department_id !== null && typeof body.department_id !== "string") {
         return res.status(400).json({ error: "invalid_department_id" });
       }
-      const department_id = typeof body.department_id === "string" ? body.department_id.trim() || null : null;
+      const department_id =
+        typeof body.department_id === "string"
+          ? body.department_id.trim()
+            ? mapLegacyDepartmentId(body.department_id.trim())
+            : null
+          : null;
       if (department_id) {
         const deptExists = getDepartmentForPack(db as any, workflowPackKey, department_id);
         if (!deptExists) return res.status(400).json({ error: "department_not_found" });
@@ -883,10 +892,11 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       } else if (body.department_id !== null && typeof body.department_id !== "string") {
         return res.status(400).json({ error: "invalid_department_id" });
       } else if (typeof body.department_id === "string") {
-        const normalizedDepartmentId = body.department_id.trim();
-        if (!normalizedDepartmentId) {
+        const trimmedDepartmentId = body.department_id.trim();
+        if (!trimmedDepartmentId) {
           body.department_id = null;
         } else {
+          const normalizedDepartmentId = mapLegacyDepartmentId(trimmedDepartmentId);
           const deptExists = getDepartmentForPack(db as any, officePackKey, normalizedDepartmentId);
           if (!deptExists) return res.status(400).json({ error: "department_not_found" });
           body.department_id = normalizedDepartmentId;

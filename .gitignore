@@ -42,6 +42,12 @@ docs/.pdca-*
 reports/
 .climpire-worktrees/
 .climpire/
+.donggri/
+DAILY/
+STATUS.md
+KANBAN.md
+GANTT.md
+NEXT_ACTIONS.md
 
 # IDE / Editor / AI
 .vscode/

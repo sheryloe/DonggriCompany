@@ -30,9 +30,13 @@ let warnedExternalGuideRoot = false;
 
 function resolveGuideRoot(): string {
   const envRoot = String(process.env.AGENT_GUIDE_ROOT ?? "").trim();
+  const resolvedEnvRoot = envRoot ? path.resolve(envRoot) : "";
+  const allowExternalTestRoot = resolvedEnvRoot && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
+  if (allowExternalTestRoot) {
+    return resolvedEnvRoot;
+  }
   if (envRoot && !warnedExternalGuideRoot) {
     warnedExternalGuideRoot = true;
-    const resolvedEnvRoot = path.resolve(envRoot);
     if (resolvedEnvRoot !== PROJECT_AGENTS_ROOT) {
       console.warn(
         `[compat_warning] AGENT_GUIDE_ROOT='${resolvedEnvRoot}' ignored. agents_source_mode=root_only -> '${PROJECT_AGENTS_ROOT}'`,
@@ -250,7 +254,7 @@ function cleanupLegacyBundleFiles(bundleRoot: string, keepNames: Set<string>): v
   }
 }
 
-function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: string): string {
+function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: string, updatedAt: string): string {
   const safeName = input.name || input.id || "agent";
   const tasksDone = safeNumber(input.statsTasksDone);
   const xp = safeNumber(input.statsXp);
@@ -261,7 +265,6 @@ function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: stri
   const workflowPreview =
     workflowProfileRaw.length > 300 ? `${workflowProfileRaw.slice(0, 300)}...` : workflowProfileRaw;
   const extras = extractAgentProfileExtras(input.agentProfileJson ?? null);
-  const updatedAt = new Date().toISOString();
   const memorySnapshot = Array.isArray(input.memorySnapshot) ? input.memorySnapshot.filter(Boolean) : [];
   const skillGrowthSnapshot = Array.isArray(input.skillGrowthSnapshot) ? input.skillGrowthSnapshot.filter(Boolean) : [];
   const recentLessons = Array.isArray(input.recentLessons) ? input.recentLessons.filter(Boolean) : [];
@@ -363,7 +366,7 @@ function buildSkillsContent(input: AgentGuideInput): string {
   ].join("\n");
 }
 
-function buildSettingsContent(input: AgentGuideInput): string {
+function buildSettingsContent(input: AgentGuideInput, updatedAt: string): string {
   const extras = extractAgentProfileExtras(input.agentProfileJson ?? null);
   const payload = {
     agent_id: input.id,
@@ -388,10 +391,36 @@ function buildSettingsContent(input: AgentGuideInput): string {
     skill_growth_snapshot: Array.isArray(input.skillGrowthSnapshot) ? input.skillGrowthSnapshot.filter(Boolean) : [],
     recent_lessons: Array.isArray(input.recentLessons) ? input.recentLessons.filter(Boolean) : [],
     project_experience: Array.isArray(input.projectExperience) ? input.projectExperience.filter(Boolean) : [],
-    updated_at: new Date().toISOString(),
+    updated_at: updatedAt,
   };
 
   return `${JSON.stringify(payload, null, 2)}\n`;
+}
+
+function readExistingUpdatedAt(settingsPath: string): string | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8")) as { updated_at?: unknown };
+    return typeof parsed.updated_at === "string" && parsed.updated_at.trim() ? parsed.updated_at : null;
+  } catch {
+    return null;
+  }
+}
+
+function readExistingSnapshotAt(agentsPath: string): string | null {
+  try {
+    const match = fs.readFileSync(agentsPath, "utf8").match(/^- ([0-9]{4}-[0-9]{2}-[0-9]{2}T[^|]+Z) \| tasks_done=/m);
+    return match?.[1]?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function fileContentEquals(filePath: string, expectedContent: string): boolean {
+  try {
+    return fs.readFileSync(filePath, "utf8") === expectedContent;
+  } catch {
+    return false;
+  }
 }
 
 function ensureAgentBundleFiles(root: string, input: AgentGuideInput): string {
@@ -409,9 +438,29 @@ function ensureAgentBundleFiles(root: string, input: AgentGuideInput): string {
   const skillsPath = path.join(root, skillsFileName);
   const settingsPath = path.join(root, settingsFileName);
 
-  fs.writeFileSync(agentsPath, buildAgentGuideContent(input, relativeBundlePath), "utf8");
-  fs.writeFileSync(skillsPath, buildSkillsContent(input), "utf8");
-  fs.writeFileSync(settingsPath, buildSettingsContent(input), "utf8");
+  const existingSettingsUpdatedAt = readExistingUpdatedAt(settingsPath);
+  const existingSnapshotAt = readExistingSnapshotAt(agentsPath);
+  const stableUpdatedAt = new Date().toISOString();
+  const stableSettingsUpdatedAt = existingSettingsUpdatedAt ?? stableUpdatedAt;
+  const stableSnapshotAt = existingSnapshotAt ?? stableSettingsUpdatedAt;
+  const stableAgentsContent = buildAgentGuideContent(input, relativeBundlePath, stableSnapshotAt);
+  const skillsContent = buildSkillsContent(input);
+  const stableSettingsContent = buildSettingsContent(input, stableSettingsUpdatedAt);
+
+  if (
+    existingSettingsUpdatedAt &&
+    existingSnapshotAt &&
+    fileContentEquals(agentsPath, stableAgentsContent) &&
+    fileContentEquals(skillsPath, skillsContent) &&
+    fileContentEquals(settingsPath, stableSettingsContent)
+  ) {
+    return agentsPath;
+  }
+
+  const nextUpdatedAt = new Date().toISOString();
+  fs.writeFileSync(agentsPath, buildAgentGuideContent(input, relativeBundlePath, nextUpdatedAt), "utf8");
+  fs.writeFileSync(skillsPath, skillsContent, "utf8");
+  fs.writeFileSync(settingsPath, buildSettingsContent(input, nextUpdatedAt), "utf8");
 
   return agentsPath;
 }
@@ -421,7 +470,8 @@ function moveDirectorySafe(from: string, to: string): void {
     fs.renameSync(from, to);
     return;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code !== "EXDEV") {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    if (code !== "EXDEV" && code !== "EPERM" && code !== "EACCES" && code !== "ENOTEMPTY") {
       throw error;
     }
   }

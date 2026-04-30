@@ -16,6 +16,7 @@ import { classifyWorkflowPackText } from "../../../workflow/packs/text-routing.t
 import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack-resolver.ts";
 import { normalizeSubtaskTitleForDisplay } from "../../../workflow/subtasks/title-normalizer.ts";
 import { resolveGoalCommandForTaskCreate } from "../../../workflow/goal-commands.ts";
+import { mapLegacyDepartmentId } from "../../../bootstrap/schema/organization-manifest.ts";
 
 export type TaskCrudRouteDeps = Pick<
   RuntimeContext,
@@ -76,6 +77,11 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
 
     const absolute = path.isAbsolute(candidate) ? candidate : path.resolve(process.cwd(), candidate);
     return path.normalize(absolute);
+  }
+
+  function normalizeDepartmentIdInput(raw: unknown): string | null {
+    const value = normalizeTextField(raw);
+    return value ? mapLegacyDepartmentId(value) : null;
   }
 
   function parseHydratedPackList(raw: unknown): Set<string> {
@@ -251,7 +257,7 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       // best-effort reconciliation only
     }
     const statusFilter = firstQueryValue(req.query.status);
-    const deptFilter = firstQueryValue(req.query.department_id);
+    const deptFilter = normalizeDepartmentIdInput(firstQueryValue(req.query.department_id));
     const agentFilter = firstQueryValue(req.query.agent_id);
     const projectFilter = firstQueryValue(req.query.project_id);
     const workflowPackFilter = normalizeTextField(firstQueryValue(req.query.workflow_pack_key));
@@ -438,7 +444,8 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       projectPath: resolvedProjectPath,
       workflowPackKey: resolvedWorkflowPackKey,
     });
-    const resolvedDepartmentId = normalizeTextField((body as any).department_id) ?? goalPreset?.departmentId ?? null;
+    const resolvedDepartmentId =
+      normalizeDepartmentIdInput((body as any).department_id) ?? goalPreset?.departmentId ?? null;
     const resolvedAssignedAgentId = normalizeTextField((body as any).assigned_agent_id) ?? null;
     const resolvedTaskType = normalizeTextField((body as any).task_type) ?? goalPreset?.taskType ?? "general";
     const bodyPriority = Number((body as any).priority);
@@ -727,6 +734,9 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     }
     if ("output_format" in body && body.output_format !== null && typeof body.output_format !== "string") {
       return res.status(400).json({ error: "invalid_output_format" });
+    }
+    if ("department_id" in body) {
+      body.department_id = normalizeDepartmentIdInput(body.department_id);
     }
 
     const allowedFields = [

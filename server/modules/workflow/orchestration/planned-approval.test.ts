@@ -262,7 +262,7 @@ describe("planned approval gating", () => {
         minLeaders: 5,
         includePlanning: true,
         fallbackAll: true,
-        requiredDepartmentIds: expect.arrayContaining(["development", "ui-ux", "qa", "knowledge-docs"]),
+        requiredDepartmentIds: expect.arrayContaining(["pmo", "planning", "dev", "design", "qa", "operations"]),
       }),
     );
     expect(sendAgentMessage).toHaveBeenCalledWith(leaders[1], "ok", "chat", "all", null, "task-public");
@@ -270,7 +270,7 @@ describe("planned approval gating", () => {
     expect(appendTaskLog).toHaveBeenCalledWith(
       "task-public",
       "system",
-      expect.stringContaining("meeting_public_feedback phase=planned source=feedback department_id=development"),
+      expect.stringContaining("meeting_public_feedback phase=planned source=feedback department_id=dev"),
     );
     expect(appendTaskLog).toHaveBeenCalledWith(
       "task-public",

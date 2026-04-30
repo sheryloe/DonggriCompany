@@ -94,7 +94,7 @@ describe("CliSettingsTab multi-account", () => {
       />,
     );
 
-    expect(screen.getByText("CLI 계정/실행 상태")).toBeInTheDocument();
+    expect(screen.getByText("CLI 계정 / 실행 상태")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "codex-main" })).toBeInTheDocument();
 
     const verifyButtons = screen.getAllByRole("button", { name: "검증" });
@@ -103,10 +103,10 @@ describe("CliSettingsTab multi-account", () => {
     expect(onVerifyPool).toHaveBeenCalledWith("codex", "codex-main");
   });
 
-  it("shows gemini fallback model select even while model list is loading", () => {
+  it("keeps model selection removed even while model list is loading", () => {
     render(
       <CliSettingsTab
-        t={(messages) => messages.en}
+        t={(messages) => messages.ko}
         cliStatus={null}
         cliModels={null}
         cliModelsLoading
@@ -117,7 +117,7 @@ describe("CliSettingsTab multi-account", () => {
         runnerMeta={{ maxActive: 5, idleTtlMs: 900000, dockerEnabled: false }}
         cliAuthBusyKey={null}
         selectedPoolByProvider={{ codex: "", gemini: "", claude: "", jules: "" }}
-        form={{ ...(DEFAULT_SETTINGS as LocalSettings), language: "en" }}
+        form={{ ...(DEFAULT_SETTINGS as LocalSettings), language: "ko" }}
         setForm={vi.fn()}
         persistSettings={vi.fn()}
         onRefresh={vi.fn()}
@@ -132,15 +132,15 @@ describe("CliSettingsTab multi-account", () => {
       />,
     );
 
-    expect(screen.getByRole("option", { name: "Gemini 3 Pro Preview" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Gemini 3 Pro Preview" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("option", { name: "계정 없음" })).toHaveLength(4);
   });
 
-  it("shows provider policy controls as read-only in compatibility mode", async () => {
-    const user = userEvent.setup();
+  it("does not expose provider model policy controls in compatibility mode", () => {
     const persistSettings = vi.fn();
     const initialForm: LocalSettings = {
       ...(DEFAULT_SETTINGS as LocalSettings),
-      language: "en",
+      language: "ko",
       providerModelConfig: {
         codex: {
           model: "gpt-5.3-codex",
@@ -155,7 +155,7 @@ describe("CliSettingsTab multi-account", () => {
       const [form, setForm] = useState<LocalSettings>(initialForm);
       return (
         <CliSettingsTab
-          t={(messages) => messages.en}
+          t={(messages) => messages.ko}
           cliStatus={null}
           cliModels={{
             codex: [
@@ -206,10 +206,9 @@ describe("CliSettingsTab multi-account", () => {
     render(<Harness />);
 
     const selects = screen.getAllByRole("combobox");
-    expect(selects[1]).toBeDisabled();
-    expect(selects[2]).toBeDisabled();
-    expect(selects[3]).toBeDisabled();
-    expect(selects[4]).toBeDisabled();
+    expect(selects).toHaveLength(1);
+    expect(screen.queryByRole("option", { name: "GPT-5.4" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "GPT-5.4 Mini" })).not.toBeInTheDocument();
     expect(persistSettings).not.toHaveBeenCalled();
   });
 
@@ -234,7 +233,7 @@ describe("CliSettingsTab multi-account", () => {
 
     render(
       <CliSettingsTab
-        t={(messages) => messages.en}
+        t={(messages) => messages.ko}
         cliStatus={null}
         cliModels={null}
         cliModelsLoading={false}
@@ -275,7 +274,7 @@ describe("CliSettingsTab multi-account", () => {
           claude: "",
           jules: "",
         }}
-        form={{ ...(DEFAULT_SETTINGS as LocalSettings), language: "en" }}
+        form={{ ...(DEFAULT_SETTINGS as LocalSettings), language: "ko" }}
         setForm={vi.fn()}
         persistSettings={vi.fn()}
         onRefresh={vi.fn()}
@@ -290,7 +289,7 @@ describe("CliSettingsTab multi-account", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Verify All Codex Pools" }));
+    await user.click(screen.getByRole("button", { name: "Codex 전체 검증" }));
 
     expect(onVerifyPool).toHaveBeenCalledWith("codex", "codex-main");
     expect(onVerifyPool).toHaveBeenCalledWith("codex", "codex-backup");
@@ -349,7 +348,7 @@ describe("CliSettingsTab multi-account", () => {
       />,
     );
 
-    expect(screen.getAllByText("연결됨").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("실행 준비").length).toBeGreaterThan(0);
     expect(screen.getAllByText("대기").length).toBeGreaterThan(0);
   });
 });

@@ -1,9 +1,19 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import type { ProjectDecisionEventItem, ProjectTaskHistoryItem } from "../../api";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getProjectModules, type ProjectDecisionEventItem, type ProjectTaskHistoryItem } from "../../api";
 import type { Project } from "../../types";
 import type { GroupedProjectTaskCard } from "./types";
 import ProjectInsightsPanel from "./ProjectInsightsPanel";
+
+vi.mock("../../api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api")>();
+  return {
+    ...actual,
+    getProjectModules: vi.fn(async () => ({ bindings: [] })),
+  };
+});
+
+const getProjectModulesMock = vi.mocked(getProjectModules);
 
 function buildProject(): Project {
   return {
@@ -45,7 +55,11 @@ function buildGroupedTaskCards(items: ProjectTaskHistoryItem[]): GroupedProjectT
 }
 
 describe("ProjectInsightsPanel rollout20", () => {
-  it("renders rollout20 sample badge and progress timeline", () => {
+  beforeEach(() => {
+    getProjectModulesMock.mockResolvedValue({ bindings: [], apply_runs: [] });
+  });
+
+  it("renders rollout20 sample badge and progress timeline", async () => {
     render(
       <ProjectInsightsPanel
         t={(messages) => messages.en}
@@ -60,6 +74,8 @@ describe("ProjectInsightsPanel rollout20", () => {
       />,
     );
 
+    await waitFor(() => expect(getProjectModulesMock).toHaveBeenCalledWith("project-1"));
+
     fireEvent.click(screen.getByRole("button", { name: "Rollout 20" }));
 
     expect(screen.getByText("Rollout 20 Progress")).toBeInTheDocument();
@@ -68,7 +84,7 @@ describe("ProjectInsightsPanel rollout20", () => {
     expect(screen.getByText("20-A Locale")).toBeInTheDocument();
   });
 
-  it("shows blocking reason when decision history contains hard-block signals", () => {
+  it("shows blocking reason when decision history contains hard-block signals", async () => {
     const decisionEvents: ProjectDecisionEventItem[] = [
       {
         id: 1,
@@ -96,6 +112,8 @@ describe("ProjectInsightsPanel rollout20", () => {
         handleOpenTaskDetail={vi.fn(async () => undefined)}
       />,
     );
+
+    await waitFor(() => expect(getProjectModulesMock).toHaveBeenCalledWith("project-1"));
 
     fireEvent.click(screen.getByRole("button", { name: "Rollout 20" }));
 

@@ -3,6 +3,7 @@ import { seedDefaultWorkflowPacks } from "./workflow-pack-seeds.ts";
 import {
   DEFAULT_ROOM_THEMES,
   getDefaultSkillBundleForDepartment,
+  mapLegacyDepartmentId,
   ORGANIZATION_AGENT_SEEDS,
   ORGANIZATION_DEPARTMENTS,
 } from "./organization-manifest.ts";
@@ -107,13 +108,14 @@ export function applyDefaultSeeds(db: DbLike): void {
     );
     for (const seed of ORGANIZATION_AGENT_SEEDS) {
       const workflowProfileJson = JSON.stringify(seed.workflow_profile);
+      const departmentId = mapLegacyDepartmentId(seed.department_id) ?? seed.department_id;
       insertAgent.run(
         seed.id,
         seed.name,
         seed.name_ko,
         seed.name_ja,
         seed.name_zh,
-        seed.department_id,
+        departmentId,
         seed.role,
         seed.cli_provider,
         seed.family,
@@ -125,8 +127,8 @@ export function applyDefaultSeeds(db: DbLike): void {
         seed.avatar_emoji,
         seed.personality,
       );
-      ensureSkillBundleHistory(db, seed.id, seed.cli_provider, seed.department_id);
-      syncSeedGuideFiles(db, seed.id, seed.name, seed.role, seed.department_id, workflowProfileJson);
+      ensureSkillBundleHistory(db, seed.id, seed.cli_provider, departmentId);
+      syncSeedGuideFiles(db, seed.id, seed.name, seed.role, departmentId, workflowProfileJson);
     }
     console.log("[Claw-Empire] Seeded canonical organization agents");
   }

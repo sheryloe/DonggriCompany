@@ -64,7 +64,15 @@ async function establishApiSession(request: APIRequestContext): Promise<string> 
   let lastText = "";
 
   while (Date.now() - startedAt < timeoutMs) {
-    const response = await request.get("/api/auth/session");
+    let response: APIResponse;
+    try {
+      response = await request.get("/api/auth/session");
+    } catch (err) {
+      lastStatus = 0;
+      lastText = err instanceof Error ? err.message : String(err);
+      await sleep(500);
+      continue;
+    }
     const text = await response.text();
     if (response.ok()) {
       try {

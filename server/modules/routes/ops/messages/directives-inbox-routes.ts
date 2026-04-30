@@ -23,7 +23,7 @@ import {
 
 type DirectiveAndInboxRouteCtx = Pick<RuntimeContext, "app" | "db" | "broadcast">;
 
-const DIRECTIVE_CHAIR_DEPARTMENT_IDS = ["pmo", "planning-architecture", "planning"] as const;
+const DIRECTIVE_CHAIR_DEPARTMENT_IDS = ["pmo", "planning"] as const;
 
 type DirectiveAndInboxRouteDeps = {
   IdempotencyConflictError: RuntimeContext["IdempotencyConflictError"];

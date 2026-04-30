@@ -14,7 +14,7 @@ export type DepartmentRouteDeps = Pick<
 export function registerDepartmentRoutes(deps: DepartmentRouteDeps): void {
   const { app, db, broadcast, normalizeTextField, runInTransaction } = deps;
 
-  const PROTECTED_DEPARTMENT_IDS = new Set(["planning", "dev", "design", "qa", "devsecops", "operations"]);
+  const PROTECTED_DEPARTMENT_IDS = new Set(["pmo", "planning", "dev", "design", "qa", "devsecops", "operations"]);
   const allowReservedCiDepartmentIds = (() => {
     const dbPath = String(process.env.DB_PATH ?? "")
       .replace(/\\/g, "/")

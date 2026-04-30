@@ -33,6 +33,7 @@ const TaskBoard = lazy(() => import("../components/TaskBoard"));
 const AgentManager = lazy(() => import("../components/AgentManager"));
 const SkillsLibrary = lazy(() => import("../components/SkillsLibrary"));
 const ModulesLibrary = lazy(() => import("../components/ModulesLibrary"));
+const ManualLibrary = lazy(() => import("../components/ManualLibrary"));
 const SettingsPanel = lazy(() => import("../components/SettingsPanel"));
 
 interface AppMainLayoutLabels {
@@ -470,6 +471,8 @@ export default function AppMainLayout({
               {view === "skills" && <SkillsLibrary agents={agents} />}
 
               {view === "modules" && <ModulesLibrary />}
+
+              {view === "manual" && <ManualLibrary />}
 
               {view === "settings" && (
                 <SettingsPanel

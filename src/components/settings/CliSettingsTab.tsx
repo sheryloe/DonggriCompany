@@ -1,11 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { OfficeExecutionProvider } from "../../api";
-import { withCliModelFallback } from "../../app/cli-model-fallbacks";
-import type { CliModelInfo } from "../../types";
-import { getCodexReasoningOptions, resolveCodexReasoningLevel } from "../../utils/codex-execution";
 import type { CliSettingsTabProps } from "./types";
 
 type CliPoolStatus = "connected" | "auth_required" | "install_required" | "profile_error";
+type RunnerStatus = "active" | "idle" | "stopping" | "error";
+type CodexSyncMetaByPool = Record<
+  string,
+  {
+    usageSummary: string | null;
+    availability: string;
+    riskScore: number;
+    waitMs: number;
+    isCurrent: boolean;
+    lastUsedAt: number | null;
+    expiresAt: number | null;
+    source: "auth_report" | "storage_fallback";
+    accountDetected: boolean;
+    usageReady: boolean;
+    executionReady: boolean;
+    executionIssue: "none" | "profile_sync_required" | "auth_required" | "install_required" | "unknown";
+  }
+>;
 
 const PROVIDER_INFO: Record<OfficeExecutionProvider, { label: string; icon: string }> = {
   codex: { label: "Codex CLI", icon: "C" },
@@ -21,269 +36,133 @@ function statusChipClass(status: CliPoolStatus): string {
   return "bg-rose-500/15 text-rose-300 border border-rose-500/30";
 }
 
-function runnerChipClass(status: "active" | "idle" | "stopping" | "error"): string {
+function runnerChipClass(status: RunnerStatus | null): string {
   if (status === "active") return "bg-blue-500/15 text-blue-300 border border-blue-500/30";
   if (status === "idle") return "bg-slate-500/15 text-slate-300 border border-slate-400/30";
   if (status === "stopping") return "bg-amber-500/15 text-amber-300 border border-amber-500/30";
-  return "bg-rose-500/15 text-rose-300 border border-rose-500/30";
+  if (status === "error") return "bg-rose-500/15 text-rose-300 border border-rose-500/30";
+  return "bg-slate-600/30 text-slate-300 border border-slate-500/30";
 }
 
-function localizePoolStatus(status: CliPoolStatus, t: CliSettingsTabProps["t"]): string {
-  if (status === "connected") return t({ ko: "연결됨", en: "Connected", ja: "Connected", zh: "Connected" });
-  if (status === "auth_required")
-    return t({ ko: "인증 필요", en: "Auth required", ja: "Auth required", zh: "Auth required" });
-  if (status === "install_required") {
-    return t({ ko: "CLI 설치 필요", en: "Install required", ja: "Install required", zh: "Install required" });
-  }
-  return t({ ko: "프로필 오류", en: "Profile error", ja: "Profile error", zh: "Profile error" });
+function poolStatusLabel(status: CliPoolStatus): string {
+  if (status === "connected") return "실행 준비";
+  if (status === "auth_required") return "인증 필요";
+  if (status === "install_required") return "CLI 설치 필요";
+  return "실행 홈 문제";
 }
 
-function isCliPoolStatus(value: string): value is CliPoolStatus {
-  return (
-    value === "connected" || value === "auth_required" || value === "install_required" || value === "profile_error"
-  );
+function runnerStatusLabel(status: RunnerStatus | null): string {
+  if (status === "active") return "실행 중";
+  if (status === "idle") return "대기";
+  if (status === "stopping") return "중지 중";
+  if (status === "error") return "오류";
+  return "러너 없음";
 }
 
-function localizeVerifyResult(value: string, t: CliSettingsTabProps["t"]): string {
-  if (isCliPoolStatus(value)) return localizePoolStatus(value, t);
-  return value;
+function queueStatusLabel(status: string): string {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "queued") return "대기";
+  if (normalized === "running") return "실행 중";
+  if (normalized === "done") return "완료";
+  if (normalized === "failed") return "실패";
+  if (normalized === "canceled") return "취소됨";
+  return status || "-";
 }
 
-function localizeQueueStatus(value: string, t: CliSettingsTabProps["t"]): string {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "queued") return t({ ko: "대기", en: "Queued", ja: "Queued", zh: "Queued" });
-  if (normalized === "running") return t({ ko: "실행 중", en: "Running", ja: "Running", zh: "Running" });
-  if (normalized === "done") return t({ ko: "완료", en: "Done", ja: "Done", zh: "Done" });
-  if (normalized === "failed") return t({ ko: "실패", en: "Failed", ja: "Failed", zh: "Failed" });
-  if (normalized === "canceled") return t({ ko: "취소됨", en: "Canceled", ja: "Canceled", zh: "Canceled" });
-  return value;
-}
-
-function localizeRunnerStatus(
-  status: "active" | "idle" | "stopping" | "error" | null,
-  t: CliSettingsTabProps["t"],
-): string {
-  if (status === "active") return t({ ko: "활성", en: "Active", ja: "Active", zh: "Active" });
-  if (status === "idle") return t({ ko: "대기", en: "Idle", ja: "Idle", zh: "Idle" });
-  if (status === "stopping") return t({ ko: "중지 중", en: "Stopping", ja: "Stopping", zh: "Stopping" });
-  if (status === "error") return t({ ko: "오류", en: "Error", ja: "Error", zh: "Error" });
-  return t({ ko: "러너 없음", en: "No runner", ja: "No runner", zh: "No runner" });
-}
-
-function localizeAvailability(value: string, t: CliSettingsTabProps["t"]): string {
-  const normalized = value.trim().toLowerCase();
-  if (!normalized || normalized === "unknown")
-    return t({ ko: "알 수 없음", en: "Unknown", ja: "Unknown", zh: "Unknown" });
-  if (normalized === "ready") return t({ ko: "사용 가능", en: "Ready", ja: "Ready", zh: "Ready" });
-  if (normalized === "delayed") return t({ ko: "지연", en: "Delayed", ja: "Delayed", zh: "Delayed" });
-  if (normalized === "unavailable")
-    return t({ ko: "사용 불가", en: "Unavailable", ja: "Unavailable", zh: "Unavailable" });
+function availabilityLabel(value: string | null | undefined): string {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!normalized || normalized === "unknown") return "사용량 정보 없음";
+  if (normalized === "ready") return "즉시 사용 가능";
+  if (normalized === "delayed") return "대기 필요";
+  if (normalized === "unavailable") return "사용 불가";
   return normalized;
 }
 
-function localizeSyncSource(value: "auth_report" | "storage_fallback", t: CliSettingsTabProps["t"]): string {
-  if (value === "storage_fallback") {
-    return t({ ko: "저장소 폴백", en: "Storage fallback", ja: "Storage fallback", zh: "Storage fallback" });
-  }
-  return t({ ko: "라이브 리포트", en: "Live report", ja: "Live report", zh: "Live report" });
+function executionIssueLabel(value: string | null | undefined): string {
+  if (value === "none") return "문제 없음";
+  if (value === "profile_sync_required") return "실행 프로필 동기화 필요";
+  if (value === "auth_required") return "인증 필요";
+  if (value === "install_required") return "CLI 설치 필요";
+  return "상태 확인 필요";
 }
 
-function normalizeReasoningOptions(provider: OfficeExecutionProvider, model: CliModelInfo | null) {
-  if (provider === "codex") {
-    return getCodexReasoningOptions(model);
-  }
-  return model?.reasoningLevels ?? [];
+function sourceLabel(value: string | null | undefined): string {
+  if (value === "storage_fallback") return "저장소 기준";
+  return "사용량 리포트 기준";
 }
 
-function resolveReasoningValue(
-  provider: OfficeExecutionProvider,
-  model: CliModelInfo | null,
-  currentLevel: string | null | undefined,
-): string {
-  if (provider === "codex") {
-    return resolveCodexReasoningLevel(model, currentLevel);
-  }
-  const options = normalizeReasoningOptions(provider, model);
-  if (currentLevel && options.some((option) => option.effort === currentLevel)) {
-    return currentLevel;
-  }
-  const defaultLevel = String(model?.defaultReasoningLevel ?? "").trim();
-  if (defaultLevel && options.some((option) => option.effort === defaultLevel)) {
-    return defaultLevel;
-  }
-  return options[0]?.effort ?? "";
-}
-
-export default function CliSettingsTab({
-  t,
-  cliStatus,
-  cliModels,
-  cliModelsLoading,
-  officeExecutionProviders,
-  cliAccountPools,
-  officeRunners,
-  officeRunnerQueue,
-  runnerMeta,
-  cliAuthBusyKey,
-  selectedPoolByProvider,
-  form,
-  setForm,
-  persistSettings,
-  onRefresh,
-  onPoolSelect,
-  onCreatePool,
-  onUpdatePool,
-  onDeletePool,
-  onVerifyPool,
-  onSyncCodexPoolsFromMultiAuth,
-  onCopyLoginCommand,
-  onActivateRunner,
-  onDeactivateRunner,
-}: CliSettingsTabProps) {
-  const [verifyMessageByKey, setVerifyMessageByKey] = useState<Record<string, CliPoolStatus | string>>({});
+export default function CliSettingsTab(props: CliSettingsTabProps) {
+  const [verifyMessageByKey, setVerifyMessageByKey] = useState<Record<string, string>>({});
   const [labelDraftByKey, setLabelDraftByKey] = useState<Record<string, string>>({});
   const [verifyAllCodexBusy, setVerifyAllCodexBusy] = useState(false);
-  const codexAutoSyncRef = useRef(false);
-  const [codexSyncMetaByPool, setCodexSyncMetaByPool] = useState<
-    Record<
-      string,
-      {
-        usageSummary: string | null;
-        availability: string;
-        riskScore: number;
-        waitMs: number;
-        isCurrent: boolean;
-        lastUsedAt: number | null;
-        expiresAt: number | null;
-        source: "auth_report" | "storage_fallback";
-      }
-    >
-  >({});
-  const [codexSyncedAccounts, setCodexSyncedAccounts] = useState<
-    Array<{
-      poolId: string;
-      label: string;
-      usageSummary: string | null;
-      availability: string;
-      riskScore: number;
-      waitMs: number;
-      isCurrent: boolean;
-      lastUsedAt: number | null;
-      expiresAt: number | null;
-      source: "auth_report" | "storage_fallback";
-    }>
-  >([]);
-
-  const updateProviderPolicy = (
-    provider: OfficeExecutionProvider,
-    updater: (current: {
-      model?: string;
-      subModel?: string;
-      reasoningLevel?: string;
-      subModelReasoningLevel?: string;
-    }) => {
-      model?: string;
-      subModel?: string;
-      reasoningLevel?: string;
-      subModelReasoningLevel?: string;
-    },
-  ) => {
-    void provider;
-    void updater;
-  };
+  const [codexSyncBusy, setCodexSyncBusy] = useState(false);
+  const [codexSyncMetaByPool, setCodexSyncMetaByPool] = useState<CodexSyncMetaByPool>({});
 
   const activeRunnerCount = useMemo(
-    () => officeRunners.filter((runner) => runner.status === "active").length,
-    [officeRunners],
+    () => props.officeRunners.filter((runner) => runner.status === "active").length,
+    [props.officeRunners],
   );
-
   const queueTop = useMemo(
-    () => officeRunnerQueue.filter((item) => item.status === "queued").slice(0, 5),
-    [officeRunnerQueue],
+    () => props.officeRunnerQueue.filter((item) => item.status === "queued").slice(0, 5),
+    [props.officeRunnerQueue],
   );
-  const codexPools = useMemo(() => cliAccountPools.filter((pool) => pool.provider === "codex"), [cliAccountPools]);
+  const codexPools = useMemo(
+    () => props.cliAccountPools.filter((pool) => pool.provider === "codex"),
+    [props.cliAccountPools],
+  );
 
-  const codexPoolRows = useMemo(() => {
-    return codexPools.map((pool) => {
-      const runner = officeRunners.find(
-        (item) => item.provider === "codex" && item.accountPoolId === pool.accountPoolId,
-      );
-      const syncMeta = codexSyncMetaByPool[`codex:${pool.accountPoolId}`];
-      return {
-        poolId: pool.accountPoolId,
-        label: pool.label,
-        accountStatus: pool.status,
-        lastVerifiedAt: pool.lastVerifiedAt,
-        runnerStatus: runner?.status ?? null,
-        usageSummary: syncMeta?.usageSummary ?? null,
-        availability: syncMeta?.availability ?? "",
-        riskScore: syncMeta?.riskScore ?? 0,
-        waitMs: syncMeta?.waitMs ?? 0,
-        isCurrent: syncMeta?.isCurrent ?? false,
-        lastUsedAt: syncMeta?.lastUsedAt ?? null,
-        expiresAt: syncMeta?.expiresAt ?? null,
-        source: syncMeta?.source ?? "auth_report",
-      };
-    });
-  }, [codexPools, officeRunners, codexSyncMetaByPool]);
+  const applyCodexSyncResponse = useCallback(
+    (response: Awaited<ReturnType<NonNullable<CliSettingsTabProps["onSyncCodexPoolsFromMultiAuth"]>>>) => {
+      const nextMeta: CodexSyncMetaByPool = {};
+      for (const account of response.accounts ?? []) {
+        nextMeta[`codex:${account.poolId}`] = {
+          usageSummary: account.usageSummary ?? null,
+          availability: account.availability,
+          riskScore: account.riskScore,
+          waitMs: account.waitMs,
+          isCurrent: account.isCurrent,
+          lastUsedAt: account.lastUsedAt ?? null,
+          expiresAt: account.expiresAt ?? null,
+          source: account.source,
+          accountDetected: account.accountDetected ?? true,
+          usageReady: account.usageReady ?? Boolean(account.usageSummary),
+          executionReady: account.executionReady ?? false,
+          executionIssue: account.executionIssue ?? "unknown",
+        };
+      }
+      setCodexSyncMetaByPool((prev) => ({ ...prev, ...nextMeta }));
+      const verifyMessages: Record<string, string> = {};
+      for (const pool of response.pools ?? []) {
+        verifyMessages[`codex:${pool.accountPoolId}`] = pool.status;
+      }
+      setVerifyMessageByKey((prev) => ({ ...prev, ...verifyMessages }));
+    },
+    [],
+  );
 
-  const handleVerifyAllCodexPools = async () => {
+  const handleSyncCodexPools = useCallback(async () => {
+    if (!props.onSyncCodexPoolsFromMultiAuth || codexSyncBusy) return;
+    setCodexSyncBusy(true);
+    try {
+      const response = await props.onSyncCodexPoolsFromMultiAuth(true);
+      applyCodexSyncResponse(response);
+    } finally {
+      setCodexSyncBusy(false);
+    }
+  }, [applyCodexSyncResponse, codexSyncBusy, props]);
+
+  const handleVerifyAllCodexPools = useCallback(async () => {
     if (verifyAllCodexBusy) return;
     setVerifyAllCodexBusy(true);
     try {
-      let poolsToVerify = codexPools;
-      if (onSyncCodexPoolsFromMultiAuth) {
-        const synced = await onSyncCodexPoolsFromMultiAuth(true);
-        setCodexSyncedAccounts(
-          (synced.accounts ?? []).map((account) => ({
-            poolId: account.poolId,
-            label: account.label,
-            usageSummary: account.usageSummary ?? null,
-            availability: account.availability,
-            riskScore: account.riskScore,
-            waitMs: account.waitMs,
-            isCurrent: account.isCurrent,
-            lastUsedAt: account.lastUsedAt ?? null,
-            expiresAt: account.expiresAt ?? null,
-            source: account.source,
-          })),
-        );
-        const syncMetaEntries: Record<
-          string,
-          {
-            usageSummary: string | null;
-            availability: string;
-            riskScore: number;
-            waitMs: number;
-            isCurrent: boolean;
-            lastUsedAt: number | null;
-            expiresAt: number | null;
-            source: "auth_report" | "storage_fallback";
-          }
-        > = {};
-        for (const account of synced.accounts ?? []) {
-          syncMetaEntries[`codex:${account.poolId}`] = {
-            usageSummary: account.usageSummary ?? null,
-            availability: account.availability,
-            riskScore: account.riskScore,
-            waitMs: account.waitMs,
-            isCurrent: account.isCurrent,
-            lastUsedAt: account.lastUsedAt ?? null,
-            expiresAt: account.expiresAt ?? null,
-            source: account.source,
-          };
-        }
-        if (Object.keys(syncMetaEntries).length > 0) {
-          setCodexSyncMetaByPool((prev) => ({
-            ...prev,
-            ...syncMetaEntries,
-          }));
-        }
-        poolsToVerify = (synced.pools ?? []).filter((pool) => pool.provider === "codex");
+      if (props.onSyncCodexPoolsFromMultiAuth) {
+        applyCodexSyncResponse(await props.onSyncCodexPoolsFromMultiAuth(true));
       }
-      if (poolsToVerify.length <= 0) return;
+      const poolsToVerify = props.cliAccountPools.filter((pool) => pool.provider === "codex");
       for (const pool of poolsToVerify) {
-        const response = await onVerifyPool("codex", pool.accountPoolId);
+        const response = await props.onVerifyPool("codex", pool.accountPoolId);
         setVerifyMessageByKey((prev) => ({
           ...prev,
           [`codex:${pool.accountPoolId}`]: response.pool.status,
@@ -292,710 +171,315 @@ export default function CliSettingsTab({
     } finally {
       setVerifyAllCodexBusy(false);
     }
-  };
-
-  const handleSyncCodexPools = useCallback(async () => {
-    if (!onSyncCodexPoolsFromMultiAuth) return;
-    const response = await onSyncCodexPoolsFromMultiAuth(true);
-    setCodexSyncedAccounts(
-      (response.accounts ?? []).map((account) => ({
-        poolId: account.poolId,
-        label: account.label,
-        usageSummary: account.usageSummary ?? null,
-        availability: account.availability,
-        riskScore: account.riskScore,
-        waitMs: account.waitMs,
-        isCurrent: account.isCurrent,
-        lastUsedAt: account.lastUsedAt ?? null,
-        expiresAt: account.expiresAt ?? null,
-        source: account.source,
-      })),
-    );
-    const syncMetaEntries: Record<
-      string,
-      {
-        usageSummary: string | null;
-        availability: string;
-        riskScore: number;
-        waitMs: number;
-        isCurrent: boolean;
-        lastUsedAt: number | null;
-        expiresAt: number | null;
-        source: "auth_report" | "storage_fallback";
-      }
-    > = {};
-    for (const account of response.accounts ?? []) {
-      const key = `codex:${account.poolId}`;
-      syncMetaEntries[key] = {
-        usageSummary: account.usageSummary ?? null,
-        availability: account.availability,
-        riskScore: account.riskScore,
-        waitMs: account.waitMs,
-        isCurrent: account.isCurrent,
-        lastUsedAt: account.lastUsedAt ?? null,
-        expiresAt: account.expiresAt ?? null,
-        source: account.source,
-      };
-    }
-    if (Object.keys(syncMetaEntries).length > 0) {
-      setCodexSyncMetaByPool((prev) => ({
-        ...prev,
-        ...syncMetaEntries,
-      }));
-    }
-    const verifyMessages: Record<string, string> = {};
-    for (const pool of response.pools ?? []) {
-      verifyMessages[`codex:${pool.accountPoolId}`] = pool.status;
-    }
-    if (Object.keys(verifyMessages).length > 0) {
-      setVerifyMessageByKey((prev) => ({
-        ...prev,
-        ...verifyMessages,
-      }));
-    }
-  }, [onSyncCodexPoolsFromMultiAuth]);
-
-  const codexSyncBusy = cliAuthBusyKey === "codex:sync";
-
-  useEffect(() => {
-    if (codexAutoSyncRef.current) return;
-    if (!onSyncCodexPoolsFromMultiAuth) return;
-    codexAutoSyncRef.current = true;
-    void handleSyncCodexPools();
-  }, [handleSyncCodexPools, onSyncCodexPoolsFromMultiAuth]);
+  }, [applyCodexSyncResponse, props, verifyAllCodexBusy]);
 
   return (
     <section
       className="space-y-5 rounded-xl p-5 sm:p-6"
       style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)" }}
     >
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: "var(--th-text-primary)" }}>
-          {t({
-            ko: "CLI 계정/실행 상태",
-            en: "CLI Account & Runner",
-            ja: "CLI アカウント/実行状態",
-            zh: "CLI 账号/运行状态",
-          })}
-        </h3>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: "var(--th-text-primary)" }}>
+            CLI 계정 / 실행 상태
+          </h3>
+          <p className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>
+            계정 감지, 사용량 확인, 실행 준비, 실행 홈 문제를 분리해서 표시합니다.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => {
-              void handleSyncCodexPools();
-            }}
-            disabled={codexSyncBusy || !onSyncCodexPoolsFromMultiAuth}
+            type="button"
+            onClick={() => void handleSyncCodexPools()}
+            disabled={codexSyncBusy || !props.onSyncCodexPoolsFromMultiAuth}
             className="rounded border border-emerald-400/40 px-2 py-1 text-xs text-emerald-300 enabled:hover:bg-emerald-500/10 disabled:opacity-40"
           >
-            {codexSyncBusy
-              ? t({
-                  ko: "Codex 계정 동기화 중...",
-                  en: "Syncing Codex accounts...",
-                  ja: "Syncing Codex accounts...",
-                  zh: "Syncing Codex accounts...",
-                })
-              : t({
-                  ko: "Codex 계정 동기화",
-                  en: "Sync Codex Accounts",
-                  ja: "Sync Codex Accounts",
-                  zh: "Sync Codex Accounts",
-                })}
+            {codexSyncBusy ? "Codex 계정 동기화 중..." : "Codex 계정 동기화"}
           </button>
           <button
-            onClick={() => {
-              void handleVerifyAllCodexPools();
-            }}
+            type="button"
+            onClick={() => void handleVerifyAllCodexPools()}
             disabled={verifyAllCodexBusy || codexPools.length === 0}
             className="rounded border border-cyan-400/40 px-2 py-1 text-xs text-cyan-300 enabled:hover:bg-cyan-500/10 disabled:opacity-40"
           >
-            {verifyAllCodexBusy
-              ? t({
-                  ko: "Codex 전체 검증 중...",
-                  en: "Verifying Codex pools...",
-                  ja: "Verifying Codex pools...",
-                  zh: "Verifying Codex pools...",
-                })
-              : t({
-                  ko: "Codex 풀 전체 검증",
-                  en: "Verify All Codex Pools",
-                  ja: "Verify All Codex Pools",
-                  zh: "Verify All Codex Pools",
-                })}
+            {verifyAllCodexBusy ? "Codex 전체 검증 중..." : "Codex 전체 검증"}
           </button>
-          <button onClick={onRefresh} className="text-xs text-blue-400 transition-colors hover:text-blue-300">
-            {t({ ko: "새로고침", en: "Refresh", ja: "更新", zh: "刷新" })}
+          <button type="button" onClick={props.onRefresh} className="text-xs text-blue-400 hover:text-blue-300">
+            새로고침
           </button>
         </div>
       </div>
 
-      <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
-        <div className="mb-2 text-xs font-semibold text-cyan-200">
-          {t({
-            ko: "Codex 다중 인증 풀 상태",
-            en: "Codex Multi-Auth Pools",
-            ja: "Codex Multi-Auth Pools",
-            zh: "Codex Multi-Auth Pools",
-          })}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-slate-700/60 bg-slate-900/30 p-3">
+          <div className="text-xs text-slate-400">활성 러너</div>
+          <div className="mt-1 text-lg font-semibold text-slate-100">
+            {activeRunnerCount}/{props.runnerMeta.maxActive}
+          </div>
         </div>
-        {codexPoolRows.length === 0 ? (
-          <div className="text-xs text-slate-400">
-            {t({
-              ko: "등록된 Codex 계정풀이 없습니다.",
-              en: "No Codex pools configured.",
-              ja: "No Codex pools configured.",
-              zh: "No Codex pools configured.",
+        <div className="rounded-lg border border-slate-700/60 bg-slate-900/30 p-3">
+          <div className="text-xs text-slate-400">대기열</div>
+          <div className="mt-1 text-lg font-semibold text-slate-100">{props.officeRunnerQueue.length}</div>
+        </div>
+        <div className="rounded-lg border border-slate-700/60 bg-slate-900/30 p-3">
+          <div className="text-xs text-slate-400">Docker 실행</div>
+          <div className="mt-1 text-lg font-semibold text-slate-100">
+            {props.runnerMeta.dockerEnabled ? "사용" : "미사용"}
+          </div>
+        </div>
+      </div>
+
+      {codexPools.length > 0 ? (
+        <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+          <div className="mb-2 text-xs font-semibold text-cyan-200">Codex 계정 상태</div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {codexPools.map((pool) => {
+              const key = `codex:${pool.accountPoolId}`;
+              const meta = codexSyncMetaByPool[key];
+              const runner = props.officeRunners.find(
+                (item) => item.provider === "codex" && item.accountPoolId === pool.accountPoolId,
+              );
+              return (
+                <article key={pool.accountPoolId} className="rounded border border-slate-700/70 bg-slate-900/50 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-medium text-slate-100">{pool.label}</div>
+                      <div className="mt-1 text-[11px] text-slate-500">{pool.accountPoolId}</div>
+                    </div>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusChipClass(pool.status)}`}>
+                      {poolStatusLabel(pool.status)}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-[11px] text-slate-300">
+                    <div>계정 감지: {meta?.accountDetected ? "감지됨" : "미확인"}</div>
+                    <div>사용량 확인: {meta?.usageReady ? "확인됨" : availabilityLabel(meta?.availability)}</div>
+                    <div>실행 준비: {meta?.executionReady || pool.status === "connected" ? "준비됨" : "점검 필요"}</div>
+                    <div>
+                      실행 홈:{" "}
+                      {executionIssueLabel(
+                        meta?.executionIssue ?? (pool.status === "profile_error" ? "profile_sync_required" : "unknown"),
+                      )}
+                    </div>
+                    <div>사용량: {meta?.usageSummary ?? "-"}</div>
+                    <div>
+                      리스크/대기: {meta?.riskScore ?? 0}/{meta?.waitMs ?? 0}ms
+                    </div>
+                    <div>출처: {sourceLabel(meta?.source)}</div>
+                    <div>러너: {runnerStatusLabel(runner?.status ?? null)}</div>
+                    <div>
+                      최근 검증: {pool.lastVerifiedAt ? new Date(pool.lastVerifiedAt).toLocaleString("ko-KR") : "-"}
+                    </div>
+                  </div>
+                </article>
+              );
             })}
           </div>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {codexPoolRows.map((row) => (
-              <div key={row.poolId} className="rounded border border-slate-700/70 bg-slate-900/50 px-2.5 py-2 text-xs">
-                <div className="truncate font-medium text-slate-100">{row.label}</div>
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusChipClass(row.accountStatus)}`}>
-                    {localizePoolStatus(row.accountStatus, t)}
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] ${
-                      row.runnerStatus
-                        ? runnerChipClass(row.runnerStatus)
-                        : "bg-slate-600/30 text-slate-300 border border-slate-500/30"
-                    }`}
-                  >
-                    {localizeRunnerStatus(row.runnerStatus, t)}
-                  </span>
-                </div>
-                <div className="mt-1 text-[10px] text-slate-400">
-                  {t({ ko: "마지막 검증", en: "Last verify", ja: "Last verify", zh: "Last verify" })}:{" "}
-                  {row.lastVerifiedAt ? new Date(row.lastVerifiedAt).toLocaleString() : "-"}
-                </div>
-                <div className="mt-1 text-[10px] text-slate-400">
-                  {t({ ko: "가용성", en: "Availability", ja: "Availability", zh: "Availability" })}:{" "}
-                  {localizeAvailability(row.availability || "unknown", t)}
-                  {row.isCurrent ? ` · ${t({ ko: "현재 선택", en: "Current", ja: "Current", zh: "Current" })}` : ""}
-                </div>
-                <div className="mt-1 text-[10px] text-slate-400">
-                  {t({ ko: "리스크/대기", en: "Risk/Wait", ja: "Risk/Wait", zh: "Risk/Wait" })}: {row.riskScore}/
-                  {row.waitMs}ms
-                </div>
-                <div className="mt-1 text-[10px] text-slate-300">
-                  {t({ ko: "사용량", en: "Usage", ja: "Usage", zh: "Usage" })}:{" "}
-                  {row.usageSummary ?? t({ ko: "- (사용량 데이터 없음)", en: "-", ja: "-", zh: "-" })}
-                </div>
-                <div className="mt-1 text-[10px] text-slate-400">
-                  {t({ ko: "마지막 사용", en: "Last used", ja: "Last used", zh: "Last used" })}:{" "}
-                  {row.lastUsedAt ? new Date(row.lastUsedAt).toLocaleString() : "-"}
-                </div>
-                <div className="mt-1 text-[10px] text-slate-400">
-                  {t({ ko: "만료 시각", en: "Expires", ja: "Expires", zh: "Expires" })}:{" "}
-                  {row.expiresAt ? new Date(row.expiresAt).toLocaleString() : "-"}
-                </div>
-                <div className="mt-1 text-[10px] text-slate-500">
-                  {t({ ko: "동기화 소스", en: "Sync source", ja: "Sync source", zh: "Sync source" })}:{" "}
-                  {localizeSyncSource(row.source, t)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {codexSyncedAccounts.length > 0 ? (
-          <div className="mt-3 rounded border border-cyan-500/20 bg-slate-900/40 p-2.5">
-            <div className="mb-2 text-[11px] font-semibold text-cyan-200">
-              {t({
-                ko: "계정별 사용량 요약 (동기화 기준)",
-                en: "Per-account usage summary (synced)",
-                ja: "Per-account usage summary (synced)",
-                zh: "Per-account usage summary (synced)",
-              })}
-            </div>
-            <ul className="space-y-1 text-[11px] text-slate-300">
-              {codexSyncedAccounts.map((account) => (
-                <li
-                  key={`usage:${account.poolId}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-700/70 bg-slate-900/40 px-2 py-1"
-                >
-                  <span className="truncate text-slate-200">
-                    {account.label}
-                    {account.isCurrent ? ` · ${t({ ko: "현재", en: "Current", ja: "Current", zh: "Current" })}` : ""}
-                  </span>
-                  <span className="text-slate-400">
-                    {account.usageSummary ?? t({ ko: "- (사용량 데이터 없음)", en: "-", ja: "-", zh: "-" })}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <div className="grid gap-2 rounded-lg border border-slate-700/60 bg-slate-900/30 p-3 text-xs sm:grid-cols-3">
-        <div>
-          <div className="text-slate-400">
-            {t({ ko: "활성 Runner", en: "Active runners", ja: "稼働 Runner", zh: "活跃 Runner" })}
-          </div>
-          <div className="mt-1 text-sm text-white">
-            {activeRunnerCount}/{runnerMeta.maxActive}
-          </div>
-        </div>
-        <div>
-          <div className="text-slate-400">{t({ ko: "대기열", en: "Queue", ja: "キュー", zh: "队列" })}</div>
-          <div className="mt-1 text-sm text-white">{queueTop.length}</div>
-        </div>
-        <div>
-          <div className="text-slate-400">
-            {t({ ko: "Docker 실행", en: "Docker mode", ja: "Docker 実行", zh: "Docker 模式" })}
-          </div>
-          <div className="mt-1 text-sm text-white">{runnerMeta.dockerEnabled ? "ON" : "OFF"}</div>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {officeExecutionProviders.map((provider) => {
-          const info = PROVIDER_INFO[provider];
-          const providerPools = cliAccountPools.filter((pool) => pool.provider === provider);
-          const selectedPoolId = selectedPoolByProvider[provider] || providerPools[0]?.accountPoolId || "";
-          const selectedPool = providerPools.find((pool) => pool.accountPoolId === selectedPoolId) || null;
-          const poolKey = selectedPool ? `${provider}:${selectedPool.accountPoolId}` : `${provider}:none`;
-          const labelDraft = selectedPool ? (labelDraftByKey[poolKey] ?? selectedPool.label) : "";
-          const runner = officeRunners.find(
-            (row) => row.provider === provider && row.accountPoolId === (selectedPool?.accountPoolId ?? ""),
-          );
-          const queuedCount = officeRunnerQueue.filter(
-            (item) =>
-              item.provider === provider &&
-              item.accountPoolId === (selectedPool?.accountPoolId ?? "") &&
-              item.status === "queued",
-          ).length;
-          const keyPrefix = `${provider}:${selectedPool?.accountPoolId ?? "none"}`;
-          const isBusy = Boolean(cliAuthBusyKey && cliAuthBusyKey.startsWith(keyPrefix));
-          const cliTool = cliStatus?.[provider];
-          const providerModels = withCliModelFallback(provider, cliModels?.[provider] ?? []);
-          const selectedModel = form.providerModelConfig?.[provider]?.model || "";
-          const selectedModelInfo = providerModels.find((model) => model.slug === selectedModel) ?? null;
-          const selectedReasoningLevel = form.providerModelConfig?.[provider]?.reasoningLevel || "";
-          const mainReasoningOptions = normalizeReasoningOptions(provider, selectedModelInfo);
-          const supportsSubAgentPolicy = provider === "claude" || provider === "codex";
-          const subModelOptions = supportsSubAgentPolicy ? providerModels : [];
-          const selectedSubModel = supportsSubAgentPolicy ? (form.providerModelConfig?.[provider]?.subModel ?? "") : "";
-          const selectedSubModelInfo = subModelOptions.find((model) => model.slug === selectedSubModel) ?? null;
-          const selectedSubReasoningLevel = form.providerModelConfig?.[provider]?.subModelReasoningLevel || "";
-          const subReasoningOptions =
-            supportsSubAgentPolicy && selectedSubModel ? normalizeReasoningOptions(provider, selectedSubModelInfo) : [];
+      <div className="grid gap-4 xl:grid-cols-2">
+        {props.officeExecutionProviders.map((provider) => {
+          const info = PROVIDER_INFO[provider] ?? { label: provider, icon: provider.slice(0, 1).toUpperCase() };
+          const pools = props.cliAccountPools.filter((pool) => pool.provider === provider);
+          const selectedPoolId = props.selectedPoolByProvider[provider] ?? pools[0]?.accountPoolId ?? "";
+          const selectedPool = pools.find((pool) => pool.accountPoolId === selectedPoolId) ?? pools[0] ?? null;
+          const runner = selectedPool
+            ? props.officeRunners.find(
+                (item) => item.provider === provider && item.accountPoolId === selectedPool.accountPoolId,
+              )
+            : null;
+          const poolKey = `${provider}:${selectedPool?.accountPoolId ?? "none"}`;
+          const labelDraft = labelDraftByKey[poolKey] ?? selectedPool?.label ?? "";
+          const isBusy = props.cliAuthBusyKey?.startsWith(`${provider}:`) ?? false;
 
           return (
-            <article key={provider} className="space-y-3 rounded-lg border border-slate-700/60 bg-slate-800/40 p-3">
-              <div className="flex items-center gap-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-slate-100">
-                  {info.icon}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white">{info.label}</div>
-                  <div className="text-xs text-slate-400">
-                    {cliTool?.version ||
-                      t({ ko: "버전 정보 없음", en: "Version unknown", ja: "バージョン不明", zh: "版本未知" })}
+            <article key={provider} className="space-y-3 rounded-xl border border-slate-700/60 bg-slate-900/30 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800 text-xs font-bold text-slate-100">
+                    {info.icon}
+                  </span>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-100">{info.label}</div>
+                    <div className="text-[11px] text-slate-500">
+                      모델 선택은 중앙 provider 정책에서 자동 배정합니다.
+                    </div>
                   </div>
                 </div>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] ${cliTool?.installed ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-600/40 text-slate-300"}`}
-                >
-                  {cliTool?.installed
-                    ? t({ ko: "설치됨", en: "Installed", ja: "インストール済み", zh: "已安装" })
-                    : t({ ko: "미설치", en: "Not installed", ja: "未インストール", zh: "未安装" })}
-                </span>
+                {selectedPool ? (
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] ${runnerChipClass(runner?.status ?? null)}`}>
+                    {runnerStatusLabel(runner?.status ?? null)}
+                  </span>
+                ) : null}
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+              <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={selectedPool?.accountPoolId ?? ""}
-                  onChange={(event) => onPoolSelect(provider, event.target.value)}
-                  className="rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
+                  onChange={(event) => props.onPoolSelect(provider, event.target.value)}
+                  className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
                 >
-                  {providerPools.length === 0 ? (
-                    <option value="">
-                      {t({ ko: "계정풀 없음", en: "No pool", ja: "プールなし", zh: "无账号池" })}
+                  {pools.length === 0 ? <option value="">계정 없음</option> : null}
+                  {pools.map((pool) => (
+                    <option key={pool.accountPoolId} value={pool.accountPoolId}>
+                      {pool.label}
                     </option>
-                  ) : (
-                    providerPools.map((pool) => (
-                      <option key={`${pool.provider}:${pool.accountPoolId}`} value={pool.accountPoolId}>
-                        {pool.label && pool.label.trim() && pool.label.trim() !== pool.accountPoolId
-                          ? `${pool.label} (${pool.accountPoolId})`
-                          : pool.accountPoolId}
-                      </option>
-                    ))
-                  )}
+                  ))}
                 </select>
                 <button
                   type="button"
-                  onClick={() => void onCreatePool(provider)}
-                  className="rounded border border-emerald-500/40 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
+                  disabled={isBusy}
+                  onClick={() => void props.onCreatePool(provider)}
+                  className="rounded border border-emerald-500/40 px-2 py-1 text-xs text-emerald-300 enabled:hover:bg-emerald-500/10 disabled:opacity-40"
                 >
-                  + {t({ ko: "추가", en: "Add", ja: "追加", zh: "添加" })}
+                  추가
                 </button>
                 <button
                   type="button"
                   disabled={!selectedPool || isBusy}
-                  onClick={() => selectedPool && void onDeletePool(provider, selectedPool.accountPoolId)}
+                  onClick={() => selectedPool && void props.onDeletePool(provider, selectedPool.accountPoolId)}
                   className="rounded border border-rose-500/40 px-2 py-1 text-xs text-rose-300 enabled:hover:bg-rose-500/10 disabled:opacity-40"
                 >
-                  - {t({ ko: "삭제", en: "Delete", ja: "削除", zh: "删除" })}
+                  삭제
                 </button>
               </div>
 
               {selectedPool ? (
-                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                  <input
-                    value={labelDraft}
-                    onChange={(event) =>
-                      setLabelDraftByKey((prev) => ({
-                        ...prev,
-                        [poolKey]: event.target.value,
-                      }))
-                    }
-                    placeholder={t({ ko: "표시 이름", en: "Display name", ja: "表示名", zh: "显示名称" })}
-                    className="rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
-                  />
-                  <button
-                    type="button"
-                    disabled={isBusy || !labelDraft.trim() || labelDraft.trim() === selectedPool.label}
-                    onClick={() =>
-                      void (async () => {
-                        const nextLabel = labelDraft.trim();
-                        if (!nextLabel) return;
-                        await onUpdatePool(provider, selectedPool.accountPoolId, { label: nextLabel });
-                        setLabelDraftByKey((prev) => ({ ...prev, [poolKey]: nextLabel }));
-                      })()
-                    }
-                    className="rounded border border-blue-500/40 px-2 py-1 text-xs text-blue-300 enabled:hover:bg-blue-500/10 disabled:opacity-40"
-                  >
-                    {t({ ko: "이름 저장", en: "Save name", ja: "保存", zh: "保存" })}
-                  </button>
-                </div>
-              ) : null}
-
-              <div className="grid gap-2 text-xs sm:grid-cols-2">
-                <div className="rounded border border-slate-700/50 bg-slate-900/30 p-2">
-                  <div className="text-slate-400">
-                    {t({ ko: "계정 상태", en: "Account status", ja: "アカウント状態", zh: "账号状态" })}
+                <>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <input
+                      value={labelDraft}
+                      onChange={(event) => setLabelDraftByKey((prev) => ({ ...prev, [poolKey]: event.target.value }))}
+                      placeholder="표시 이름"
+                      className="rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
+                    />
+                    <button
+                      type="button"
+                      disabled={isBusy || !labelDraft.trim() || labelDraft.trim() === selectedPool.label}
+                      onClick={() =>
+                        void props.onUpdatePool(provider, selectedPool.accountPoolId, { label: labelDraft.trim() })
+                      }
+                      className="rounded border border-blue-500/40 px-2 py-1 text-xs text-blue-300 enabled:hover:bg-blue-500/10 disabled:opacity-40"
+                    >
+                      이름 저장
+                    </button>
                   </div>
-                  {selectedPool ? (
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusChipClass(selectedPool.status)}`}>
-                        {selectedPool.status === "connected" &&
-                          t({ ko: "연결됨", en: "Connected", ja: "接続済み", zh: "已连接" })}
-                        {selectedPool.status === "auth_required" &&
-                          t({ ko: "인증 필요", en: "Auth required", ja: "認証必要", zh: "需要认证" })}
-                        {selectedPool.status === "install_required" &&
-                          t({
-                            ko: "CLI 설치 필요",
-                            en: "Install required",
-                            ja: "CLI インストール必要",
-                            zh: "需要安装 CLI",
-                          })}
-                        {selectedPool.status === "profile_error" &&
-                          t({ ko: "프로필 오류", en: "Profile error", ja: "プロファイルエラー", zh: "配置错误" })}
-                      </span>
-                      {selectedPool.lastVerifiedAt ? (
-                        <span className="text-slate-500">{new Date(selectedPool.lastVerifiedAt).toLocaleString()}</span>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="mt-1 text-slate-500">
-                      {t({
-                        ko: "선택된 계정풀이 없습니다.",
-                        en: "No selected pool.",
-                        ja: "選択されたプールがありません。",
-                        zh: "未选择账号池。",
-                      })}
-                    </div>
-                  )}
-                </div>
 
-                <div className="rounded border border-slate-700/50 bg-slate-900/30 p-2">
-                  <div className="text-slate-400">
-                    {t({ ko: "Runner 상태", en: "Runner status", ja: "Runner 状態", zh: "Runner 状态" })}
-                  </div>
-                  {runner ? (
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${runnerChipClass(runner.status)}`}>
-                        {localizeRunnerStatus(runner.status, t)}
-                      </span>
-                      <span className="text-slate-500">Q:{queuedCount}</span>
-                    </div>
-                  ) : (
-                    <div className="mt-1 text-slate-500">
-                      {t({ ko: "Runner 없음", en: "No runner", ja: "Runner なし", zh: "无 Runner" })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-4">
-                <button
-                  type="button"
-                  disabled={!selectedPool || isBusy}
-                  onClick={() => selectedPool && void onCopyLoginCommand(provider, selectedPool.accountPoolId)}
-                  className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-100 enabled:hover:bg-slate-700/40 disabled:opacity-40"
-                >
-                  {t({ ko: "인증 명령 복사", en: "Copy login", ja: "ログインコマンド", zh: "复制登录命令" })}
-                </button>
-                <button
-                  type="button"
-                  disabled={!selectedPool || isBusy}
-                  onClick={async () => {
-                    if (!selectedPool) return;
-                    const response = await onVerifyPool(provider, selectedPool.accountPoolId);
-                    const message = response.pool.status;
-                    setVerifyMessageByKey((prev) => ({
-                      ...prev,
-                      [`${provider}:${selectedPool.accountPoolId}`]: message,
-                    }));
-                  }}
-                  className="rounded border border-blue-500/40 px-2 py-1 text-xs text-blue-300 enabled:hover:bg-blue-500/10 disabled:opacity-40"
-                >
-                  {t({ ko: "검증", en: "Verify", ja: "検証", zh: "验证" })}
-                </button>
-                <button
-                  type="button"
-                  disabled={!selectedPool || isBusy || selectedPool.status === "install_required"}
-                  onClick={() => selectedPool && void onActivateRunner(provider, selectedPool.accountPoolId)}
-                  className="rounded border border-emerald-500/40 px-2 py-1 text-xs text-emerald-300 enabled:hover:bg-emerald-500/10 disabled:opacity-40"
-                >
-                  {t({ ko: "Runner 활성화", en: "Activate", ja: "起動", zh: "激活" })}
-                </button>
-                <button
-                  type="button"
-                  disabled={!selectedPool || isBusy}
-                  onClick={() => selectedPool && void onDeactivateRunner(provider, selectedPool.accountPoolId)}
-                  className="rounded border border-amber-500/40 px-2 py-1 text-xs text-amber-300 enabled:hover:bg-amber-500/10 disabled:opacity-40"
-                >
-                  {t({ ko: "Runner 비활성화", en: "Deactivate", ja: "停止", zh: "停用" })}
-                </button>
-              </div>
-
-              {selectedPool && verifyMessageByKey[`${provider}:${selectedPool.accountPoolId}`] && (
-                <p className="text-[11px] text-slate-400">
-                  {t({ ko: "최근 검증 결과", en: "Last verify result", ja: "最新検証結果", zh: "最近验证结果" })}:{" "}
-                  {localizeVerifyResult(verifyMessageByKey[`${provider}:${selectedPool.accountPoolId}`] ?? "", t)}
-                </p>
-              )}
-
-              <div className="space-y-3 rounded-lg border border-slate-700/50 bg-slate-900/20 p-3">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                  {t({
-                    ko: "Provider 정책",
-                    en: "Provider policy",
-                    ja: "Provider policy",
-                    zh: "Provider policy",
-                  })}
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  {t({
-                    ko: "model/reasoning override는 compatibility-only이며 여기서는 읽기 전용으로 표시됩니다.",
-                    en: "Model/reasoning overrides are compatibility-only and shown read-only here.",
-                    ja: "Model/reasoning overrides are compatibility-only and shown read-only here.",
-                    zh: "Model/reasoning overrides are compatibility-only and shown read-only here.",
-                  })}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="space-y-1">
-                    <span className="text-xs text-slate-400">
-                      {t({ ko: "메인 모델", en: "Main model", ja: "Main model", zh: "Main model" })}
-                    </span>
-                    {providerModels.length > 0 ? (
-                      <select
-                        value={selectedModel}
-                        disabled
-                        onChange={(event) => {
-                          const nextModel = event.target.value;
-                          const nextModelInfo = providerModels.find((model) => model.slug === nextModel) ?? null;
-                          updateProviderPolicy(provider, (current) => ({
-                            ...current,
-                            model: nextModel || undefined,
-                            reasoningLevel: nextModel
-                              ? resolveReasoningValue(provider, nextModelInfo, current.reasoningLevel)
-                              : undefined,
-                          }));
-                        }}
-                        className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
-                      >
-                        <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
-                        {providerModels.map((model) => (
-                          <option key={model.slug} value={model.slug}>
-                            {model.displayName || model.slug}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="block rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-xs text-slate-500">
-                        {cliModelsLoading
-                          ? t({
-                              ko: "모델 로딩 중...",
-                              en: "Loading models...",
-                              ja: "モデル読込中...",
-                              zh: "模型加载中...",
-                            })
-                          : t({ ko: "모델 목록 없음", en: "No models", ja: "モデルなし", zh: "无模型" })}
-                      </span>
-                    )}
-                  </label>
-
-                  <label className="space-y-1">
-                    <span className="text-xs text-slate-400">
-                      {t({ ko: "메인 추론 레벨", en: "Main reasoning", ja: "Main reasoning", zh: "Main reasoning" })}
-                    </span>
-                    {mainReasoningOptions.length > 0 ? (
-                      <select
-                        value={selectedReasoningLevel}
-                        disabled
-                        onChange={(event) =>
-                          updateProviderPolicy(provider, (current) => ({
-                            ...current,
-                            reasoningLevel: event.target.value || undefined,
-                          }))
-                        }
-                        className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
-                      >
-                        <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
-                        {mainReasoningOptions.map((option) => (
-                          <option key={option.effort} value={option.effort}>
-                            {option.effort}
-                            {option.description ? ` · ${option.description}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="block rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-xs text-slate-500">
-                        {t({
-                          ko: "이 모델은 추론 레벨 메타데이터가 없습니다.",
-                          en: "No reasoning metadata for this model.",
-                          ja: "No reasoning metadata for this model.",
-                          zh: "No reasoning metadata for this model.",
-                        })}
-                      </span>
-                    )}
-                  </label>
-                </div>
-
-                {supportsSubAgentPolicy ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="space-y-1">
-                      <span className="text-xs text-slate-400">
-                        {t({
-                          ko: "서브 에이전트 모델",
-                          en: "Sub-agent model",
-                          ja: "Sub-agent model",
-                          zh: "Sub-agent model",
-                        })}
-                      </span>
-                      <select
-                        value={selectedSubModel}
-                        disabled
-                        onChange={(event) => {
-                          const nextModel = event.target.value;
-                          const nextModelInfo = subModelOptions.find((model) => model.slug === nextModel) ?? null;
-                          updateProviderPolicy(provider, (current) => ({
-                            ...current,
-                            subModel: nextModel || undefined,
-                            subModelReasoningLevel: nextModel
-                              ? resolveReasoningValue(provider, nextModelInfo, current.subModelReasoningLevel)
-                              : undefined,
-                          }));
-                        }}
-                        className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
-                      >
-                        <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
-                        {subModelOptions.map((model) => (
-                          <option key={model.slug} value={model.slug}>
-                            {model.displayName || model.slug}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="space-y-1">
-                      <span className="text-xs text-slate-400">
-                        {t({
-                          ko: "서브 에이전트 추론 레벨",
-                          en: "Sub-agent reasoning",
-                          ja: "Sub-agent reasoning",
-                          zh: "Sub-agent reasoning",
-                        })}
-                      </span>
-                      {subReasoningOptions.length > 0 ? (
-                        <select
-                          value={selectedSubReasoningLevel}
-                          disabled
-                          onChange={(event) =>
-                            updateProviderPolicy(provider, (current) => ({
-                              ...current,
-                              subModelReasoningLevel: event.target.value || undefined,
-                            }))
-                          }
-                          className="w-full rounded border border-slate-600 bg-slate-900/50 px-2 py-1 text-xs text-white"
+                  <div className="grid gap-2 text-xs sm:grid-cols-2">
+                    <div className="rounded border border-slate-700/50 bg-slate-900/30 p-2">
+                      <div className="text-slate-400">계정 상태</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] ${statusChipClass(selectedPool.status)}`}
                         >
-                          <option value="">{t({ ko: "기본값", en: "Default", ja: "デフォルト", zh: "默认" })}</option>
-                          {subReasoningOptions.map((option) => (
-                            <option key={option.effort} value={option.effort}>
-                              {option.effort}
-                              {option.description ? ` · ${option.description}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="block rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-xs text-slate-500">
-                          {t({
-                            ko: "서브 에이전트 추론 레벨 메타데이터가 없습니다.",
-                            en: "No sub-agent reasoning metadata.",
-                            ja: "No sub-agent reasoning metadata.",
-                            zh: "No sub-agent reasoning metadata.",
-                          })}
+                          {poolStatusLabel(selectedPool.status)}
                         </span>
-                      )}
-                    </label>
+                        <span className="text-slate-500">
+                          {selectedPool.lastVerifiedAt
+                            ? new Date(selectedPool.lastVerifiedAt).toLocaleString("ko-KR")
+                            : "-"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="rounded border border-slate-700/50 bg-slate-900/30 p-2">
+                      <div className="text-slate-400">Runner 상태</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] ${runnerChipClass(runner?.status ?? null)}`}
+                        >
+                          {runnerStatusLabel(runner?.status ?? null)}
+                        </span>
+                        <span className="text-slate-500">
+                          Q:
+                          {
+                            props.officeRunnerQueue.filter(
+                              (item) => item.provider === provider && item.accountPoolId === selectedPool.accountPoolId,
+                            ).length
+                          }
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                ) : null}
 
-                {cliModelsLoading ? (
-                  <span className="text-[11px] text-slate-500">
-                    {t({
-                      ko: "모델 목록 동기화 중...",
-                      en: "Syncing models...",
-                      ja: "Syncing models...",
-                      zh: "Syncing models...",
-                    })}
-                  </span>
-                ) : null}
-              </div>
+                  <div className="grid gap-2 sm:grid-cols-4">
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => void props.onCopyLoginCommand(provider, selectedPool.accountPoolId)}
+                      className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-100 enabled:hover:bg-slate-700/40 disabled:opacity-40"
+                    >
+                      로그인 명령 복사
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={async () => {
+                        const response = await props.onVerifyPool(provider, selectedPool.accountPoolId);
+                        setVerifyMessageByKey((prev) => ({
+                          ...prev,
+                          [`${provider}:${selectedPool.accountPoolId}`]: response.pool.status,
+                        }));
+                      }}
+                      className="rounded border border-blue-500/40 px-2 py-1 text-xs text-blue-300 enabled:hover:bg-blue-500/10 disabled:opacity-40"
+                    >
+                      검증
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy || selectedPool.status === "install_required"}
+                      onClick={() => void props.onActivateRunner(provider, selectedPool.accountPoolId)}
+                      className="rounded border border-emerald-500/40 px-2 py-1 text-xs text-emerald-300 enabled:hover:bg-emerald-500/10 disabled:opacity-40"
+                    >
+                      Runner 활성화
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => void props.onDeactivateRunner(provider, selectedPool.accountPoolId)}
+                      className="rounded border border-amber-500/40 px-2 py-1 text-xs text-amber-300 enabled:hover:bg-amber-500/10 disabled:opacity-40"
+                    >
+                      Runner 비활성화
+                    </button>
+                  </div>
+
+                  {verifyMessageByKey[`${provider}:${selectedPool.accountPoolId}`] ? (
+                    <p className="text-[11px] text-slate-400">
+                      최근 검증 결과:{" "}
+                      {poolStatusLabel(
+                        verifyMessageByKey[`${provider}:${selectedPool.accountPoolId}`] as CliPoolStatus,
+                      )}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <div className="rounded border border-slate-700/50 bg-slate-900/30 p-3 text-xs text-slate-400">
+                  등록된 계정 풀이 없습니다. 추가 버튼으로 실행 계정을 먼저 만드세요.
+                </div>
+              )}
             </article>
           );
         })}
       </div>
 
-      {queueTop.length > 0 && (
+      {queueTop.length > 0 ? (
         <div className="rounded-lg border border-slate-700/60 bg-slate-900/30 p-3">
-          <h4 className="mb-2 text-xs font-semibold text-slate-300">
-            {t({ ko: "대기열 상위", en: "Queue top", ja: "キュー上位", zh: "队列前列" })}
-          </h4>
+          <h4 className="mb-2 text-xs font-semibold text-slate-300">대기열 상위</h4>
           <ul className="space-y-1 text-xs text-slate-300">
             {queueTop.map((item) => (
               <li key={item.id} className="flex items-center justify-between gap-2 rounded bg-slate-800/50 px-2 py-1">
                 <span className="truncate">
                   {item.provider}:{item.accountPoolId}
                 </span>
-                <span className="text-slate-400">{localizeQueueStatus(String(item.status ?? ""), t)}</span>
+                <span className="text-slate-400">{queueStatusLabel(String(item.status ?? ""))}</span>
               </li>
             ))}
           </ul>
         </div>
-      )}
+      ) : null}
 
       <p className="text-xs text-slate-500">
-        {t({
-          ko: "인증은 계정풀 단위로 분리됩니다. 로그인 명령을 실행한 뒤 검증 버튼으로 연결 상태를 갱신하세요.",
-          en: "Authentication is isolated per account pool. Run login command, then verify.",
-          ja: "認証はアカウントプール単位で分離されます。ログイン後に検証を実行してください。",
-          zh: "认证按账号池隔离。执行登录命令后，请点击验证。",
-        })}
+        인증과 실행 홈은 분리됩니다. 사용량은 보이지만 실행 프로필이 없으면 “인증 필요”가 아니라 “실행 프로필 동기화
+        필요”로 처리합니다.
       </p>
     </section>
   );

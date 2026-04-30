@@ -1,5 +1,6 @@
 ﻿import type { DatabaseSync } from "node:sqlite";
 import { isLang, type Lang } from "../../../types/lang.ts";
+import { mapLegacyDepartmentId } from "../../bootstrap/schema/organization-manifest.ts";
 
 export type L10n = Record<Lang, string[]>;
 
@@ -263,7 +264,7 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
     const out = new Set<string>();
 
     for (const [deptId, keywords] of Object.entries(DEPT_KEYWORDS)) {
-      if (includesAnyTerm(message, keywords)) out.add(deptId);
+      if (includesAnyTerm(message, keywords)) out.add(mapLegacyDepartmentId(deptId) ?? deptId);
     }
 
     try {
@@ -288,7 +289,7 @@ export function initializeCollabLanguagePolicy(deps: LanguagePolicyDeps) {
             return normalized.includes(alias) || compact.includes(aliasCompact);
           })
         ) {
-          out.add(deptId);
+          out.add(mapLegacyDepartmentId(deptId) ?? deptId);
         }
       }
     } catch {

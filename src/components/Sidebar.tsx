@@ -17,6 +17,7 @@ const NAV_ITEMS: Array<{ view: View; icon: string; sprite?: string }> = [
   { view: "agents", icon: "AG", sprite: "/sprites/3-D-1.png" },
   { view: "skills", icon: "SK" },
   { view: "modules", icon: "MO" },
+  { view: "manual", icon: "MN" },
   { view: "dashboard", icon: "DB" },
   { view: "tasks", icon: "TS" },
   { view: "settings", icon: "ST" },
@@ -29,6 +30,7 @@ const NAV_LABELS: Record<View, string> = {
   tasks: "업무 관리",
   skills: "Skill 문서고",
   modules: "모듈",
+  manual: "메뉴얼",
   settings: "설정",
 };
 
@@ -136,7 +138,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
           <div className={`h-2.5 w-2.5 rounded-full ${connected ? "animate-pulse bg-green-500" : "bg-red-500"}`} />
           {!collapsed && (
             <div className="text-[10px]" style={{ color: "var(--th-text-muted)" }}>
-              {connected ? "연결됨" : "연결 끊김"} · {workingCount}/{totalAgents} 근무 중
+              {connected ? "연결됨" : "연결 안 됨"} · {workingCount}/{totalAgents} 근무 중
             </div>
           )}
         </div>

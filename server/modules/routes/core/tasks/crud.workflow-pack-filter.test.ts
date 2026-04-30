@@ -363,7 +363,7 @@ describe("task CRUD workflow pack behavior", () => {
         };
       };
       expect(payload.task.workflow_pack_key).toBe("web_research_report");
-      expect(payload.task.department_id).toBe("api-research");
+      expect(payload.task.department_id).toBe("operations");
       expect(payload.task.task_type).toBe("analysis");
       expect(payload.task.priority).toBe(3);
       expect(JSON.parse(payload.task.workflow_meta_json)).toMatchObject({
@@ -372,7 +372,7 @@ describe("task CRUD workflow pack behavior", () => {
         team_preset: "research_report",
         route_source: "task_create_goal_chooser",
         routing_reason: "user_selected_goal",
-        required_departments: ["pmo", "api-research", "knowledge-docs"],
+        required_departments: ["pmo", "operations"],
         max_parallel_workstreams: 2,
       });
     } finally {
@@ -398,13 +398,13 @@ describe("task CRUD workflow pack behavior", () => {
 
       expect(res.statusCode).toBe(200);
       const payload = res.payload as { task: { workflow_meta_json: string; department_id: string } };
-      expect(payload.task.department_id).toBe("cicd-repo");
+      expect(payload.task.department_id).toBe("devsecops");
       expect(JSON.parse(payload.task.workflow_meta_json)).toMatchObject({
         goal_command: "release",
         team_preset: "release_gate",
         route_source: "slash_command_parser",
         routing_reason: "slash_command_detected",
-        required_departments: ["pmo", "cicd-repo", "qa", "security-approval", "knowledge-docs"],
+        required_departments: ["pmo", "devsecops", "qa", "operations"],
         max_parallel_workstreams: 3,
       });
 

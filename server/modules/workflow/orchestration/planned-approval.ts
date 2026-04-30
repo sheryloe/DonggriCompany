@@ -36,18 +36,7 @@ type CreatePlannedApprovalToolsDeps = {
   reviewMeetingOneShotTimeoutMs?: number;
 };
 
-const PLANNED_PUBLIC_REQUIRED_DEPARTMENT_IDS = [
-  "pmo",
-  "planning-architecture",
-  "planning",
-  "development",
-  "dev",
-  "ui-ux",
-  "design",
-  "qa",
-  "knowledge-docs",
-  "operations",
-];
+const PLANNED_PUBLIC_REQUIRED_DEPARTMENT_IDS = ["pmo", "planning", "dev", "design", "qa", "operations"];
 
 export function createPlannedApprovalTools(deps: CreatePlannedApprovalToolsDeps) {
   const {

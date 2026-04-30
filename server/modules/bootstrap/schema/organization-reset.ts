@@ -6,6 +6,7 @@ import {
   getOrganizationAgentSeedById,
   LEGACY_BUILTIN_AGENT_SIGNATURES,
   LEGACY_DEPARTMENT_ID_MAP,
+  mapLegacyDepartmentId,
   ORGANIZATION_AGENT_SEEDS,
   ORGANIZATION_DEPARTMENTS,
   ORGANIZATION_SEED_VERSION,
@@ -75,7 +76,8 @@ function collectLegacyBuiltinMatches(db: DbLike): LegacyBuiltinMatch[] {
 }
 
 function syncDefaultSkillHistory(db: DbLike, seed: OrganizationAgentSeed): void {
-  const skills = getDefaultSkillBundleForDepartment(seed.department_id);
+  const canonicalDepartmentId = mapLegacyDepartmentId(seed.department_id) ?? seed.department_id;
+  const skills = getDefaultSkillBundleForDepartment(canonicalDepartmentId);
   const now = Date.now();
   for (const skillId of skills) {
     const jobId = `seed-skill:${seed.id}:${skillId}`;
@@ -104,7 +106,7 @@ function syncDefaultSkillHistory(db: DbLike, seed: OrganizationAgentSeed): void 
       id,
       jobId,
       seed.cli_provider,
-      `builtin://${ORGANIZATION_SEED_VERSION}/${seed.department_id}`,
+      `builtin://${ORGANIZATION_SEED_VERSION}/${canonicalDepartmentId}`,
       skillId,
       skillId.replace(/[-_.]+/g, " "),
       `canonical-seed-sync ${ORGANIZATION_SEED_VERSION}`,
@@ -117,15 +119,16 @@ function syncDefaultSkillHistory(db: DbLike, seed: OrganizationAgentSeed): void 
 }
 
 function syncSeedAgentArtifacts(seed: OrganizationAgentSeed, statsTasksDone = 0, statsXp = 0): void {
+  const canonicalDepartmentId = mapLegacyDepartmentId(seed.department_id) ?? seed.department_id;
   upsertAgentGuideFile({
     id: seed.id,
     name: seed.name,
     role: seed.role,
-    departmentId: seed.department_id,
+    departmentId: canonicalDepartmentId,
     workflowProfileJson: JSON.stringify(seed.workflow_profile),
     statsTasksDone,
     statsXp,
-    skillBundle: getDefaultSkillBundleForDepartment(seed.department_id),
+    skillBundle: getDefaultSkillBundleForDepartment(canonicalDepartmentId),
   });
 }
 
@@ -217,6 +220,7 @@ function updateAgentReferenceTables(db: DbLike, fromAgentId: string, toAgentId: 
 
 function upsertSeedAgent(db: DbLike, seed: OrganizationAgentSeed, agentId?: string): void {
   const id = agentId ?? seed.id;
+  const canonicalDepartmentId = mapLegacyDepartmentId(seed.department_id) ?? seed.department_id;
   db.prepare(
     `
     INSERT INTO agents (
@@ -249,7 +253,7 @@ function upsertSeedAgent(db: DbLike, seed: OrganizationAgentSeed, agentId?: stri
     seed.name_ko,
     seed.name_ja,
     seed.name_zh,
-    seed.department_id,
+    canonicalDepartmentId,
     seed.role,
     seed.cli_provider,
     seed.family,
@@ -280,7 +284,10 @@ function buildPreview(db: DbLike): CanonicalResetPreview {
       .filter(Boolean),
   );
   const department_migrations = Object.entries(LEGACY_DEPARTMENT_ID_MAP)
-    .filter(([fromDepartmentId]) => existingDepartments.has(fromDepartmentId))
+    .filter(
+      ([fromDepartmentId, toDepartmentId]) =>
+        fromDepartmentId !== toDepartmentId && existingDepartments.has(fromDepartmentId),
+    )
     .map(([fromDepartmentId, toDepartmentId]) => ({ from: fromDepartmentId, to: toDepartmentId }));
   const legacy_builtin_agents_matched = collectLegacyBuiltinMatches(db);
   const matchedSeedIds = new Set(legacy_builtin_agents_matched.map((match) => match.seed_agent_id));

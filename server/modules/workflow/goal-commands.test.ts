@@ -46,7 +46,7 @@ describe("goal command presets", () => {
       team_preset: "research_report",
       route_source: "task_create_goal_chooser",
       routing_reason: "user_selected_goal",
-      required_departments: ["pmo", "api-research", "knowledge-docs"],
+      required_departments: ["pmo", "operations"],
       max_parallel_workstreams: 2,
     });
   });
@@ -62,7 +62,7 @@ describe("goal command presets", () => {
     expect(block).toContain("[Goal Command Context]");
     expect(block).toContain("goal_command=release");
     expect(block).toContain("team_preset=release_gate");
-    expect(block).toContain("required_departments=pmo,cicd-repo,qa,security-approval,knowledge-docs");
+    expect(block).toContain("required_departments=pmo,devsecops,qa,operations");
     expect(block).toContain("max_parallel_workstreams=3");
     expect(block).toContain("verification_gates=git_status,tests,ci_readiness,release_notes");
     expect(block).toContain("Bottleneck rule:");

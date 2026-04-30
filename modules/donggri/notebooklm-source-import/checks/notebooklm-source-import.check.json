@@ -1,0 +1,7 @@
+{
+  "check_key": "notebooklm-source-import",
+  "version": "1.0.0",
+  "required_files": ["docs/notebooklm/import-checklist.md"],
+  "forbidden_artifacts": ["**/cookies.json", "**/oauth*.json", "**/*token*", "**/browser-profile/**"],
+  "manual_verification": ["source_owner_confirmed", "license_confidentiality_reviewed", "notebooklm_output_reviewed"]
+}

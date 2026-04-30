@@ -1,0 +1,26 @@
+{
+  "module_key": "notebooklm-source-import",
+  "module_type": "knowledge_source",
+  "category_key": "project-template",
+  "version": "1.0.0",
+  "name": "NotebookLM Source Import",
+  "summary": "Safe NotebookLM source import workflow using official URL, PDF, Google Docs/Drive export, and manual upload paths.",
+  "capabilities": ["source_collection", "notebooklm_import_checklist", "brief_export_review", "citation_handoff"],
+  "required_secrets": [],
+  "required_runtime": ["browser", "manual_google_account_access"],
+  "artifact_contract": {
+    "preview_files": [".donggri/modules/<binding_name>.json", "docs/notebooklm/import-checklist.md"],
+    "apply_files": [".donggri/modules/<binding_name>.json", "docs/notebooklm/import-checklist.md"],
+    "secret_policy": "no_google_tokens_or_cookies_are_written"
+  },
+  "license_policy": {
+    "source": "official_import_export_only",
+    "notes": "No unofficial Chrome extension automation or NotebookLM UI scraping is generated in v1."
+  },
+  "risk_level": "low",
+  "default_config": {
+    "allowed_source_types": ["url", "pdf", "google_docs_export", "google_drive_export", "manual_upload"],
+    "excluded_source_types": ["unofficial_chrome_extension_control", "cookie_export", "browser_profile_scraping"],
+    "review_required": true
+  }
+}

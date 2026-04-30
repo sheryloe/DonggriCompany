@@ -1,14 +1,14 @@
 ﻿export type OrganizationSeedVersion = "org-v2";
 export const ORGANIZATION_SEED_VERSION: OrganizationSeedVersion = "org-v2";
 
-export type OrganizationDepartmentId =
+export type OrganizationDepartmentId = "pmo" | "planning" | "dev" | "design" | "qa" | "devsecops" | "operations";
+
+export type OrganizationDepartmentLegacyId =
   | "development"
   | "planning-architecture"
   | "ui-ux"
   | "cicd-repo"
   | "management"
-  | "pmo"
-  | "qa"
   | "bloggent"
   | "api-research"
   | "security-approval"
@@ -31,7 +31,7 @@ export interface OrganizationAgentSeed {
   name_ko: string;
   name_ja: string;
   name_zh: string;
-  department_id: OrganizationDepartmentId;
+  department_id: OrganizationDepartmentId | OrganizationDepartmentLegacyId;
   role: "team_leader" | "senior" | "junior";
   cli_provider: "codex" | "api";
   avatar_emoji: string;
@@ -69,65 +69,25 @@ export interface LegacyBuiltinAgentSignature {
 }
 
 export const LEGACY_DEPARTMENT_ID_MAP: Record<string, OrganizationDepartmentId> = {
-  dev: "development",
-  planning: "planning-architecture",
-  design: "ui-ux",
+  pmo: "pmo",
+  planning: "planning",
+  dev: "dev",
+  design: "design",
   qa: "qa",
-  devsecops: "cicd-repo",
-  operations: "management",
+  devsecops: "devsecops",
+  operations: "operations",
+  development: "dev",
+  "planning-architecture": "planning",
+  "ui-ux": "design",
+  "cicd-repo": "devsecops",
+  "security-approval": "devsecops",
+  management: "operations",
+  "knowledge-docs": "operations",
+  "api-research": "operations",
+  bloggent: "operations",
 };
 
 export const ORGANIZATION_DEPARTMENTS: OrganizationDepartmentManifest[] = [
-  {
-    id: "development",
-    name: "Development",
-    name_ko: "개발",
-    name_ja: "Development",
-    name_zh: "Development",
-    icon: "DEV",
-    color: "#3b82f6",
-    sort_order: 1,
-  },
-  {
-    id: "planning-architecture",
-    name: "Planning & Architecture",
-    name_ko: "기획 및 설계",
-    name_ja: "Planning & Architecture",
-    name_zh: "Planning & Architecture",
-    icon: "PLAN",
-    color: "#f59e0b",
-    sort_order: 2,
-  },
-  {
-    id: "ui-ux",
-    name: "UI/UX",
-    name_ko: "UI/UX",
-    name_ja: "UI/UX",
-    name_zh: "UI/UX",
-    icon: "UI",
-    color: "#8b5cf6",
-    sort_order: 3,
-  },
-  {
-    id: "cicd-repo",
-    name: "CI/CD & Repo",
-    name_ko: "CI/CD 병합",
-    name_ja: "CI/CD & Repo",
-    name_zh: "CI/CD & Repo",
-    icon: "CI",
-    color: "#f97316",
-    sort_order: 4,
-  },
-  {
-    id: "management",
-    name: "Management",
-    name_ko: "관리",
-    name_ja: "Management",
-    name_zh: "Management",
-    icon: "OPS",
-    color: "#10b981",
-    sort_order: 5,
-  },
   {
     id: "pmo",
     name: "PMO",
@@ -136,48 +96,58 @@ export const ORGANIZATION_DEPARTMENTS: OrganizationDepartmentManifest[] = [
     name_zh: "PMO",
     icon: "PMO",
     color: "#0f766e",
-    sort_order: 6,
-  },
-  { id: "qa", name: "QA", name_ko: "QA", name_ja: "QA", name_zh: "QA", icon: "QA", color: "#ef4444", sort_order: 7 },
-  {
-    id: "bloggent",
-    name: "Bloggent",
-    name_ko: "블로그",
-    name_ja: "Bloggent",
-    name_zh: "Bloggent",
-    icon: "BLOG",
-    color: "#ec4899",
-    sort_order: 8,
+    sort_order: 1,
   },
   {
-    id: "api-research",
-    name: "API Research",
-    name_ko: "API 전문",
-    name_ja: "API Research",
-    name_zh: "API Research",
-    icon: "API",
-    color: "#6366f1",
-    sort_order: 9,
+    id: "planning",
+    name: "Planning",
+    name_ko: "기획",
+    name_ja: "Planning",
+    name_zh: "Planning",
+    icon: "PLAN",
+    color: "#f59e0b",
+    sort_order: 2,
   },
   {
-    id: "security-approval",
-    name: "Security Approval",
-    name_ko: "보안/승인",
-    name_ja: "Security Approval",
-    name_zh: "Security Approval",
+    id: "dev",
+    name: "Development",
+    name_ko: "개발",
+    name_ja: "Development",
+    name_zh: "Development",
+    icon: "DEV",
+    color: "#3b82f6",
+    sort_order: 3,
+  },
+  {
+    id: "design",
+    name: "Design",
+    name_ko: "디자인",
+    name_ja: "Design",
+    name_zh: "Design",
+    icon: "UI",
+    color: "#8b5cf6",
+    sort_order: 4,
+  },
+  { id: "qa", name: "QA", name_ko: "QA", name_ja: "QA", name_zh: "QA", icon: "QA", color: "#ef4444", sort_order: 5 },
+  {
+    id: "devsecops",
+    name: "DevSecOps",
+    name_ko: "DevSecOps",
+    name_ja: "DevSecOps",
+    name_zh: "DevSecOps",
     icon: "SEC",
     color: "#dc2626",
-    sort_order: 10,
+    sort_order: 6,
   },
   {
-    id: "knowledge-docs",
-    name: "Knowledge & Docs",
-    name_ko: "지식/문서",
-    name_ja: "Knowledge & Docs",
-    name_zh: "Knowledge & Docs",
-    icon: "DOCS",
-    color: "#7c3aed",
-    sort_order: 11,
+    id: "operations",
+    name: "Operations",
+    name_ko: "운영",
+    name_ja: "Operations",
+    name_zh: "Operations",
+    icon: "OPS",
+    color: "#10b981",
+    sort_order: 7,
   },
 ];
 
@@ -204,19 +174,6 @@ function seed(
 }
 
 export const DEFAULT_DEPARTMENT_SKILL_BUNDLES: Record<OrganizationDepartmentId, string[]> = {
-  development: ["typescript", "react-node", "test", "refactor", "review"],
-  "planning-architecture": [
-    "prd-writing",
-    "user-discovery",
-    "impact-mapping",
-    "scope",
-    "architecture-review",
-    "roadmap-planning",
-    "acceptance-criteria",
-  ],
-  "ui-ux": ["design-system", "interaction", "accessibility", "handoff"],
-  "cicd-repo": ["git-workflow", "deployment", "release-checklist", "repo-bootstrap"],
-  management: ["settings-control", "runtime-ops", "monitoring", "program-ops"],
   pmo: [
     "task-distribution",
     "prd-brief",
@@ -228,11 +185,31 @@ export const DEFAULT_DEPARTMENT_SKILL_BUNDLES: Record<OrganizationDepartmentId, 
     "stakeholder-brief",
     "decision-log",
   ],
+  planning: [
+    "prd-writing",
+    "user-discovery",
+    "impact-mapping",
+    "scope",
+    "architecture-review",
+    "roadmap-planning",
+    "acceptance-criteria",
+  ],
+  dev: ["typescript", "react-node", "test", "refactor", "review"],
+  design: ["design-system", "interaction", "accessibility", "handoff"],
   qa: ["regression", "test-strategy", "release-confidence", "review-consensus"],
-  bloggent: ["bloggent-cli", "editorial-calendar", "seo-brief", "content-operations"],
-  "api-research": ["docs-research", "citation", "search-specialist", "free-token-ops"],
-  "security-approval": ["security-review", "approval-gate", "compliance", "policy-check"],
-  "knowledge-docs": ["status-log", "kanban", "gantt", "decisions", "next-actions"],
+  devsecops: ["git-workflow", "deployment", "release-checklist", "repo-bootstrap", "security-review", "approval-gate"],
+  operations: [
+    "settings-control",
+    "runtime-ops",
+    "monitoring",
+    "program-ops",
+    "status-log",
+    "kanban",
+    "gantt",
+    "decisions",
+    "docs-research",
+    "citation",
+  ],
 };
 
 export const ORGANIZATION_AGENT_SEEDS: OrganizationAgentSeed[] = [
@@ -960,13 +937,18 @@ export const LEGACY_BUILTIN_AGENT_SIGNATURES: LegacyBuiltinAgentSignature[] = [
 
 export const DEFAULT_ROOM_THEMES: Record<string, { accent: number; floor1: number; floor2: number; wall: number }> = {
   ceoOffice: { accent: 0xa77d0c, floor1: 0xe5d9b9, floor2: 0xdfd0a8, wall: 0x998243 },
+  pmo: { accent: 0x4cc3b2, floor1: 0xd5f1ed, floor2: 0xc5ebe6, wall: 0x4b9388 },
+  planning: { accent: 0xd4a85a, floor1: 0xf0e1c5, floor2: 0xeddaba, wall: 0xae9871 },
+  dev: { accent: 0x5a9fd4, floor1: 0xd8e8f5, floor2: 0xcce1f2, wall: 0x6c96b7 },
+  design: { accent: 0x9a6fc4, floor1: 0xe8def2, floor2: 0xe1d4ee, wall: 0x9378ad },
+  qa: { accent: 0xd46a6a, floor1: 0xf0cbcb, floor2: 0xedc0c0, wall: 0xae7979 },
+  devsecops: { accent: 0xc94a4a, floor1: 0xf2d0d0, floor2: 0xefc4c4, wall: 0x9f5b5 },
+  operations: { accent: 0x5ac48a, floor1: 0xd0eede, floor2: 0xc4ead5, wall: 0x6eaa89 },
   development: { accent: 0x5a9fd4, floor1: 0xd8e8f5, floor2: 0xcce1f2, wall: 0x6c96b7 },
   "planning-architecture": { accent: 0xd4a85a, floor1: 0xf0e1c5, floor2: 0xeddaba, wall: 0xae9871 },
   "ui-ux": { accent: 0x9a6fc4, floor1: 0xe8def2, floor2: 0xe1d4ee, wall: 0x9378ad },
   "cicd-repo": { accent: 0xd4885a, floor1: 0xf0d5c5, floor2: 0xedcdba, wall: 0xae8871 },
   management: { accent: 0x5ac48a, floor1: 0xd0eede, floor2: 0xc4ead5, wall: 0x6eaa89 },
-  pmo: { accent: 0x4cc3b2, floor1: 0xd5f1ed, floor2: 0xc5ebe6, wall: 0x4b9388 },
-  qa: { accent: 0xd46a6a, floor1: 0xf0cbcb, floor2: 0xedc0c0, wall: 0xae7979 },
   bloggent: { accent: 0xd46ab2, floor1: 0xf4d4e8, floor2: 0xf0c8e2, wall: 0xad7c9b },
   "api-research": { accent: 0x7376f2, floor1: 0xd8dcfb, floor2: 0xcfd4fa, wall: 0x6a73b8 },
   "security-approval": { accent: 0xc94a4a, floor1: 0xf2d0d0, floor2: 0xefc4c4, wall: 0x9f5b5 },
@@ -983,7 +965,8 @@ export function getOrganizationDepartmentById(id: string): OrganizationDepartmen
 }
 
 export function getDefaultSkillBundleForDepartment(departmentId: string | null | undefined): string[] {
-  const normalized = String(departmentId ?? "").trim() as OrganizationDepartmentId;
+  const normalized = mapLegacyDepartmentId(departmentId) as OrganizationDepartmentId | null;
+  if (!normalized) return [];
   return [...(DEFAULT_DEPARTMENT_SKILL_BUNDLES[normalized] ?? [])];
 }
 
@@ -1004,27 +987,19 @@ export function deriveCanonicalFamilyFromDepartment(
     .trim()
     .toLowerCase();
   switch (normalized) {
-    case "development":
+    case "dev":
       return specialization.startsWith("frontend.") ? "frontend" : "backend";
-    case "planning-architecture":
+    case "planning":
       return specialization.startsWith("system.") ? "architect" : "product-manager";
-    case "ui-ux":
+    case "design":
       return "frontend";
-    case "cicd-repo":
-      return specialization.startsWith("github.") ? "backend" : "orchestrator";
-    case "management":
-      return "memory-manager";
     case "pmo":
       return "orchestrator";
     case "qa":
       return "qa";
-    case "bloggent":
-      return specialization.startsWith("content.") ? "researcher" : "documenter";
-    case "api-research":
-      return specialization.startsWith("citation.") ? "documenter" : "researcher";
-    case "security-approval":
+    case "devsecops":
       return specialization.startsWith("policy.") ? "qa" : "reviewer";
-    case "knowledge-docs":
+    case "operations":
       return specialization.startsWith("decision.") ? "memory-manager" : "documenter";
     default:
       return "backend";
@@ -1034,27 +1009,19 @@ export function deriveCanonicalFamilyFromDepartment(
 export function getDefaultReviewLensesForDepartment(departmentId: string | null | undefined): string[] {
   const normalized = mapLegacyDepartmentId(departmentId);
   switch (normalized) {
-    case "development":
+    case "dev":
       return ["correctness", "architecture", "maintainability"];
-    case "planning-architecture":
+    case "planning":
       return ["scope", "risk", "priority"];
-    case "ui-ux":
+    case "design":
       return ["ux", "consistency", "a11y"];
-    case "cicd-repo":
-      return ["release", "security", "operability"];
-    case "management":
-      return ["operations", "monitoring", "traceability"];
     case "pmo":
       return ["scope", "priority", "timeline"];
     case "qa":
       return ["test_coverage", "regression", "reliability"];
-    case "bloggent":
-      return ["clarity", "seo", "storytelling"];
-    case "api-research":
-      return ["research", "citation", "budget"];
-    case "security-approval":
+    case "devsecops":
       return ["security", "compliance", "approval"];
-    case "knowledge-docs":
+    case "operations":
       return ["documentation", "traceability", "governance"];
     default:
       return ["general_quality"];
@@ -1064,28 +1031,20 @@ export function getDefaultReviewLensesForDepartment(departmentId: string | null 
 export function getDepartmentResponsibilityText(departmentId: string | null | undefined): string {
   const normalized = mapLegacyDepartmentId(departmentId);
   switch (normalized) {
-    case "development":
+    case "dev":
       return "implementation, bug fixes, refactors, API and UI coding";
-    case "planning-architecture":
+    case "planning":
       return "requirements, scope, architecture, specification, roadmap";
-    case "ui-ux":
+    case "design":
       return "interface design, UX flow, accessibility, prototyping";
-    case "cicd-repo":
-      return "repository bootstrap, branch policy, PR, merge, release, CI/CD";
-    case "management":
-      return "program operations, settings control, monitoring, runtime administration";
     case "pmo":
       return "CEO directive triage, planning chair, milestone reset, resource rebalance";
     case "qa":
       return "regression, validation, release confidence, quality review";
-    case "bloggent":
-      return "Bloggent CLI operations, editorial planning, article production";
-    case "api-research":
-      return "research, source discovery, citation, free-token API usage";
-    case "security-approval":
+    case "devsecops":
       return "security gate, compliance, approval checks for auth/release/billing/production";
-    case "knowledge-docs":
-      return "status, kanban, gantt, decisions, documentation governance";
+    case "operations":
+      return "program operations, settings control, monitoring, documentation governance, weekly skill and module reports";
     default:
       return "department-specific work within assigned capability";
   }

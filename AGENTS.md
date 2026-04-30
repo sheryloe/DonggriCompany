@@ -506,26 +506,24 @@ When processing `$` or `#` commands, the response to the user must be **minimal 
 
 ### Canonical 조직
 
-기본 조직은 11개 부서와 35명 seed 직원이다. 부팅 시 강제 reseed하지 않고, 명시적 canonical reset preview/apply로만 적용한다.
+기본 조직은 7개 부서와 seed 직원으로 운영한다. 부팅 시 강제 reseed하지 않고, 명시적 canonical reset preview/apply로만 적용한다.
 
 | ID | 한국어 이름 | 역할 |
 | --- | --- | --- |
-| `development` | 개발 | 프론트엔드/백엔드 구현 |
-| `planning-architecture` | 기획 및 설계 | 요구사항, 설계, 아키텍처 |
-| `ui-ux` | UI/UX | 화면 흐름, 인터랙션, 사용성 |
-| `cicd-repo` | CI/CD 병합 | GitHub repo, branch, PR, merge, release |
-| `management` | 관리 | 운영 상태, 작업 흐름 관리 |
 | `pmo` | PMO | CEO 지시 정리, 부서 분배, chair |
+| `planning` | 기획 | 요구사항, 설계, 아키텍처 |
+| `dev` | 개발 | 프론트엔드/백엔드 구현 |
+| `design` | 디자인 | 화면 흐름, 인터랙션, 사용성 |
 | `qa` | QA | 검증, 회귀, 품질 기준 |
-| `bloggent` | 블로그 | Bloggent CLI 기반 콘텐츠 운영 |
-| `api-research` | API 전문 | 무료 토큰 범위 내 정보 수집/요약 |
-| `security-approval` | 보안/승인 | auth, billing, production gate |
-| `knowledge-docs` | 지식/문서 | STATUS, KANBAN, GANTT, DECISIONS 유지 |
+| `devsecops` | DevSecOps | auth, security, CI/CD, release gate |
+| `operations` | 운영 | 상태, 문서, 리서치, 모니터링, 주간 보고 |
+
+Legacy alias는 읽기 호환으로만 허용한다: `planning-architecture→planning`, `development→dev`, `ui-ux→design`, `cicd-repo/security-approval→devsecops`, `management/knowledge-docs/api-research/bloggent→operations`.
 
 ### PMO chair 규칙
 
 - CEO 지시는 PMO 팀장이 1순위 chair다.
-- fallback은 `planning-architecture`, legacy `planning` 순서다.
+- fallback은 `planning`만 사용한다.
 - `acts_as_planning_leader`, legacy `planning`, `workflow_role`은 compatibility-only다.
 
 ### Goal Command 운영 규칙
@@ -565,6 +563,34 @@ When processing `$` or `#` commands, the response to the user must be **minimal 
 - 작업 완료 시 task result, workflow metadata, agent id, project id를 기반으로 memory, skill usage, growth event를 갱신한다.
 - AGENTS 번들은 영어 섹션명 `Memory Snapshot`, `Skill Growth Snapshot`, `Recent Lessons`, `Project Experience`를 유지한다.
 
+### CLI 계정 판정 규칙
+
+- Codex/Gemini/Claude/Jules 계정 상태는 `계정 감지`, `사용량 확인`, `실행 준비`, `실행 홈 문제`로 분리한다.
+- Codex 사용량 리포트가 보이면 계정은 감지된 것이다. 실행 홈에 `.codex/auth.json`이 없으면 `인증 필요`가 아니라 `실행 프로필 동기화 필요`로 표시한다.
+- 토큰, OAuth 코드, session cookie, credential 원문은 UI/API/로그/보고서에 출력하지 않는다.
+- 모델 선택은 에이전트별 override가 아니라 provider execution policy와 task/workflow routing rule로만 결정한다.
+
+### 스킬·모듈 주간 보고 규칙
+
+- 주 1회 `skills.sh`, OpenAI/Codex, Gemini, NotebookLM 공식 문서, GitHub OSS 후보, Choi.ai/커뮤니티 후보를 조사한다.
+- 자동 작업은 `주간 스킬·모듈 보고서`, `추천 신규 skill 초안`, `추천 신규 module 초안`, `리스크/라이선스 검토`까지만 만든다.
+- 사용자 승인 없는 자동 설치, 자동 파일 생성, 자동 커밋, 자동 push는 금지한다.
+- 승인된 항목만 `skills/donggri/**` 또는 `modules/donggri/**`에 반영한다.
+
+### 모듈 생성 규칙
+
+- Skill은 직원이 쓰는 기법/지식이고 Module은 프로젝트에 적용하는 기능 패키지다.
+- 모듈 저장 구조는 `modules/donggri/<module_key>/module.json`, `MODULE.md`, `templates/`, `checks/`를 따른다.
+- 적용 순서는 항상 `미리보기 생성 → 변경사항 확인 → 적용`이다.
+- NotebookLM은 공식 URL/PDF/Google Docs·Drive export/수동 업로드만 지원한다. 비공식 Chrome extension 자동화, cookie export, browser profile scraping은 금지한다.
+
+### ISO 9001 / 품질 게이트 규칙
+
+- ISO 9001 인증을 주장하지 않는다. 대신 QMS-ready 증거를 남긴다.
+- 변경요청, 영향 분석, 승인, 구현, 검증 증거, 배포 기록, 시정조치가 task/project 기록에 추적되어야 한다.
+- 검증 없는 완료 처리는 금지한다. 최소한 테스트 결과, 빌드 결과, smoke 결과, 리뷰 메모 중 해당 범위에 맞는 증거를 남긴다.
+- 반복 실패는 `tasks/lessons.md`에 예방 규칙으로 기록하고 필요 시 AGENTS.md 운영 규칙으로 승격한다.
+
 ### 텔레그램 보고 규칙
 
 - 텔레그램은 단일 그룹방만 사용한다.
@@ -603,13 +629,13 @@ When processing `$` or `#` commands, the response to the user must be **minimal 
 기본 포함 부서:
 
 ```text
-pmo, planning-architecture, development, ui-ux, qa, knowledge-docs
+pmo, planning, dev, design, qa, operations
 ```
 
 조건부 포함 부서:
 
 ```text
-cicd-repo, security-approval, api-research, bloggent, management
+devsecops
 ```
 
 ## `$` CEO 지시 처리

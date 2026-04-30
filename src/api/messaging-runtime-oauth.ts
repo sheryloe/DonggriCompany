@@ -534,6 +534,10 @@ export interface CodexSyncedAccountView {
   index: number;
   poolId: string;
   label: string;
+  accountDetected?: boolean;
+  usageReady?: boolean;
+  executionReady?: boolean;
+  executionIssue?: "none" | "profile_sync_required" | "auth_required" | "install_required" | "unknown";
   isCurrent: boolean;
   availability: string;
   riskScore: number;

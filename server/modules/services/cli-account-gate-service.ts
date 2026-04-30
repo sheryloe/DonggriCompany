@@ -82,6 +82,10 @@ export type CodexSyncedAccountView = {
   index: number;
   poolId: string;
   label: string;
+  accountDetected?: boolean;
+  usageReady?: boolean;
+  executionReady?: boolean;
+  executionIssue?: "none" | "profile_sync_required" | "auth_required" | "install_required" | "unknown";
   isCurrent: boolean;
   availability: string;
   riskScore: number;
@@ -241,6 +245,10 @@ export class CliAccountGateService {
         index: mappedIndex,
         poolId,
         label: verified.label,
+        accountDetected: true,
+        usageReady: Boolean(extractCodexUsageSummary(forecast)),
+        executionReady: verified.status === "connected",
+        executionIssue: mapCodexExecutionIssue(verified.status, verified.lastError),
         isCurrent: Boolean(forecast.isCurrent || index === activeIndex),
         availability: normalizeCodexAvailability(forecast.availability),
         riskScore: normalizeCodexNumber(forecast.riskScore),
@@ -310,6 +318,10 @@ export class CliAccountGateService {
         index,
         poolId,
         label: verified.label,
+        accountDetected: true,
+        usageReady: false,
+        executionReady: verified.status === "connected",
+        executionIssue: mapCodexExecutionIssue(verified.status, verified.lastError),
         isCurrent: rawIndex === activeIndex,
         availability: "unknown",
         riskScore: 0,
@@ -429,6 +441,20 @@ export class CliAccountGateService {
 
     const authArtifactFound = hasAuthArtifact(normalizedProvider, row.profile_home);
     if (!authArtifactFound) {
+      if (normalizedProvider === "codex" && isCodexGlobalAccountDetected()) {
+        this.updatePoolStatus(
+          row.provider,
+          row.account_pool_id,
+          "profile_error",
+          now,
+          "codex_account_detected_profile_sync_required",
+        );
+        return {
+          pool: this.toView(this.mustGetPoolRow(row.provider, row.account_pool_id)),
+          binaryInstalled: true,
+          authArtifactFound: false,
+        };
+      }
       this.updatePoolStatus(row.provider, row.account_pool_id, "auth_required", now, "auth_artifact_missing");
       return {
         pool: this.toView(this.mustGetPoolRow(row.provider, row.account_pool_id)),
@@ -736,6 +762,45 @@ function normalizeCodexSyncReason(error: unknown): string {
   if (details.includes("not logged in") || details.includes("login")) return "auth_required";
   if (details.includes("timed out") || details.includes("timeout")) return "timeout";
   return "command_failed";
+}
+
+function mapCodexExecutionIssue(
+  status: CliAccountPoolStatus,
+  lastError: string | null | undefined,
+): CodexSyncedAccountView["executionIssue"] {
+  if (status === "connected") return "none";
+  if (status === "install_required") return "install_required";
+  if (status === "auth_required") return "auth_required";
+  const errorText = String(lastError ?? "").toLowerCase();
+  if (errorText.includes("profile_sync_required") || errorText.includes("auth_artifact_missing")) {
+    return "profile_sync_required";
+  }
+  return "unknown";
+}
+
+function isCodexGlobalAccountDetected(): boolean {
+  if (!isBinaryInstalled("codex")) return false;
+  const probes: string[][] = [
+    ["login", "status"],
+    ["auth", "status"],
+  ];
+  for (const args of probes) {
+    try {
+      const output = execFileSync("codex", args, {
+        stdio: "pipe",
+        timeout: 8_000,
+        encoding: "utf8",
+        shell: process.platform === "win32",
+      });
+      const normalized = output.toLowerCase();
+      if (normalized.includes("logged in") || normalized.includes("authenticated") || normalized.includes("account")) {
+        return true;
+      }
+    } catch {
+      // Continue with the next safe probe. Token details are never read or logged here.
+    }
+  }
+  return false;
 }
 
 function extractCodexUsageSummary(account: CodexForecastAccount): string | null {

@@ -90,10 +90,10 @@ function isPmoChairCandidate(agent: CanonicalAuthorityAgent): boolean {
 
 function isChairCandidate(agent: CanonicalAuthorityAgent): boolean {
   const canonical = resolveCanonicalIdentity(agent);
-  const rawDepartmentId = String(agent.department_id ?? "").trim();
+  const departmentId = mapLegacyDepartmentId(agent.department_id);
   return (
     (canonical.family === "orchestrator" && canonical.career_stage === "team-lead") ||
-    (rawDepartmentId === "planning" && canonical.career_stage === "team-lead")
+    (departmentId === "planning" && canonical.career_stage === "team-lead")
   );
 }
 
@@ -185,10 +185,10 @@ export function evaluateCanonicalMeetingAuthority<TAgent extends CanonicalAuthor
     const qaLeader = enriched.find(
       ({ canonical, department_id }) => department_id === "qa" && isSeniorPlus(canonical.career_stage),
     );
-    const hasReleaseDiscipline = enriched.some(({ department_id }) => department_id === "cicd-repo");
+    const hasReleaseDiscipline = enriched.some(({ department_id }) => department_id === "devsecops");
     const releaseLeader = enriched.find(
       ({ canonical, department_id }) =>
-        department_id === "cicd-repo" &&
+        department_id === "devsecops" &&
         (isSeniorPlus(canonical.career_stage) || canonical.career_stage === "team-lead"),
     );
     if (!qaLeader) {
@@ -208,7 +208,7 @@ export function evaluateCanonicalMeetingAuthority<TAgent extends CanonicalAuthor
     );
     const securityLeader = enriched.find(
       ({ canonical, department_id }) =>
-        department_id === "security-approval" &&
+        department_id === "devsecops" &&
         (isSeniorPlus(canonical.career_stage) || canonical.career_stage === "team-lead"),
     );
     if (!qaLeader || !securityLeader) blockedBy.push("security_quorum_not_met");
@@ -218,7 +218,7 @@ export function evaluateCanonicalMeetingAuthority<TAgent extends CanonicalAuthor
   if (requiresDocsQuorum(context)) {
     const docsLeader = enriched.find(
       ({ canonical, department_id }) =>
-        department_id === "knowledge-docs" &&
+        department_id === "operations" &&
         (isSeniorPlus(canonical.career_stage) || canonical.career_stage === "team-lead"),
     );
     const pmoLeader = enriched.find(

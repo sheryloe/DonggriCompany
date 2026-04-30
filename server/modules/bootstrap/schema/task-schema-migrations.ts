@@ -2,11 +2,13 @@
 import { DEFAULT_WORKFLOW_PACK_KEY, WORKFLOW_PACK_KEYS } from "../../workflow/packs/definitions.ts";
 import { deriveCanonicalFamilyFromDepartment, mapLegacyDepartmentId } from "./organization-manifest.ts";
 import { applyMemorySchema } from "./memory-schema.ts";
+import { applyModuleSchema } from "./module-schema.ts";
 
 type DbLike = Pick<DatabaseSync, "exec" | "prepare">;
 
 export function applyTaskSchemaMigrations(db: DbLike): void {
   applyMemorySchema(db);
+  applyModuleSchema(db);
 
   // Subtask cross-department delegation columns
   try {

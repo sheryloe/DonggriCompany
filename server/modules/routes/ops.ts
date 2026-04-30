@@ -13,6 +13,7 @@ import { registerModelRoutes } from "./ops/models-routes.ts";
 import { registerOAuthRoutes } from "./ops/oauth/routes.ts";
 import { registerOfficeRunnerRoutes } from "./ops/office-runner.ts";
 import { registerSkillRoutes } from "./ops/skills/routes.ts";
+import { registerModuleRoutes } from "./ops/modules.ts";
 import { registerCodexSubagentCatalogRoutes } from "./ops/subagents/catalog-routes.ts";
 import { registerApiDocsRoutes } from "./ops/api-docs.ts";
 import { registerWorkflowPackRoutes } from "./ops/workflow-packs.ts";
@@ -220,6 +221,7 @@ export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   registerGoalCommandRoutes(__ctx);
 
   const { normalizeSkillLearnProviders } = registerSkillRoutes(__ctx);
+  registerModuleRoutes(__ctx);
   registerCodexSubagentCatalogRoutes(__ctx);
   registerCustomSkillRoutes(__ctx, { normalizeSkillLearnProviders });
 

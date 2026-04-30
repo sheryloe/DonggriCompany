@@ -8,6 +8,7 @@ import {
 } from "../../agent-profile";
 import { getRoleDisplayLabel, getWorkflowRoleDisplayLabel } from "../../app/canonical-display";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../../i18n/canonical-label-registry";
+import { resolveAgentVisualProfile } from "../../agent-visual-profiles";
 import type { Agent, AgentMemoryResponse, Department, SubAgent, SubTask, Task } from "../../types";
 import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import { getSubAgentSpriteNum, SUBTASK_STATUS_ICON, taskStatusLabel, taskTypeLabel, type TFunction } from "./constants";
@@ -100,6 +101,7 @@ export default function AgentDetailTabContent({
   const specialtiesText = stringifySpecialties(profile.specialties);
   const overrideText = resolveAgentProfileOverrideText(profile, agent.personality);
   const classPath = classPathText(profile);
+  const visualProfile = resolveAgentVisualProfile(agent);
   const canonicalFamily = agent.family ? getCanonicalFamilyLabel(agent.family, language) : "-";
   const canonicalStage = agent.career_stage ? getCanonicalStageLabel(agent.career_stage, language) : "-";
   const canonicalSource = canonicalSourceLabel(agent.canonical_identity_source, language);
@@ -211,6 +213,36 @@ export default function AgentDetailTabContent({
           </div>
           <div className="mt-2 text-sm text-slate-300">{capabilitySummary}</div>
           {specialtiesText ? <div className="mt-2 text-xs text-slate-400">{specialtiesText}</div> : null}
+        </div>
+
+        <div className="rounded-lg bg-slate-700/30 p-3">
+          <div className="mb-1 text-xs text-slate-500">
+            {t({ ko: "비주얼 프로필", en: "Visual Profile", ja: "Visual Profile", zh: "Visual Profile" })}
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {infoField(t({ ko: "프로필", en: "Profile", ja: "Profile", zh: "Profile" }), visualProfile.label_ko)}
+            {infoField(
+              t({ ko: "스프라이트", en: "Sprite", ja: "Sprite", zh: "Sprite" }),
+              `${visualProfile.sprite_profile.directions.join(" / ")} · ${
+                visualProfile.sprite_profile.supports_walk ? "walk ready" : "static only"
+              }`,
+            )}
+            {infoField(
+              t({ ko: "추천 모듈", en: "Recommended Modules", ja: "Recommended Modules", zh: "Recommended Modules" }),
+              visualProfile.preferred_asset_modules.join(", "),
+            )}
+            {infoField(t({ ko: "상태", en: "Status", ja: "Status", zh: "Status" }), visualProfile.status)}
+          </div>
+          <div className="mt-2 rounded-md bg-slate-900/50 p-2 text-xs leading-5 text-slate-300">
+            <div className="font-semibold text-slate-200">
+              {t({ ko: "캐릭터 설정", en: "Character Bible", ja: "Character Bible", zh: "Character Bible" })}
+            </div>
+            <p className="mt-1">{visualProfile.character_bible_en}</p>
+            <div className="mt-2 font-semibold text-slate-200">
+              {t({ ko: "스타일 프롬프트", en: "Style Prompt", ja: "Style Prompt", zh: "Style Prompt" })}
+            </div>
+            <p className="mt-1">{visualProfile.style_prompt_en}</p>
+          </div>
         </div>
 
         <div className="rounded-lg bg-slate-700/30 p-3">

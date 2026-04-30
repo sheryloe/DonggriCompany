@@ -56,6 +56,8 @@ export function useAppLabels({
         return tr("직원 관리", "Agents", "エージェント管理", "代理管理");
       case "skills":
         return `S ${tr("문서/스킬", "Skills", "ドキュメント/スキル", "文档/技能")}`;
+      case "modules":
+        return `M ${tr("모듈", "Modules", "モジュール", "模块")}`;
       case "settings":
         return `G ${tr("설정", "Settings", "設定", "设置")}`;
       default:

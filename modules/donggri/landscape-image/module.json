@@ -1,0 +1,37 @@
+{
+  "module_key": "landscape-image",
+  "module_type": "image_prompt_pack",
+  "category_key": "image-generation",
+  "version": "1.0.0",
+  "name": "Landscape Image",
+  "summary": "Prompt pack and review contract for project background and landscape image generation.",
+  "capabilities": ["image_prompt_pack", "background_asset_generation", "review_contract", "publish_manifest"],
+  "required_secrets": [],
+  "required_runtime": ["codex_imagegen_skill", "workspace_asset_manifest"],
+  "artifact_contract": {
+    "source_root": "assets/generated/image_prompt_pack/<asset_id>",
+    "published_root": "public/generated/image_prompt_pack/<asset_id>",
+    "manifest": ".donggri/assets/manifest.json",
+    "publication_rule": "codex_home_outputs_must_be_copied_to_workspace"
+  },
+  "license_policy": {
+    "source": "native_prompt_pack",
+    "notes": "Generated outputs require project-level review before publication."
+  },
+  "risk_level": "low",
+  "default_config": {
+    "aspect_ratio": "16:9",
+    "review_required": true,
+    "preferred_style": "clean animated background"
+  },
+  "prompt_pack": {
+    "system": "Generate a clean project-ready landscape or background asset with consistent lighting, no text, and clear foreground-safe composition.",
+    "negative": "Avoid watermarks, text, UI elements, distorted perspective, unreadable clutter, and inconsistent scale.",
+    "review_checks": [
+      "composition_safe_for_ui",
+      "no_text_or_watermark",
+      "consistent_light_direction",
+      "workspace_copy_required"
+    ]
+  }
+}

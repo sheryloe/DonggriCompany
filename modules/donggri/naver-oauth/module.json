@@ -1,0 +1,26 @@
+{
+  "module_key": "naver-oauth",
+  "module_type": "auth_provider",
+  "category_key": "auth-provider",
+  "version": "1.0.0",
+  "name": "Naver OAuth",
+  "summary": "Reusable Naver OAuth provider contract based on OAuth 2.0 strategy patterns.",
+  "capabilities": ["oauth_login", "account_linking", "callback_route_contract", "reauthentication_hint"],
+  "required_secrets": ["NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "NAVER_CALLBACK_URL"],
+  "required_runtime": ["node", "express", "secure_session_storage"],
+  "artifact_contract": {
+    "preview_files": [".donggri/modules/<binding_name>.json"],
+    "apply_files": [".donggri/modules/<binding_name>.json"],
+    "secret_policy": "secret_values_are_never_written"
+  },
+  "license_policy": {
+    "source": "pattern_reference_only",
+    "notes": "Naver Passport is MIT licensed; v1 uses only conceptual OAuth strategy structure."
+  },
+  "risk_level": "medium",
+  "default_config": {
+    "callback_path": "/api/auth/naver/callback",
+    "account_pool": "execution_account",
+    "reauthentication_supported": true
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "module_key": "google-oauth",
+  "module_type": "auth_provider",
+  "category_key": "auth-provider",
+  "version": "1.0.0",
+  "name": "Google OAuth",
+  "summary": "Reusable Google OAuth provider setup contract for Donggri projects.",
+  "capabilities": ["oauth_login", "account_linking", "callback_route_contract", "token_storage_contract"],
+  "required_secrets": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_CALLBACK_URL"],
+  "required_runtime": ["node", "express", "secure_session_storage"],
+  "artifact_contract": {
+    "preview_files": [".donggri/modules/<binding_name>.json"],
+    "apply_files": [".donggri/modules/<binding_name>.json"],
+    "secret_policy": "secret_values_are_never_written"
+  },
+  "license_policy": {
+    "source": "pattern_reference_only",
+    "notes": "No third-party OAuth implementation code is copied into generated artifacts."
+  },
+  "risk_level": "medium",
+  "default_config": {
+    "callback_path": "/api/auth/google/callback",
+    "account_pool": "execution_account",
+    "scopes": ["openid", "email", "profile"]
+  }
+}

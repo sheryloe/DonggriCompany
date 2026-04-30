@@ -1,8 +1,7 @@
 import { useState } from "react";
-import type { Department, Agent, CompanySettings } from "../types";
-import { useI18n, localeName } from "../i18n";
-
-type View = "office" | "agents" | "dashboard" | "tasks" | "skills" | "settings";
+import type { View } from "../app/types";
+import type { Agent, CompanySettings, Department } from "../types";
+import { localeName, useI18n } from "../i18n";
 
 interface SidebarProps {
   currentView: View;
@@ -13,117 +12,118 @@ interface SidebarProps {
   connected: boolean;
 }
 
-const NAV_ITEMS: { view: View; icon: string; sprite?: string }[] = [
-  { view: "office", icon: "🏢" },
-  { view: "agents", icon: "👥", sprite: "/sprites/3-D-1.png" },
-  { view: "skills", icon: "📚" },
-  { view: "dashboard", icon: "📊" },
-  { view: "tasks", icon: "📋" },
-  { view: "settings", icon: "⚙️" },
+const NAV_ITEMS: Array<{ view: View; icon: string; sprite?: string }> = [
+  { view: "office", icon: "OF" },
+  { view: "agents", icon: "AG", sprite: "/sprites/3-D-1.png" },
+  { view: "skills", icon: "SK" },
+  { view: "modules", icon: "MO" },
+  { view: "dashboard", icon: "DB" },
+  { view: "tasks", icon: "TS" },
+  { view: "settings", icon: "ST" },
 ];
+
+const NAV_LABELS: Record<View, string> = {
+  office: "오피스",
+  agents: "직원 관리",
+  dashboard: "대시보드",
+  tasks: "업무 관리",
+  skills: "Skill 문서고",
+  modules: "모듈",
+  settings: "설정",
+};
 
 export default function Sidebar({ currentView, onChangeView, departments, agents, settings, connected }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const { t, locale } = useI18n();
-  const workingCount = agents.filter((a) => a.status === "working").length;
+  const { locale } = useI18n();
+  const workingCount = agents.filter((agent) => agent.status === "working").length;
   const totalAgents = agents.length;
-
-  const tr = (ko: string, en: string, ja = en, zh = en) => t({ ko, en, ja, zh });
-
-  const navLabels: Record<View, string> = {
-    office: tr("오피스", "Office", "オフィス", "办公室"),
-    agents: tr("직원관리", "Agents", "社員管理", "员工管理"),
-    skills: tr("문서고", "Library", "ライブラリ", "文档库"),
-    dashboard: tr("대시보드", "Dashboard", "ダッシュボード", "仪表盘"),
-    tasks: tr("업무 관리", "Tasks", "タスク管理", "任务管理"),
-    settings: tr("설정", "Settings", "設定", "设置"),
-  };
 
   return (
     <aside
       className={`flex h-full flex-col backdrop-blur-sm transition-all duration-300 ${collapsed ? "w-16" : "w-48"}`}
       style={{ background: "var(--th-bg-sidebar)", borderRight: "1px solid var(--th-border)" }}
     >
-      {/* Logo */}
       <div
         className="flex items-center gap-2 px-3 py-4"
         style={{ borderBottom: "1px solid var(--th-border)", boxShadow: "0 4px 12px rgba(59, 130, 246, 0.06)" }}
       >
         <button
+          type="button"
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 transition-opacity hover:opacity-80"
         >
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 relative overflow-visible">
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-visible rounded-lg">
             <img
               src="/sprites/ceo-lobster.png"
-              alt={tr("CEO", "CEO")}
-              className="w-8 h-8 object-contain"
+              alt="CEO"
+              className="h-8 w-8 object-contain"
               style={{ imageRendering: "pixelated" }}
             />
-            <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 text-[10px] leading-none drop-shadow">👑</span>
+            <span className="absolute -top-1 left-1/2 -translate-x-1/2 rounded bg-amber-300 px-1 text-[9px] font-bold leading-4 text-slate-950 shadow">
+              CEO
+            </span>
           </div>
           {!collapsed && (
-            <div className="overflow-hidden">
-              <div className="text-sm font-bold truncate" style={{ color: "var(--th-text-heading)" }}>
+            <div className="overflow-hidden text-left">
+              <div className="truncate text-sm font-bold" style={{ color: "var(--th-text-heading)" }}>
                 {settings.companyName}
               </div>
               <div className="text-[10px]" style={{ color: "var(--th-text-muted)" }}>
-                👑 {settings.ceoName}
+                {settings.ceoName}
               </div>
             </div>
           )}
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-2 space-y-0.5 px-2">
+      <nav className="flex-1 space-y-0.5 px-2 py-2">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.view}
+            type="button"
             onClick={() => onChangeView(item.view)}
             className={`sidebar-nav-item ${
               currentView === item.view ? "active font-semibold shadow-sm shadow-blue-500/10" : ""
             }`}
           >
-            <span className="text-base shrink-0">
+            <span className="shrink-0 text-[11px] font-bold tracking-tight">
               {item.sprite ? (
                 <img
                   src={item.sprite}
                   alt=""
-                  className="w-5 h-5 object-cover rounded-full"
+                  className="h-5 w-5 rounded-full object-cover"
                   style={{ imageRendering: "pixelated" }}
                 />
               ) : (
                 item.icon
               )}
             </span>
-            {!collapsed && <span>{navLabels[item.view]}</span>}
+            {!collapsed && <span>{NAV_LABELS[item.view]}</span>}
           </button>
         ))}
       </nav>
 
-      {/* Department quick stats */}
       {!collapsed && (
         <div className="px-3 py-2" style={{ borderTop: "1px solid var(--th-border)" }}>
           <div
-            className="text-[10px] uppercase font-semibold mb-1.5 tracking-wider"
+            className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider"
             style={{ color: "var(--th-text-muted)" }}
           >
-            {tr("부서 현황", "Department Status", "部門状況", "部门状态")}
+            부서 현황
           </div>
-          {departments.map((d) => {
-            const deptAgents = agents.filter((a) => a.department_id === d.id);
-            const working = deptAgents.filter((a) => a.status === "working").length;
+          {departments.map((department) => {
+            const departmentAgents = agents.filter((agent) => agent.department_id === department.id);
+            const working = departmentAgents.filter((agent) => agent.status === "working").length;
             return (
               <div
-                key={d.id}
-                className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs hover:bg-[var(--th-bg-surface-hover)] transition-colors"
+                key={department.id}
+                className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-[var(--th-bg-surface-hover)]"
                 style={{ color: "var(--th-text-secondary)" }}
               >
-                <span>{d.icon}</span>
-                <span className="flex-1 truncate">{localeName(locale, d)}</span>
-                <span className={working > 0 ? "text-blue-400 font-medium" : ""}>
-                  {working}/{deptAgents.length}
+                <span>{department.icon}</span>
+                <span className="flex-1 truncate">{localeName(locale, department)}</span>
+                <span className={working > 0 ? "font-medium text-blue-400" : ""}>
+                  {working}/{departmentAgents.length}
                 </span>
               </div>
             );
@@ -131,16 +131,12 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
         </div>
       )}
 
-      {/* Status bar */}
       <div className="px-3 py-2.5" style={{ borderTop: "1px solid var(--th-border)" }}>
         <div className="flex items-center gap-2">
-          <div className={`w-2.5 h-2.5 rounded-full ${connected ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
+          <div className={`h-2.5 w-2.5 rounded-full ${connected ? "animate-pulse bg-green-500" : "bg-red-500"}`} />
           {!collapsed && (
             <div className="text-[10px]" style={{ color: "var(--th-text-muted)" }}>
-              {connected
-                ? tr("연결됨", "Connected", "接続中", "已连接")
-                : tr("연결 끊김", "Disconnected", "接続なし", "已断开")}{" "}
-              · {workingCount}/{totalAgents} {tr("근무중", "working", "稼働中", "工作中")}
+              {connected ? "연결됨" : "연결 끊김"} · {workingCount}/{totalAgents} 근무 중
             </div>
           )}
         </div>

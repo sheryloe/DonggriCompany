@@ -215,6 +215,119 @@ export interface ProjectMemoryResponse {
   memory_context_preview?: string;
 }
 
+export type ProjectModuleCategoryKey =
+  | "auth-provider"
+  | "image-generation"
+  | "game-asset"
+  | "project-template"
+  | "operations";
+export type ProjectModuleRiskLevel = "low" | "medium" | "high";
+export type ProjectModuleBindingStatus = "previewed" | "bound" | "applied" | "failed" | "disabled";
+export type AssetJobStatus =
+  | "draft"
+  | "generating"
+  | "generated"
+  | "needs_review"
+  | "approved"
+  | "published"
+  | "failed";
+
+export interface ProjectModuleManifest {
+  module_key: string;
+  module_type: string;
+  category_key: ProjectModuleCategoryKey;
+  version: string;
+  name: string;
+  summary: string;
+  capabilities: string[];
+  required_secrets: string[];
+  required_runtime: string[];
+  artifact_contract: Record<string, unknown>;
+  license_policy: Record<string, unknown>;
+  risk_level: ProjectModuleRiskLevel;
+  default_config?: Record<string, unknown>;
+  prompt_pack?: Record<string, unknown>;
+}
+
+export interface ProjectModuleArtifactDelta {
+  path: string;
+  action: "create" | "update" | "ensure_dir";
+  purpose: string;
+  content_preview?: string;
+}
+
+export interface ProjectModulePreview {
+  module_key: string;
+  module_version: string;
+  binding_name: string;
+  project_id: string;
+  project_path: string;
+  secret_status: Record<string, "configured" | "missing">;
+  artifact_delta: ProjectModuleArtifactDelta[];
+  apply_required: boolean;
+}
+
+export interface ProjectModuleBinding {
+  id: string;
+  project_id: string;
+  module_key: string;
+  module_version: string;
+  binding_name: string;
+  project_path: string | null;
+  config: Record<string, unknown>;
+  secret_status: Record<string, "configured" | "missing">;
+  preview: ProjectModulePreview | null;
+  status: ProjectModuleBindingStatus;
+  created_at: number;
+  updated_at: number;
+  applied_at: number | null;
+}
+
+export interface ProjectModuleApplyRun {
+  id: string;
+  binding_id: string;
+  project_id: string;
+  idempotency_key: string;
+  status: "applied" | "noop" | "failed";
+  artifact_delta: ProjectModuleArtifactDelta[];
+  message: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface AssetJob {
+  id: string;
+  project_id: string | null;
+  module_key: string;
+  module_type: string;
+  asset_key: string;
+  status: AssetJobStatus;
+  engine: "imagegen_builtin" | string;
+  request: Record<string, unknown>;
+  prompt_markdown: string;
+  source_files: string[];
+  published_files: string[];
+  review: Record<string, unknown>;
+  created_at: number;
+  updated_at: number;
+  approved_at: number | null;
+  published_at: number | null;
+}
+
+export interface AgentVisualProfile {
+  agent_visual_profile_key: string;
+  label_ko: string;
+  style_prompt_en: string;
+  character_bible_en: string;
+  sprite_profile: {
+    directions: Array<"front" | "left" | "back" | "right">;
+    supports_walk: boolean;
+    canvas_size: string;
+  };
+  preferred_asset_modules: string[];
+  status: "seeded" | "active" | "archived";
+}
+
 export interface MeetingPresence {
   agent_id: string;
   seat_index: number;

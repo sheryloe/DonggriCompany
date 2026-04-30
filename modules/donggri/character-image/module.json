@@ -1,0 +1,37 @@
+{
+  "module_key": "character-image",
+  "module_type": "image_prompt_pack",
+  "category_key": "image-generation",
+  "version": "1.0.0",
+  "name": "Character Image",
+  "summary": "Prompt pack and identity-lock review contract for reusable character image generation.",
+  "capabilities": ["character_prompt_pack", "identity_lock", "pose_variation", "review_contract"],
+  "required_secrets": [],
+  "required_runtime": ["codex_imagegen_skill", "workspace_asset_manifest"],
+  "artifact_contract": {
+    "source_root": "assets/generated/image_prompt_pack/<asset_id>",
+    "published_root": "public/generated/image_prompt_pack/<asset_id>",
+    "manifest": ".donggri/assets/manifest.json",
+    "publication_rule": "codex_home_outputs_must_be_copied_to_workspace"
+  },
+  "license_policy": {
+    "source": "native_prompt_pack",
+    "notes": "Character identity prompts must avoid unlicensed real-person likeness unless explicitly authorized."
+  },
+  "risk_level": "medium",
+  "default_config": {
+    "identity_lock_required": true,
+    "transparent_background_preferred": true,
+    "review_required": true
+  },
+  "prompt_pack": {
+    "system": "Generate an original game-ready animated character with a stable silhouette, consistent outfit, clear face shape, and repeatable color palette.",
+    "negative": "Avoid celebrity likeness, logos, text, watermarks, extra limbs, inconsistent outfit details, and unstable proportions.",
+    "review_checks": [
+      "identity_consistency",
+      "silhouette_readability",
+      "outfit_consistency",
+      "transparent_or_clean_background"
+    ]
+  }
+}

@@ -1,6 +1,7 @@
-﻿import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ProjectDecisionEventItem, ProjectReportHistoryItem, ProjectTaskHistoryItem } from "../../api";
-import type { Project, ProjectMemoryResponse } from "../../types";
+import { getProjectModules } from "../../api";
+import type { Project, ProjectMemoryResponse, ProjectModuleBinding } from "../../types";
 import type { GroupedProjectTaskCard, ProjectDetailView, ProjectI18nTranslate } from "./types";
 import { fmtTime } from "./utils";
 
@@ -64,6 +65,30 @@ export default function ProjectInsightsPanel({
   projectMemoryLoading,
 }: ProjectInsightsPanelProps) {
   const [activeView, setActiveView] = useState<ProjectDetailView>("overview");
+  const [projectModules, setProjectModules] = useState<ProjectModuleBinding[]>([]);
+  const [projectModulesLoading, setProjectModulesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedProject?.id) {
+      setProjectModules([]);
+      return;
+    }
+    let cancelled = false;
+    setProjectModulesLoading(true);
+    getProjectModules(selectedProject.id)
+      .then((response) => {
+        if (!cancelled) setProjectModules(response.bindings);
+      })
+      .catch(() => {
+        if (!cancelled) setProjectModules([]);
+      })
+      .finally(() => {
+        if (!cancelled) setProjectModulesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProject?.id]);
 
   const boardColumns = useMemo(() => {
     const columns: Record<BoardColumnKey, GroupedProjectTaskCard[]> = {
@@ -259,6 +284,49 @@ export default function ProjectInsightsPanel({
                       {getTaskStatusLabel(group.root.status, t)} · {fmtTime(group.root.created_at)}
                     </p>
                   </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+            <h4 className="text-sm font-semibold text-white">
+              {t({ ko: "적용된 모듈", en: "Applied Modules", ja: "Applied Modules", zh: "Applied Modules" })}
+            </h4>
+            {!selectedProject ? (
+              <p className="mt-2 text-xs text-slate-500">-</p>
+            ) : projectModulesLoading ? (
+              <p className="mt-2 text-xs text-slate-400">
+                {t({
+                  ko: "모듈 상태를 불러오는 중입니다",
+                  en: "Loading module state",
+                  ja: "Loading module state",
+                  zh: "Loading module state",
+                })}
+              </p>
+            ) : projectModules.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-500">
+                {t({
+                  ko: "아직 프로젝트에 적용된 모듈이 없습니다",
+                  en: "No modules applied yet",
+                  ja: "No modules applied yet",
+                  zh: "No modules applied yet",
+                })}
+              </p>
+            ) : (
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                {projectModules.slice(0, 6).map((binding) => (
+                  <div key={binding.id} className="rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-xs font-semibold text-slate-100">{binding.binding_name}</p>
+                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
+                        {binding.status === "applied" ? "적용됨" : "바인딩됨"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      {binding.module_key}@{binding.module_version}
+                    </p>
+                  </div>
                 ))}
               </div>
             )}

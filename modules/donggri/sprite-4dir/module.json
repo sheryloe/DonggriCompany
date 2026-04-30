@@ -1,0 +1,34 @@
+{
+  "module_key": "sprite-4dir",
+  "module_type": "game_asset_pipeline",
+  "category_key": "game-asset",
+  "version": "1.0.0",
+  "name": "4-Direction Sprite",
+  "summary": "Prompt pack and manifest contract for front, left, back, and right game character sprites.",
+  "capabilities": ["sprite_prompt_pack", "four_direction_manifest", "walk_extension_contract", "atlas_review"],
+  "required_secrets": [],
+  "required_runtime": ["codex_imagegen_skill", "workspace_asset_manifest"],
+  "artifact_contract": {
+    "source_root": "assets/generated/game_asset_pipeline/<asset_id>",
+    "published_root": "public/generated/game_asset_pipeline/<asset_id>",
+    "manifest": ".donggri/assets/manifest.json",
+    "required_directions": ["front", "left", "back", "right"],
+    "optional_animations": ["walk"]
+  },
+  "license_policy": {
+    "source": "native_prompt_pack",
+    "notes": "Sprite generation is native; external atlas tools are optional project-side processors."
+  },
+  "risk_level": "medium",
+  "default_config": {
+    "canvas_size": "1024x1024",
+    "directions": ["front", "left", "back", "right"],
+    "walk_extension": true,
+    "review_required": true
+  },
+  "prompt_pack": {
+    "system": "Generate a game character sprite set with exactly four direction poses: front, left, back, and right. Preserve identity, outfit, scale, palette, and anchor position across all directions.",
+    "negative": "Avoid perspective mismatch, inconsistent clothing, different body scale, cropped feet, text, watermarks, and extra directions.",
+    "review_checks": ["front_left_back_right_present", "shared_anchor", "scale_consistency", "walk_extension_optional"]
+  }
+}

@@ -5,3 +5,4 @@ export * from "./api/workflow-skills-subtasks";
 export * from "./api/providers-reports-github";
 export * from "./api/company";
 export * from "./api/memory";
+export * from "./api/modules";

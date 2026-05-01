@@ -3,6 +3,8 @@ import { post, request } from "./core";
 import type {
   AgentMemoryResponse,
   BeadsStatus,
+  MemoryOutboxItem,
+  MemoryPromotionCandidate,
   NativeMemory,
   ProjectMemoryResponse,
   SkillUsageSummary,
@@ -67,6 +69,57 @@ export async function getBeadsMemoryStatus(projectId: string): Promise<BeadsStat
     `/api/memory/beads/status?project_id=${encodeURIComponent(projectId)}`,
   );
   return payload.status;
+}
+
+export async function searchMemory(input: {
+  q?: string;
+  project_id?: string | null;
+  agent_id?: string | null;
+  thread_id?: string | null;
+  layer?: string | null;
+  scope?: "local" | "global" | "all";
+  limit?: number;
+}): Promise<NativeMemory[]> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const payload = await request<{ ok: boolean; memories: NativeMemory[] }>(`/api/memory/search?${params.toString()}`);
+  return payload.memories;
+}
+
+export async function scanMemoryPromotions(): Promise<MemoryPromotionCandidate[]> {
+  const payload = await post<{ ok: boolean; candidates: MemoryPromotionCandidate[] }>(
+    "/api/memory/promotions/scan",
+    {},
+  );
+  return payload.candidates;
+}
+
+export async function getMemoryPromotions(status: "candidate" | "approved" | "rejected" | "all" = "candidate") {
+  const payload = await request<{ ok: boolean; candidates: MemoryPromotionCandidate[] }>(
+    `/api/memory/promotions?status=${encodeURIComponent(status)}`,
+  );
+  return payload.candidates;
+}
+
+export async function approveMemoryPromotion(candidateId: string): Promise<MemoryPromotionCandidate> {
+  const payload = await post<{ ok: boolean; candidate: MemoryPromotionCandidate }>(
+    `/api/memory/promotions/${encodeURIComponent(candidateId)}/approve`,
+    {},
+  );
+  return payload.candidate;
+}
+
+export async function drainBeadsOutbox(projectId: string): Promise<{
+  ok: boolean;
+  processed: number;
+  succeeded: number;
+  failed: number;
+  items: MemoryOutboxItem[];
+}> {
+  return post("/api/memory/beads/outbox/drain", { project_id: projectId, limit: 20 });
 }
 
 export async function importBeadsMemory(projectId: string): Promise<{

@@ -147,6 +147,47 @@ async function deleteMessagesForProjectsFromLocalE2EDb(projectIds: string[], err
   });
 }
 
+async function markAgentsIdleForCleanup(
+  request: APIRequestContext,
+  agentIds: string[],
+  errors: string[],
+  requestHeaders?: Record<string, string>,
+): Promise<void> {
+  if (agentIds.length === 0) return;
+
+  for (const id of agentIds) {
+    try {
+      let response = await request.patch(`/api/agents/${id}`, {
+        ...(requestHeaders ? { headers: requestHeaders } : {}),
+        data: { status: "offline" },
+      });
+      if (response.status() === 401 && !requestHeaders) {
+        await request.get("/api/auth/session");
+        response = await request.patch(`/api/agents/${id}`, { data: { status: "offline" } });
+      }
+      if (response.ok() || response.status() === 404) continue;
+      for (let attempt = 1; attempt <= 5 && TRANSIENT_HTTP_STATUSES.has(response.status()); attempt += 1) {
+        await sleep(200 * attempt);
+        response = await request.patch(`/api/agents/${id}`, {
+          ...(requestHeaders ? { headers: requestHeaders } : {}),
+          data: { status: "offline" },
+        });
+        if (response.status() === 401 && !requestHeaders) {
+          await request.get("/api/auth/session");
+          response = await request.patch(`/api/agents/${id}`, { data: { status: "offline" } });
+        }
+      }
+    } catch {
+      // Local DB cleanup below is the final fallback for isolated E2E runtime only.
+    }
+  }
+
+  await runLocalE2EDbMutation("agents(status=offline)", errors, (db) => {
+    const placeholders = agentIds.map(() => "?").join(", ");
+    db.prepare(`UPDATE agents SET status = 'offline' WHERE id IN (${placeholders})`).run(...agentIds);
+  });
+}
+
 async function collectDepartmentAgentIds(
   request: APIRequestContext,
   departmentIds: string[],
@@ -254,6 +295,7 @@ export async function cleanupE2EResources(request: APIRequestContext, targets: E
   await deleteMessagesForProjectsFromLocalE2EDb(projectIds, errors);
   const departmentAgentIds = await collectDepartmentAgentIds(request, departmentIds, errors, requestHeaders);
   const agentIds = uniqueIds([...(targets.agentIds ?? []), ...departmentAgentIds]);
+  await markAgentsIdleForCleanup(request, agentIds, errors, requestHeaders);
   await deleteById(request, "/api/agents", agentIds, errors, requestHeaders);
   await deleteById(request, "/api/api-providers", apiProviderIds, errors, requestHeaders);
   const leftoverTaskIds = await collectRelatedTaskIds(request, projectIds, departmentIds, errors, requestHeaders);

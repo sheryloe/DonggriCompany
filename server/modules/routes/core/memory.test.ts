@@ -1,6 +1,14 @@
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { applyBaseSchema } from "../../bootstrap/schema/base-schema.ts";
+import { applyMemorySchema } from "../../bootstrap/schema/memory-schema.ts";
+import {
+  enqueueMemoryOutbox,
+  listDueMemoryOutbox,
+  markMemoryOutboxFailed,
+  markMemoryOutboxRunning,
+  markMemoryOutboxSucceeded,
+} from "../../memory/store.ts";
 import { registerMemoryRoutes } from "./memory.ts";
 
 type RouteHandler = (req: any, res: any) => any;
@@ -43,6 +51,15 @@ function createHarness() {
   return { db, routes };
 }
 
+function seedProject(db: DatabaseSync, id: string, name = id) {
+  db.prepare(
+    `
+    INSERT INTO projects (id, name, project_path, core_goal, last_used_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 1, 1, 1)
+  `,
+  ).run(id, name, process.cwd(), `Goal for ${name}`);
+}
+
 function seedProjectAndAgent(db: DatabaseSync) {
   db.prepare(
     `
@@ -50,12 +67,9 @@ function seedProjectAndAgent(db: DatabaseSync) {
     VALUES ('agent-1', 'Memory Agent', '메모리 에이전트', NULL, 'junior', 'codex', 'idle', 0, 0)
   `,
   ).run();
-  db.prepare(
-    `
-    INSERT INTO projects (id, name, project_path, core_goal, last_used_at, created_at, updated_at)
-    VALUES ('project-1', 'Memory Project', ?, 'Build durable project memory.', 1, 1, 1)
-  `,
-  ).run(process.cwd());
+  seedProject(db, "project-1", "Memory Project");
+  seedProject(db, "project-2", "Other Project");
+  seedProject(db, "project-3", "Third Project");
 }
 
 describe("memory routes", () => {
@@ -74,7 +88,7 @@ describe("memory routes", () => {
     db = null;
   });
 
-  it("creates and lists agent memory with Korean display summary", () => {
+  it("creates and lists agent memory with Korean display summary and canonical layer", () => {
     const postHandler = routes.get("POST /api/agents/:id/memory");
     const getHandler = routes.get("GET /api/agents/:id/memory");
     expect(postHandler).toBeTypeOf("function");
@@ -88,6 +102,7 @@ describe("memory routes", () => {
           title: "OAuth reconnect lesson",
           body: "Check execution account readiness before assigning provider-specific work.",
           memory_type: "lesson",
+          memory_layer: "core",
           display_summary_ko: "실행 계정 준비 상태를 먼저 확인한다.",
           tags: ["oauth", "provider"],
         },
@@ -101,6 +116,8 @@ describe("memory routes", () => {
       memory: {
         agent_id: "agent-1",
         memory_type: "lesson",
+        memory_layer: "core",
+        promotion_status: "local",
         display_summary_ko: "실행 계정 준비 상태를 먼저 확인한다.",
       },
     });
@@ -111,7 +128,7 @@ describe("memory routes", () => {
     expect((getRes.payload as { memories: unknown[] }).memories).toHaveLength(1);
   });
 
-  it("reconciles completed tasks into project memory and skill usage", () => {
+  it("reconciles completed tasks into episodic memory, growth events, and skill usage", () => {
     db!
       .prepare(
         `
@@ -131,18 +148,156 @@ describe("memory routes", () => {
     handler?.({ params: { id: "project-1" }, body: { include_beads: false } }, res);
 
     expect(res.statusCode).toBe(200);
-    const payload = res.payload as { reconciled_tasks: number; memories: Array<{ title: string }>; beads_import: null };
+    const payload = res.payload as {
+      reconciled_tasks: number;
+      memories: Array<{ title: string; memory_layer: string; episode_json: string | null }>;
+      beads_import: null;
+      quality_events: Array<{ event_type: string; title: string; evidence_json: string }>;
+    };
     expect(payload.reconciled_tasks).toBe(1);
     expect(payload.beads_import).toBeNull();
+    expect(payload.quality_events[0]).toMatchObject({
+      event_type: "memory_reconcile",
+      title: "Project memory reconcile",
+    });
+    expect(payload.quality_events[0]?.evidence_json).toContain('"reconciled_tasks":1');
     expect(payload.memories.some((memory) => memory.title.includes("Build login flow"))).toBe(true);
+    expect(payload.memories.every((memory) => memory.memory_layer === "episodic")).toBe(true);
+    expect(payload.memories[0]?.episode_json).toContain("task-1");
 
     const skillRows = db!
       .prepare("SELECT skill_id FROM skill_usage_events WHERE task_id = ? ORDER BY skill_id")
       .all("task-1") as Array<{ skill_id: string }>;
     expect(skillRows.map((row) => row.skill_id)).toEqual(["development", "feature"]);
+
+    const growthRows = db!
+      .prepare("SELECT event_type, episode_json FROM agent_growth_events WHERE task_id = ?")
+      .all("task-1") as Array<{ event_type: string; episode_json: string | null }>;
+    expect(growthRows).toHaveLength(1);
+    expect(growthRows[0]?.event_type).toBe("task_completed");
+    expect(growthRows[0]?.episode_json).toContain("Build login flow");
   });
 
-  it("keeps Beads write bridge disabled by default", () => {
+  it("searches memories with project isolation by default", () => {
+    const createProjectMemoryHandler = routes.get("POST /api/projects/:id/memory");
+    createProjectMemoryHandler?.(
+      {
+        params: { id: "project-1" },
+        body: {
+          title: "React router fix",
+          body: "Use stable route ids for dashboard navigation.",
+          memory_type: "lesson",
+          memory_layer: "archival",
+          tags: ["react", "router"],
+        },
+      },
+      createFakeResponse(),
+    );
+    createProjectMemoryHandler?.(
+      {
+        params: { id: "project-2" },
+        body: {
+          title: "React router unrelated",
+          body: "This other project memory must not bleed into project-1.",
+          memory_type: "lesson",
+          memory_layer: "archival",
+          tags: ["react", "router"],
+        },
+      },
+      createFakeResponse(),
+    );
+
+    const searchHandler = routes.get("GET /api/memory/search");
+    const res = createFakeResponse();
+    searchHandler?.(
+      {
+        query: {
+          q: "React router",
+          project_id: "project-1",
+          scope: "local",
+        },
+      },
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    const payload = res.payload as { memories: Array<{ project_id: string; title: string }> };
+    expect(payload.memories.length).toBeGreaterThan(0);
+    expect(payload.memories.every((memory) => memory.project_id === "project-1")).toBe(true);
+  });
+
+  it("ranks core and episodic memories before archival matches", () => {
+    const createProjectMemoryHandler = routes.get("POST /api/projects/:id/memory");
+    for (const memory of [
+      {
+        title: "Routing archival note",
+        body: "Routing fallback detail.",
+        memory_type: "lesson",
+        memory_layer: "archival",
+        strength: 1,
+      },
+      {
+        title: "Routing core rule",
+        body: "Routing project invariant.",
+        memory_type: "constraint",
+        memory_layer: "core",
+        strength: 0.2,
+      },
+      {
+        title: "Routing episodic fix",
+        body: "Routing issue was fixed after a failed deploy.",
+        memory_type: "episode",
+        memory_layer: "episodic",
+        strength: 0.8,
+      },
+    ]) {
+      createProjectMemoryHandler?.({ params: { id: "project-1" }, body: memory }, createFakeResponse());
+    }
+
+    const searchHandler = routes.get("GET /api/memory/search");
+    const res = createFakeResponse();
+    searchHandler?.({ query: { q: "Routing", project_id: "project-1", scope: "local" } }, res);
+
+    expect(res.statusCode).toBe(200);
+    const payload = res.payload as { memories: Array<{ memory_layer: string; title: string }> };
+    expect(payload.memories.map((memory) => memory.memory_layer).slice(0, 3)).toEqual(["core", "episodic", "archival"]);
+  });
+
+  it("creates and approves global skill promotion candidates from cross-project success evidence", () => {
+    const now = 1_700_000_000_000;
+    for (const [index, projectId] of ["project-1", "project-2", "project-3"].entries()) {
+      db!
+        .prepare(
+          `
+        INSERT INTO skill_usage_events (
+          id, agent_id, project_id, task_id, skill_id, provider, outcome, confidence, notes, created_at
+        ) VALUES (?, 'agent-1', ?, NULL, 'react-router-repair', 'codex', 'success', 0.9, 'test evidence', ?)
+      `,
+        )
+        .run(`skill-${index}`, projectId, now + index);
+    }
+
+    const scanHandler = routes.get("POST /api/memory/promotions/scan");
+    const scanRes = createFakeResponse();
+    scanHandler?.({ body: {} }, scanRes);
+    expect(scanRes.statusCode).toBe(200);
+    const candidates = (scanRes.payload as { candidates: Array<{ id: string; candidate_key: string }> }).candidates;
+    expect(candidates.some((candidate) => candidate.candidate_key === "skill:react-router-repair")).toBe(true);
+
+    const approveHandler = routes.get("POST /api/memory/promotions/:id/approve");
+    const approveRes = createFakeResponse();
+    approveHandler?.({ params: { id: candidates[0]!.id } }, approveRes);
+    expect(approveRes.statusCode).toBe(200);
+    expect(approveRes.payload).toMatchObject({ candidate: { status: "approved" } });
+
+    const qualityRows = db!
+      .prepare("SELECT event_type, evidence_json FROM memory_quality_events ORDER BY created_at DESC")
+      .all() as Array<{ event_type: string; evidence_json: string }>;
+    expect(qualityRows.some((row) => row.event_type === "global_memory_promotion_approved")).toBe(true);
+    expect(qualityRows[0]?.evidence_json).toContain("react-router-repair");
+  });
+
+  it("keeps Beads write bridge disabled by default and exposes outbox state", () => {
     const handler = routes.get("POST /api/memory/beads/export");
     const res = createFakeResponse();
     handler?.(
@@ -158,5 +313,124 @@ describe("memory routes", () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.payload).toMatchObject({ error: "beads_write_disabled" });
+
+    enqueueMemoryOutbox(db!, {
+      projectId: "project-1",
+      target: "beads",
+      operation: "create_issue",
+      payload: { title: "Queued issue" },
+      now: 1_700_000_000_000,
+    });
+    const projectHandler = routes.get("GET /api/projects/:id/memory");
+    const projectRes = createFakeResponse();
+    projectHandler?.({ params: { id: "project-1" } }, projectRes);
+    expect((projectRes.payload as { memory_outbox: unknown[] }).memory_outbox).toHaveLength(1);
+  });
+
+  it("claims, retries, and completes memory outbox items deterministically", () => {
+    const queued = enqueueMemoryOutbox(db!, {
+      projectId: "project-1",
+      target: "beads",
+      operation: "create_issue",
+      payload: { title: "Queued issue" },
+      now: 1_700_000_000_000,
+    });
+
+    expect(listDueMemoryOutbox(db!, { target: "beads", now: 1_700_000_000_000 })).toHaveLength(1);
+    const running = markMemoryOutboxRunning(db!, { id: queued.id, now: 1_700_000_000_100 });
+    expect(running).toMatchObject({ status: "running", attempt_count: 1 });
+
+    const failed = markMemoryOutboxFailed(db!, {
+      id: queued.id,
+      error: "bd unavailable",
+      nextRetryAt: 1_700_000_010_000,
+      now: 1_700_000_000_200,
+    });
+    expect(failed).toMatchObject({ status: "failed", last_error: "bd unavailable" });
+    expect(listDueMemoryOutbox(db!, { target: "beads", now: 1_700_000_005_000 })).toHaveLength(0);
+    expect(listDueMemoryOutbox(db!, { target: "beads", now: 1_700_000_010_000 })).toHaveLength(1);
+
+    const rerun = markMemoryOutboxRunning(db!, { id: queued.id, now: 1_700_000_010_100 });
+    expect(rerun).toMatchObject({ status: "running", attempt_count: 2 });
+    const succeeded = markMemoryOutboxSucceeded(db!, {
+      id: queued.id,
+      externalRef: "bd-123",
+      now: 1_700_000_010_200,
+    });
+    expect(succeeded).toMatchObject({ status: "succeeded", external_ref: "bd-123", next_retry_at: null });
+    expect(listDueMemoryOutbox(db!, { target: "beads", now: 1_700_000_020_000 })).toHaveLength(0);
+  });
+});
+
+describe("memory schema migration", () => {
+  it("adds compatibility columns before indexes and FTS are created for legacy databases", () => {
+    const legacyDb = new DatabaseSync(":memory:");
+    try {
+      legacyDb.exec(`
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE agent_memories (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  project_id TEXT,
+  memory_type TEXT NOT NULL,
+  scope_type TEXT NOT NULL DEFAULT 'agent',
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  display_summary_ko TEXT,
+  tags_json TEXT NOT NULL DEFAULT '[]',
+  confidence REAL NOT NULL DEFAULT 0.7,
+  strength REAL NOT NULL DEFAULT 0.5,
+  source_type TEXT NOT NULL DEFAULT 'manual',
+  source_id TEXT,
+  external_ref TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at INTEGER DEFAULT 1,
+  updated_at INTEGER DEFAULT 1,
+  last_used_at INTEGER
+);
+CREATE TABLE project_memories (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  agent_id TEXT,
+  memory_type TEXT NOT NULL,
+  scope_type TEXT NOT NULL DEFAULT 'project',
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  display_summary_ko TEXT,
+  tags_json TEXT NOT NULL DEFAULT '[]',
+  confidence REAL NOT NULL DEFAULT 0.7,
+  strength REAL NOT NULL DEFAULT 0.5,
+  source_type TEXT NOT NULL DEFAULT 'manual',
+  source_id TEXT,
+  external_ref TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at INTEGER DEFAULT 1,
+  updated_at INTEGER DEFAULT 1,
+  last_used_at INTEGER
+);
+CREATE TABLE agent_growth_events (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  project_id TEXT,
+  task_id TEXT,
+  event_type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  xp_delta INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER DEFAULT 1
+);
+`);
+
+      expect(() => applyMemorySchema(legacyDb)).not.toThrow();
+      const columns = legacyDb.prepare("PRAGMA table_info(agent_memories)").all() as Array<{ name: string }>;
+      expect(columns.map((column) => column.name)).toContain("memory_layer");
+      expect(columns.map((column) => column.name)).toContain("promotion_status");
+      const ftsSetting = legacyDb.prepare("SELECT value FROM settings WHERE key = 'memoryFtsAvailable'").get() as
+        | { value: string }
+        | undefined;
+      expect(ftsSetting?.value).toBe("true");
+    } finally {
+      legacyDb.close();
+    }
   });
 });

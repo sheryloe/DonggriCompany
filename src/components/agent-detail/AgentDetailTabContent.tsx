@@ -1,4 +1,5 @@
-﻿import { localeName, type UiLanguage } from "../../i18n";
+import { localeName, type UiLanguage } from "../../i18n";
+import { useMemo, useState } from "react";
 import {
   buildAgentCapabilityCompactSummary,
   normalizeAgentProfile,
@@ -12,6 +13,8 @@ import { resolveAgentVisualProfile } from "../../agent-visual-profiles";
 import type { Agent, AgentMemoryResponse, Department, SubAgent, SubTask, Task } from "../../types";
 import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import { getSubAgentSpriteNum, SUBTASK_STATUS_ICON, taskStatusLabel, taskTypeLabel, type TFunction } from "./constants";
+
+type AgentMemoryFilter = "all" | "core" | "archival" | "episodic" | "candidate";
 
 interface AgentDetailTabContentProps {
   tab: "info" | "tasks" | "alba" | "memory";
@@ -87,6 +90,7 @@ export default function AgentDetailTabContent({
   agentMemory,
   agentMemoryLoading,
 }: AgentDetailTabContentProps) {
+  const [memoryFilter, setMemoryFilter] = useState<AgentMemoryFilter>("all");
   const xpLevel = Math.floor(agent.stats_xp / 100) + 1;
   const profile = normalizeAgentProfile(agent.agent_profile, agent.role);
   const recommendedTier = recommendGrowthTierFromXp(agent.stats_xp);
@@ -131,6 +135,21 @@ export default function AgentDetailTabContent({
       value: profile.capabilities.leadership,
     },
   ] as const;
+  const allAgentMemories = useMemo(() => agentMemory?.memories ?? [], [agentMemory?.memories]);
+  const filteredAgentMemories = useMemo(() => {
+    if (memoryFilter === "all") return allAgentMemories;
+    if (memoryFilter === "candidate") {
+      return allAgentMemories.filter((memory) => memory.promotion_status === "candidate");
+    }
+    return allAgentMemories.filter((memory) => memory.memory_layer === memoryFilter);
+  }, [allAgentMemories, memoryFilter]);
+  const memoryFilterOptions: Array<{ key: AgentMemoryFilter; label: string }> = [
+    { key: "all", label: "전체" },
+    { key: "core", label: "핵심 기억" },
+    { key: "archival", label: "보관 기억" },
+    { key: "episodic", label: "프로젝트 경험" },
+    { key: "candidate", label: "전사 공통 Skill 후보" },
+  ];
 
   if (tab === "info") {
     return (
@@ -427,7 +446,7 @@ export default function AgentDetailTabContent({
   }
 
   if (tab === "memory") {
-    const memories = agentMemory?.memories ?? [];
+    const memories = filteredAgentMemories;
     const skillUsage = agentMemory?.skill_usage ?? [];
     const growthEvents = agentMemory?.growth_events ?? [];
     return (
@@ -441,7 +460,7 @@ export default function AgentDetailTabContent({
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
             <div className="text-[11px] text-slate-400">장기기억</div>
-            <div className="mt-1 text-2xl font-bold text-white">{memories.length}</div>
+            <div className="mt-1 text-2xl font-bold text-white">{allAgentMemories.length}</div>
           </div>
           <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
             <div className="text-[11px] text-slate-400">스킬 숙련 항목</div>
@@ -453,21 +472,46 @@ export default function AgentDetailTabContent({
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-2">
+          {memoryFilterOptions.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setMemoryFilter(option.key)}
+              className={`rounded-full px-3 py-1.5 text-xs transition ${
+                memoryFilter === option.key
+                  ? "bg-cyan-500 text-slate-950"
+                  : "border border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-400"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
         <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
           <div className="mb-2 text-xs font-semibold text-white">장기기억</div>
           {memories.length === 0 ? (
-            <p className="text-xs text-slate-500">아직 축적된 기억이 없습니다. 작업 완료 후 자동으로 쌓입니다.</p>
+            <p className="text-xs text-slate-500">선택한 조건에 맞는 기억이 없습니다.</p>
           ) : (
             <div className="space-y-2">
               {memories.slice(0, 10).map((memory) => (
                 <div key={memory.id} className="rounded-md bg-slate-900/70 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="min-w-0 truncate text-sm font-medium text-slate-100">{memory.title}</p>
-                    <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200">
-                      {memory.memory_type}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-200">
+                        {memory.memory_layer}
+                      </span>
+                      <span className="rounded bg-slate-700 px-2 py-0.5 text-[10px] text-slate-200">
+                        {memory.memory_type}
+                      </span>
+                    </div>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs text-slate-400">{memory.display_summary_ko || memory.body}</p>
+                  {memory.promotion_status === "candidate" ? (
+                    <p className="mt-1 text-[10px] text-amber-200">전사 공통 Skill 후보</p>
+                  ) : null}
                 </div>
               ))}
             </div>

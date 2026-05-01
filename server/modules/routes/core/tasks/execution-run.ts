@@ -509,6 +509,8 @@ Whenever you complete a subtask, report it in this format:
     const memoryContextBlock = buildMemoryContextBlock(db as any, {
       agentId,
       projectId: task.project_id,
+      query: [task.title, task.description ?? ""].filter(Boolean).join("\n"),
+      threadId: id,
       limit: 8,
     });
 

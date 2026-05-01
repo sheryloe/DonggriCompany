@@ -1,15 +1,27 @@
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import {
   buildMemoryContextBlock,
+  approveMemoryPromotionCandidate,
   createAgentMemory,
   createProjectMemory,
   extractAndStoreTaskMemory,
   listAgentGrowthEvents,
   listAgentMemories,
+  listMemoryOutbox,
+  listMemoryPromotionCandidates,
+  listMemoryQualityEvents,
   listProjectMemories,
   listSkillUsageSummary,
+  recordMemoryQualityEvent,
+  scanMemoryPromotionCandidates,
+  searchMemories,
 } from "../../memory/store.ts";
-import { createBeadsIssue, getBeadsStatus, importBeadsProjectMemory } from "../../memory/beads-bridge.ts";
+import {
+  drainBeadsOutbox,
+  enqueueBeadsIssueExport,
+  getBeadsStatus,
+  importBeadsProjectMemory,
+} from "../../memory/beads-bridge.ts";
 
 function readBooleanSetting(db: RuntimeContext["db"], key: string, fallback: boolean): boolean {
   try {
@@ -80,6 +92,9 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
       tags: parseTags(body.tags ?? body.tags_json),
       confidence: Number(body.confidence ?? 0.7),
       strength: Number(body.strength ?? 0.5),
+      memoryLayer: normalizeBodyText(ctx, body.memory_layer),
+      threadId: normalizeBodyText(ctx, body.thread_id),
+      promotionStatus: normalizeBodyText(ctx, body.promotion_status),
       sourceType: "manual",
       now: nowMs(),
     });
@@ -95,6 +110,9 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
       memories: listProjectMemories(db, projectId),
       skill_usage: listSkillUsageSummary(db, { projectId }),
       beads_status: bridgeEnabled ? getBeadsStatus(db, projectId) : null,
+      memory_outbox: listMemoryOutbox(db, projectId),
+      promotion_candidates: listMemoryPromotionCandidates(db),
+      quality_events: listMemoryQualityEvents(db, projectId),
       memory_context_preview: buildMemoryContextBlock(db, { projectId, limit: 6 }),
     });
   });
@@ -138,11 +156,33 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
       readBooleanSetting(db, "beadsBridgeEnabled", true) && req.body?.include_beads !== false
         ? importBeadsProjectMemory(db, { projectId, now })
         : null;
+    const skillUsage = listSkillUsageSummary(db, { projectId });
+    const promotionCandidates = scanMemoryPromotionCandidates(db, now);
+    const memories = listProjectMemories(db, projectId);
+    const qualityEvent = recordMemoryQualityEvent(db, {
+      projectId,
+      eventType: "memory_reconcile",
+      title: "Project memory reconcile",
+      summary: `프로젝트 기억 ${memories.length}건, skill 사용 이력 ${skillUsage.length}건을 검증했습니다.`,
+      evidence: {
+        reconciled_tasks: tasks.length,
+        memory_count: memories.length,
+        skill_usage_count: skillUsage.length,
+        beads_imported: beads?.imported ?? 0,
+        promotion_candidate_count: promotionCandidates.length,
+      },
+      now,
+    });
     return res.json({
       ok: true,
       reconciled_tasks: tasks.length,
       beads_import: beads,
-      memories: listProjectMemories(db, projectId),
+      memories,
+      skill_usage: skillUsage,
+      beads_status: readBooleanSetting(db, "beadsBridgeEnabled", true) ? getBeadsStatus(db, projectId) : null,
+      memory_outbox: listMemoryOutbox(db, projectId),
+      promotion_candidates: promotionCandidates,
+      quality_events: [qualityEvent, ...listMemoryQualityEvents(db, projectId, 19)],
     });
   });
 
@@ -151,6 +191,59 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
     if (!projectId) return res.status(400).json({ error: "project_id_required" });
     if (!ensureProjectExists(db, projectId)) return res.status(404).json({ error: "project_not_found" });
     return res.json({ ok: true, status: getBeadsStatus(db, projectId) });
+  });
+
+  app.get("/api/memory/search", (req, res) => {
+    const projectId = typeof req.query.project_id === "string" ? req.query.project_id.trim() : "";
+    const agentId = typeof req.query.agent_id === "string" ? req.query.agent_id.trim() : "";
+    if (projectId && !ensureProjectExists(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    if (agentId && !ensureAgentExists(db, agentId)) return res.status(404).json({ error: "agent_not_found" });
+    const rows = searchMemories(db, {
+      query: typeof req.query.q === "string" ? req.query.q : "",
+      projectId: projectId || null,
+      agentId: agentId || null,
+      threadId: typeof req.query.thread_id === "string" ? req.query.thread_id : null,
+      layer: typeof req.query.layer === "string" ? req.query.layer : null,
+      scope: typeof req.query.scope === "string" ? req.query.scope : "local",
+      limit: Number(req.query.limit ?? 10),
+      now: nowMs(),
+    });
+    return res.json({ ok: true, memories: rows });
+  });
+
+  app.post("/api/memory/promotions/scan", (_req, res) => {
+    return res.json({ ok: true, candidates: scanMemoryPromotionCandidates(db, nowMs()) });
+  });
+
+  app.get("/api/memory/promotions", (req, res) => {
+    const status = typeof req.query.status === "string" ? req.query.status : "candidate";
+    const normalizedStatus =
+      status === "approved" || status === "rejected" || status === "all" || status === "candidate"
+        ? status
+        : "candidate";
+    return res.json({ ok: true, candidates: listMemoryPromotionCandidates(db, normalizedStatus) });
+  });
+
+  app.post("/api/memory/promotions/:id/approve", (req, res) => {
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "candidate_id_required" });
+    const now = nowMs();
+    const candidate = approveMemoryPromotionCandidate(db, { id, now });
+    if (!candidate) return res.status(404).json({ error: "candidate_not_found" });
+    recordMemoryQualityEvent(db, {
+      eventType: "global_memory_promotion_approved",
+      title: "Global memory promotion approved",
+      summary: `전사 공통 지식 후보 '${candidate.candidate_key}'를 승인했습니다.`,
+      evidence: {
+        candidate_id: candidate.id,
+        candidate_key: candidate.candidate_key,
+        candidate_type: candidate.candidate_type,
+        evidence_count: candidate.evidence_count,
+        project_count: candidate.project_count,
+      },
+      now,
+    });
+    return res.json({ ok: true, candidate });
   });
 
   app.get("/api/skills/usage-summary", (_req, res) => {
@@ -177,9 +270,39 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
     if (!readBooleanSetting(db, "beadsWriteEnabled", false)) {
       return res.status(403).json({ error: "beads_write_disabled" });
     }
-    const result = createBeadsIssue(db, { projectId, title, body });
+    const result = enqueueBeadsIssueExport(db, { projectId, title, body, now: nowMs() });
     if (!result.ok) return res.status(409).json(result);
-    return res.json({ ok: true, output: result.output });
+    return res.json({ ok: true, queued: true, outbox: result.outbox });
+  });
+
+  app.post("/api/memory/beads/outbox/drain", (req, res) => {
+    const projectId = normalizeBodyText(ctx, req.body?.project_id);
+    const limit = Number(req.body?.limit ?? 20);
+    if (projectId && !ensureProjectExists(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    if (!readBooleanSetting(db, "beadsWriteEnabled", false)) {
+      return res.status(403).json({ error: "beads_write_disabled" });
+    }
+    const now = nowMs();
+    const result = drainBeadsOutbox(db, {
+      projectId,
+      limit: Number.isFinite(limit) ? limit : 20,
+      now,
+    });
+    if (projectId) {
+      recordMemoryQualityEvent(db, {
+        projectId,
+        eventType: "beads_outbox_drain",
+        title: "Beads outbox drain",
+        summary: `Beads Outbox 처리 ${result.processed}건, 성공 ${result.succeeded}건, 실패 ${result.failed}건입니다.`,
+        evidence: result,
+        status: result.failed > 0 ? "corrective_action_required" : "recorded",
+        now,
+      });
+    }
+    return res.json({
+      ok: true,
+      ...result,
+    });
   });
 
   app.post("/api/projects/:id/memory", (req, res) => {
@@ -201,6 +324,9 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
       tags: parseTags(body.tags ?? body.tags_json),
       confidence: Number(body.confidence ?? 0.7),
       strength: Number(body.strength ?? 0.5),
+      memoryLayer: normalizeBodyText(ctx, body.memory_layer),
+      threadId: normalizeBodyText(ctx, body.thread_id),
+      promotionStatus: normalizeBodyText(ctx, body.promotion_status),
       sourceType: "manual",
       now: nowMs(),
     });

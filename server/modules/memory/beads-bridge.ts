@@ -2,7 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import type { DatabaseSync } from "node:sqlite";
-import { createProjectMemory } from "./store.ts";
+import {
+  createProjectMemory,
+  enqueueMemoryOutbox,
+  listDueMemoryOutbox,
+  markMemoryOutboxFailed,
+  markMemoryOutboxRunning,
+  markMemoryOutboxSucceeded,
+  type MemoryOutboxRow,
+} from "./store.ts";
 
 export type BeadsStatus = {
   installed: boolean;
@@ -18,6 +26,13 @@ export type BeadsImportResult = {
   imported: number;
   skipped: number;
   status: BeadsStatus;
+};
+
+export type BeadsOutboxDrainResult = {
+  processed: number;
+  succeeded: number;
+  failed: number;
+  items: MemoryOutboxRow[];
 };
 
 type BeadsItem = {
@@ -44,6 +59,15 @@ function parseJson(raw: string): unknown {
   return JSON.parse(trimmed);
 }
 
+function parseJsonObject(raw: string): Record<string, unknown> | null {
+  try {
+    const parsed = parseJson(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 function asRecords(value: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(value))
     return value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object");
@@ -63,6 +87,20 @@ function readString(record: Record<string, unknown>, keys: string[]): string {
     if (typeof value === "number") return String(value);
   }
   return "";
+}
+
+function parsePayload(row: MemoryOutboxRow): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(row.payload_json);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function retryDelayMs(attemptCount: number): number {
+  const attempt = Math.max(1, Math.min(8, Math.trunc(attemptCount)));
+  return Math.min(60 * 60 * 1000, 30_000 * 2 ** (attempt - 1));
 }
 
 function readTags(record: Record<string, unknown>): string[] {
@@ -204,6 +242,13 @@ export function importBeadsProjectMemory(
       sourceType: "beads",
       sourceId: input.projectId,
       externalRef: item.id,
+      memoryLayer: item.status === "closed" ? "episodic" : "archival",
+      threadId: item.id,
+      episode: {
+        external_ref: item.id,
+        beads_status: item.status,
+        imported_from: "bd",
+      },
       status: "active",
       now: input.now,
     });
@@ -211,6 +256,102 @@ export function importBeadsProjectMemory(
   }
 
   return { imported, skipped, status };
+}
+
+export function enqueueBeadsIssueExport(
+  db: DatabaseSync,
+  input: { projectId: string; title: string; body?: string | null; now?: number | null },
+): { ok: true; outbox: MemoryOutboxRow } | { ok: false; error: string; status: BeadsStatus } {
+  const projectPath = readProjectPathById(db, input.projectId);
+  const status = getBeadsStatusForProjectPath(projectPath);
+  if (!status.installed || !status.initialized || !projectPath) {
+    return { ok: false, error: "beads_unavailable", status };
+  }
+  const outbox = enqueueMemoryOutbox(db, {
+    projectId: input.projectId,
+    target: "beads",
+    operation: "create_issue",
+    payload: {
+      title: input.title,
+      body: input.body?.trim() || input.title,
+    },
+    now: input.now,
+  });
+  return { ok: true, outbox };
+}
+
+export function drainBeadsOutbox(
+  db: DatabaseSync,
+  input: { projectId?: string | null; limit?: number | null; now?: number | null } = {},
+): BeadsOutboxDrainResult {
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const dueItems = listDueMemoryOutbox(db, {
+    projectId: input.projectId,
+    target: "beads",
+    limit: input.limit ?? 20,
+    now,
+  });
+  const items: MemoryOutboxRow[] = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const item of dueItems) {
+    const running = markMemoryOutboxRunning(db, { id: item.id, now });
+    if (!running || running.status !== "running") continue;
+
+    if (running.operation !== "create_issue") {
+      const failedItem = markMemoryOutboxFailed(db, {
+        id: running.id,
+        error: `unsupported_operation:${running.operation}`,
+        nextRetryAt: null,
+        now,
+      });
+      if (failedItem) items.push(failedItem);
+      failed += 1;
+      continue;
+    }
+
+    const payload = parsePayload(running);
+    const title = readString(payload, ["title"]);
+    const body = readString(payload, ["body", "description", "content"]) || title;
+    if (!title) {
+      const failedItem = markMemoryOutboxFailed(db, {
+        id: running.id,
+        error: "title_required",
+        nextRetryAt: null,
+        now,
+      });
+      if (failedItem) items.push(failedItem);
+      failed += 1;
+      continue;
+    }
+
+    const result = createBeadsIssue(db, { projectId: running.project_id, title, body });
+    if (result.ok) {
+      const output = parseJsonObject(result.output);
+      const externalRef = output ? readString(output, ["id", "key", "ref", "issue_id"]) : "";
+      const succeededItem = markMemoryOutboxSucceeded(db, {
+        id: running.id,
+        externalRef: externalRef || null,
+        now,
+      });
+      if (succeededItem) items.push(succeededItem);
+      succeeded += 1;
+      continue;
+    }
+
+    const nextRetryAt = now + retryDelayMs(running.attempt_count);
+    const failedItem = markMemoryOutboxFailed(db, {
+      id: running.id,
+      error: result.error,
+      nextRetryAt,
+      now,
+    });
+    if (failedItem) items.push(failedItem);
+    failed += 1;
+  }
+
+  return { processed: succeeded + failed, succeeded, failed, items };
 }
 
 export function createBeadsIssue(

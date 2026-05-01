@@ -164,6 +164,12 @@ export interface NativeMemory {
   source_type: string;
   source_id: string | null;
   external_ref: string | null;
+  memory_layer: "core" | "archival" | "episodic" | "global";
+  thread_id: string | null;
+  promotion_status: "local" | "candidate" | "promoted" | "rejected";
+  retrieval_count: number;
+  last_retrieved_at: number | null;
+  episode_json: string | null;
   status: string;
   created_at: number;
   updated_at: number;
@@ -186,7 +192,52 @@ export interface AgentGrowthEvent {
   event_type: string;
   title: string;
   body: string;
+  episode_json: string | null;
+  source_memory_id: string | null;
   xp_delta: number;
+  created_at: number;
+}
+
+export interface MemoryOutboxItem {
+  id: string;
+  project_id: string;
+  target: string;
+  operation: string;
+  payload_json: string;
+  status: "pending" | "running" | "succeeded" | "failed" | "cancelled";
+  attempt_count: number;
+  last_error: string | null;
+  next_retry_at: number | null;
+  external_ref: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface MemoryPromotionCandidate {
+  id: string;
+  candidate_key: string;
+  candidate_type: string;
+  title: string;
+  summary: string;
+  tags_json: string;
+  evidence_json: string;
+  evidence_count: number;
+  project_count: number;
+  confidence: number;
+  status: "candidate" | "approved" | "rejected";
+  approved_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface MemoryQualityEvent {
+  id: string;
+  project_id: string | null;
+  event_type: string;
+  title: string;
+  summary: string;
+  evidence_json: string;
+  status: string;
   created_at: number;
 }
 
@@ -212,6 +263,9 @@ export interface ProjectMemoryResponse {
   memories: NativeMemory[];
   skill_usage: SkillUsageSummary[];
   beads_status: BeadsStatus | null;
+  memory_outbox?: MemoryOutboxItem[];
+  promotion_candidates?: MemoryPromotionCandidate[];
+  quality_events?: MemoryQualityEvent[];
   memory_context_preview?: string;
 }
 

@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { applyMemorySchema } from "./memory-schema.ts";
 import { applyModuleSchema } from "./module-schema.ts";
 
-type DbLike = Pick<DatabaseSync, "exec">;
+type DbLike = Pick<DatabaseSync, "exec" | "prepare">;
 
 export function applyBaseSchema(db: DbLike): void {
   db.exec(`

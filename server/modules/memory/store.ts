@@ -16,10 +16,24 @@ export type NativeMemoryRow = {
   source_type: string;
   source_id: string | null;
   external_ref: string | null;
+  memory_layer: MemoryLayer;
+  thread_id: string | null;
+  promotion_status: MemoryPromotionStatus;
+  retrieval_count: number;
+  last_retrieved_at: number | null;
+  episode_json: string | null;
   status: string;
   created_at: number;
   updated_at: number;
   last_used_at: number | null;
+};
+
+export type MemoryLayer = "core" | "archival" | "episodic" | "global";
+export type MemoryPromotionStatus = "local" | "candidate" | "promoted" | "rejected";
+
+export type MemorySearchRow = NativeMemoryRow & {
+  source_table: "agent_memories" | "project_memories";
+  rank: number;
 };
 
 export type SkillUsageSummaryRow = {
@@ -38,7 +52,52 @@ export type AgentGrowthEventRow = {
   event_type: string;
   title: string;
   body: string;
+  episode_json: string | null;
+  source_memory_id: string | null;
   xp_delta: number;
+  created_at: number;
+};
+
+export type MemoryOutboxRow = {
+  id: string;
+  project_id: string;
+  target: string;
+  operation: string;
+  payload_json: string;
+  status: "pending" | "running" | "succeeded" | "failed" | "cancelled";
+  attempt_count: number;
+  last_error: string | null;
+  next_retry_at: number | null;
+  external_ref: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+export type MemoryPromotionCandidateRow = {
+  id: string;
+  candidate_key: string;
+  candidate_type: string;
+  title: string;
+  summary: string;
+  tags_json: string;
+  evidence_json: string;
+  evidence_count: number;
+  project_count: number;
+  confidence: number;
+  status: "candidate" | "approved" | "rejected";
+  approved_at: number | null;
+  created_at: number;
+  updated_at: number;
+};
+
+export type MemoryQualityEventRow = {
+  id: string;
+  project_id: string | null;
+  event_type: string;
+  title: string;
+  summary: string;
+  evidence_json: string;
+  status: string;
   created_at: number;
 };
 
@@ -56,6 +115,10 @@ export type MemoryCreateInput = {
   sourceType?: string | null;
   sourceId?: string | null;
   externalRef?: string | null;
+  memoryLayer?: MemoryLayer | string | null;
+  threadId?: string | null;
+  promotionStatus?: MemoryPromotionStatus | string | null;
+  episode?: Record<string, unknown> | string | null;
   status?: string | null;
   now?: number | null;
 };
@@ -93,6 +156,44 @@ function encodeTags(tags: string[] | null | undefined): string {
     ? [...new Set(tags.map((tag) => normalizeText(tag).toLowerCase()).filter(Boolean))].slice(0, 20)
     : [];
   return JSON.stringify(normalized);
+}
+
+function encodeJson(value: Record<string, unknown> | string | null | undefined): string | null {
+  if (typeof value === "string") {
+    const normalized = normalizeText(value);
+    if (!normalized) return null;
+    try {
+      JSON.parse(normalized);
+      return normalized;
+    } catch {
+      return JSON.stringify({ note: normalized });
+    }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return JSON.stringify(value);
+}
+
+function normalizeMemoryLayer(value: unknown, fallback: MemoryLayer = "archival"): MemoryLayer {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === "core" || normalized === "archival" || normalized === "episodic" || normalized === "global") {
+    return normalized;
+  }
+  return fallback;
+}
+
+function normalizePromotionStatus(value: unknown, fallback: MemoryPromotionStatus = "local"): MemoryPromotionStatus {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === "local" || normalized === "candidate" || normalized === "promoted" || normalized === "rejected") {
+    return normalized;
+  }
+  return fallback;
+}
+
+function defaultMemoryLayer(memoryType: string, sourceType: string): MemoryLayer {
+  if (memoryType === "core" || memoryType === "identity" || memoryType === "project_goal") return "core";
+  if (memoryType.includes("experience") || memoryType.includes("task") || sourceType === "task_run") return "episodic";
+  if (memoryType.includes("global")) return "global";
+  return "archival";
 }
 
 function parseWorkflowMeta(raw: string | null | undefined): Record<string, unknown> {
@@ -140,20 +241,17 @@ function getExistingMemoryId(
 
 function upsertProjectMemory(db: DatabaseSync, input: MemoryCreateInput): NativeMemoryRow {
   const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const memoryType = normalizeText(input.memoryType) || "lesson";
+  const sourceType = normalizeText(input.sourceType) || "manual";
+  const memoryLayer = normalizeMemoryLayer(input.memoryLayer, defaultMemoryLayer(memoryType, sourceType));
   const id =
-    getExistingMemoryId(
-      db,
-      "project_memories",
-      input.sourceType ?? "manual",
-      input.sourceId,
-      input.memoryType,
-      input.externalRef,
-    ) ?? randomUUID();
+    getExistingMemoryId(db, "project_memories", sourceType, input.sourceId, memoryType, input.externalRef) ??
+    randomUUID();
   const params: SQLInputValue[] = [
     id,
     input.projectId ?? null,
     input.agentId ?? null,
-    normalizeText(input.memoryType) || "lesson",
+    memoryType,
     input.scopeType,
     normalizeText(input.title) || "Untitled memory",
     normalizeText(input.body) || "No memory body.",
@@ -161,9 +259,13 @@ function upsertProjectMemory(db: DatabaseSync, input: MemoryCreateInput): Native
     encodeTags(input.tags),
     clampNumber(input.confidence, 0.7, 0, 1),
     clampNumber(input.strength, 0.5, 0, 1),
-    normalizeText(input.sourceType) || "manual",
+    sourceType,
     normalizeText(input.sourceId) || null,
     normalizeText(input.externalRef) || null,
+    memoryLayer,
+    normalizeText(input.threadId) || null,
+    normalizePromotionStatus(input.promotionStatus),
+    encodeJson(input.episode),
     normalizeText(input.status) || "active",
     now,
     now,
@@ -172,17 +274,24 @@ function upsertProjectMemory(db: DatabaseSync, input: MemoryCreateInput): Native
     `
     INSERT INTO project_memories (
       id, project_id, agent_id, memory_type, scope_type, title, body, display_summary_ko,
-      tags_json, confidence, strength, source_type, source_id, external_ref, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      tags_json, confidence, strength, source_type, source_id, external_ref, memory_layer, thread_id,
+      promotion_status, episode_json, status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       project_id = excluded.project_id,
       agent_id = excluded.agent_id,
+      memory_type = excluded.memory_type,
+      scope_type = excluded.scope_type,
       title = excluded.title,
       body = excluded.body,
       display_summary_ko = excluded.display_summary_ko,
       tags_json = excluded.tags_json,
       confidence = excluded.confidence,
       strength = excluded.strength,
+      memory_layer = excluded.memory_layer,
+      thread_id = excluded.thread_id,
+      promotion_status = excluded.promotion_status,
+      episode_json = excluded.episode_json,
       status = excluded.status,
       updated_at = excluded.updated_at
   `,
@@ -192,20 +301,17 @@ function upsertProjectMemory(db: DatabaseSync, input: MemoryCreateInput): Native
 
 function upsertAgentMemory(db: DatabaseSync, input: MemoryCreateInput): NativeMemoryRow {
   const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const memoryType = normalizeText(input.memoryType) || "lesson";
+  const sourceType = normalizeText(input.sourceType) || "manual";
+  const memoryLayer = normalizeMemoryLayer(input.memoryLayer, defaultMemoryLayer(memoryType, sourceType));
   const id =
-    getExistingMemoryId(
-      db,
-      "agent_memories",
-      input.sourceType ?? "manual",
-      input.sourceId,
-      input.memoryType,
-      input.externalRef,
-    ) ?? randomUUID();
+    getExistingMemoryId(db, "agent_memories", sourceType, input.sourceId, memoryType, input.externalRef) ??
+    randomUUID();
   const params: SQLInputValue[] = [
     id,
     input.agentId ?? null,
     input.projectId ?? null,
-    normalizeText(input.memoryType) || "lesson",
+    memoryType,
     input.scopeType,
     normalizeText(input.title) || "Untitled memory",
     normalizeText(input.body) || "No memory body.",
@@ -213,9 +319,13 @@ function upsertAgentMemory(db: DatabaseSync, input: MemoryCreateInput): NativeMe
     encodeTags(input.tags),
     clampNumber(input.confidence, 0.7, 0, 1),
     clampNumber(input.strength, 0.5, 0, 1),
-    normalizeText(input.sourceType) || "manual",
+    sourceType,
     normalizeText(input.sourceId) || null,
     normalizeText(input.externalRef) || null,
+    memoryLayer,
+    normalizeText(input.threadId) || null,
+    normalizePromotionStatus(input.promotionStatus),
+    encodeJson(input.episode),
     normalizeText(input.status) || "active",
     now,
     now,
@@ -224,17 +334,24 @@ function upsertAgentMemory(db: DatabaseSync, input: MemoryCreateInput): NativeMe
     `
     INSERT INTO agent_memories (
       id, agent_id, project_id, memory_type, scope_type, title, body, display_summary_ko,
-      tags_json, confidence, strength, source_type, source_id, external_ref, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      tags_json, confidence, strength, source_type, source_id, external_ref, memory_layer, thread_id,
+      promotion_status, episode_json, status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       agent_id = excluded.agent_id,
       project_id = excluded.project_id,
+      memory_type = excluded.memory_type,
+      scope_type = excluded.scope_type,
       title = excluded.title,
       body = excluded.body,
       display_summary_ko = excluded.display_summary_ko,
       tags_json = excluded.tags_json,
       confidence = excluded.confidence,
       strength = excluded.strength,
+      memory_layer = excluded.memory_layer,
+      thread_id = excluded.thread_id,
+      promotion_status = excluded.promotion_status,
+      episode_json = excluded.episode_json,
       status = excluded.status,
       updated_at = excluded.updated_at
   `,
@@ -260,7 +377,10 @@ export function listAgentMemories(db: DatabaseSync, agentId: string, limit = 80)
       FROM agent_memories
       WHERE agent_id = ?
         AND status = 'active'
-      ORDER BY strength DESC, updated_at DESC
+      ORDER BY
+        CASE memory_layer WHEN 'core' THEN 0 WHEN 'episodic' THEN 1 WHEN 'archival' THEN 2 ELSE 3 END,
+        strength DESC,
+        updated_at DESC
       LIMIT ?
     `,
     )
@@ -275,11 +395,530 @@ export function listProjectMemories(db: DatabaseSync, projectId: string, limit =
       FROM project_memories
       WHERE project_id = ?
         AND status = 'active'
-      ORDER BY strength DESC, updated_at DESC
+      ORDER BY
+        CASE memory_layer WHEN 'core' THEN 0 WHEN 'episodic' THEN 1 WHEN 'archival' THEN 2 ELSE 3 END,
+        strength DESC,
+        updated_at DESC
       LIMIT ?
     `,
     )
     .all(projectId, Math.max(1, Math.min(300, Math.trunc(limit)))) as NativeMemoryRow[];
+}
+
+function escapeFtsQuery(query: string): string {
+  return query
+    .split(/\s+/g)
+    .map((part) => part.replace(/["*]/g, "").trim())
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((part) => `"${part}"`)
+    .join(" OR ");
+}
+
+function hasMemoryFts(db: DatabaseSync): boolean {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'memoryFtsAvailable'").get() as
+      | { value?: string }
+      | undefined;
+    if (row?.value === "false") return false;
+    db.prepare("SELECT 1 FROM project_memories_fts LIMIT 1").get();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function updateRetrievalStats(db: DatabaseSync, rows: MemorySearchRow[], now: number): void {
+  const byTable = rows.reduce(
+    (acc, row) => {
+      acc[row.source_table].push(row.id);
+      return acc;
+    },
+    { agent_memories: [] as string[], project_memories: [] as string[] },
+  );
+  for (const [tableName, ids] of Object.entries(byTable) as Array<["agent_memories" | "project_memories", string[]]>) {
+    for (const id of ids) {
+      db.prepare(
+        `UPDATE ${tableName}
+         SET retrieval_count = retrieval_count + 1,
+             last_retrieved_at = ?,
+             last_used_at = ?,
+             updated_at = updated_at
+         WHERE id = ?`,
+      ).run(now, now, id);
+    }
+  }
+}
+
+function layerPriority(layer: string | null | undefined): number {
+  switch (layer) {
+    case "core":
+      return 4;
+    case "episodic":
+      return 3;
+    case "archival":
+      return 2;
+    case "global":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function memoryRecencyScore(row: NativeMemoryRow, now: number): number {
+  const timestamp = Number(row.last_retrieved_at ?? row.last_used_at ?? row.updated_at ?? row.created_at ?? 0);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return 0;
+  const ageDays = Math.max(0, (now - timestamp) / 86_400_000);
+  return Math.max(0, 40 - ageDays);
+}
+
+function memorySearchScore(row: MemorySearchRow, now: number): number {
+  const ftsScore = Number.isFinite(Number(row.rank)) ? Math.max(0, 80 - Math.abs(Number(row.rank)) * 10) : 0;
+  const usageScore = Math.min(30, Math.max(0, Number(row.retrieval_count ?? 0)) * 3);
+  return (
+    layerPriority(row.memory_layer) * 1000 +
+    clampNumber(row.strength, 0.5, 0, 1) * 120 +
+    clampNumber(row.confidence, 0.7, 0, 1) * 80 +
+    memoryRecencyScore(row, now) +
+    usageScore +
+    ftsScore
+  );
+}
+
+function rankMemoryRows(rows: MemorySearchRow[], limit: number, now: number): MemorySearchRow[] {
+  const deduped = [...new Map(rows.map((row) => [`${row.source_table}:${row.id}`, row])).values()];
+  return deduped
+    .map((row) => ({ row, score: memorySearchScore(row, now) }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return Number(b.row.updated_at ?? 0) - Number(a.row.updated_at ?? 0);
+    })
+    .slice(0, limit)
+    .map(({ row, score }) => ({ ...row, rank: score }));
+}
+
+export function searchMemories(
+  db: DatabaseSync,
+  input: {
+    query?: string | null;
+    projectId?: string | null;
+    agentId?: string | null;
+    threadId?: string | null;
+    layer?: string | null;
+    scope?: "local" | "global" | "all" | string | null;
+    limit?: number | null;
+    now?: number | null;
+  },
+): MemorySearchRow[] {
+  const query = normalizeText(input.query);
+  const limit = Math.max(1, Math.min(50, Math.trunc(Number(input.limit ?? 10))));
+  const layer = normalizeText(input.layer);
+  const scope = normalizeText(input.scope) || "local";
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const params: SQLInputValue[] = [];
+  const clauses = ["m.status = 'active'"];
+  const includeGlobal = scope === "global" || scope === "all";
+  if (input.projectId && !includeGlobal) {
+    clauses.push("m.project_id = ?");
+    params.push(input.projectId);
+  } else if (input.projectId && includeGlobal) {
+    clauses.push("(m.project_id = ? OR m.promotion_status = 'promoted')");
+    params.push(input.projectId);
+  } else if (includeGlobal) {
+    clauses.push("m.promotion_status = 'promoted'");
+  }
+  if (input.agentId) {
+    clauses.push("(m.agent_id = ? OR m.agent_id IS NULL)");
+    params.push(input.agentId);
+  }
+  if (input.threadId) {
+    clauses.push("m.thread_id = ?");
+    params.push(input.threadId);
+  }
+  if (layer && layer !== "all") {
+    clauses.push("m.memory_layer = ?");
+    params.push(normalizeMemoryLayer(layer));
+  }
+
+  const searchAgentMemories = !input.projectId || input.agentId;
+  const searchProjectMemories = !!input.projectId || includeGlobal;
+  const rows: MemorySearchRow[] = [];
+  if (hasMemoryFts(db) && query) {
+    const ftsQuery = escapeFtsQuery(query);
+    if (ftsQuery) {
+      if (searchProjectMemories) {
+        rows.push(
+          ...((db
+            .prepare(
+              `
+              SELECT m.*, 'project_memories' AS source_table, bm25(project_memories_fts) AS rank
+              FROM project_memories_fts
+              JOIN project_memories m ON m.id = project_memories_fts.memory_id
+              WHERE project_memories_fts MATCH ?
+                AND ${clauses.join(" AND ")}
+              ORDER BY rank ASC, m.strength DESC, m.updated_at DESC
+              LIMIT ?
+            `,
+            )
+            .all(ftsQuery, ...params, limit) as MemorySearchRow[]) ?? []),
+        );
+      }
+      if (searchAgentMemories) {
+        rows.push(
+          ...((db
+            .prepare(
+              `
+              SELECT m.*, 'agent_memories' AS source_table, bm25(agent_memories_fts) AS rank
+              FROM agent_memories_fts
+              JOIN agent_memories m ON m.id = agent_memories_fts.memory_id
+              WHERE agent_memories_fts MATCH ?
+                AND ${clauses.join(" AND ")}
+              ORDER BY rank ASC, m.strength DESC, m.updated_at DESC
+              LIMIT ?
+            `,
+            )
+            .all(ftsQuery, ...params, limit) as MemorySearchRow[]) ?? []),
+        );
+      }
+    }
+  }
+
+  if (rows.length === 0) {
+    const likeParams = query ? [`%${query}%`, `%${query}%`, `%${query}%`] : [];
+    const likeClause = query ? "(m.title LIKE ? OR m.body LIKE ? OR m.tags_json LIKE ?)" : "1 = 1";
+    if (searchProjectMemories) {
+      rows.push(
+        ...((db
+          .prepare(
+            `
+            SELECT m.*, 'project_memories' AS source_table, 0 AS rank
+            FROM project_memories m
+            WHERE ${likeClause}
+              AND ${clauses.join(" AND ")}
+            ORDER BY m.strength DESC, m.updated_at DESC
+            LIMIT ?
+          `,
+          )
+          .all(...likeParams, ...params, limit) as MemorySearchRow[]) ?? []),
+      );
+    }
+    if (searchAgentMemories) {
+      rows.push(
+        ...((db
+          .prepare(
+            `
+            SELECT m.*, 'agent_memories' AS source_table, 0 AS rank
+            FROM agent_memories m
+            WHERE ${likeClause}
+              AND ${clauses.join(" AND ")}
+            ORDER BY m.strength DESC, m.updated_at DESC
+            LIMIT ?
+          `,
+          )
+          .all(...likeParams, ...params, limit) as MemorySearchRow[]) ?? []),
+      );
+    }
+  }
+
+  const ranked = rankMemoryRows(rows, limit, now);
+  updateRetrievalStats(db, ranked, now);
+  return ranked;
+}
+
+export function listMemoryOutbox(db: DatabaseSync, projectId: string, limit = 20): MemoryOutboxRow[] {
+  return db
+    .prepare(
+      `
+      SELECT *
+      FROM memory_outbox
+      WHERE project_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `,
+    )
+    .all(projectId, Math.max(1, Math.min(100, Math.trunc(limit)))) as MemoryOutboxRow[];
+}
+
+export function listMemoryQualityEvents(db: DatabaseSync, projectId: string, limit = 20): MemoryQualityEventRow[] {
+  return db
+    .prepare(
+      `
+      SELECT *
+      FROM memory_quality_events
+      WHERE project_id = ? OR project_id IS NULL
+      ORDER BY created_at DESC
+      LIMIT ?
+    `,
+    )
+    .all(projectId, Math.max(1, Math.min(100, Math.trunc(limit)))) as MemoryQualityEventRow[];
+}
+
+export function recordMemoryQualityEvent(
+  db: DatabaseSync,
+  input: {
+    projectId?: string | null;
+    eventType: string;
+    title: string;
+    summary: string;
+    evidence?: Record<string, unknown> | null;
+    status?: string | null;
+    now?: number | null;
+  },
+): MemoryQualityEventRow {
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const id = randomUUID();
+  db.prepare(
+    `
+    INSERT INTO memory_quality_events (
+      id, project_id, event_type, title, summary, evidence_json, status, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+  ).run(
+    id,
+    normalizeText(input.projectId) || null,
+    normalizeText(input.eventType) || "memory_event",
+    normalizeText(input.title) || "Memory quality event",
+    normalizeText(input.summary) || "Memory quality evidence recorded.",
+    JSON.stringify(input.evidence ?? {}),
+    normalizeText(input.status) || "recorded",
+    now,
+  );
+  return db.prepare("SELECT * FROM memory_quality_events WHERE id = ?").get(id) as MemoryQualityEventRow;
+}
+
+export function listDueMemoryOutbox(
+  db: DatabaseSync,
+  input: { projectId?: string | null; target?: string | null; limit?: number | null; now?: number | null } = {},
+): MemoryOutboxRow[] {
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const limit = Math.max(1, Math.min(100, Math.trunc(Number(input.limit ?? 20))));
+  const clauses = ["status IN ('pending', 'failed')", "(next_retry_at IS NULL OR next_retry_at <= ?)"];
+  const params: SQLInputValue[] = [now];
+  const target = normalizeText(input.target);
+  const projectId = normalizeText(input.projectId);
+  if (target) {
+    clauses.push("target = ?");
+    params.push(target);
+  }
+  if (projectId) {
+    clauses.push("project_id = ?");
+    params.push(projectId);
+  }
+  params.push(limit);
+  return db
+    .prepare(
+      `
+      SELECT *
+      FROM memory_outbox
+      WHERE ${clauses.join(" AND ")}
+      ORDER BY created_at ASC
+      LIMIT ?
+    `,
+    )
+    .all(...params) as MemoryOutboxRow[];
+}
+
+export function enqueueMemoryOutbox(
+  db: DatabaseSync,
+  input: {
+    projectId: string;
+    target: string;
+    operation: string;
+    payload: Record<string, unknown>;
+    externalRef?: string | null;
+    now?: number | null;
+  },
+): MemoryOutboxRow {
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const id = randomUUID();
+  db.prepare(
+    `
+    INSERT INTO memory_outbox (
+      id, project_id, target, operation, payload_json, status, attempt_count, external_ref, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)
+  `,
+  ).run(
+    id,
+    input.projectId,
+    normalizeText(input.target) || "beads",
+    normalizeText(input.operation) || "create",
+    JSON.stringify(input.payload ?? {}),
+    normalizeText(input.externalRef) || null,
+    now,
+    now,
+  );
+  return db.prepare("SELECT * FROM memory_outbox WHERE id = ?").get(id) as MemoryOutboxRow;
+}
+
+export function markMemoryOutboxRunning(
+  db: DatabaseSync,
+  input: { id: string; now?: number | null },
+): MemoryOutboxRow | null {
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  db.prepare(
+    `
+    UPDATE memory_outbox
+    SET status = 'running',
+        attempt_count = attempt_count + 1,
+        last_error = NULL,
+        updated_at = ?
+    WHERE id = ?
+      AND status IN ('pending', 'failed')
+      AND (next_retry_at IS NULL OR next_retry_at <= ?)
+  `,
+  ).run(now, input.id, now);
+  return (db.prepare("SELECT * FROM memory_outbox WHERE id = ?").get(input.id) as MemoryOutboxRow | undefined) ?? null;
+}
+
+export function markMemoryOutboxSucceeded(
+  db: DatabaseSync,
+  input: { id: string; externalRef?: string | null; now?: number | null },
+): MemoryOutboxRow | null {
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  db.prepare(
+    `
+    UPDATE memory_outbox
+    SET status = 'succeeded',
+        last_error = NULL,
+        next_retry_at = NULL,
+        external_ref = COALESCE(?, external_ref),
+        updated_at = ?
+    WHERE id = ?
+  `,
+  ).run(normalizeText(input.externalRef) || null, now, input.id);
+  return (db.prepare("SELECT * FROM memory_outbox WHERE id = ?").get(input.id) as MemoryOutboxRow | undefined) ?? null;
+}
+
+export function markMemoryOutboxFailed(
+  db: DatabaseSync,
+  input: { id: string; error: string; nextRetryAt?: number | null; now?: number | null },
+): MemoryOutboxRow | null {
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const nextRetryAt = Number.isFinite(Number(input.nextRetryAt)) ? Number(input.nextRetryAt) : null;
+  db.prepare(
+    `
+    UPDATE memory_outbox
+    SET status = 'failed',
+        last_error = ?,
+        next_retry_at = ?,
+        updated_at = ?
+    WHERE id = ?
+  `,
+  ).run(normalizeText(input.error).slice(0, 1000) || "unknown_error", nextRetryAt, now, input.id);
+  return (db.prepare("SELECT * FROM memory_outbox WHERE id = ?").get(input.id) as MemoryOutboxRow | undefined) ?? null;
+}
+
+export function scanMemoryPromotionCandidates(db: DatabaseSync, now = Date.now()): MemoryPromotionCandidateRow[] {
+  const rows = db
+    .prepare(
+      `
+      SELECT
+        skill_id,
+        COUNT(*) AS evidence_count,
+        COUNT(DISTINCT project_id) AS project_count,
+        GROUP_CONCAT(DISTINCT project_id) AS projects,
+        MAX(created_at) AS latest_at
+      FROM skill_usage_events
+      WHERE outcome = 'success'
+        AND project_id IS NOT NULL
+      GROUP BY skill_id
+      HAVING COUNT(DISTINCT project_id) >= 3
+      ORDER BY project_count DESC, evidence_count DESC
+      LIMIT 50
+    `,
+    )
+    .all() as Array<{
+    skill_id: string;
+    evidence_count: number;
+    project_count: number;
+    projects: string | null;
+    latest_at: number | null;
+  }>;
+
+  for (const row of rows) {
+    const candidateKey = `skill:${row.skill_id}`;
+    const projects = String(row.projects ?? "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const evidence = {
+      skill_id: row.skill_id,
+      projects,
+      latest_at: row.latest_at,
+      rule: "success_in_three_or_more_projects",
+    };
+    db.prepare(
+      `
+      INSERT INTO memory_promotion_evidence (
+        id, candidate_key, candidate_type, title, summary, tags_json, evidence_json,
+        evidence_count, project_count, confidence, status, created_at, updated_at
+      ) VALUES (?, ?, 'skill', ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?)
+      ON CONFLICT(candidate_key, candidate_type) DO UPDATE SET
+        title = excluded.title,
+        summary = excluded.summary,
+        tags_json = excluded.tags_json,
+        evidence_json = excluded.evidence_json,
+        evidence_count = excluded.evidence_count,
+        project_count = excluded.project_count,
+        confidence = excluded.confidence,
+        updated_at = excluded.updated_at
+      WHERE memory_promotion_evidence.status = 'candidate'
+    `,
+    ).run(
+      randomUUID(),
+      candidateKey,
+      `Global skill candidate: ${row.skill_id}`,
+      `Skill '${row.skill_id}' succeeded across ${row.project_count} projects and can be reviewed as shared operating knowledge.`,
+      JSON.stringify([row.skill_id, "global_skill_candidate"]),
+      JSON.stringify(evidence),
+      row.evidence_count,
+      row.project_count,
+      clampNumber(0.55 + Number(row.project_count) * 0.08, 0.75, 0, 0.95),
+      now,
+      now,
+    );
+  }
+
+  return listMemoryPromotionCandidates(db);
+}
+
+export function listMemoryPromotionCandidates(
+  db: DatabaseSync,
+  status: "candidate" | "approved" | "rejected" | "all" = "candidate",
+): MemoryPromotionCandidateRow[] {
+  const where = status === "all" ? "" : "WHERE status = ?";
+  const params = status === "all" ? [] : [status];
+  return db
+    .prepare(
+      `
+      SELECT *
+      FROM memory_promotion_evidence
+      ${where}
+      ORDER BY project_count DESC, evidence_count DESC, updated_at DESC
+      LIMIT 100
+    `,
+    )
+    .all(...params) as MemoryPromotionCandidateRow[];
+}
+
+export function approveMemoryPromotionCandidate(
+  db: DatabaseSync,
+  input: { id: string; now?: number | null },
+): MemoryPromotionCandidateRow | null {
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  db.prepare(
+    `
+    UPDATE memory_promotion_evidence
+    SET status = 'approved',
+        approved_at = COALESCE(approved_at, ?),
+        updated_at = ?
+    WHERE id = ?
+  `,
+  ).run(now, now, input.id);
+  const row = db.prepare("SELECT * FROM memory_promotion_evidence WHERE id = ?").get(input.id) as
+    | MemoryPromotionCandidateRow
+    | undefined;
+  return row ?? null;
 }
 
 export function listAgentGrowthEvents(db: DatabaseSync, agentId: string, limit = 30): AgentGrowthEventRow[] {
@@ -374,6 +1013,8 @@ export function recordAgentGrowthEvent(
     eventType: string;
     title: string;
     body: string;
+    episode?: Record<string, unknown> | string | null;
+    sourceMemoryId?: string | null;
     xpDelta?: number | null;
     now?: number | null;
   },
@@ -382,8 +1023,8 @@ export function recordAgentGrowthEvent(
   db.prepare(
     `
     INSERT INTO agent_growth_events (
-      id, agent_id, project_id, task_id, event_type, title, body, xp_delta, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, agent_id, project_id, task_id, event_type, title, body, episode_json, source_memory_id, xp_delta, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     randomUUID(),
@@ -393,6 +1034,8 @@ export function recordAgentGrowthEvent(
     normalizeText(input.eventType) || "task_completed",
     normalizeText(input.title) || "Growth event",
     normalizeText(input.body) || "No event body.",
+    encodeJson(input.episode),
+    normalizeText(input.sourceMemoryId) || null,
     Math.trunc(Number(input.xpDelta ?? 0)) || 0,
     now,
   );
@@ -416,9 +1059,20 @@ export function extractAndStoreTaskMemory(db: DatabaseSync, input: TaskMemoryExt
     .filter(Boolean)
     .join("\n");
   const tags = [...new Set([workflowPack, taskType, goalCommand].filter(Boolean))];
+  const episode = {
+    task_id: task.id,
+    task_title: task.title,
+    workflow_pack: workflowPack,
+    task_type: taskType,
+    goal_command: goalCommand || null,
+    project_id: task.project_id ?? null,
+    agent_id: task.assigned_agent_id ?? null,
+    result_summary: summarizeResult(input.result),
+  };
+  let projectMemoryId: string | null = null;
 
   if (task.project_id) {
-    createProjectMemory(db, {
+    const projectMemory = createProjectMemory(db, {
       projectId: task.project_id,
       agentId: task.assigned_agent_id,
       memoryType: "task_lesson",
@@ -431,8 +1085,12 @@ export function extractAndStoreTaskMemory(db: DatabaseSync, input: TaskMemoryExt
       strength: 0.65,
       sourceType: "task_run",
       sourceId: task.id,
+      memoryLayer: "episodic",
+      threadId: task.id,
+      episode,
       now,
     });
+    projectMemoryId = projectMemory.id;
   }
 
   if (task.assigned_agent_id) {
@@ -449,6 +1107,9 @@ export function extractAndStoreTaskMemory(db: DatabaseSync, input: TaskMemoryExt
       strength: 0.6,
       sourceType: "task_run",
       sourceId: task.id,
+      memoryLayer: "episodic",
+      threadId: task.id,
+      episode,
       now,
     });
     recordAgentGrowthEvent(db, {
@@ -458,6 +1119,8 @@ export function extractAndStoreTaskMemory(db: DatabaseSync, input: TaskMemoryExt
       eventType: "task_completed",
       title: `Completed ${task.title}`,
       body: `The agent completed a ${taskType} task in workflow pack ${workflowPack}.`,
+      episode,
+      sourceMemoryId: projectMemoryId,
       xpDelta: 10,
       now,
     });
@@ -480,25 +1143,57 @@ export function extractAndStoreTaskMemory(db: DatabaseSync, input: TaskMemoryExt
 
 export function buildMemoryContextBlock(
   db: DatabaseSync,
-  input: { agentId?: string | null; projectId?: string | null; limit?: number | null },
+  input: {
+    agentId?: string | null;
+    projectId?: string | null;
+    query?: string | null;
+    threadId?: string | null;
+    limit?: number | null;
+  },
 ): string {
   const limit = Math.max(1, Math.min(20, Math.trunc(Number(input.limit ?? 8))));
   const parts: string[] = ["[Memory Context]", "source=donggri_native_memory"];
   if (input.projectId) {
-    const memories = listProjectMemories(db, input.projectId, limit);
-    if (memories.length > 0) {
-      parts.push("Project memories:");
-      for (const memory of memories.slice(0, limit)) {
+    const coreMemories = searchMemories(db, {
+      projectId: input.projectId,
+      layer: "core",
+      scope: "local",
+      limit: Math.min(4, limit),
+    });
+    if (coreMemories.length > 0) {
+      parts.push("Core project memories (always scoped to this project):");
+      for (const memory of coreMemories) {
         parts.push(`- (${memory.memory_type}) ${memory.title}: ${memory.body.slice(0, 240)}`);
+      }
+    }
+
+    const archivalMemories = searchMemories(db, {
+      query: input.query,
+      projectId: input.projectId,
+      threadId: input.threadId,
+      layer: input.query ? "all" : "episodic",
+      scope: "local",
+      limit: Math.max(2, limit - coreMemories.length),
+    }).filter((memory) => memory.memory_layer !== "core");
+    if (archivalMemories.length > 0) {
+      parts.push("Retrieved archival and episodic project memories:");
+      for (const memory of archivalMemories.slice(0, limit)) {
+        parts.push(`- (${memory.memory_layer}/${memory.memory_type}) ${memory.title}: ${memory.body.slice(0, 220)}`);
       }
     }
   }
   if (input.agentId) {
-    const memories = listAgentMemories(db, input.agentId, limit);
+    const memories = searchMemories(db, {
+      query: input.query,
+      agentId: input.agentId,
+      projectId: input.projectId,
+      scope: "local",
+      limit,
+    });
     if (memories.length > 0) {
-      parts.push("Agent memories:");
+      parts.push("Agent memories for this assignment:");
       for (const memory of memories.slice(0, limit)) {
-        parts.push(`- (${memory.memory_type}) ${memory.title}: ${memory.body.slice(0, 240)}`);
+        parts.push(`- (${memory.memory_layer}/${memory.memory_type}) ${memory.title}: ${memory.body.slice(0, 220)}`);
       }
     }
     const skills = listSkillUsageSummary(db, { agentId: input.agentId }).slice(0, 8);
@@ -509,6 +1204,16 @@ export function buildMemoryContextBlock(
       }
     }
   }
+  const approvedGlobal = listMemoryPromotionCandidates(db, "approved").slice(0, 5);
+  if (approvedGlobal.length > 0) {
+    parts.push("Approved global lessons (summaries only; no raw cross-project memory):");
+    for (const candidate of approvedGlobal) {
+      parts.push(`- ${candidate.candidate_key}: ${candidate.summary}`);
+    }
+  }
+  parts.push(
+    "Memory usage rule: use only project-scoped memories by default. Search archival memory through /api/memory/search when more context is needed. Do not import raw memories from other projects unless they are listed as approved global lessons.",
+  );
   return parts.length > 2 ? parts.join("\n") : "";
 }
 
@@ -524,7 +1229,9 @@ export function buildAgentGuideMemorySnapshot(
   const memories = listAgentMemories(db, agentId, 12);
   const skills = listSkillUsageSummary(db, { agentId }).slice(0, 12);
   return {
-    memorySnapshot: memories.slice(0, 6).map((memory) => `${memory.memory_type}: ${memory.title}`),
+    memorySnapshot: memories
+      .slice(0, 6)
+      .map((memory) => `${memory.memory_layer}/${memory.memory_type}: ${memory.title}`),
     skillGrowthSnapshot: skills.map(
       (skill) =>
         `${skill.skill_id}: use_count=${skill.use_count}, success=${skill.success_count}, proficiency=${skill.proficiency.toFixed(2)}`,

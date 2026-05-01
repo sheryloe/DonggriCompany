@@ -46,6 +46,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
   const { locale } = useI18n();
   const workingCount = agents.filter((agent) => agent.status === "working").length;
   const totalAgents = agents.length;
+  const origin = typeof window === "undefined" ? "http://127.0.0.1:8900" : window.location.origin;
   const visibleDepartments = useMemo(() => {
     const byId = new Map(departments.map((department) => [department.id, department]));
     const ordered = DEPARTMENT_ORDER.map((id) => byId.get(id)).filter((department): department is Department =>
@@ -57,7 +58,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
   return (
     <aside
       className={`command-sidebar flex h-full flex-col backdrop-blur-xl transition-all duration-300 ${
-        collapsed ? "w-[72px]" : "w-[240px]"
+        collapsed ? "w-[76px]" : "w-[264px]"
       }`}
     >
       <div className="command-sidebar-brand">
@@ -67,7 +68,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
           className="flex min-w-0 flex-1 items-center gap-3 text-left transition-opacity hover:opacity-90"
           aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
         >
-          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-2xl border border-sky-400/20 bg-sky-400/10">
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-2xl border border-sky-400/25 bg-sky-400/10">
             <img
               src="/sprites/ceo-lobster.png"
               alt="CEO"
@@ -108,7 +109,8 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
             </div>
             <span className="font-mono text-[11px] text-cyan-300">LIVE</span>
           </div>
-          <div className="mt-2 text-[11px] text-slate-400">
+          <div className="mt-2 truncate font-mono text-[11px] text-slate-400">{origin}</div>
+          <div className="mt-1 text-[11px] text-slate-400">
             직원 {workingCount}/{totalAgents} 근무 중
           </div>
         </div>

@@ -105,11 +105,11 @@ function buildAgent(id: string, departmentId: string, status: Agent["status"], s
 }
 
 describe("Sidebar app shell", () => {
-  it("한국어 네비게이션과 7부서 상태를 표시한다", () => {
+  it("한국어 내비게이션과 7부서 상태를 표시한다", () => {
     render(
       <I18nProvider language="ko">
         <Sidebar
-          currentView="office"
+          currentView="manual"
           onChangeView={vi.fn()}
           departments={departments}
           agents={[buildAgent("agent-dev", "dev", "working", 3), buildAgent("agent-qa", "qa", "idle", 4)]}

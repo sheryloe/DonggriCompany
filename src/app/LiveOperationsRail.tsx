@@ -35,6 +35,13 @@ function agentSprite(agent: Agent | undefined): string | null {
   return `/sprites/${agent.sprite_number}-D-1.png`;
 }
 
+function statusTone(status: TaskStatus): string {
+  if (status === "done") return "bg-emerald-400";
+  if (status === "cancelled") return "bg-rose-400";
+  if (LIVE_STATUSES.has(status)) return "bg-sky-400";
+  return "bg-slate-500";
+}
+
 export default function LiveOperationsRail({ agents, tasks, connected }: LiveOperationsRailProps) {
   const workingAgents = agents.filter((agent) => agent.status === "working");
   const idleAgents = agents.filter((agent) => agent.status === "idle");
@@ -110,20 +117,46 @@ export default function LiveOperationsRail({ agents, tasks, connected }: LiveOpe
       </section>
 
       <section className="command-panel p-4">
+        <h2 className="text-sm font-bold text-slate-50">시스템 상태</h2>
+        <div className="mt-3 space-y-2">
+          <div className="system-status-row">
+            <span>서버 연결</span>
+            <strong className={connected ? "text-emerald-300" : "text-rose-300"}>
+              {connected ? "정상" : "확인 필요"}
+            </strong>
+          </div>
+          <div className="system-status-row">
+            <span>업무 큐</span>
+            <strong>{tasks.length}건</strong>
+          </div>
+          <div className="system-status-row">
+            <span>직원 풀</span>
+            <strong>{agents.length}명</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="command-panel p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-50">최근 시스템 로그</h2>
           <span className="text-[10px] text-slate-500">최근 {recentTasks.length}건</span>
         </div>
         <div className="mt-3 space-y-2">
-          {recentTasks.map((task) => (
-            <div key={task.id} className="flex items-start gap-2 text-xs">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-              <div className="min-w-0">
-                <div className="truncate font-mono text-emerald-300">Task #{task.id.slice(0, 6)}</div>
-                <div className="truncate text-slate-400">{task.title}</div>
-              </div>
+          {recentTasks.length === 0 ? (
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-3 text-xs text-slate-500">
+              표시할 업무 로그가 없습니다.
             </div>
-          ))}
+          ) : (
+            recentTasks.map((task) => (
+              <div key={task.id} className="flex items-start gap-2 text-xs">
+                <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusTone(task.status)}`} />
+                <div className="min-w-0">
+                  <div className="truncate font-mono text-emerald-300">Task #{task.id.slice(0, 6)}</div>
+                  <div className="truncate text-slate-400">{task.title}</div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </section>
     </aside>

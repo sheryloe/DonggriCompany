@@ -52,6 +52,63 @@ const VIEW_MARKS: Partial<Record<View, string>> = {
   settings: "ST",
 };
 
+function SearchIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+function ThemeIcon({ theme }: { theme: "light" | "dark" }) {
+  return theme === "dark" ? (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  ) : (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="5" />
+      <line x1="12" y1="1" x2="12" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="23" />
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+      <line x1="1" y1="12" x2="3" y2="12" />
+      <line x1="21" y1="12" x2="23" y2="12" />
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+    </svg>
+  );
+}
+
 export default function AppHeaderBar({
   currentView,
   connected,
@@ -79,6 +136,9 @@ export default function AppHeaderBar({
   onCloseMobileHeaderMenu,
 }: AppHeaderBarProps) {
   const viewMark = VIEW_MARKS[currentView] ?? "DG";
+  const focusManualSearch = () => {
+    window.dispatchEvent(new Event("donggri:manual-search-focus"));
+  };
 
   return (
     <header className="app-topbar sticky top-0 z-30 flex items-center justify-between px-3 py-2 sm:px-4 lg:px-6">
@@ -86,7 +146,7 @@ export default function AppHeaderBar({
         <button
           onClick={onOpenMobileNav}
           className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-950/40 text-slate-300 transition hover:border-sky-400/50 hover:text-sky-200 lg:hidden"
-          aria-label="네비게이션 열기"
+          aria-label="내비게이션 열기"
         >
           <span className="font-mono text-sm font-bold">DG</span>
         </button>
@@ -112,6 +172,13 @@ export default function AppHeaderBar({
           )}
           <span className="truncate text-slate-50">{viewTitle}</span>
         </h1>
+        {currentView === "manual" && (
+          <button type="button" onClick={focusManualSearch} className="manual-header-search">
+            <SearchIcon />
+            <span>메뉴얼 검색...</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+        )}
         {officePackControl && (
           <label className="hidden items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-950/35 px-3 py-2 xl:flex">
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -168,7 +235,7 @@ export default function AppHeaderBar({
         </div>
         <button
           onClick={onOpenTasks}
-          className="header-action-btn header-action-btn-primary md:hidden"
+          className="header-action-btn header-action-btn-primary header-mobile-action"
           aria-label={tasksPrimaryLabel}
         >
           업무
@@ -176,7 +243,7 @@ export default function AppHeaderBar({
         <button
           onClick={onOpenDecisionInbox}
           disabled={decisionInboxLoading}
-          className={`header-action-btn header-action-btn-secondary md:hidden disabled:cursor-wait disabled:opacity-60${
+          className={`header-action-btn header-action-btn-secondary header-mobile-action disabled:cursor-wait disabled:opacity-60${
             decisionInboxCount > 0 ? " decision-has-pending" : ""
           }`}
           aria-label={decisionLabel}
@@ -191,41 +258,7 @@ export default function AppHeaderBar({
           title={theme === "dark" ? "라이트 모드" : "다크 모드"}
         >
           <span className="theme-toggle-icon">
-            {theme === "dark" ? (
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            ) : (
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" />
-                <line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            )}
+            <ThemeIcon theme={theme} />
           </span>
         </button>
         <div className="relative sm:hidden">

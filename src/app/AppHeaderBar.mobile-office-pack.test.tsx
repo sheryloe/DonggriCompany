@@ -8,15 +8,15 @@ function createBaseProps(): ComponentProps<typeof AppHeaderBar> {
   return {
     currentView: "office" as const,
     connected: true,
-    viewTitle: "Office",
-    tasksPrimaryLabel: "Tasks",
-    decisionLabel: "Decisions",
+    viewTitle: "오피스",
+    tasksPrimaryLabel: "업무",
+    decisionLabel: "의사결정",
     decisionInboxLoading: false,
     decisionInboxCount: 0,
-    agentStatusLabel: "Agent Status",
-    reportLabel: "Reports",
-    announcementLabel: "Announcement",
-    roomManagerLabel: "Room Manager",
+    agentStatusLabel: "직원 상태",
+    reportLabel: "보고서",
+    announcementLabel: "공지",
+    roomManagerLabel: "오피스 관리",
     officePackControl: null,
     theme: "dark" as const,
     mobileHeaderMenuOpen: true,
@@ -34,18 +34,18 @@ function createBaseProps(): ComponentProps<typeof AppHeaderBar> {
 }
 
 describe("AppHeaderBar mobile office pack selector", () => {
-  it("모바일 더보기 메뉴에서 오피스팩을 변경할 수 있다", async () => {
+  it("모바일 더보기 메뉴에서 오피스 팩을 변경할 수 있다", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     const onCloseMobileHeaderMenu = vi.fn();
     const props = createBaseProps();
     props.officePackControl = {
-      label: "Office Pack",
+      label: "오피스 팩",
       value: "development",
       onChange,
       options: [
-        { key: "development", label: "Development", summary: "", slug: "DEV", accent: 0 },
-        { key: "report", label: "Report", summary: "", slug: "REP", accent: 1 },
+        { key: "development", label: "개발", summary: "", slug: "DEV", accent: 0 },
+        { key: "report", label: "보고", summary: "", slug: "REP", accent: 1 },
       ],
     };
     props.onCloseMobileHeaderMenu = onCloseMobileHeaderMenu;
@@ -61,10 +61,23 @@ describe("AppHeaderBar mobile office pack selector", () => {
     expect(onCloseMobileHeaderMenu).toHaveBeenCalled();
   });
 
-  it("오피스팩 컨트롤이 없으면 모바일 메뉴에 셀렉터를 표시하지 않는다", () => {
+  it("오피스 팩 컨트롤이 없으면 모바일 메뉴에 선택기를 표시하지 않는다", () => {
     const props = createBaseProps();
     render(<AppHeaderBar {...props} />);
 
-    expect(screen.queryByLabelText("Office Pack")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("오피스 팩")).not.toBeInTheDocument();
+  });
+
+  it("메뉴얼 화면에서 검색 포커스 이벤트를 보낸다", async () => {
+    const user = userEvent.setup();
+    const props = createBaseProps();
+    const listener = vi.fn();
+    window.addEventListener("donggri:manual-search-focus", listener);
+
+    render(<AppHeaderBar {...props} currentView="manual" viewTitle="메뉴얼" />);
+    await user.click(screen.getByRole("button", { name: /메뉴얼 검색/i }));
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    window.removeEventListener("donggri:manual-search-focus", listener);
   });
 });

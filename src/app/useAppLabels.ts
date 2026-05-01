@@ -1,6 +1,5 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import type * as api from "../api";
-import { normalizeLanguage, pickLang } from "../i18n";
 import type { CompanySettings, Department } from "../types";
 import type { RuntimeOs, View } from "./types";
 
@@ -36,14 +35,9 @@ export function useAppLabels({
   updateStatus,
   dismissedUpdateVersion,
 }: UseAppLabelsParams) {
-  const uiLanguage = normalizeLanguage(settings.language);
-  const tr = useCallback(
-    (ko: string, en: string, ja = en, zh = en) => pickLang(uiLanguage, { ko, en, ja, zh }),
-    [uiLanguage],
-  );
-
-  const loadingTitle = tr("Donggri를 불러오는 중입니다.", "Loading Donggri...");
-  const loadingSubtitle = tr("AI 운영 시스템을 준비하고 있습니다.", "Preparing your AI operations system.");
+  const uiLanguage = "ko" as const;
+  const loadingTitle = "Donggri를 불러오는 중입니다.";
+  const loadingSubtitle = "AI 운영 시스템을 준비하고 있습니다.";
   const viewTitle = VIEW_TITLE[view] ?? "";
   const announcementLabel = "공지";
   const roomManagerLabel = "오피스 관리";
@@ -95,8 +89,7 @@ export function useAppLabels({
 
   const autoUpdateNoticeVisible = Boolean(settings.autoUpdateNoticePending);
   const autoUpdateNoticeTitle = "업데이트 안내: 자동 업데이트 토글이 추가되었습니다.";
-  const autoUpdateNoticeHint =
-    "기존 설치(v1.1.3 이하)는 기본값이 OFF입니다. 필요하면 설정 > 일반에서 ON으로 전환하세요.";
+  const autoUpdateNoticeHint = "기존 설치는 기본값이 OFF입니다. 필요하면 설정 > 일반에서 ON으로 전환하세요.";
   const autoUpdateNoticeActionLabel = "확인";
 
   const autoUpdateNoticeContainerClass =

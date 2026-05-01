@@ -52,7 +52,7 @@ export default function App() {
   const initialRoomThemes = useMemo(() => readStoredRoomThemes(), []);
   const hasLocalRoomThemesRef = useRef<boolean>(initialRoomThemes.hasStored);
 
-  const [view, setView] = useState<View>("office");
+  const [view, setView] = useState<View>("manual");
   const [departments, setDepartments] = useState<Department[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -103,7 +103,7 @@ export default function App() {
     content: string;
   } | null>(null);
 
-  const viewRef = useRef<View>("office");
+  const viewRef = useRef<View>("manual");
   viewRef.current = view;
   const agentsRef = useRef<Agent[]>(agents);
   agentsRef.current = agents;

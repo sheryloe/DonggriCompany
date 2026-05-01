@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 
 export type ThemeMode = "dark" | "light";
 
-const THEME_STORAGE_KEY = "climpire_theme";
+const THEME_STORAGE_KEY = "donggri_theme_v2";
+const LEGACY_THEME_STORAGE_KEY = "climpire_theme";
 
 interface ThemeContextValue {
   theme: ThemeMode;
@@ -10,15 +11,17 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: "light",
+  theme: "dark",
   toggleTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "light";
+    if (typeof window === "undefined") return "dark";
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === "dark" ? "dark" : "light";
+    if (stored === "dark" || stored === "light") return stored;
+    const legacyStored = window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY);
+    return legacyStored === "dark" ? "dark" : "dark";
   });
 
   useEffect(() => {

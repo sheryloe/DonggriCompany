@@ -38,7 +38,7 @@ const task: Task = {
 };
 
 describe("LiveOperationsRail", () => {
-  it("실시간 업무, 직원 상태, 시스템 로그를 한국어로 표시한다", () => {
+  it("실시간 업무, 시스템 상태, 최근 로그를 한국어로 표시한다", () => {
     render(<LiveOperationsRail agents={[agent]} tasks={[task]} connected />);
 
     expect(screen.getByRole("complementary", { name: "실시간 업무 현황" })).toBeInTheDocument();
@@ -46,6 +46,8 @@ describe("LiveOperationsRail", () => {
     expect(screen.getByText("근무 직원")).toBeInTheDocument();
     expect(screen.getAllByText("앱 셸 리디자인")).toHaveLength(2);
     expect(screen.getByText("진행 중")).toBeInTheDocument();
+    expect(screen.getByText("시스템 상태")).toBeInTheDocument();
+    expect(screen.getByText("서버 연결")).toBeInTheDocument();
     expect(screen.getByText("최근 시스템 로그")).toBeInTheDocument();
     expect(screen.getByText("Task #task-1")).toBeInTheDocument();
   });

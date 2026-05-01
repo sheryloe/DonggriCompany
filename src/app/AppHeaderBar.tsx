@@ -41,6 +41,17 @@ interface AppHeaderBarProps {
   onCloseMobileHeaderMenu: () => void;
 }
 
+const VIEW_MARKS: Partial<Record<View, string>> = {
+  office: "OF",
+  agents: "AG",
+  skills: "SK",
+  modules: "MO",
+  manual: "MN",
+  dashboard: "DB",
+  tasks: "TS",
+  settings: "ST",
+};
+
 export default function AppHeaderBar({
   currentView,
   connected,
@@ -67,59 +78,49 @@ export default function AppHeaderBar({
   onToggleMobileHeaderMenu,
   onCloseMobileHeaderMenu,
 }: AppHeaderBarProps) {
+  const viewMark = VIEW_MARKS[currentView] ?? "DG";
+
   return (
-    <header
-      className="sticky top-0 z-30 flex items-center justify-between px-3 py-2 backdrop-blur-sm sm:px-4 sm:py-3 lg:px-6"
-      style={{ borderBottom: "1px solid var(--th-border)", background: "var(--th-bg-header)" }}
-    >
+    <header className="app-topbar sticky top-0 z-30 flex items-center justify-between px-3 py-2 sm:px-4 lg:px-6">
       <div className="flex min-w-0 items-center gap-2">
         <button
           onClick={onOpenMobileNav}
-          className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition lg:hidden"
-          style={{
-            border: "1px solid var(--th-border)",
-            background: "var(--th-bg-surface)",
-            color: "var(--th-text-secondary)",
-          }}
+          className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-950/40 text-slate-300 transition hover:border-sky-400/50 hover:text-sky-200 lg:hidden"
           aria-label="네비게이션 열기"
         >
-          ☰
+          <span className="font-mono text-sm font-bold">DG</span>
         </button>
-        <h1
-          className="truncate text-base font-bold sm:text-lg flex items-center gap-2"
-          style={{ color: "var(--th-text-heading)" }}
-        >
+        <h1 className="flex min-w-0 items-center gap-3 truncate text-base font-bold sm:text-lg">
+          <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-400/10 font-mono text-sm text-sky-200 sm:inline-flex">
+            {viewMark}
+          </span>
           {currentView === "agents" && (
             <span className="relative inline-flex items-center" style={{ width: 30, height: 22 }}>
               <img
                 src="/sprites/8-D-1.png"
                 alt=""
-                className="absolute left-0 top-0 w-5 h-5 rounded-full object-cover"
+                className="absolute left-0 top-0 h-5 w-5 rounded-full object-cover"
                 style={{ imageRendering: "pixelated", opacity: 0.85 }}
               />
               <img
                 src="/sprites/3-D-1.png"
                 alt=""
-                className="absolute left-2.5 top-0.5 w-5 h-5 rounded-full object-cover"
+                className="absolute left-2.5 top-0.5 h-5 w-5 rounded-full object-cover"
                 style={{ imageRendering: "pixelated", zIndex: 1 }}
               />
             </span>
           )}
-          <span className="truncate">{viewTitle}</span>
+          <span className="truncate text-slate-50">{viewTitle}</span>
         </h1>
         {officePackControl && (
-          <label
-            className="hidden xl:flex items-center gap-2 rounded-lg px-2 py-1"
-            style={{ border: "1px solid var(--th-border)", background: "var(--th-bg-surface)" }}
-          >
-            <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--th-text-muted)" }}>
+          <label className="hidden items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-950/35 px-3 py-2 xl:flex">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
               {officePackControl.label}
             </span>
             <select
               value={officePackControl.value}
               onChange={(e) => officePackControl.onChange(e.target.value as WorkflowPackKey)}
-              className="min-w-[170px] bg-transparent text-xs font-medium focus:outline-none"
-              style={{ color: "var(--th-text-primary)" }}
+              className="min-w-[170px] bg-transparent text-xs font-semibold text-slate-100 focus:outline-none"
             >
               {officePackControl.options.map((option) => (
                 <option key={option.key} value={option.key}>
@@ -131,40 +132,57 @@ export default function AppHeaderBar({
         )}
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
+        <div className="hidden items-center gap-2 md:flex">
+          <button
+            onClick={onOpenTasks}
+            className="header-action-btn header-action-btn-primary"
+            aria-label={tasksPrimaryLabel}
+          >
+            <span>업무</span>
+          </button>
+          <button
+            onClick={onOpenDecisionInbox}
+            disabled={decisionInboxLoading}
+            className={`header-action-btn header-action-btn-secondary disabled:cursor-wait disabled:opacity-60${
+              decisionInboxCount > 0 ? " decision-has-pending" : ""
+            }`}
+            aria-label={decisionLabel}
+          >
+            <span>{decisionInboxLoading ? "확인 중" : "의사결정"}</span>
+            {decisionInboxCount > 0 && <span className="header-decision-badge">{decisionInboxCount}</span>}
+          </button>
+          <button onClick={onOpenAgentStatus} className="header-action-btn header-action-btn-secondary">
+            {agentStatusLabel}
+          </button>
+        </div>
+        <div className="hidden items-center gap-2 xl:flex">
+          <button onClick={onOpenReportHistory} className="header-action-btn header-action-btn-ghost">
+            {reportLabel}
+          </button>
+          <button onClick={onOpenAnnouncement} className="header-action-btn header-action-btn-ghost">
+            {announcementLabel}
+          </button>
+          <button onClick={onOpenRoomManager} className="header-action-btn header-action-btn-ghost">
+            {roomManagerLabel}
+          </button>
+        </div>
         <button
           onClick={onOpenTasks}
-          className="header-action-btn header-action-btn-primary"
+          className="header-action-btn header-action-btn-primary md:hidden"
           aria-label={tasksPrimaryLabel}
         >
-          <span className="sm:hidden">📋</span>
-          <span className="hidden sm:inline">📋 {tasksPrimaryLabel}</span>
+          업무
         </button>
         <button
           onClick={onOpenDecisionInbox}
           disabled={decisionInboxLoading}
-          className={`header-action-btn header-action-btn-secondary disabled:cursor-wait disabled:opacity-60${
+          className={`header-action-btn header-action-btn-secondary md:hidden disabled:cursor-wait disabled:opacity-60${
             decisionInboxCount > 0 ? " decision-has-pending" : ""
           }`}
           aria-label={decisionLabel}
         >
-          <span className="sm:hidden">{decisionInboxLoading ? "…" : "✅"}</span>
-          <span className="hidden sm:inline">
-            {decisionInboxLoading ? "…" : "✅"} {decisionLabel}
-          </span>
+          {decisionInboxLoading ? "확인" : "결정"}
           {decisionInboxCount > 0 && <span className="header-decision-badge">{decisionInboxCount}</span>}
-        </button>
-        <button onClick={onOpenAgentStatus} className="header-action-btn header-action-btn-secondary mobile-hidden">
-          🛠 {agentStatusLabel}
-        </button>
-        <button onClick={onOpenReportHistory} className="header-action-btn header-action-btn-secondary mobile-hidden">
-          {reportLabel}
-        </button>
-        <button onClick={onOpenAnnouncement} className="header-action-btn header-action-btn-secondary">
-          <span className="sm:hidden">📢</span>
-          <span className="hidden sm:inline">{announcementLabel}</span>
-        </button>
-        <button onClick={onOpenRoomManager} className="header-action-btn header-action-btn-secondary mobile-hidden">
-          {roomManagerLabel}
         </button>
         <button
           onClick={onToggleTheme}
@@ -213,12 +231,7 @@ export default function AppHeaderBar({
         <div className="relative sm:hidden">
           <button
             onClick={onToggleMobileHeaderMenu}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg transition"
-            style={{
-              border: "1px solid var(--th-border)",
-              background: "var(--th-bg-surface)",
-              color: "var(--th-text-secondary)",
-            }}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-950/40 text-slate-300 transition hover:border-sky-400/50 hover:text-sky-200"
             aria-label="더보기 메뉴"
           >
             <svg
@@ -239,16 +252,12 @@ export default function AppHeaderBar({
           {mobileHeaderMenuOpen && (
             <>
               <button className="fixed inset-0 z-40" onClick={onCloseMobileHeaderMenu} aria-label="메뉴 닫기" />
-              <div
-                className="absolute right-0 top-full z-50 mt-1 min-w-[180px] rounded-lg py-1 shadow-lg"
-                style={{ border: "1px solid var(--th-border)", background: "var(--th-bg-surface)" }}
-              >
+              <div className="absolute right-0 top-full z-50 mt-2 min-w-[210px] rounded-2xl border border-slate-700/70 bg-slate-950/95 py-1 shadow-2xl shadow-black/30">
                 {officePackControl && (
-                  <div className="px-3 py-2" style={{ borderBottom: "1px solid var(--th-border)" }}>
+                  <div className="border-b border-slate-800 px-3 py-2">
                     <label
                       htmlFor="mobile-office-pack-selector"
-                      className="mb-1 block text-[10px] uppercase tracking-wider"
-                      style={{ color: "var(--th-text-muted)" }}
+                      className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500"
                     >
                       {officePackControl.label}
                     </label>
@@ -259,12 +268,7 @@ export default function AppHeaderBar({
                         officePackControl.onChange(e.target.value as WorkflowPackKey);
                         onCloseMobileHeaderMenu();
                       }}
-                      className="w-full rounded-md px-2 py-1.5 text-xs focus:outline-none"
-                      style={{
-                        border: "1px solid var(--th-border)",
-                        background: "var(--th-bg-elevated)",
-                        color: "var(--th-text-primary)",
-                      }}
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 focus:outline-none"
                     >
                       {officePackControl.options.map((option) => (
                         <option key={option.key} value={option.key}>
@@ -279,28 +283,34 @@ export default function AppHeaderBar({
                     onOpenAgentStatus();
                     onCloseMobileHeaderMenu();
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:opacity-80"
-                  style={{ color: "var(--th-text-primary)" }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-slate-900"
                 >
-                  🛠 {agentStatusLabel}
+                  {agentStatusLabel}
                 </button>
                 <button
                   onClick={() => {
                     onOpenReportHistory();
                     onCloseMobileHeaderMenu();
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:opacity-80"
-                  style={{ color: "var(--th-text-primary)" }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-slate-900"
                 >
                   {reportLabel}
+                </button>
+                <button
+                  onClick={() => {
+                    onOpenAnnouncement();
+                    onCloseMobileHeaderMenu();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-slate-900"
+                >
+                  {announcementLabel}
                 </button>
                 <button
                   onClick={() => {
                     onOpenRoomManager();
                     onCloseMobileHeaderMenu();
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:opacity-80"
-                  style={{ color: "var(--th-text-primary)" }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-slate-900"
                 >
                   {roomManagerLabel}
                 </button>
@@ -308,9 +318,9 @@ export default function AppHeaderBar({
             </>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs" style={{ color: "var(--th-text-muted)" }}>
-          <div className={`w-2 h-2 rounded-full ${connected ? "bg-green-500" : "bg-red-500"}`} />
-          <span className="hidden sm:inline">{connected ? "연결됨" : "오프라인"}</span>
+        <div className="hidden items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-950/35 px-2.5 py-2 text-xs text-slate-400 sm:flex">
+          <div className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-rose-400"}`} />
+          <span>{connected ? "연결됨" : "오프라인"}</span>
         </div>
       </div>
     </header>

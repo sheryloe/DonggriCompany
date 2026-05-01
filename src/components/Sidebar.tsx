@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { View } from "../app/types";
 import type { Agent, CompanySettings, Department } from "../types";
 import { localeName, useI18n } from "../i18n";
@@ -12,53 +12,66 @@ interface SidebarProps {
   connected: boolean;
 }
 
-const NAV_ITEMS: Array<{ view: View; icon: string; sprite?: string }> = [
-  { view: "office", icon: "OF" },
-  { view: "agents", icon: "AG", sprite: "/sprites/3-D-1.png" },
-  { view: "skills", icon: "SK" },
-  { view: "modules", icon: "MO" },
-  { view: "manual", icon: "MN" },
-  { view: "dashboard", icon: "DB" },
-  { view: "tasks", icon: "TS" },
-  { view: "settings", icon: "ST" },
+const NAV_ITEMS: Array<{ view: View; mark: string; label: string; sprite?: string }> = [
+  { view: "office", mark: "OF", label: "오피스" },
+  { view: "agents", mark: "AG", label: "직원 관리", sprite: "/sprites/3-D-1.png" },
+  { view: "skills", mark: "SK", label: "Skill 문서고" },
+  { view: "modules", mark: "MO", label: "모듈" },
+  { view: "manual", mark: "MN", label: "메뉴얼" },
+  { view: "dashboard", mark: "DB", label: "대시보드" },
+  { view: "tasks", mark: "TS", label: "업무 관리" },
+  { view: "settings", mark: "ST", label: "설정" },
 ];
 
-const NAV_LABELS: Record<View, string> = {
-  office: "오피스",
-  agents: "직원 관리",
-  dashboard: "대시보드",
-  tasks: "업무 관리",
-  skills: "Skill 문서고",
-  modules: "모듈",
-  manual: "메뉴얼",
-  settings: "설정",
+const DEPARTMENT_ORDER = ["pmo", "planning", "dev", "design", "qa", "devsecops", "operations"];
+const DEPARTMENT_SHORT_LABELS: Record<string, string> = {
+  pmo: "PMO",
+  planning: "기획",
+  dev: "개발",
+  design: "디자인",
+  qa: "QA",
+  devsecops: "DevSecOps",
+  operations: "운영",
 };
+
+function spriteSrc(agent: Agent): string | null {
+  if (typeof agent.sprite_number === "number" && Number.isFinite(agent.sprite_number)) {
+    return `/sprites/${agent.sprite_number}-D-1.png`;
+  }
+  return null;
+}
 
 export default function Sidebar({ currentView, onChangeView, departments, agents, settings, connected }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { locale } = useI18n();
   const workingCount = agents.filter((agent) => agent.status === "working").length;
   const totalAgents = agents.length;
+  const visibleDepartments = useMemo(() => {
+    const byId = new Map(departments.map((department) => [department.id, department]));
+    const ordered = DEPARTMENT_ORDER.map((id) => byId.get(id)).filter((department): department is Department =>
+      Boolean(department),
+    );
+    return ordered.length > 0 ? ordered : departments;
+  }, [departments]);
 
   return (
     <aside
-      className={`flex h-full flex-col backdrop-blur-sm transition-all duration-300 ${collapsed ? "w-16" : "w-48"}`}
-      style={{ background: "var(--th-bg-sidebar)", borderRight: "1px solid var(--th-border)" }}
+      className={`command-sidebar flex h-full flex-col backdrop-blur-xl transition-all duration-300 ${
+        collapsed ? "w-[72px]" : "w-[240px]"
+      }`}
     >
-      <div
-        className="flex items-center gap-2 px-3 py-4"
-        style={{ borderBottom: "1px solid var(--th-border)", boxShadow: "0 4px 12px rgba(59, 130, 246, 0.06)" }}
-      >
+      <div className="command-sidebar-brand">
         <button
           type="button"
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center gap-2 transition-opacity hover:opacity-80"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left transition-opacity hover:opacity-90"
+          aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
         >
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-visible rounded-lg">
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-2xl border border-sky-400/20 bg-sky-400/10">
             <img
               src="/sprites/ceo-lobster.png"
               alt="CEO"
-              className="h-8 w-8 object-contain"
+              className="h-9 w-9 object-contain"
               style={{ imageRendering: "pixelated" }}
             />
             <span className="absolute -top-1 left-1/2 -translate-x-1/2 rounded bg-amber-300 px-1 text-[9px] font-bold leading-4 text-slate-950 shadow">
@@ -66,83 +79,151 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
             </span>
           </div>
           {!collapsed && (
-            <div className="overflow-hidden text-left">
-              <div className="truncate text-sm font-bold" style={{ color: "var(--th-text-heading)" }}>
+            <div className="min-w-0 text-left">
+              <div
+                className="truncate text-base font-extrabold tracking-tight"
+                style={{ color: "var(--th-text-heading)" }}
+              >
                 {settings.companyName}
               </div>
-              <div className="text-[10px]" style={{ color: "var(--th-text-muted)" }}>
-                {settings.ceoName}
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-300/90">
+                Command Center
               </div>
             </div>
           )}
         </button>
+        {!collapsed && (
+          <span className="rounded-lg border border-slate-700/70 px-2 py-1 text-xs text-slate-400">v4</span>
+        )}
       </div>
 
-      <nav className="flex-1 space-y-0.5 px-2 py-2">
+      {!collapsed && (
+        <div className="mx-3 mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${connected ? "animate-pulse bg-emerald-400" : "bg-rose-400"}`}
+              />
+              <span className="text-sm font-semibold text-slate-100">{connected ? "연결됨" : "연결 대기"}</span>
+            </div>
+            <span className="font-mono text-[11px] text-cyan-300">LIVE</span>
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400">
+            직원 {workingCount}/{totalAgents} 근무 중
+          </div>
+        </div>
+      )}
+
+      <nav className="flex-1 space-y-1 px-3 py-4">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.view}
             type="button"
             onClick={() => onChangeView(item.view)}
-            className={`sidebar-nav-item ${
-              currentView === item.view ? "active font-semibold shadow-sm shadow-blue-500/10" : ""
-            }`}
+            className={`sidebar-nav-item ${currentView === item.view ? "active font-semibold" : ""}`}
+            title={collapsed ? item.label : undefined}
           >
-            <span className="shrink-0 text-[11px] font-bold tracking-tight">
+            <span className="sidebar-nav-icon">
               {item.sprite ? (
                 <img
                   src={item.sprite}
                   alt=""
-                  className="h-5 w-5 rounded-full object-cover"
+                  className="h-6 w-6 rounded-full object-cover"
                   style={{ imageRendering: "pixelated" }}
                 />
               ) : (
-                item.icon
+                item.mark
               )}
             </span>
-            {!collapsed && <span>{NAV_LABELS[item.view]}</span>}
+            {!collapsed && (
+              <>
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                <span className="font-mono text-[10px] text-slate-500">{item.mark}</span>
+              </>
+            )}
           </button>
         ))}
       </nav>
 
       {!collapsed && (
-        <div className="px-3 py-2" style={{ borderTop: "1px solid var(--th-border)" }}>
-          <div
-            className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: "var(--th-text-muted)" }}
-          >
-            부서 현황
+        <div className="mx-3 mb-3 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">부서 현황</div>
+            <span className="rounded-md border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-400">7부서</span>
           </div>
-          {departments.map((department) => {
-            const departmentAgents = agents.filter((agent) => agent.department_id === department.id);
-            const working = departmentAgents.filter((agent) => agent.status === "working").length;
-            return (
-              <div
-                key={department.id}
-                className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-[var(--th-bg-surface-hover)]"
-                style={{ color: "var(--th-text-secondary)" }}
-              >
-                <span>{department.icon}</span>
-                <span className="flex-1 truncate">{localeName(locale, department)}</span>
-                <span className={working > 0 ? "font-medium text-blue-400" : ""}>
-                  {working}/{departmentAgents.length}
-                </span>
-              </div>
-            );
-          })}
+          <div className="space-y-1.5">
+            {visibleDepartments.map((department) => {
+              const departmentAgents = agents.filter((agent) => agent.department_id === department.id);
+              const working = departmentAgents.filter((agent) => agent.status === "working").length;
+              const idle = departmentAgents.filter((agent) => agent.status === "idle").length;
+              const label = DEPARTMENT_SHORT_LABELS[department.id] ?? localeName(locale, department);
+              return (
+                <div
+                  key={department.id}
+                  className="group flex items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-xs transition hover:border-slate-700/70 hover:bg-slate-900/60"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: department.color || "#38bdf8" }}
+                    />
+                    <span className="truncate text-slate-200">{label}</span>
+                  </div>
+                  <div className="flex -space-x-1">
+                    {departmentAgents.slice(0, 3).map((agent) => {
+                      const src = spriteSrc(agent);
+                      return (
+                        <span
+                          key={agent.id}
+                          className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-md border border-slate-800 bg-slate-900 text-[10px]"
+                          title={localeName(locale, agent)}
+                        >
+                          {src ? (
+                            <img
+                              src={src}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              style={{ imageRendering: "pixelated" }}
+                            />
+                          ) : (
+                            <span className="h-2 w-2 rounded-full bg-slate-500" />
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <span
+                    className={
+                      working > 0 ? "font-mono text-[11px] text-emerald-300" : "font-mono text-[11px] text-slate-500"
+                    }
+                  >
+                    {working}/{idle}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      <div className="px-3 py-2.5" style={{ borderTop: "1px solid var(--th-border)" }}>
-        <div className="flex items-center gap-2">
-          <div className={`h-2.5 w-2.5 rounded-full ${connected ? "animate-pulse bg-green-500" : "bg-red-500"}`} />
-          {!collapsed && (
-            <div className="text-[10px]" style={{ color: "var(--th-text-muted)" }}>
-              {connected ? "연결됨" : "연결 안 됨"} · {workingCount}/{totalAgents} 근무 중
+      {!collapsed && (
+        <div className="mx-3 mb-3 rounded-xl border border-slate-700/70 bg-slate-950/45 p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-amber-300/20 bg-amber-300/10">
+              <img
+                src="/sprites/ceo-lobster.png"
+                alt=""
+                className="h-8 w-8 object-contain"
+                style={{ imageRendering: "pixelated" }}
+              />
             </div>
-          )}
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-slate-100">{settings.ceoName}</div>
+              <div className="text-[11px] text-slate-500">최고 관리자</div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

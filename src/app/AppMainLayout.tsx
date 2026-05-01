@@ -18,6 +18,7 @@ import type {
 import type { UpdateStatus } from "../api";
 import type { OAuthCallbackResult, RoomThemeMap, View } from "./types";
 import AppHeaderBar from "./AppHeaderBar";
+import LiveOperationsRail from "./LiveOperationsRail";
 import {
   buildOfficePackPresentation,
   getOfficePackRoomThemes,
@@ -399,97 +400,96 @@ export default function AppMainLayout({
             </div>
           )}
 
-          <div className="p-3 sm:p-4 lg:p-6">
-            <Suspense
-              fallback={
-                <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 px-4 py-6 text-sm text-slate-300">
-                  {viewLoadingLabel}
-                </div>
-              }
-            >
-              {view === "office" && (
-                <OfficeView
-                  departments={officePresentation.departments}
-                  agents={officePresentation.agents}
-                  tasks={tasks}
-                  subAgents={subAgents}
-                  meetingPresence={meetingPresence}
-                  activeMeetingTaskId={activeMeetingTaskId}
-                  unreadAgentIds={unreadAgentIds}
-                  crossDeptDeliveries={crossDeptDeliveries}
-                  onCrossDeptDeliveryProcessed={onCrossDeptDeliveryProcessed}
-                  ceoOfficeCalls={ceoOfficeCalls}
-                  onCeoOfficeCallProcessed={onCeoOfficeCallProcessed}
-                  onOpenActiveMeetingMinutes={onOpenActiveMeetingMinutes}
-                  customDeptThemes={officePresentation.roomThemes}
-                  themeHighlightTargetId={activeRoomThemeTargetId}
-                  onSelectAgent={onSelectAgent}
-                  onSelectDepartment={onSelectDepartment}
-                />
-              )}
+          <div className="app-main-grid p-3 sm:p-4 lg:p-6">
+            <div className="min-w-0">
+              <Suspense
+                fallback={<div className="command-panel px-4 py-6 text-sm text-slate-300">{viewLoadingLabel}</div>}
+              >
+                {view === "office" && (
+                  <OfficeView
+                    departments={officePresentation.departments}
+                    agents={officePresentation.agents}
+                    tasks={tasks}
+                    subAgents={subAgents}
+                    meetingPresence={meetingPresence}
+                    activeMeetingTaskId={activeMeetingTaskId}
+                    unreadAgentIds={unreadAgentIds}
+                    crossDeptDeliveries={crossDeptDeliveries}
+                    onCrossDeptDeliveryProcessed={onCrossDeptDeliveryProcessed}
+                    ceoOfficeCalls={ceoOfficeCalls}
+                    onCeoOfficeCallProcessed={onCeoOfficeCallProcessed}
+                    onOpenActiveMeetingMinutes={onOpenActiveMeetingMinutes}
+                    customDeptThemes={officePresentation.roomThemes}
+                    themeHighlightTargetId={activeRoomThemeTargetId}
+                    onSelectAgent={onSelectAgent}
+                    onSelectDepartment={onSelectDepartment}
+                  />
+                )}
 
-              {view === "dashboard" && (
-                <Dashboard
-                  stats={stats}
-                  agents={agents}
-                  tasks={tasks}
-                  companyName={settings.companyName}
-                  onPrimaryCtaClick={() => setView("tasks")}
-                />
-              )}
+                {view === "dashboard" && (
+                  <Dashboard
+                    stats={stats}
+                    agents={agents}
+                    tasks={tasks}
+                    companyName={settings.companyName}
+                    onPrimaryCtaClick={() => setView("tasks")}
+                  />
+                )}
 
-              {view === "tasks" && (
-                <TaskBoard
-                  tasks={tasksForActivePack}
-                  agents={displayAgents}
-                  departments={displayDepartments}
-                  subtasks={subtasks}
-                  onCreateTask={handleCreateTaskForActivePack}
-                  onUpdateTask={onUpdateTask}
-                  onDeleteTask={onDeleteTask}
-                  onAssignTask={onAssignTask}
-                  onRunTask={onRunTask}
-                  onStopTask={onStopTask}
-                  onPauseTask={onPauseTask}
-                  onResumeTask={onResumeTask}
-                  onOpenTerminal={onOpenTerminal}
-                  onOpenMeetingMinutes={onOpenMeetingMinutes}
-                />
-              )}
+                {view === "tasks" && (
+                  <TaskBoard
+                    tasks={tasksForActivePack}
+                    agents={displayAgents}
+                    departments={displayDepartments}
+                    subtasks={subtasks}
+                    onCreateTask={handleCreateTaskForActivePack}
+                    onUpdateTask={onUpdateTask}
+                    onDeleteTask={onDeleteTask}
+                    onAssignTask={onAssignTask}
+                    onRunTask={onRunTask}
+                    onStopTask={onStopTask}
+                    onPauseTask={onPauseTask}
+                    onResumeTask={onResumeTask}
+                    onOpenTerminal={onOpenTerminal}
+                    onOpenMeetingMinutes={onOpenMeetingMinutes}
+                  />
+                )}
 
-              {view === "agents" && (
-                <AgentManager
-                  agents={managerAgents}
-                  departments={managerDepartments}
-                  onAgentsChange={onAgentsChange}
-                  activeOfficeWorkflowPack={officePackKey}
-                  dbBackedOfficePack={isHydratedOfficePack}
-                  onSaveOfficePackProfile={async () => {}}
-                />
-              )}
+                {view === "agents" && (
+                  <AgentManager
+                    agents={managerAgents}
+                    departments={managerDepartments}
+                    onAgentsChange={onAgentsChange}
+                    activeOfficeWorkflowPack={officePackKey}
+                    dbBackedOfficePack={isHydratedOfficePack}
+                    onSaveOfficePackProfile={async () => {}}
+                  />
+                )}
 
-              {view === "skills" && <SkillsLibrary agents={agents} />}
+                {view === "skills" && <SkillsLibrary agents={agents} />}
 
-              {view === "modules" && <ModulesLibrary />}
+                {view === "modules" && <ModulesLibrary />}
 
-              {view === "manual" && <ManualLibrary />}
+                {view === "manual" && <ManualLibrary />}
 
-              {view === "settings" && (
-                <SettingsPanel
-                  settings={settings}
-                  departments={officePresentation.departments}
-                  cliStatus={cliStatus}
-                  onSave={(nextSettings) => {
-                    void onSaveSettings(nextSettings);
-                  }}
-                  onRefreshCli={() => {
-                    void onRefreshCli();
-                  }}
-                  oauthResult={oauthResult}
-                  onOauthResultClear={onOauthResultClear}
-                />
-              )}
-            </Suspense>
+                {view === "settings" && (
+                  <SettingsPanel
+                    settings={settings}
+                    departments={officePresentation.departments}
+                    cliStatus={cliStatus}
+                    onSave={(nextSettings) => {
+                      void onSaveSettings(nextSettings);
+                    }}
+                    onRefreshCli={() => {
+                      void onRefreshCli();
+                    }}
+                    oauthResult={oauthResult}
+                    onOauthResultClear={onOauthResultClear}
+                  />
+                )}
+              </Suspense>
+            </div>
+            <LiveOperationsRail agents={displayAgents} tasks={tasksForActivePack} connected={connected} />
           </div>
         </main>
 

@@ -2,8 +2,8 @@
 
 ## Identity
 - Agent Name: Luna
-- Agent ID: 4a31b46f-9bab-453f-90be-819301a9d4ba
-- Role: junior
+- Agent ID: seed-design-ux-senior
+- Role: senior
 - Department ID: design
 - Bundle Path: agents/design/Luna
 
@@ -18,8 +18,9 @@
 - Do not involve every department by default.
 - Split independent work up to max_parallel_workstreams and keep one owner per workstream.
 - Produce evidence for each verification gate before claiming completion.
+
 ## Class Path
-- Class Path: (unclassified)
+- Class Path: design > frontend > ux.flow
 - Stage Rule: stage1(<100 XP), stage2(100~299 XP), stage3(>=300 XP)
 
 ## Growth
@@ -30,10 +31,33 @@
 ## Promotion Policy
 - Default: junior -> senior auto-promotion at 300 XP
 - Exception: team_leader promotion remains manual only
-- Applied Rule: junior -> senior @xp>=300, team_leader manual only
+- Applied Rule: {"mode":"manual","notes":"default seed is senior; junior growth remains available for non-seed agents"}
+
+## Visual Profile
+- Visual Profile Key: agent-visual-17
+- Runtime Sprite Source: /sprites/{sprite_number}-D-1.png for v1 preview
+- Contact Sheet: public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png
+
+## Subagent Supervision
+- Staff members supervise specialized subagents instead of owning every specialty directly.
+- Preferred Subagent: ui-designer
+- Preferred Subagent: ux-researcher
+- Preferred Subagent: accessibility-tester
 
 ## Latest Snapshot
-- 2026-04-15T06:57:37.455Z | tasks_done=0 | xp=0 | role=junior
+- 2026-05-02T02:20:03.420Z | tasks_done=0 | xp=0 | role=senior
 
 ## Workflow Profile
-- Raw: (none)
+- Raw: {"role":"reviewer","review_lenses":["ux","clarity","a11y"],"two_pass_required":true,"max_review_rounds":null}
+
+## Memory Snapshot
+- No durable memory snapshot yet.
+
+## Skill Growth Snapshot
+- No skill usage history yet.
+
+## Recent Lessons
+- No recent lesson extracted yet.
+
+## Project Experience
+- No project experience extracted yet.

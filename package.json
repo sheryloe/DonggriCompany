@@ -24,6 +24,7 @@
     "setup": "node scripts/setup.mjs",
     "arch:map": "node scripts/generate-architecture-report.mjs",
     "subagents:sync": "node scripts/sync-awesome-codex-subagents.mjs",
+    "agents:sprites": "node tools/agents/build-agent-sprites-from-sheet.mjs",
     "preflight:public": "bash scripts/preflight-public.sh",
     "audit:verify": "node scripts/verify-security-audit-log.mjs",
     "gmail:intake:oauth": "node scripts/gmail-intake-oauth.mjs",

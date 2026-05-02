@@ -20,6 +20,8 @@ type AgentGuideInput = {
 type AgentProfileExtras = {
   classPath: string;
   promotionPolicy: string;
+  visualProfileKey: string;
+  preferredSubagents: string[];
 };
 
 const RESERVED_ROOT_DIRS = new Set(["archive", "classes"]);
@@ -134,11 +136,17 @@ function extractAgentProfileExtras(agentProfileJson: string | null | undefined):
     return {
       classPath: DEFAULT_CLASS_PATH,
       promotionPolicy: DEFAULT_PROMOTION_POLICY,
+      visualProfileKey: "(none)",
+      preferredSubagents: [],
     };
   }
   return {
     classPath: normalizeClassPath(parsed.class_path),
     promotionPolicy: normalizePromotionPolicy(parsed.promotion_policy),
+    visualProfileKey: String(parsed.visual_profile_key ?? "").trim() || "(none)",
+    preferredSubagents: Array.isArray(parsed.preferred_subagents)
+      ? parsed.preferred_subagents.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+      : [],
   };
 }
 
@@ -306,6 +314,17 @@ function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: stri
     "- Exception: team_leader promotion remains manual only",
     `- Applied Rule: ${extras.promotionPolicy}`,
     "",
+    "## Visual Profile",
+    `- Visual Profile Key: ${extras.visualProfileKey}`,
+    "- Runtime Sprite Source: /sprites/{sprite_number}-D-1.png for v1 preview",
+    "- Contact Sheet: public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png",
+    "",
+    "## Subagent Supervision",
+    "- Staff members supervise specialized subagents instead of owning every specialty directly.",
+    ...(extras.preferredSubagents.length > 0
+      ? extras.preferredSubagents.map((subagent) => `- Preferred Subagent: ${subagent}`)
+      : ["- Preferred Subagent: task-specific catalog selection"]),
+    "",
     "## Latest Snapshot",
     `- ${updatedAt} | tasks_done=${tasksDone} | xp=${xp} | role=${role}`,
     "",
@@ -385,6 +404,8 @@ function buildSettingsContent(input: AgentGuideInput, updatedAt: string): string
     },
     class_path: extras.classPath,
     promotion_policy: extras.promotionPolicy,
+    visual_profile_key: extras.visualProfileKey,
+    preferred_subagents: extras.preferredSubagents,
     stats_tasks_done: safeNumber(input.statsTasksDone),
     stats_xp: safeNumber(input.statsXp),
     memory_snapshot: Array.isArray(input.memorySnapshot) ? input.memorySnapshot.filter(Boolean) : [],

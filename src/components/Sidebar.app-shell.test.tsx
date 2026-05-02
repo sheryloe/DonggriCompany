@@ -106,7 +106,7 @@ function buildAgent(id: string, departmentId: string, status: Agent["status"], s
 
 describe("Sidebar app shell", () => {
   it("한국어 내비게이션과 7부서 상태를 표시한다", () => {
-    render(
+    const { container } = render(
       <I18nProvider language="ko">
         <Sidebar
           currentView="manual"
@@ -130,5 +130,7 @@ describe("Sidebar app shell", () => {
     }
     expect(screen.getByText("연결됨")).toBeInTheDocument();
     expect(screen.getByText("직원 1/2 근무 중")).toBeInTheDocument();
+    expect(container.querySelectorAll("nav .sidebar-nav-icon")).toHaveLength(8);
+    expect(container.querySelectorAll("nav .sidebar-nav-icon img")).toHaveLength(0);
   });
 });

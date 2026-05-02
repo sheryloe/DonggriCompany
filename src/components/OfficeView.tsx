@@ -168,6 +168,39 @@ export default function OfficeView({
     });
   }, [setMoveDirectionPressed]);
 
+  const scrollToOfficeArea = useCallback((area: "shared" | "strategy" | "production" | "quality") => {
+    const container = containerRef.current;
+    if (!container) return;
+    const departmentGroups: Record<"shared" | "strategy" | "production" | "quality", string[]> = {
+      shared: [],
+      strategy: ["pmo", "planning"],
+      production: ["dev", "design"],
+      quality: ["qa", "devsecops", "operations"],
+    };
+    const targetY =
+      area === "shared"
+        ? (breakRoomRectRef.current?.y ?? 0)
+        : Math.min(
+            ...roomRectsRef.current
+              .filter((room) => departmentGroups[area].includes(room.dept.id))
+              .map((room) => room.y),
+          );
+    if (!Number.isFinite(targetY)) return;
+
+    const hostY =
+      findScrollContainer(container, "y") ??
+      scrollHostYRef.current ??
+      (document.scrollingElement as HTMLElement | null);
+    if (!hostY) return;
+    const canvas = container.querySelector("canvas");
+    const scaleY = canvas ? canvas.getBoundingClientRect().height / Math.max(1, totalHRef.current) : 1;
+    const containerRect = container.getBoundingClientRect();
+    const hostRect = hostY.getBoundingClientRect();
+    const targetTop = hostY.scrollTop + containerRect.top - hostRect.top + targetY * scaleY - 24;
+    const maxTop = Math.max(0, hostY.scrollHeight - hostY.clientHeight);
+    hostY.scrollTo({ top: Math.max(0, Math.min(maxTop, targetTop)), behavior: "smooth" });
+  }, []);
+
   const followCeoInView = useCallback(() => {
     if (!showVirtualPadRef.current) return;
     const container = containerRef.current;
@@ -393,6 +426,25 @@ export default function OfficeView({
 
   return (
     <div className="w-full overflow-auto" style={{ minHeight: "100%" }}>
+      <div className="mx-auto mb-3 flex w-full max-w-5xl flex-wrap items-center gap-2 rounded-2xl border border-cyan-400/15 bg-slate-950/45 px-3 py-2 text-xs text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur">
+        <span className="mr-1 font-semibold text-cyan-100">층 선택</span>
+        {[
+          ["shared", "1F 공용층"],
+          ["strategy", "2F 전략층"],
+          ["production", "3F 제작층"],
+          ["quality", "4F 품질/운영층"],
+        ].map(([area, label]) => (
+          <button
+            key={area}
+            type="button"
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 font-medium text-slate-200 transition hover:border-cyan-300/40 hover:bg-cyan-300/10 active:translate-y-px"
+            onClick={() => scrollToOfficeArea(area as "shared" | "strategy" | "production" | "quality")}
+          >
+            {label}
+          </button>
+        ))}
+        <span className="ml-auto hidden text-slate-400 md:inline">7부서 21명 기준 · 세부 전문성은 subagent 호출</span>
+      </div>
       <div className="relative mx-auto w-full">
         <div
           ref={containerRef}

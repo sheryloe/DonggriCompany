@@ -1,20 +1,30 @@
 {
-  "agent_id": "718d9894-f8de-42c6-ba6b-5664937a00cc",
+  "agent_id": "seed-devsecops-lead",
   "agent_name": "Vault",
   "role": "team_leader",
   "department_id": "devsecops",
-  "workflow_profile": null,
-  "agent_profile_json": null,
-  "class_path": "(unclassified)",
-  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
-  "stats_tasks_done": 0,
-  "stats_xp": 0,
-  "updated_at": "2026-04-15T06:57:37.484Z",
+  "workflow_profile": "{\"role\":\"reviewer\",\"review_lenses\":[\"security\",\"compliance\",\"approval\"],\"two_pass_required\":true,\"max_review_rounds\":null}",
+  "agent_profile_json": "{\"role_template\":\"team_leader\",\"growth_tier\":5,\"capabilities\":{\"execution\":4,\"architecture\":5,\"review\":5,\"research\":3,\"communication\":5,\"leadership\":5},\"prompt_style\":{\"tone\":4,\"autonomy\":4,\"strictness\":5,\"collaboration\":5},\"specialties\":[\"security.gate\",\"security-auditor\",\"devops-engineer\",\"github:gh-fix-ci\"],\"custom_prompt_override\":null,\"class_path\":{\"class_stage_1\":\"devsecops\",\"class_stage_2\":\"reviewer\",\"class_stage_3\":\"security.gate\"},\"promotion_policy\":{\"mode\":\"manual\",\"from_role\":\"senior\",\"to_role\":\"team_leader\",\"notes\":\"team_leader manual only\"},\"visual_profile_key\":\"agent-visual-26\",\"sprite_number\":26,\"preferred_subagents\":[\"security-auditor\",\"devops-engineer\",\"github:gh-fix-ci\"],\"subagent_supervision_rule\":\"Active staff members supervise specialized subagents instead of owning every specialty directly.\"}",
   "goal_command_policy": {
     "version": "donggri_goal_commands_v1",
     "native_commands_only": true,
     "octopus_aliases_enabled": false,
     "bottleneck_rule": "Use required_departments first; add extra departments only when a verification gate requires them.",
     "parallelism_rule": "Split independent work up to max_parallel_workstreams with one owner per workstream."
-  }
+  },
+  "class_path": "devsecops > reviewer > security.gate",
+  "promotion_policy": "{\"mode\":\"manual\",\"from_role\":\"senior\",\"to_role\":\"team_leader\",\"notes\":\"team_leader manual only\"}",
+  "visual_profile_key": "agent-visual-26",
+  "preferred_subagents": [
+    "security-auditor",
+    "devops-engineer",
+    "github:gh-fix-ci"
+  ],
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "memory_snapshot": [],
+  "skill_growth_snapshot": [],
+  "recent_lessons": [],
+  "project_experience": [],
+  "updated_at": "2026-05-02T02:20:03.455Z"
 }

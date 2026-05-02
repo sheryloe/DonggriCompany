@@ -4,7 +4,7 @@ import type { Agent } from "../../types";
 import { localeName } from "../../i18n";
 import type { CallbackSnapshot, BreakAnimItem } from "./buildScene-types";
 import { BREAK_ROOM_H, TARGET_CHAR_H, type RoomTheme, type WallClockVisual } from "./model";
-import { BREAK_CHAT_MESSAGES, BREAK_SPOTS, LOCALE_TEXT, type SupportedLocale, pickLocale } from "./themes-locale";
+import { BREAK_CHAT_MESSAGES, BREAK_SPOTS, type SupportedLocale } from "./themes-locale";
 import {
   blendColor,
   contrastTextColor,
@@ -21,6 +21,7 @@ import {
 } from "./drawing-core";
 import { drawPlant } from "./drawing-furniture-a";
 import { drawCoffeeMachine, drawCoffeeTable, drawHighTable, drawSofa, drawVendingMachine } from "./drawing-furniture-b";
+import type { OfficeFloorBand, SharedFacilityLayout } from "./officeFloorPlan";
 
 interface BuildBreakRoomParams {
   app: Application;
@@ -32,6 +33,8 @@ interface BuildBreakRoomParams {
   isDark: boolean;
   breakRoomY: number;
   OFFICE_W: number;
+  sharedFacilities?: SharedFacilityLayout[];
+  floorBands?: OfficeFloorBand[];
   cbRef: MutableRefObject<CallbackSnapshot>;
   breakAnimItemsRef: MutableRefObject<BreakAnimItem[]>;
   breakBubblesRef: MutableRefObject<Container[]>;
@@ -51,6 +54,8 @@ export function buildBreakRoom({
   isDark,
   breakRoomY,
   OFFICE_W,
+  sharedFacilities,
+  floorBands,
   cbRef,
   breakAnimItemsRef,
   breakBubblesRef,
@@ -79,6 +84,9 @@ export function buildBreakRoom({
   brBorder.roundRect(brx, bry, brw, brh, 3).stroke({ width: 2, color: breakTheme.wall });
   brBorder.roundRect(brx - 1, bry - 1, brw + 2, brh + 2, 4).stroke({ width: 1, color: breakTheme.accent, alpha: 0.25 });
   breakRoom.addChild(brBorder);
+
+  drawSharedFloorHeader(breakRoom, brx, bry, brw, breakTheme.accent, floorBands);
+  drawSharedFacilities(breakRoom, sharedFacilities ?? [], breakTheme);
 
   drawAmbientGlow(breakRoom, brx + brw / 2, bry + brh / 2, brw * 0.3, breakTheme.accent, 0.05);
   drawCeilingLight(breakRoom, brx + brw / 3, bry + 6, breakTheme.accent);
@@ -116,7 +124,7 @@ export function buildBreakRoom({
   breakRoom.addChild(brSignBg);
   const breakSignTextColor = isDark ? 0xffffff : contrastTextColor(breakTheme.accent);
   const brSignTxt = new Text({
-    text: pickLocale(activeLocale, LOCALE_TEXT.breakRoom),
+    text: "1F \uACF5\uC6A9\uCE35",
     style: new TextStyle({
       fontSize: 9,
       fill: breakSignTextColor,
@@ -164,7 +172,7 @@ export function buildBreakRoom({
       sprite.scale.set(scale);
       charContainer.addChild(sprite);
     } else {
-      const fallback = new Text({ text: agent.avatar_emoji || "🤖", style: new TextStyle({ fontSize: 20 }) });
+      const fallback = new Text({ text: agent.avatar_emoji || "AG", style: new TextStyle({ fontSize: 12 }) });
       fallback.anchor.set(0.5, 1);
       charContainer.addChild(fallback);
     }
@@ -176,10 +184,13 @@ export function buildBreakRoom({
       baseY: spotY,
     });
 
-    const coffeeEmoji = new Text({ text: "☕", style: new TextStyle({ fontSize: 10 }) });
-    coffeeEmoji.anchor.set(0.5, 0.5);
-    coffeeEmoji.position.set(spotX + 14, spotY - 10);
-    breakRoom.addChild(coffeeEmoji);
+    const breakLabel = new Text({
+      text: "\uD734\uC2DD",
+      style: new TextStyle({ fontSize: 7, fill: 0x4a3a2a, fontFamily: "system-ui, sans-serif" }),
+    });
+    breakLabel.anchor.set(0.5, 0.5);
+    breakLabel.position.set(spotX + 16, spotY - 10);
+    breakRoom.addChild(breakLabel);
 
     const nameTag = new Text({
       text: localeName(activeLocale, agent),
@@ -244,4 +255,65 @@ export function buildBreakRoom({
   }
 
   app.stage.addChild(breakRoom);
+}
+
+function drawSharedFloorHeader(
+  breakRoom: Container,
+  brx: number,
+  bry: number,
+  brw: number,
+  accent: number,
+  floorBands: OfficeFloorBand[] | undefined,
+): void {
+  const floor = floorBands?.find((band) => band.id === "shared");
+  const header = new Text({
+    text: `${floor?.level ?? "1F"} ${floor?.label ?? "\uACF5\uC6A9\uCE35"} / \uB85C\uBE44 / \uD734\uAC8C / \uD559\uC2B5 / \uD1F4\uADFC \uACF5\uBD80`,
+    style: new TextStyle({
+      fontSize: 9,
+      fill: 0xffffff,
+      fontWeight: "bold",
+      fontFamily: "system-ui, sans-serif",
+    }),
+  });
+  const bg = new Graphics();
+  bg.roundRect(brx + 10, bry + 8, Math.min(brw - 20, header.width + 20), 18, 5).fill({
+    color: accent,
+    alpha: 0.86,
+  });
+  breakRoom.addChild(bg);
+  header.position.set(brx + 20, bry + 12);
+  breakRoom.addChild(header);
+}
+
+function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLayout[], breakTheme: RoomTheme): void {
+  for (const facility of facilities) {
+    const zone = new Graphics();
+    const zoneColor =
+      facility.id === "lobby"
+        ? 0xf4ead8
+        : facility.id === "study"
+          ? 0xddebf6
+          : facility.id === "after-hours"
+            ? 0xdcdff0
+            : 0xffeadb;
+    zone.roundRect(facility.x, facility.y, facility.w, facility.h, 6).fill({ color: zoneColor, alpha: 0.72 });
+    zone.roundRect(facility.x, facility.y, facility.w, facility.h, 6).stroke({
+      width: 1,
+      color: breakTheme.accent,
+      alpha: 0.36,
+    });
+    breakRoom.addChild(zone);
+
+    const label = new Text({
+      text: facility.label,
+      style: new TextStyle({
+        fontSize: 8,
+        fill: 0x3f3424,
+        fontWeight: "bold",
+        fontFamily: "system-ui, sans-serif",
+      }),
+    });
+    label.position.set(facility.x + 8, facility.y + 6);
+    breakRoom.addChild(label);
+  }
 }

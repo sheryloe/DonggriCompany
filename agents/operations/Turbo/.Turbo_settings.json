@@ -1,20 +1,30 @@
 {
-  "agent_id": "e8902a5a-9a47-464d-98da-4f77767ea4b9",
+  "agent_id": "seed-operations-runtime-senior",
   "agent_name": "Turbo",
   "role": "senior",
   "department_id": "operations",
-  "workflow_profile": null,
-  "agent_profile_json": null,
-  "class_path": "(unclassified)",
-  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
-  "stats_tasks_done": 0,
-  "stats_xp": 0,
-  "updated_at": "2026-04-15T06:57:37.471Z",
+  "workflow_profile": "{\"role\":\"reviewer\",\"review_lenses\":[\"operations\",\"monitoring\",\"traceability\"],\"two_pass_required\":true,\"max_review_rounds\":null}",
+  "agent_profile_json": "{\"role_template\":\"senior\",\"growth_tier\":4,\"capabilities\":{\"execution\":4,\"architecture\":3,\"review\":5,\"research\":3,\"communication\":4,\"leadership\":3},\"prompt_style\":{\"tone\":4,\"autonomy\":4,\"strictness\":5,\"collaboration\":5},\"specialties\":[\"operations.runtime\",\"documentation-engineer\",\"customer-success-manager\",\"sre-engineer\"],\"custom_prompt_override\":null,\"class_path\":{\"class_stage_1\":\"operations\",\"class_stage_2\":\"memory-manager\",\"class_stage_3\":\"operations.runtime\"},\"promotion_policy\":{\"mode\":\"manual\",\"notes\":\"default seed is senior; junior growth remains available for non-seed agents\"},\"visual_profile_key\":\"agent-visual-33\",\"sprite_number\":33,\"preferred_subagents\":[\"documentation-engineer\",\"customer-success-manager\",\"sre-engineer\"],\"subagent_supervision_rule\":\"Active staff members supervise specialized subagents instead of owning every specialty directly.\"}",
   "goal_command_policy": {
     "version": "donggri_goal_commands_v1",
     "native_commands_only": true,
     "octopus_aliases_enabled": false,
     "bottleneck_rule": "Use required_departments first; add extra departments only when a verification gate requires them.",
     "parallelism_rule": "Split independent work up to max_parallel_workstreams with one owner per workstream."
-  }
+  },
+  "class_path": "operations > memory-manager > operations.runtime",
+  "promotion_policy": "{\"mode\":\"manual\",\"notes\":\"default seed is senior; junior growth remains available for non-seed agents\"}",
+  "visual_profile_key": "agent-visual-33",
+  "preferred_subagents": [
+    "documentation-engineer",
+    "customer-success-manager",
+    "sre-engineer"
+  ],
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "memory_snapshot": [],
+  "skill_growth_snapshot": [],
+  "recent_lessons": [],
+  "project_experience": [],
+  "updated_at": "2026-05-02T02:20:03.476Z"
 }

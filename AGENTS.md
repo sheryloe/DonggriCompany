@@ -84,6 +84,27 @@ These rules are additive and do NOT delete existing orchestration rules below.
 - No lazy fixes: resolve root cause.
 - Minimal impact: touch only necessary code paths.
 
+## Donggri Organization Runtime
+
+`DONGGRI_ORG_V3_21_STAFF`
+
+- Active staff is fixed to 21 people: 7 departments x 3 people.
+- Canonical departments are exactly `pmo`, `planning`, `dev`, `design`, `qa`, `devsecops`, `operations`.
+- Legacy department ids are read-only aliases and must not be used for new seed agents, new MD bundles, or new API payloads.
+- Each department keeps one `team_leader` and two `senior` staff members. `junior` remains available only for growth/legacy compatibility, not default seeds.
+- Staff members are internal owners/orchestrators. They supervise specialized Codex subagents instead of directly owning every specialty.
+- Use the subagent catalog by task type:
+  - `pmo`: `task-distributor`, `project-manager`, `risk-manager`
+  - `planning`: `product-manager`, `architect-reviewer`, `research-analyst`
+  - `dev`: `backend-developer`, `frontend-developer`, `typescript-pro`, `database-optimizer`
+  - `design`: `ui-designer`, `ux-researcher`, `accessibility-tester`
+  - `qa`: `test-automator`, `reviewer`, `performance-monitor`
+  - `devsecops`: `security-auditor`, `devops-engineer`, GitHub workflow specialists
+  - `operations`: `documentation-engineer`, `customer-success-manager`, `sre-engineer`
+- Agent visual profiles are a 30-profile pool. Profiles 1-21 are active staff mappings; profiles 22-30 are reserve candidates.
+- Office UI should present the company as floors: `1F shared`, `2F strategy`, `3F production`, `4F quality/operations`.
+- User-facing UI, toast, and status text are Korean-only. Internal keys, API fields, DB values, generated MD, and policy text remain English canonical.
+
 ---
 
 ## CEO Directive (`$` prefix)

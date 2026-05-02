@@ -2,7 +2,7 @@
 
 ## Identity
 - Agent Name: Lint
-- Agent ID: 7e4a5eb1-7bed-4092-b9eb-715a7d803715
+- Agent ID: seed-qa-regression-senior
 - Role: senior
 - Department ID: qa
 - Bundle Path: agents/qa/Lint
@@ -18,8 +18,9 @@
 - Do not involve every department by default.
 - Split independent work up to max_parallel_workstreams and keep one owner per workstream.
 - Produce evidence for each verification gate before claiming completion.
+
 ## Class Path
-- Class Path: (unclassified)
+- Class Path: qa > qa > quality.regression
 - Stage Rule: stage1(<100 XP), stage2(100~299 XP), stage3(>=300 XP)
 
 ## Growth
@@ -30,10 +31,33 @@
 ## Promotion Policy
 - Default: junior -> senior auto-promotion at 300 XP
 - Exception: team_leader promotion remains manual only
-- Applied Rule: junior -> senior @xp>=300, team_leader manual only
+- Applied Rule: {"mode":"manual","notes":"default seed is senior; junior growth remains available for non-seed agents"}
+
+## Visual Profile
+- Visual Profile Key: agent-visual-22
+- Runtime Sprite Source: /sprites/{sprite_number}-D-1.png for v1 preview
+- Contact Sheet: public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png
+
+## Subagent Supervision
+- Staff members supervise specialized subagents instead of owning every specialty directly.
+- Preferred Subagent: test-automator
+- Preferred Subagent: reviewer
+- Preferred Subagent: performance-monitor
 
 ## Latest Snapshot
-- 2026-04-15T06:57:37.478Z | tasks_done=0 | xp=0 | role=senior
+- 2026-05-02T02:20:03.436Z | tasks_done=0 | xp=0 | role=senior
 
 ## Workflow Profile
-- Raw: (none)
+- Raw: {"role":"reviewer","review_lenses":["test_coverage","regression","reliability"],"two_pass_required":true,"max_review_rounds":null}
+
+## Memory Snapshot
+- No durable memory snapshot yet.
+
+## Skill Growth Snapshot
+- No skill usage history yet.
+
+## Recent Lessons
+- No recent lesson extracted yet.
+
+## Project Experience
+- No project experience extracted yet.

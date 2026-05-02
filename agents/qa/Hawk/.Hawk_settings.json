@@ -1,20 +1,30 @@
 {
-  "agent_id": "b7ade3ad-6dc8-4653-ab40-63b51fead428",
+  "agent_id": "seed-qa-lead",
   "agent_name": "Hawk",
   "role": "team_leader",
   "department_id": "qa",
-  "workflow_profile": null,
-  "agent_profile_json": null,
-  "class_path": "(unclassified)",
-  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
-  "stats_tasks_done": 0,
-  "stats_xp": 0,
-  "updated_at": "2026-04-15T06:57:37.474Z",
+  "workflow_profile": "{\"role\":\"reviewer\",\"review_lenses\":[\"test_coverage\",\"regression\",\"reliability\"],\"two_pass_required\":true,\"max_review_rounds\":null}",
+  "agent_profile_json": "{\"role_template\":\"team_leader\",\"growth_tier\":5,\"capabilities\":{\"execution\":4,\"architecture\":5,\"review\":5,\"research\":3,\"communication\":5,\"leadership\":5},\"prompt_style\":{\"tone\":4,\"autonomy\":4,\"strictness\":5,\"collaboration\":5},\"specialties\":[\"quality.release-gate\",\"test-automator\",\"reviewer\",\"performance-monitor\"],\"custom_prompt_override\":null,\"class_path\":{\"class_stage_1\":\"qa\",\"class_stage_2\":\"qa\",\"class_stage_3\":\"quality.release-gate\"},\"promotion_policy\":{\"mode\":\"manual\",\"from_role\":\"senior\",\"to_role\":\"team_leader\",\"notes\":\"team_leader manual only\"},\"visual_profile_key\":\"agent-visual-21\",\"sprite_number\":21,\"preferred_subagents\":[\"test-automator\",\"reviewer\",\"performance-monitor\"],\"subagent_supervision_rule\":\"Active staff members supervise specialized subagents instead of owning every specialty directly.\"}",
   "goal_command_policy": {
     "version": "donggri_goal_commands_v1",
     "native_commands_only": true,
     "octopus_aliases_enabled": false,
     "bottleneck_rule": "Use required_departments first; add extra departments only when a verification gate requires them.",
     "parallelism_rule": "Split independent work up to max_parallel_workstreams with one owner per workstream."
-  }
+  },
+  "class_path": "qa > qa > quality.release-gate",
+  "promotion_policy": "{\"mode\":\"manual\",\"from_role\":\"senior\",\"to_role\":\"team_leader\",\"notes\":\"team_leader manual only\"}",
+  "visual_profile_key": "agent-visual-21",
+  "preferred_subagents": [
+    "test-automator",
+    "reviewer",
+    "performance-monitor"
+  ],
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "memory_snapshot": [],
+  "skill_growth_snapshot": [],
+  "recent_lessons": [],
+  "project_experience": [],
+  "updated_at": "2026-05-02T02:20:03.429Z"
 }

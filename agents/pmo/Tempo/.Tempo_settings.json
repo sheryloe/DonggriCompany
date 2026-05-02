@@ -1,10 +1,10 @@
 {
-  "agent_id": "seed-pmo-junior",
+  "agent_id": "seed-pmo-risk-senior",
   "agent_name": "Tempo",
-  "role": "junior",
+  "role": "senior",
   "department_id": "pmo",
-  "workflow_profile": "{\"role\":\"reviewer\",\"review_lenses\":[\"timeline\",\"traceability\",\"clarity\"],\"two_pass_required\":true,\"max_review_rounds\":null}",
-  "agent_profile_json": null,
+  "workflow_profile": "{\"role\":\"reviewer\",\"review_lenses\":[\"timeline\",\"traceability\",\"risk\"],\"two_pass_required\":true,\"max_review_rounds\":null}",
+  "agent_profile_json": "{\"role_template\":\"senior\",\"growth_tier\":4,\"capabilities\":{\"execution\":4,\"architecture\":3,\"review\":5,\"research\":3,\"communication\":4,\"leadership\":3},\"prompt_style\":{\"tone\":4,\"autonomy\":4,\"strictness\":5,\"collaboration\":5},\"specialties\":[\"pmo.risk-evidence\",\"task-distributor\",\"project-manager\",\"risk-manager\"],\"custom_prompt_override\":null,\"class_path\":{\"class_stage_1\":\"pmo\",\"class_stage_2\":\"documenter\",\"class_stage_3\":\"pmo.risk-evidence\"},\"promotion_policy\":{\"mode\":\"manual\",\"notes\":\"default seed is senior; junior growth remains available for non-seed agents\"},\"visual_profile_key\":\"agent-visual-03\",\"sprite_number\":3,\"preferred_subagents\":[\"task-distributor\",\"project-manager\",\"risk-manager\"],\"subagent_supervision_rule\":\"Active staff members supervise specialized subagents instead of owning every specialty directly.\"}",
   "goal_command_policy": {
     "version": "donggri_goal_commands_v1",
     "native_commands_only": true,
@@ -12,13 +12,19 @@
     "bottleneck_rule": "Use required_departments first; add extra departments only when a verification gate requires them.",
     "parallelism_rule": "Split independent work up to max_parallel_workstreams with one owner per workstream."
   },
-  "class_path": "(unclassified)",
-  "promotion_policy": "junior -> senior @xp>=300, team_leader manual only",
+  "class_path": "pmo > documenter > pmo.risk-evidence",
+  "promotion_policy": "{\"mode\":\"manual\",\"notes\":\"default seed is senior; junior growth remains available for non-seed agents\"}",
+  "visual_profile_key": "agent-visual-03",
+  "preferred_subagents": [
+    "task-distributor",
+    "project-manager",
+    "risk-manager"
+  ],
   "stats_tasks_done": 0,
   "stats_xp": 0,
   "memory_snapshot": [],
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-04-29T08:59:54.855Z"
+  "updated_at": "2026-05-02T02:20:03.386Z"
 }

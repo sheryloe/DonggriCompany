@@ -2,7 +2,7 @@
 
 ## Identity
 - Agent Name: Harbor
-- Agent ID: seed-management-lead
+- Agent ID: seed-operations-lead
 - Role: team_leader
 - Department ID: operations
 - Bundle Path: agents/operations/Harbor
@@ -20,7 +20,7 @@
 - Produce evidence for each verification gate before claiming completion.
 
 ## Class Path
-- Class Path: (unclassified)
+- Class Path: operations > memory-manager > operations.control
 - Stage Rule: stage1(<100 XP), stage2(100~299 XP), stage3(>=300 XP)
 
 ## Growth
@@ -31,10 +31,21 @@
 ## Promotion Policy
 - Default: junior -> senior auto-promotion at 300 XP
 - Exception: team_leader promotion remains manual only
-- Applied Rule: junior -> senior @xp>=300, team_leader manual only
+- Applied Rule: {"mode":"manual","from_role":"senior","to_role":"team_leader","notes":"team_leader manual only"}
+
+## Visual Profile
+- Visual Profile Key: agent-visual-31
+- Runtime Sprite Source: /sprites/{sprite_number}-D-1.png for v1 preview
+- Contact Sheet: public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png
+
+## Subagent Supervision
+- Staff members supervise specialized subagents instead of owning every specialty directly.
+- Preferred Subagent: documentation-engineer
+- Preferred Subagent: customer-success-manager
+- Preferred Subagent: sre-engineer
 
 ## Latest Snapshot
-- 2026-04-30T16:44:59.296Z | tasks_done=0 | xp=0 | role=team_leader
+- 2026-05-02T02:20:03.467Z | tasks_done=0 | xp=0 | role=team_leader
 
 ## Workflow Profile
 - Raw: {"role":"primary_author","review_lenses":["operations","monitoring","traceability"],"two_pass_required":true,"max_review_rounds":2}

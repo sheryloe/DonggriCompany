@@ -4,6 +4,7 @@ import type { Agent, Department, SubAgent, Task } from "../../types";
 import { buildSpriteMap } from "../AgentAvatar";
 import { type Delivery, MIN_OFFICE_W, findScrollContainer } from "./model";
 import { runOfficeTickerStep, type OfficeTickerContext } from "./officeTicker";
+import { buildAgentSpriteUrl } from "./spriteAssets";
 
 interface UseOfficePixiRuntimeParams {
   containerRef: MutableRefObject<HTMLDivElement | null>;
@@ -112,7 +113,7 @@ export function useOfficePixiRuntime({
         for (const frame of [1, 2, 3]) {
           const key = `${spriteNum}-D-${frame}`;
           loads.push(
-            Assets.load<Texture>(`/sprites/${key}.png`)
+            Assets.load<Texture>(buildAgentSpriteUrl(spriteNum, "D", frame))
               .then((texture) => {
                 textures[key] = texture;
               })
@@ -123,7 +124,7 @@ export function useOfficePixiRuntime({
         for (const direction of ["L", "R"]) {
           const key = `${spriteNum}-${direction}-1`;
           loads.push(
-            Assets.load<Texture>(`/sprites/${key}.png`)
+            Assets.load<Texture>(buildAgentSpriteUrl(spriteNum, direction as "L" | "R", 1))
               .then((texture) => {
                 textures[key] = texture;
               })

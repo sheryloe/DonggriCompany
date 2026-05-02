@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { seedDefaultWorkflowPacks } from "./workflow-pack-seeds.ts";
 import {
   DEFAULT_ROOM_THEMES,
+  buildSeedAgentProfile,
   getDefaultSkillBundleForDepartment,
   mapLegacyDepartmentId,
   ORGANIZATION_AGENT_SEEDS,
@@ -47,21 +48,20 @@ function ensureSkillBundleHistory(db: DbLike, agentId: string, provider: string,
 
 function syncSeedGuideFiles(
   db: DbLike,
-  agentId: string,
-  agentName: string,
-  role: string,
+  seed: (typeof ORGANIZATION_AGENT_SEEDS)[number],
   departmentId: string,
   workflowProfile: string,
 ): void {
-  const row = db.prepare("SELECT stats_tasks_done, stats_xp FROM agents WHERE id = ? LIMIT 1").get(agentId) as
+  const row = db.prepare("SELECT stats_tasks_done, stats_xp FROM agents WHERE id = ? LIMIT 1").get(seed.id) as
     | { stats_tasks_done?: number; stats_xp?: number }
     | undefined;
   upsertAgentGuideFile({
-    id: agentId,
-    name: agentName,
-    role,
+    id: seed.id,
+    name: seed.name,
+    role: seed.role,
     departmentId,
     workflowProfileJson: workflowProfile,
+    agentProfileJson: JSON.stringify(buildSeedAgentProfile(seed)),
     statsTasksDone: Number(row?.stats_tasks_done ?? 0),
     statsXp: Number(row?.stats_xp ?? 0),
     skillBundle: getDefaultSkillBundleForDepartment(departmentId),
@@ -101,9 +101,9 @@ export function applyDefaultSeeds(db: DbLike): void {
       INSERT INTO agents (
         id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key, role, cli_provider,
         family, career_stage, specialization_key, authority_level, execution_capability_profile, workflow_profile,
-        avatar_emoji, personality
+        agent_profile_json, avatar_emoji, sprite_number, personality
       )
-      VALUES (?, ?, ?, ?, ?, ?, 'development', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, 'development', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     );
     for (const seed of ORGANIZATION_AGENT_SEEDS) {
@@ -124,11 +124,13 @@ export function applyDefaultSeeds(db: DbLike): void {
         seed.authority_level,
         seed.execution_capability_profile,
         workflowProfileJson,
+        JSON.stringify(buildSeedAgentProfile(seed)),
         seed.avatar_emoji,
+        seed.sprite_number,
         seed.personality,
       );
       ensureSkillBundleHistory(db, seed.id, seed.cli_provider, departmentId);
-      syncSeedGuideFiles(db, seed.id, seed.name, seed.role, departmentId, workflowProfileJson);
+      syncSeedGuideFiles(db, seed, departmentId, workflowProfileJson);
     }
     console.log("[Claw-Empire] Seeded canonical organization agents");
   }

@@ -138,7 +138,7 @@ const TILE = 20;
 const CEO_SPEED = 7;
 const DELIVERY_SPEED = 0.012;
 
-const BREAK_ROOM_H = 110;
+const BREAK_ROOM_H = 150;
 const BREAK_ROOM_GAP = 32;
 const MAX_VISIBLE_SUB_CLONES_PER_AGENT = 3;
 const SUB_CLONE_WAVE_SPEED = 0.04;
@@ -208,7 +208,7 @@ function emitSubCloneSmokeBurst(
   });
 
   const burstTxt = new Text({
-    text: "펑",
+    text: "SUB",
     style: new TextStyle({
       fontSize: 7,
       fill: mode === "spawn" ? 0xeff4ff : 0xdde4f5,

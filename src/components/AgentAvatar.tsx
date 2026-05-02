@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { CSSProperties } from "react";
 import type { Agent } from "../types";
+import { buildAgentSpriteUrl } from "./office-view/spriteAssets";
 
 const AUTO_SPRITE_START = 1;
 const AUTO_SPRITE_COUNT = 44;
@@ -82,7 +83,7 @@ export default function AgentAvatar({
         style={{ width: size, height: size }}
       >
         <img
-          src={`/sprites/${spriteNum}-D-1.png`}
+          src={buildAgentSpriteUrl(spriteNum, "D", 1)}
           alt={agent?.name ?? ""}
           className={`w-full h-full ${imageFit === "contain" ? "object-contain" : "object-cover"}`}
           style={{ imageRendering: "pixelated", objectPosition: imagePosition }}

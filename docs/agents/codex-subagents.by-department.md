@@ -1,7 +1,7 @@
 # Codex Subagents (Department Map)
 
 - Source: https://github.com/VoltAgent/awesome-codex-subagents (ref: main)
-- Generated at: 2026-04-14T15:03:08.015Z
+- Generated at: 2026-05-01T12:27:52.147Z
 - Total: 136
 - Departments: planning=25, dev=73, design=4, qa=10, devsecops=17, operations=7
 

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { View } from "../app/types";
 import type { Agent, CompanySettings, Department } from "../types";
 import { localeName, useI18n } from "../i18n";
+import { buildAgentSpriteUrl } from "./office-view/spriteAssets";
 
 interface SidebarProps {
   currentView: View;
@@ -12,9 +13,9 @@ interface SidebarProps {
   connected: boolean;
 }
 
-const NAV_ITEMS: Array<{ view: View; mark: string; label: string; sprite?: string }> = [
+const NAV_ITEMS: Array<{ view: View; mark: string; label: string }> = [
   { view: "office", mark: "OF", label: "오피스" },
-  { view: "agents", mark: "AG", label: "직원 관리", sprite: "/sprites/3-D-1.png" },
+  { view: "agents", mark: "AG", label: "직원 관리" },
   { view: "skills", mark: "SK", label: "Skill 문서고" },
   { view: "modules", mark: "MO", label: "모듈" },
   { view: "manual", mark: "MN", label: "메뉴얼" },
@@ -36,7 +37,7 @@ const DEPARTMENT_SHORT_LABELS: Record<string, string> = {
 
 function spriteSrc(agent: Agent): string | null {
   if (typeof agent.sprite_number === "number" && Number.isFinite(agent.sprite_number)) {
-    return `/sprites/${agent.sprite_number}-D-1.png`;
+    return buildAgentSpriteUrl(agent.sprite_number, "D", 1);
   }
   return null;
 }
@@ -125,17 +126,8 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
             className={`sidebar-nav-item ${currentView === item.view ? "active font-semibold" : ""}`}
             title={collapsed ? item.label : undefined}
           >
-            <span className="sidebar-nav-icon">
-              {item.sprite ? (
-                <img
-                  src={item.sprite}
-                  alt=""
-                  className="h-6 w-6 rounded-full object-cover"
-                  style={{ imageRendering: "pixelated" }}
-                />
-              ) : (
-                item.mark
-              )}
+            <span className="sidebar-nav-icon" aria-hidden="true">
+              {item.mark}
             </span>
             {!collapsed && (
               <>
@@ -157,7 +149,6 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
             {visibleDepartments.map((department) => {
               const departmentAgents = agents.filter((agent) => agent.department_id === department.id);
               const working = departmentAgents.filter((agent) => agent.status === "working").length;
-              const idle = departmentAgents.filter((agent) => agent.status === "idle").length;
               const label = DEPARTMENT_SHORT_LABELS[department.id] ?? localeName(locale, department);
               return (
                 <div
@@ -199,7 +190,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
                       working > 0 ? "font-mono text-[11px] text-emerald-300" : "font-mono text-[11px] text-slate-500"
                     }
                   >
-                    {working}/{idle}
+                    {working}/{departmentAgents.length}
                   </span>
                 </div>
               );

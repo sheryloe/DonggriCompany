@@ -33,6 +33,7 @@ import {
 import { drawChair, drawDesk, drawPlant, drawWhiteboard } from "./drawing-furniture-a";
 import { drawBookshelf } from "./drawing-furniture-b";
 import { renderDeskAgentAndSubClones } from "./buildScene-department-agent";
+import type { OfficeRoomLayout } from "./officeFloorPlan";
 
 interface BuildDepartmentRoomsParams {
   app: Application;
@@ -51,6 +52,7 @@ interface BuildDepartmentRoomsParams {
   roomGap: number;
   deptStartY: number;
   agentRows: number;
+  roomLayouts?: Map<string, OfficeRoomLayout>;
   spriteMap: Map<string, number>;
   cbRef: MutableRefObject<CallbackSnapshot>;
   roomRectsRef: MutableRefObject<RoomRect[]>;
@@ -80,7 +82,7 @@ export function buildDepartmentRooms({
   roomH,
   roomGap,
   deptStartY,
-  agentRows,
+  roomLayouts,
   spriteMap,
   cbRef,
   roomRectsRef,
@@ -96,37 +98,43 @@ export function buildDepartmentRooms({
   departments.forEach((dept, deptIdx) => {
     const col = deptIdx % gridCols;
     const row = Math.floor(deptIdx / gridCols);
-    const rx = roomStartX + col * (roomW + roomGap);
-    const ry = deptStartY + row * (roomH + roomGap);
+    const layout = roomLayouts?.get(dept.id);
+    const rx = layout?.x ?? roomStartX + col * (roomW + roomGap);
+    const ry = layout?.y ?? deptStartY + row * (roomH + roomGap);
+    const currentRoomW = layout?.w ?? roomW;
+    const currentRoomH = layout?.h ?? roomH;
     const theme = customThemes?.[dept.id] || DEPT_THEME[dept.id] || DEPT_THEME.dev;
     const deptAgents = agents.filter((agent) => agent.department_id === dept.id);
-    roomRectsRef.current.push({ dept, x: rx, y: ry, w: roomW, h: roomH });
+    const currentAgentRows = Math.max(1, Math.ceil(deptAgents.length / COLS_PER_ROW));
+    roomRectsRef.current.push({ dept, x: rx, y: ry, w: currentRoomW, h: currentRoomH });
 
     const room = new Container();
 
     const floorG = new Graphics();
-    drawTiledFloor(floorG, rx, ry, roomW, roomH, theme.floor1, theme.floor2);
+    drawTiledFloor(floorG, rx, ry, currentRoomW, currentRoomH, theme.floor1, theme.floor2);
     room.addChild(floorG);
-    drawRoomAtmosphere(room, rx, ry, roomW, roomH, theme.wall, theme.accent);
+    drawRoomAtmosphere(room, rx, ry, currentRoomW, currentRoomH, theme.wall, theme.accent);
 
     const wallG = new Graphics();
-    wallG.roundRect(rx, ry, roomW, roomH, 3).stroke({ width: 2.5, color: theme.wall });
+    wallG.roundRect(rx, ry, currentRoomW, currentRoomH, 3).stroke({ width: 2.5, color: theme.wall });
     room.addChild(wallG);
 
     const doorG = new Graphics();
-    doorG.rect(rx + roomW / 2 - 16, ry - 2, 32, 5).fill(0xf5f0e8);
+    doorG.rect(rx + currentRoomW / 2 - 16, ry - 2, 32, 5).fill(0xf5f0e8);
     room.addChild(doorG);
 
     const signW = 84;
     const signBg = new Graphics();
-    signBg.roundRect(rx + roomW / 2 - signW / 2 + 1, ry - 3, signW, 18, 4).fill({ color: 0x000000, alpha: 0.12 });
-    signBg.roundRect(rx + roomW / 2 - signW / 2, ry - 4, signW, 18, 4).fill(theme.accent);
+    signBg
+      .roundRect(rx + currentRoomW / 2 - signW / 2 + 1, ry - 3, signW, 18, 4)
+      .fill({ color: 0x000000, alpha: 0.12 });
+    signBg.roundRect(rx + currentRoomW / 2 - signW / 2, ry - 4, signW, 18, 4).fill(theme.accent);
     signBg.eventMode = "static";
     signBg.cursor = "pointer";
     signBg.on("pointerdown", () => cbRef.current.onSelectDepartment(dept));
     room.addChild(signBg);
     const signTxt = new Text({
-      text: `${dept.icon || "🏢"} ${localeName(activeLocale, dept)}`,
+      text: `${dept.icon || "DEPT"} ${localeName(activeLocale, dept)}`,
       style: new TextStyle({
         fontSize: 9,
         fill: 0xffffff,
@@ -136,18 +144,19 @@ export function buildDepartmentRooms({
       }),
     });
     signTxt.anchor.set(0.5, 0.5);
-    signTxt.position.set(rx + roomW / 2, ry + 5);
+    signTxt.position.set(rx + currentRoomW / 2, ry + 5);
     room.addChild(signTxt);
 
-    drawCeilingAndDecor(room, rx, ry, roomW, roomH, theme, deptIdx, wallClocksRef);
+    drawFloorLabel(room, layout?.floorLabel, rx, ry, currentRoomW, theme.accent);
+    drawCeilingAndDecor(room, rx, ry, currentRoomW, currentRoomH, theme, deptIdx, wallClocksRef);
 
     if (deptAgents.length > 0) {
       drawRug(
         room,
-        rx + roomW / 2,
-        ry + 38 + (Math.min(agentRows, 2) * SLOT_H) / 2,
-        roomW - 40,
-        Math.min(agentRows, 2) * SLOT_H - 10,
+        rx + currentRoomW / 2,
+        ry + 38 + (Math.min(currentAgentRows, 2) * SLOT_H) / 2,
+        currentRoomW - 40,
+        Math.min(currentAgentRows, 2) * SLOT_H - 10,
         theme.accent,
       );
     }
@@ -158,7 +167,7 @@ export function buildDepartmentRooms({
         style: new TextStyle({ fontSize: 10, fill: 0x9a8a7a, fontFamily: "system-ui, sans-serif" }),
       });
       emptyText.anchor.set(0.5, 0.5);
-      emptyText.position.set(rx + roomW / 2, ry + roomH / 2);
+      emptyText.position.set(rx + currentRoomW / 2, ry + currentRoomH / 2);
       room.addChild(emptyText);
     }
 
@@ -216,6 +225,33 @@ export function buildDepartmentRooms({
 
     app.stage.addChild(room);
   });
+}
+
+function drawFloorLabel(
+  room: Container,
+  floorLabel: string | undefined,
+  rx: number,
+  ry: number,
+  roomW: number,
+  accent: number,
+): void {
+  if (!floorLabel) return;
+  const label = new Text({
+    text: floorLabel,
+    style: new TextStyle({
+      fontSize: 7,
+      fill: 0xffffff,
+      fontFamily: "system-ui, sans-serif",
+      fontWeight: "bold",
+    }),
+  });
+  label.anchor.set(0, 0.5);
+  const width = Math.min(120, Math.max(72, label.width + 14), roomW - 16);
+  const bg = new Graphics();
+  bg.roundRect(rx + 8, ry + 16, width, 14, 4).fill({ color: accent, alpha: 0.78 });
+  room.addChild(bg);
+  label.position.set(rx + 14, ry + 23);
+  room.addChild(label);
 }
 
 function drawCeilingAndDecor(

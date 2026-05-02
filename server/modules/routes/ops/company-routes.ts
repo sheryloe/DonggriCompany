@@ -11,6 +11,7 @@ import {
   applyCanonicalResetOrganization,
   previewCanonicalResetOrganization,
 } from "../../bootstrap/schema/organization-reset.ts";
+import { ORGANIZATION_SEED_VERSION } from "../../bootstrap/schema/organization-manifest.ts";
 import { resolveProjectRoutingConstraint } from "../shared/project-staffing-policy.ts";
 
 type RegisterCompanyRoutesDeps = Pick<RuntimeContext, "app" | "db">;
@@ -43,7 +44,7 @@ export function registerCompanyRoutes({ app, db }: RegisterCompanyRoutesDeps): v
       .trim()
       .toLowerCase();
     const targetSeedVersion = String(body.target_seed_version ?? "").trim();
-    if (targetSeedVersion && targetSeedVersion !== "org-v2") {
+    if (targetSeedVersion && targetSeedVersion !== ORGANIZATION_SEED_VERSION) {
       return res.status(400).json({ error: "unsupported_seed_version", target_seed_version: targetSeedVersion });
     }
     if (mode !== "preview" && mode !== "apply") {

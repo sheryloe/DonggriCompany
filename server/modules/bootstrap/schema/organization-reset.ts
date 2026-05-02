@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import {
   DEFAULT_ROOM_THEMES,
+  buildSeedAgentProfile,
   getDefaultSkillBundleForDepartment,
   getOrganizationAgentSeedById,
   LEGACY_BUILTIN_AGENT_SIGNATURES,
@@ -126,6 +127,7 @@ function syncSeedAgentArtifacts(seed: OrganizationAgentSeed, statsTasksDone = 0,
     role: seed.role,
     departmentId: canonicalDepartmentId,
     workflowProfileJson: JSON.stringify(seed.workflow_profile),
+    agentProfileJson: JSON.stringify(buildSeedAgentProfile(seed)),
     statsTasksDone,
     statsXp,
     skillBundle: getDefaultSkillBundleForDepartment(canonicalDepartmentId),
@@ -226,9 +228,9 @@ function upsertSeedAgent(db: DbLike, seed: OrganizationAgentSeed, agentId?: stri
     INSERT INTO agents (
       id, name, name_ko, name_ja, name_zh, department_id, workflow_pack_key, role, cli_provider,
       family, career_stage, specialization_key, authority_level, execution_capability_profile, workflow_profile,
-      avatar_emoji, personality
+      agent_profile_json, avatar_emoji, sprite_number, personality
     )
-    VALUES (?, ?, ?, ?, ?, ?, 'development', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, 'development', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       name_ko = excluded.name_ko,
@@ -244,7 +246,9 @@ function upsertSeedAgent(db: DbLike, seed: OrganizationAgentSeed, agentId?: stri
       authority_level = excluded.authority_level,
       execution_capability_profile = excluded.execution_capability_profile,
       workflow_profile = excluded.workflow_profile,
+      agent_profile_json = excluded.agent_profile_json,
       avatar_emoji = excluded.avatar_emoji,
+      sprite_number = excluded.sprite_number,
       personality = excluded.personality
   `,
   ).run(
@@ -262,7 +266,9 @@ function upsertSeedAgent(db: DbLike, seed: OrganizationAgentSeed, agentId?: stri
     seed.authority_level,
     seed.execution_capability_profile,
     JSON.stringify(seed.workflow_profile),
+    JSON.stringify(buildSeedAgentProfile(seed)),
     seed.avatar_emoji,
+    seed.sprite_number,
     seed.personality,
   );
   syncDefaultSkillHistory(db, seed);

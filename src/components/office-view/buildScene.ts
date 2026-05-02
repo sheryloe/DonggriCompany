@@ -1,22 +1,13 @@
 import { type Container } from "pixi.js";
 import { buildSpriteMap } from "../AgentAvatar";
-import {
-  BREAK_ROOM_GAP,
-  BREAK_ROOM_H,
-  CEO_ZONE_H,
-  COLS_PER_ROW,
-  HALLWAY_H,
-  ROOM_PAD,
-  SLOT_H,
-  SLOT_W,
-  detachNode,
-} from "./model";
+import { BREAK_ROOM_GAP, COLS_PER_ROW, ROOM_PAD, SLOT_H, SLOT_W, detachNode } from "./model";
 import { DEFAULT_BREAK_THEME, DEFAULT_CEO_THEME, applyOfficeThemeMode } from "./themes-locale";
 import type { BuildOfficeSceneContext } from "./buildScene-types";
 import { buildCeoAndHallway } from "./buildScene-ceo-hallway";
 import { buildDepartmentRooms } from "./buildScene-departments";
 import { buildBreakRoom } from "./buildScene-break-room";
 import { buildFinalLayers } from "./buildScene-final-layers";
+import { buildOfficeFloorPlan } from "./officeFloorPlan";
 
 export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   const {
@@ -122,6 +113,7 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   spriteMapRef.current = spriteMap;
 
   const OFFICE_W = officeWRef.current;
+  const floorPlan = buildOfficeFloorPlan({ officeW: OFFICE_W, departments, agents });
   const deptCount = departments.length || 1;
   const baseRoomW = COLS_PER_ROW * SLOT_W + ROOM_PAD * 2;
   const roomGap = 12;
@@ -130,7 +122,6 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
     gridCols -= 1;
   }
 
-  const gridRows = Math.ceil(deptCount / gridCols);
   const agentsPerDept = departments.map((dept) => agents.filter((agent) => agent.department_id === dept.id));
   const maxAgents = Math.max(1, ...agentsPerDept.map((deptAgents) => deptAgents.length));
   const agentRows = Math.ceil(maxAgents / COLS_PER_ROW);
@@ -138,9 +129,9 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   const totalRoomSpace = OFFICE_W - 24 - (gridCols - 1) * roomGap;
   const roomW = Math.max(baseRoomW, Math.floor(totalRoomSpace / gridCols));
   const roomH = Math.max(170, agentRows * SLOT_H + 44);
-  const deptStartY = CEO_ZONE_H + HALLWAY_H;
-  const breakRoomY = deptStartY + gridRows * (roomH + roomGap) + BREAK_ROOM_GAP;
-  const totalH = breakRoomY + BREAK_ROOM_H + 30;
+  const deptStartY = floorPlan.sharedFloorY + BREAK_ROOM_GAP;
+  const breakRoomY = floorPlan.sharedFloorY;
+  const totalH = floorPlan.totalH;
   const roomStartX = (OFFICE_W - (gridCols * roomW + (gridCols - 1) * roomGap)) / 2;
   totalHRef.current = totalH;
 
@@ -181,6 +172,7 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
     roomGap,
     deptStartY,
     agentRows,
+    roomLayouts: floorPlan.roomLayouts,
     spriteMap,
     cbRef,
     roomRectsRef,
@@ -205,6 +197,8 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
     isDark,
     breakRoomY,
     OFFICE_W,
+    sharedFacilities: floorPlan.sharedFacilities,
+    floorBands: floorPlan.floorBands,
     cbRef,
     breakAnimItemsRef,
     breakBubblesRef,

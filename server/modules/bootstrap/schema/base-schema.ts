@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS agents (
   authority_level INTEGER NOT NULL DEFAULT 0,
   execution_capability_profile TEXT,
   agent_profile_json TEXT,
-  avatar_emoji TEXT NOT NULL DEFAULT '🤖',
+  avatar_emoji TEXT NOT NULL DEFAULT 'AG',
   sprite_number INTEGER,
   personality TEXT,
   status TEXT NOT NULL DEFAULT 'idle' CHECK(status IN ('idle','working','break','offline')),
@@ -497,6 +497,8 @@ function ensureCanonicalCompatibilityColumns(db: DbLike): void {
   execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN career_stage TEXT;");
   execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN specialization_key TEXT;");
   execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN authority_level INTEGER NOT NULL DEFAULT 0;");
+  execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN agent_profile_json TEXT;");
+  execIgnoreDuplicateColumn(db, "ALTER TABLE agents ADD COLUMN sprite_number INTEGER;");
   execIgnoreDuplicateColumn(
     db,
     "ALTER TABLE projects ADD COLUMN canonical_pack_profile TEXT NOT NULL DEFAULT 'development';",

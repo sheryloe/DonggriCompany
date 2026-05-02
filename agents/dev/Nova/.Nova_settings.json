@@ -15,17 +15,12 @@
   "class_path": "dev > frontend > frontend.react",
   "promotion_policy": "{\"mode\":\"manual\",\"notes\":\"default seed is senior; junior growth remains available for non-seed agents\"}",
   "visual_profile_key": "agent-visual-13",
-  "preferred_subagents": [
-    "backend-developer",
-    "frontend-developer",
-    "typescript-pro",
-    "database-optimizer"
-  ],
+  "preferred_subagents": ["backend-developer", "frontend-developer", "typescript-pro", "database-optimizer"],
   "stats_tasks_done": 0,
   "stats_xp": 0,
   "memory_snapshot": [],
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-05-02T02:20:03.414Z"
+  "updated_at": "2026-05-02T04:59:14.382Z"
 }

@@ -109,6 +109,8 @@ export interface AgentProfile {
   custom_prompt_override: string | null;
   class_path?: AgentClassPath | string | string[] | null;
   promotion_policy?: AgentPromotionPolicy | string | null;
+  visual_profile_key?: string | null;
+  preferred_subagents?: string[];
 }
 
 export interface Agent {
@@ -379,7 +381,7 @@ export interface AgentVisualProfile {
     canvas_size: string;
   };
   preferred_asset_modules: string[];
-  status: "seeded" | "active" | "archived";
+  status: "seeded" | "active" | "reserve" | "archived";
 }
 
 export interface MeetingPresence {

@@ -15,16 +15,12 @@
   "class_path": "devsecops > reviewer > security.audit",
   "promotion_policy": "{\"mode\":\"manual\",\"notes\":\"default seed is senior; junior growth remains available for non-seed agents\"}",
   "visual_profile_key": "agent-visual-28",
-  "preferred_subagents": [
-    "security-auditor",
-    "devops-engineer",
-    "github:gh-fix-ci"
-  ],
+  "preferred_subagents": ["security-auditor", "devops-engineer", "github:gh-fix-ci"],
   "stats_tasks_done": 0,
   "stats_xp": 0,
   "memory_snapshot": [],
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-05-02T02:20:03.463Z"
+  "updated_at": "2026-05-02T04:59:14.443Z"
 }

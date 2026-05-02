@@ -4,6 +4,7 @@ import {
   LEGACY_DEPARTMENT_ID_MAP,
   ORGANIZATION_AGENT_SEEDS,
   ORGANIZATION_DEPARTMENTS,
+  RESERVE_VISUAL_PROFILE_POLICY,
   buildSeedAgentProfile,
   mapLegacyDepartmentId,
 } from "./organization-manifest.ts";
@@ -50,6 +51,11 @@ describe("organization manifest v3", () => {
     expect(AGENT_VISUAL_PROFILE_SEEDS).toHaveLength(35);
     expect(AGENT_VISUAL_PROFILE_SEEDS.filter((profile) => profile.status === "active")).toHaveLength(21);
     expect(AGENT_VISUAL_PROFILE_SEEDS.filter((profile) => profile.status === "reserve")).toHaveLength(14);
+    expect(RESERVE_VISUAL_PROFILE_POLICY).toMatchObject({
+      status: "reserve_until_approved",
+      approval_gate: "ceo_or_pmo",
+      active_staff_profile_limit: 21,
+    });
 
     const devLead = ORGANIZATION_AGENT_SEEDS.find((seed) => seed.id === "seed-dev-lead");
     expect(devLead).toBeTruthy();

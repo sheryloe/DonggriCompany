@@ -201,6 +201,19 @@ export default function OfficeView({
     hostY.scrollTo({ top: Math.max(0, Math.min(maxTop, targetTop)), behavior: "smooth" });
   }, []);
 
+  const officeSummaryCards = useMemo(() => {
+    const inProgressTasks = tasks.filter((task) => task.status === "in_progress").length;
+    const reviewTasks = tasks.filter((task) => task.status === "review").length;
+    const workingAgents = agents.filter((agent) => agent.status === "working").length;
+    const activeSubAgents = subAgents.filter((subAgent) => subAgent.status === "working").length;
+    return [
+      { label: "진행 업무", value: inProgressTasks, detail: `검토 대기 ${reviewTasks}` },
+      { label: "근무 직원", value: workingAgents, detail: `전체 ${agents.length}` },
+      { label: "호출 Subagent", value: activeSubAgents, detail: "전문 실행 풀" },
+      { label: "운영 층", value: 4, detail: "공용·전략·제작·품질" },
+    ];
+  }, [agents, subAgents, tasks]);
+
   const followCeoInView = useCallback(() => {
     if (!showVirtualPadRef.current) return;
     const container = containerRef.current;
@@ -444,6 +457,20 @@ export default function OfficeView({
           </button>
         ))}
         <span className="ml-auto hidden text-slate-400 md:inline">7부서 21명 기준 · 세부 전문성은 subagent 호출</span>
+      </div>
+      <div className="mx-auto mb-3 grid w-full max-w-5xl grid-cols-2 gap-2 md:grid-cols-4">
+        {officeSummaryCards.map((card) => (
+          <div
+            key={card.label}
+            className="rounded-2xl border border-slate-700/70 bg-slate-950/45 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+          >
+            <div className="text-[11px] font-semibold text-slate-400">{card.label}</div>
+            <div className="mt-1 flex items-end justify-between gap-2">
+              <span className="font-mono text-2xl font-bold text-cyan-100">{card.value}</span>
+              <span className="pb-1 text-[11px] text-slate-500">{card.detail}</span>
+            </div>
+          </div>
+        ))}
       </div>
       <div className="relative mx-auto w-full">
         <div

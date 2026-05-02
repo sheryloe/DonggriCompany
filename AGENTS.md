@@ -102,8 +102,20 @@ These rules are additive and do NOT delete existing orchestration rules below.
   - `devsecops`: `security-auditor`, `devops-engineer`, GitHub workflow specialists
   - `operations`: `documentation-engineer`, `customer-success-manager`, `sre-engineer`
 - Agent visual profiles are a 30-profile pool. Profiles 1-21 are active staff mappings; profiles 22-30 are reserve candidates.
+- Reserve visual profiles must stay inactive until a new hire, project pack, or staff replacement explicitly activates them. Activation requires a tracked seed/profile update and guide bundle regeneration.
 - Office UI should present the company as floors: `1F shared`, `2F strategy`, `3F production`, `4F quality/operations`.
+- Runtime character sprites must be generated through the tracked sprite normalization pipeline. Do not hand-edit individual runtime sprite PNG files unless the generator is also updated.
 - User-facing UI, toast, and status text are Korean-only. Internal keys, API fields, DB values, generated MD, and policy text remain English canonical.
+
+## Commit Hygiene Rule
+
+`DONGGRI_COMMIT_SCOPE_GUARD_V1`
+
+- Never commit runtime-only outputs: `.tmp/`, `reports/`, `data/`, `logs/`, `coverage/`, `dist/`, local DB files, auth storage, and token/secret material.
+- `agents/archive/` is an operational backup area and must not be used as a tracked source of truth.
+- If an analysis report must be committed, write it under `tasks/` or `docs/` with no secrets and no runtime-only absolute token paths.
+- Generated runtime assets may be committed only when they are deterministic repo assets and the generator/source manifest is committed in the same change.
+- Before commit, run a staged diff check and secret-pattern scan. If suspicious credentials appear, stop and remove them before committing.
 
 ---
 

@@ -15,16 +15,12 @@
   "class_path": "pmo > product-manager > pmo.delivery-control",
   "promotion_policy": "{\"mode\":\"manual\",\"notes\":\"default seed is senior; junior growth remains available for non-seed agents\"}",
   "visual_profile_key": "agent-visual-02",
-  "preferred_subagents": [
-    "task-distributor",
-    "project-manager",
-    "risk-manager"
-  ],
+  "preferred_subagents": ["task-distributor", "project-manager", "risk-manager"],
   "stats_tasks_done": 0,
   "stats_xp": 0,
   "memory_snapshot": [],
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-05-02T02:20:03.380Z"
+  "updated_at": "2026-05-02T04:59:14.318Z"
 }

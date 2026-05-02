@@ -13,6 +13,7 @@ import {
 } from "./model";
 import { hashStr } from "./drawing-core";
 import { drawDesk } from "./drawing-furniture-a";
+import { collectAgentWalkFrames } from "./spriteActors";
 
 interface RenderDeskAgentAndSubClonesParams {
   room: Container;
@@ -62,11 +63,7 @@ export function renderDeskAgentAndSubClones({
   charContainer.cursor = "pointer";
   charContainer.on("pointerdown", () => cbRef.current.onSelectAgent(agent));
 
-  const frames: Texture[] = [];
-  for (let frame = 1; frame <= 3; frame++) {
-    const key = `${spriteNum}-D-${frame}`;
-    if (textures[key]) frames.push(textures[key]);
-  }
+  const frames = collectAgentWalkFrames(textures, spriteNum, "D");
 
   if (frames.length > 0) {
     const animSprite = new AnimatedSprite(frames);
@@ -80,7 +77,10 @@ export function renderDeskAgentAndSubClones({
     }
     charContainer.addChild(animSprite);
   } else {
-    const fallback = new Text({ text: agent.avatar_emoji || "🤖", style: new TextStyle({ fontSize: 24 }) });
+    const fallback = new Text({
+      text: agent.avatar_emoji || "AG",
+      style: new TextStyle({ fontSize: 16, fill: 0xe2e8f0, fontFamily: "monospace" }),
+    });
     fallback.anchor.set(0.5, 1);
     charContainer.addChild(fallback);
   }
@@ -142,7 +142,7 @@ export function renderDeskAgentAndSubClones({
   if (activeTask) {
     const txt = activeTask.title.length > 16 ? `${activeTask.title.slice(0, 16)}...` : activeTask.title;
     const bubbleText = new Text({
-      text: `💬 ${txt}`,
+      text: `업무 ${txt}`,
       style: new TextStyle({
         fontSize: 6.5,
         fill: 0x333333,
@@ -182,11 +182,7 @@ export function renderDeskAgentAndSubClones({
       cloneContainer.addChild(aura);
 
       const cloneSpriteNum = (hashStr(`${sub.id}:clone`) % 44) + 1;
-      const cloneFrames: Texture[] = [];
-      for (let frame = 1; frame <= 3; frame++) {
-        const key = `${cloneSpriteNum}-D-${frame}`;
-        if (textures[key]) cloneFrames.push(textures[key]);
-      }
+      const cloneFrames = collectAgentWalkFrames(textures, cloneSpriteNum, "D");
       const baseTexture = cloneFrames[0];
       if (!baseTexture) return;
       const baseScale = (TARGET_CHAR_H / baseTexture.height) * 0.76;
@@ -240,7 +236,10 @@ export function renderDeskAgentAndSubClones({
   }
 
   if (isOffline) {
-    const zzz = new Text({ text: "💤", style: new TextStyle({ fontSize: 12 }) });
+    const zzz = new Text({
+      text: "휴식",
+      style: new TextStyle({ fontSize: 8, fill: 0xaaaacc, fontWeight: "bold", fontFamily: "system-ui, sans-serif" }),
+    });
     zzz.anchor.set(0.5, 0.5);
     zzz.position.set(ax + 20, charFeetY - TARGET_CHAR_H / 2);
     room.addChild(zzz);

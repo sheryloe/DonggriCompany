@@ -2,6 +2,8 @@ import { Graphics, type Container } from "pixi.js";
 import type { MutableRefObject } from "react";
 import { DELIVERY_SPEED, type Delivery, destroyNode } from "./model";
 import { hashStr } from "./drawing-core";
+import { applyAgentWalkDirection } from "./spriteActors";
+import { getAgentWalkDirection, type AgentSpriteDirection } from "./spriteAssets";
 
 interface BreakAnimItem {
   sprite: Container;
@@ -67,6 +69,13 @@ export function updateBreakRoomAndDeliveryAnimations(
 
   const deliveries = deliveriesRef.current;
   const now = Date.now();
+
+  const setDeliveryDirection = (delivery: Delivery, direction: AgentSpriteDirection) => {
+    if (delivery.activeWalkDirection === direction) return;
+    applyAgentWalkDirection(delivery.walkSprites, direction);
+    delivery.activeWalkDirection = direction;
+  };
+
   for (let i = deliveries.length - 1; i >= 0; i--) {
     const delivery = deliveries[i];
     if (delivery.sprite.destroyed) {
@@ -83,6 +92,7 @@ export function updateBreakRoomAndDeliveryAnimations(
             maybeAnim.gotoAndStop(0);
           }
         }
+        setDeliveryDirection(delivery, "D");
         delivery.sprite.scale.x = 1;
         delivery.seatedPoseApplied = true;
       }
@@ -112,12 +122,13 @@ export function updateBreakRoomAndDeliveryAnimations(
       const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
       delivery.sprite.position.x = delivery.fromX + (delivery.toX - delivery.fromX) * ease;
       delivery.sprite.position.y = delivery.fromY + (delivery.toY - delivery.fromY) * ease;
+      setDeliveryDirection(delivery, getAgentWalkDirection(delivery.fromX, delivery.fromY, delivery.toX, delivery.toY));
       const walkBounce = Math.abs(Math.sin(t * Math.PI * 12)) * 3;
       delivery.sprite.position.y -= walkBounce;
       if (t < 0.05) delivery.sprite.alpha = t / 0.05;
       else if (t > 0.9) delivery.sprite.alpha = (1 - t) / 0.1;
       else delivery.sprite.alpha = 1;
-      delivery.sprite.scale.x = delivery.toX > delivery.fromX ? 1 : -1;
+      delivery.sprite.scale.x = 1;
     } else {
       const t = delivery.progress;
       const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;

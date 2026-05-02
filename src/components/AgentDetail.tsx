@@ -111,6 +111,13 @@ export default function AgentDetail({
     }
     return providerLabel;
   }, [agent.api_model, agent.cli_account_pool_id, agent.cli_provider]);
+  const visualProfileSummary = useMemo(() => {
+    if (agent.agent_profile?.visual_profile_key) {
+      return agent.agent_profile.visual_profile_key.replace("agent-visual-", "프로필 ");
+    }
+    if (typeof agent.sprite_number === "number") return `스프라이트 ${agent.sprite_number}`;
+    return "-";
+  }, [agent.agent_profile, agent.sprite_number]);
 
   useEffect(() => {
     setSelectedCli(agent.cli_provider);
@@ -436,6 +443,10 @@ export default function AgentDetail({
                 {t({ ko: "권한", en: "Authority", ja: "Authority", zh: "Authority" })}
               </div>
               <div className="mt-0.5 font-semibold">A{agent.authority_level ?? 0}</div>
+            </div>
+            <div className="rounded-md border border-slate-700/70 bg-slate-800/60 px-2 py-1.5 text-slate-200">
+              <div className="text-[10px] text-slate-400">비주얼 프로필</div>
+              <div className="mt-0.5 font-semibold">{visualProfileSummary}</div>
             </div>
           </div>
         </div>

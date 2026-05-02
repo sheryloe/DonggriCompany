@@ -236,6 +236,14 @@ export const AGENT_VISUAL_PROFILE_SEEDS: AgentVisualProfileSeed[] = Array.from({
   visualProfile(index + 1),
 );
 
+export const RESERVE_VISUAL_PROFILE_POLICY = {
+  status: "reserve_until_approved",
+  activation_sources: ["new_hire", "project_pack", "staff_replacement"],
+  approval_gate: "ceo_or_pmo",
+  required_actions: ["update_seed_profile", "regenerate_agent_guides", "verify_sprite_manifest"],
+  active_staff_profile_limit: 21,
+} as const;
+
 export const DEFAULT_DEPARTMENT_SKILL_BUNDLES: Record<OrganizationDepartmentId, string[]> = {
   pmo: [
     "task-distribution",

@@ -1,5 +1,5 @@
 import { useEffect, type MutableRefObject } from "react";
-import { AnimatedSprite, Container, Graphics, Text, TextStyle, type Texture } from "pixi.js";
+import { Container, Graphics, Text, TextStyle, type Texture } from "pixi.js";
 import type { Agent, CeoOfficeCall, CrossDeptDelivery, MeetingPresence } from "../../types";
 import { hashStr } from "./drawing-core";
 import { type Delivery, destroyNode, trackProcessedId } from "./model";
@@ -10,6 +10,8 @@ import {
   resolveMeetingDecision,
   type SupportedLocale,
 } from "./themes-locale";
+import { createAgentWalkActor } from "./spriteActors";
+import { getAgentWalkDirection } from "./spriteAssets";
 
 interface MeetingPresenceSyncParams {
   meetingPresence?: MeetingPresence[];
@@ -69,26 +71,12 @@ export function useMeetingPresenceSync({
       }
 
       const spriteNum = spriteMapRef.current.get(row.agent_id) ?? (hashStr(row.agent_id) % 44) + 1;
-      const actor = new Container();
-      const frames: Texture[] = [];
-
-      for (let frame = 1; frame <= 3; frame++) {
-        const key = `${spriteNum}-D-${frame}`;
-        if (textures[key]) frames.push(textures[key]);
-      }
-
-      if (frames.length > 0) {
-        const animSprite = new AnimatedSprite(frames);
-        animSprite.anchor.set(0.5, 1);
-        const scale = 44 / animSprite.texture.height;
-        animSprite.scale.set(scale);
-        animSprite.gotoAndStop(0);
-        actor.addChild(animSprite);
-      } else {
-        const fallback = new Text({ text: "🧑‍💼", style: new TextStyle({ fontSize: 20 }) });
-        fallback.anchor.set(0.5, 1);
-        actor.addChild(fallback);
-      }
+      const { actor, walkSprites } = createAgentWalkActor({
+        textures,
+        spriteNumber: spriteNum,
+        targetHeight: 44,
+        initialDirection: "D",
+      });
 
       const badge = new Graphics();
       actor.addChild(badge);
@@ -120,6 +108,8 @@ export function useMeetingPresenceSync({
         meetingDecision: decision,
         badgeGraphics: badge,
         badgeText,
+        walkSprites,
+        activeWalkDirection: "D",
       });
     }
 
@@ -182,33 +172,22 @@ export function useCrossDeptDeliveryAnimations({
         continue;
       }
 
-      const actor = new Container();
       const spriteNum = spriteMapRef.current.get(delivery.fromAgentId) ?? (hashStr(delivery.fromAgentId) % 44) + 1;
-      const frames: Texture[] = [];
-      for (let frame = 1; frame <= 3; frame++) {
-        const key = `${spriteNum}-D-${frame}`;
-        if (textures[key]) frames.push(textures[key]);
-      }
-
-      if (frames.length > 0) {
-        const animSprite = new AnimatedSprite(frames);
-        animSprite.anchor.set(0.5, 1);
-        const scale = 44 / animSprite.texture.height;
-        animSprite.scale.set(scale);
-        animSprite.animationSpeed = 0.12;
-        animSprite.play();
-        animSprite.position.set(0, 0);
-        actor.addChild(animSprite);
-      } else {
-        const fallback = new Text({ text: "🧑‍💼", style: new TextStyle({ fontSize: 20 }) });
-        fallback.anchor.set(0.5, 1);
-        actor.addChild(fallback);
-      }
+      const initialDirection = getAgentWalkDirection(fromPos.x, fromPos.y, toPos.x, toPos.y);
+      const { actor, walkSprites } = createAgentWalkActor({
+        textures,
+        spriteNumber: spriteNum,
+        targetHeight: 44,
+        initialDirection,
+      });
 
       const docHolder = new Container();
-      const docEmoji = new Text({ text: "📋", style: new TextStyle({ fontSize: 13 }) });
-      docEmoji.anchor.set(0.5, 0.5);
-      docHolder.addChild(docEmoji);
+      const docLabel = new Text({
+        text: "문서",
+        style: new TextStyle({ fontSize: 7, fill: 0x111827, fontWeight: "bold", fontFamily: "system-ui, sans-serif" }),
+      });
+      docLabel.anchor.set(0.5, 0.5);
+      docHolder.addChild(docLabel);
       docHolder.position.set(0, -50);
       actor.addChild(docHolder);
 
@@ -237,6 +216,8 @@ export function useCrossDeptDeliveryAnimations({
         progress: 0,
         speed: 0.005,
         type: "walk",
+        walkSprites,
+        activeWalkDirection: initialDirection,
       });
 
       onCrossDeptDeliveryProcessed?.(delivery.id);
@@ -383,28 +364,14 @@ export function useCeoOfficeCallAnimations({
       if (!fromPos) continue;
 
       trackProcessedId(processedCeoOfficeRef.current, call.id);
-      const actor = new Container();
       const spriteNum = spriteMapRef.current.get(call.fromAgentId) ?? (hashStr(call.fromAgentId) % 44) + 1;
-      const frames: Texture[] = [];
-
-      for (let frame = 1; frame <= 3; frame++) {
-        const key = `${spriteNum}-D-${frame}`;
-        if (textures[key]) frames.push(textures[key]);
-      }
-
-      if (frames.length > 0) {
-        const animSprite = new AnimatedSprite(frames);
-        animSprite.anchor.set(0.5, 1);
-        const scale = 44 / animSprite.texture.height;
-        animSprite.scale.set(scale);
-        animSprite.animationSpeed = 0.12;
-        animSprite.play();
-        actor.addChild(animSprite);
-      } else {
-        const fallback = new Text({ text: "🧑‍💼", style: new TextStyle({ fontSize: 20 }) });
-        fallback.anchor.set(0.5, 1);
-        actor.addChild(fallback);
-      }
+      const initialDirection = getAgentWalkDirection(fromPos.x, fromPos.y, seat.x, seat.y);
+      const { actor, walkSprites } = createAgentWalkActor({
+        textures,
+        spriteNumber: spriteNum,
+        targetHeight: 44,
+        initialDirection,
+      });
 
       const badge = new Graphics();
       actor.addChild(badge);
@@ -444,6 +411,8 @@ export function useCeoOfficeCallAnimations({
         meetingDecision: decision,
         badgeGraphics: badge,
         badgeText,
+        walkSprites,
+        activeWalkDirection: initialDirection,
       });
 
       onCeoOfficeCallProcessed?.(call.id);

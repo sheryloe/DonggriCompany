@@ -15,16 +15,12 @@
   "class_path": "planning > product-manager > planning.scope",
   "promotion_policy": "{\"mode\":\"manual\",\"from_role\":\"senior\",\"to_role\":\"team_leader\",\"notes\":\"team_leader manual only\"}",
   "visual_profile_key": "agent-visual-06",
-  "preferred_subagents": [
-    "product-manager",
-    "architect-reviewer",
-    "research-analyst"
-  ],
+  "preferred_subagents": ["product-manager", "architect-reviewer", "research-analyst"],
   "stats_tasks_done": 0,
   "stats_xp": 0,
   "memory_snapshot": [],
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-05-02T02:20:03.392Z"
+  "updated_at": "2026-05-02T04:59:14.344Z"
 }

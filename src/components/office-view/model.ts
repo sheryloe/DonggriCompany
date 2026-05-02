@@ -9,6 +9,8 @@ import type {
   CrossDeptDelivery,
   CeoOfficeCall,
 } from "../../types";
+import type { AgentSpriteDirection } from "./spriteAssets";
+import type { AgentWalkSprites } from "./spriteActors";
 
 interface OfficeViewProps {
   departments: Department[];
@@ -48,6 +50,8 @@ interface Delivery {
   meetingDecision?: MeetingReviewDecision;
   badgeGraphics?: Graphics;
   badgeText?: Text;
+  walkSprites?: AgentWalkSprites;
+  activeWalkDirection?: AgentSpriteDirection;
 }
 
 interface RoomRect {

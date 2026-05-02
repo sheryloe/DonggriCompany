@@ -1,23 +1,36 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import prettier from "prettier";
 import sharp from "sharp";
 
 const projectRoot = process.cwd();
 const sourcePath = path.join(projectRoot, "public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png");
 const spritesRoot = path.join(projectRoot, "public/sprites");
 const previewPath = path.join(projectRoot, "public/generated/agent-visual-profiles/runtime-sprite-preview-v1.png");
+const manifestPath = path.join(
+  projectRoot,
+  "public/generated/agent-visual-profiles/sprite-normalization-manifest-v1.json",
+);
 
 const columns = 5;
 const rows = 7;
 const characterCount = 35;
 const runtimeMaxSpriteNumber = 44;
 const outputPadding = 4;
+const normalizedSpriteSize = 96;
+const normalizedMaxContentSize = 84;
+const backgroundDistanceThreshold = 12;
+const walkFrameOffsets = [
+  { x: 0, y: 0 },
+  { x: -2, y: -1 },
+  { x: 2, y: 0 },
+];
 
 const poseSpecs = [
-  { key: "D", source: "F", frameNames: ["D-1", "D-2", "D-3"], centerRatio: 0.165, cropWidthRatio: 0.22 },
-  { key: "L", source: "L", frameNames: ["L-1"], centerRatio: 0.355, cropWidthRatio: 0.2 },
-  { key: "B", source: "B", frameNames: ["B-1"], centerRatio: 0.615, cropWidthRatio: 0.22 },
-  { key: "R", source: "R", frameNames: ["R-1"], centerRatio: 0.86, cropWidthRatio: 0.2 },
+  { key: "D", source: "F", frameNames: ["D-1", "D-2", "D-3"], centerRatio: 0.14, cropWidthRatio: 0.23 },
+  { key: "L", source: "L", frameNames: ["L-1", "L-2", "L-3"], centerRatio: 0.365, cropWidthRatio: 0.23 },
+  { key: "B", source: "B", frameNames: ["B-1", "B-2", "B-3"], centerRatio: 0.625, cropWidthRatio: 0.24 },
+  { key: "R", source: "R", frameNames: ["R-1", "R-2", "R-3"], centerRatio: 0.875, cropWidthRatio: 0.23 },
 ];
 
 function clamp(value, min, max) {
@@ -58,8 +71,8 @@ function makeTransparentFromConnectedBackground(raw, width, height, channels) {
   function isBackgroundLike(index) {
     const offset = index * channels;
     const color = [raw[offset], raw[offset + 1], raw[offset + 2]];
-    const darkNavy = color[0] < 36 && color[1] < 58 && color[2] < 82;
-    return darkNavy || samples.some((sample) => colorDistance(color, sample) <= 48);
+    const darkNavy = color[0] < 10 && color[1] < 18 && color[2] < 28;
+    return darkNavy || samples.some((sample) => colorDistance(color, sample) <= backgroundDistanceThreshold);
   }
 
   function pushIfBackground(x, y) {
@@ -207,6 +220,42 @@ async function extractPose(sheet, cell, poseSpec) {
     .toBuffer();
 }
 
+async function normalizePoseFrame(buffer, frameIndex) {
+  const offset = walkFrameOffsets[frameIndex] ?? walkFrameOffsets[0];
+  const resized = await sharp(buffer)
+    .resize({
+      width: normalizedMaxContentSize,
+      height: normalizedMaxContentSize,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .png()
+    .toBuffer();
+  const metadata = await sharp(resized).metadata();
+  const width = metadata.width ?? normalizedMaxContentSize;
+  const height = metadata.height ?? normalizedMaxContentSize;
+  const left = Math.round((normalizedSpriteSize - width) / 2 + offset.x);
+  const top = Math.round(normalizedSpriteSize - height - 4 + offset.y);
+
+  return sharp({
+    create: {
+      width: normalizedSpriteSize,
+      height: normalizedSpriteSize,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      {
+        input: resized,
+        left: clamp(left, 0, normalizedSpriteSize - width),
+        top: clamp(top, 0, normalizedSpriteSize - height),
+      },
+    ])
+    .png()
+    .toBuffer();
+}
+
 async function buildPreview(spriteBuffers) {
   const thumbSize = 72;
   const labelHeight = 18;
@@ -264,6 +313,7 @@ async function main() {
   }
 
   const spriteBuffers = new Map();
+  const manifestEntries = [];
 
   for (let number = 1; number <= characterCount; number += 1) {
     const col = (number - 1) % columns;
@@ -275,11 +325,21 @@ async function main() {
     const cell = { number, x, y, width: nextX - x, height: nextY - y };
 
     for (const poseSpec of poseSpecs) {
-      const buffer = await extractPose(sheet, cell, poseSpec);
-      for (const frameName of poseSpec.frameNames) {
+      const poseBuffer = await extractPose(sheet, cell, poseSpec);
+      for (const [frameIndex, frameName] of poseSpec.frameNames.entries()) {
+        const buffer = await normalizePoseFrame(poseBuffer, frameIndex);
         const runtimeKey = `${number}-${frameName}`;
         spriteBuffers.set(runtimeKey, buffer);
         await fs.writeFile(path.join(spritesRoot, `${runtimeKey}.png`), buffer);
+        manifestEntries.push({
+          sprite_number: number,
+          direction: poseSpec.key,
+          frame: frameIndex + 1,
+          file: `public/sprites/${runtimeKey}.png`,
+          source_character: number,
+          source_pose: poseSpec.source,
+          normalized_size: normalizedSpriteSize,
+        });
       }
     }
   }
@@ -294,17 +354,38 @@ async function main() {
         if (!buffer) continue;
         spriteBuffers.set(runtimeKey, buffer);
         await fs.writeFile(path.join(spritesRoot, `${runtimeKey}.png`), buffer);
+        manifestEntries.push({
+          sprite_number: number,
+          direction: poseSpec.key,
+          frame: poseSpec.frameNames.indexOf(frameName) + 1,
+          file: `public/sprites/${runtimeKey}.png`,
+          source_character: sourceNumber,
+          source_pose: poseSpec.source,
+          normalized_size: normalizedSpriteSize,
+        });
       }
     }
   }
 
   await buildPreview(spriteBuffers);
+  const manifest = {
+    version: "sprite-normalization-v1",
+    source: "public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png",
+    runtime_sprites: runtimeMaxSpriteNumber,
+    source_characters: characterCount,
+    directions: poseSpecs.map((poseSpec) => poseSpec.key),
+    frames_per_direction: 3,
+    normalized_size: normalizedSpriteSize,
+    entries: manifestEntries,
+  };
+  await fs.writeFile(manifestPath, await prettier.format(JSON.stringify(manifest), { parser: "json" }), "utf8");
   console.log(
     JSON.stringify(
       {
         sourcePath,
         spritesRoot,
         previewPath,
+        manifestPath,
         sourceCharacters: characterCount,
         runtimeSprites: runtimeMaxSpriteNumber,
       },

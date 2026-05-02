@@ -15,16 +15,12 @@
   "class_path": "design > frontend > ux.flow",
   "promotion_policy": "{\"mode\":\"manual\",\"notes\":\"default seed is senior; junior growth remains available for non-seed agents\"}",
   "visual_profile_key": "agent-visual-17",
-  "preferred_subagents": [
-    "ui-designer",
-    "ux-researcher",
-    "accessibility-tester"
-  ],
+  "preferred_subagents": ["ui-designer", "ux-researcher", "accessibility-tester"],
   "stats_tasks_done": 0,
   "stats_xp": 0,
   "memory_snapshot": [],
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-05-02T02:20:03.420Z"
+  "updated_at": "2026-05-02T04:59:14.391Z"
 }

@@ -147,7 +147,7 @@ function makeCustomSkills(count: number): CustomSkillEntry[] {
 }
 
 async function expectSummary(total: number, catalog: number, custom: number) {
-  await screen.findByText(`총 ${total} (catalog ${catalog} + custom ${custom})`);
+  await screen.findByText(`전체 ${total}개 (카탈로그 ${catalog}개 + 사용자 ${custom}개)`);
 }
 
 const TEST_AGENT: Agent = {
@@ -169,7 +169,7 @@ const TEST_AGENT: Agent = {
 describe("SkillsLibrary count aggregation", () => {
   beforeEach(() => {
     Object.defineProperty(window, "localStorage", {
-      value: createStorageMock({ [LANGUAGE_STORAGE_KEY]: "en" }),
+      value: createStorageMock({ [LANGUAGE_STORAGE_KEY]: "ko" }),
       configurable: true,
     });
     getSkillsMock.mockResolvedValue(makeCatalogSkills(1));
@@ -276,10 +276,10 @@ describe("SkillsLibrary count aggregation", () => {
     render(<SkillsLibrary agents={[TEST_AGENT]} />);
     await expectSummary(5, 3, 2);
 
-    fireEvent.change(screen.getByPlaceholderText(/스킬 검색/i), { target: { value: "custom-skill-2" } });
+    fireEvent.change(screen.getByPlaceholderText(/Skill 검색/i), { target: { value: "custom-skill-2" } });
     fireEvent.click(screen.getByRole("button", { name: /사용자 Skill.*2/ }));
 
-    expect(screen.getByText('1개 Skill 표시중 · "custom-skill-2" 검색 결과')).toBeInTheDocument();
+    expect(screen.getByText('1개 Skill을 표시합니다 · "custom-skill-2" 검색 결과.')).toBeInTheDocument();
     expect(screen.getByText("custom-skill-2")).toBeInTheDocument();
     expect(screen.queryByText("custom-skill-1")).not.toBeInTheDocument();
   });

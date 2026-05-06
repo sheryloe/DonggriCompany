@@ -213,22 +213,22 @@ export function buildCeoAndHallway({
   const inProgress = tasks.filter((task) => task.status === "in_progress").length;
   const stats = [
     {
-      icon: "🤖",
+      icon: "직",
       label: pickLocale(activeLocale, LOCALE_TEXT.statsEmployees),
       val: formatPeopleCount(agents.length, activeLocale),
     },
     {
-      icon: "⚡",
+      icon: "근",
       label: pickLocale(activeLocale, LOCALE_TEXT.statsWorking),
       val: formatPeopleCount(workingCount, activeLocale),
     },
     {
-      icon: "📋",
+      icon: "진",
       label: pickLocale(activeLocale, LOCALE_TEXT.statsProgress),
       val: formatTaskCount(inProgress, activeLocale),
     },
     {
-      icon: "✅",
+      icon: "완",
       label: pickLocale(activeLocale, LOCALE_TEXT.statsDone),
       val: `${doneCount}/${tasks.length}`,
     },

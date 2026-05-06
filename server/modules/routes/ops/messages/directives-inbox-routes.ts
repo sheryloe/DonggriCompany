@@ -882,6 +882,43 @@ export function registerDirectiveAndInboxRoutes(
         `[Claw-Empire] inbox session route ignored: mapped agent not found (agent_id=${sessionRoute.agentId}, channel=${sessionRoute.channel}, target=${sessionRoute.targetId})`,
       );
     }
+    if (!isDirective && tryHandleInboxDecisionReply) {
+      const decisionResult = await tryHandleInboxDecisionReply({
+        text: content,
+        body,
+        source: inboxSource,
+        chat: inboxChat,
+        channel: sessionRoute?.channel,
+        targetId: sessionRoute?.targetId,
+      });
+      if (decisionResult.handled) {
+        if (
+          !recordMessageIngressAuditOr503(res, {
+            endpoint: "/api/inbox",
+            req,
+            body,
+            idempotencyKey,
+            outcome: decisionResult.status < 400 ? "accepted" : "validation_error",
+            statusCode: decisionResult.status,
+            detail: `decision_reply:${String(decisionResult.payload.error ?? decisionResult.payload.action ?? "ok")}`,
+          })
+        )
+          return;
+        return res.status(decisionResult.status).json({
+          ok: decisionResult.status < 400,
+          directive: false,
+          routed: "decision_reply",
+          decision: decisionResult.payload,
+          session: sessionRoute
+            ? {
+                channel: sessionRoute.channel,
+                session_id: sessionRoute.sessionId,
+                target_id: sessionRoute.targetId,
+              }
+            : null,
+        });
+      }
+    }
     if (!isDirective && !shouldRouteToSessionAgent) {
       if (
         !recordMessageIngressAuditOr503(res, {

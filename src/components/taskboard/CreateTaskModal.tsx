@@ -24,6 +24,7 @@ interface CreateModalProps {
     priority?: number;
     project_id?: string;
     project_path?: string;
+    project_hint?: string;
     assigned_agent_id?: string;
     workflow_pack_key?: WorkflowPackKey;
     workflow_meta_json?: Record<string, unknown> | string;
@@ -32,6 +33,7 @@ interface CreateModalProps {
 }
 
 function CreateModal({ agents, departments, onClose, onCreate, onAssign }: CreateModalProps) {
+  void agents;
   void onAssign;
   const { t, language: locale, locale: localeTag } = useI18n();
   const [title, setTitle] = useState("");
@@ -49,10 +51,6 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
   const [githubConnectReason, setGithubConnectReason] = useState<GitHubGateReason | null>(null);
   const [pendingGitHubSubmitOptions, setPendingGitHubSubmitOptions] = useState<SubmitTaskOptions | null>(null);
 
-  const filteredAgents = useMemo(
-    () => (departmentId ? agents.filter((agent) => agent.department_id === departmentId) : agents),
-    [agents, departmentId],
-  );
   const selectedGoalCommandPreset = useMemo(
     () => goalCommands.find((command) => command.key === selectedGoalCommand) ?? null,
     [goalCommands, selectedGoalCommand],
@@ -219,11 +217,6 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
 
   const handlePriorityChange = useCallback((nextPriority: number) => {
     setPriority(nextPriority);
-    setFormFeedback(null);
-  }, []);
-
-  const handleAssignAgentChange = useCallback((agentIdValue: string) => {
-    setAssignAgentId(agentIdValue);
     setFormFeedback(null);
   }, []);
 
@@ -395,14 +388,12 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
       departmentId={departmentId}
       taskType={taskType}
       priority={priority}
-      assignAgentId={assignAgentId}
       selectedGoalCommand={selectedGoalCommand}
       goalCommands={goalCommands}
       goalCommandsLoading={goalCommandsLoading}
       submitBusy={submitBusy}
       formFeedback={formFeedback}
       departments={departments}
-      filteredAgents={filteredAgents}
       projectSectionProps={projectSectionProps}
       overlaysProps={overlaysProps}
       onOpenDraftModal={() => {
@@ -431,7 +422,6 @@ function CreateModal({ agents, departments, onClose, onCreate, onAssign }: Creat
         setSelectedGoalCommand("");
       }}
       onPriorityChange={handlePriorityChange}
-      onAssignAgentChange={handleAssignAgentChange}
       onGoalCommandSelect={handleGoalCommandSelect}
       onGoalCommandClear={handleGoalCommandClear}
     />

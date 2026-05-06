@@ -154,7 +154,7 @@ export default function LearningModal({
                           className="learn-book-drop"
                           style={{ left: `${8 + idx * 15}%`, animationDelay: `${idx * 0.15}s` }}
                         >
-                          SKILL
+                          학습
                         </span>
                       ))}
                     </div>
@@ -167,9 +167,9 @@ export default function LearningModal({
                       }`}
                     >
                       <AgentAvatar agent={row.agent ?? undefined} agents={agents} size={50} rounded="xl" />
-                      {isAnimating && <span className="learn-reading-book">READ</span>}
-                      {unlearnEffect === "pot" && <span className="unlearn-pot-drop">DROP</span>}
-                      {unlearnEffect === "hammer" && <span className="unlearn-hammer-swing">HIT</span>}
+                      {isAnimating && <span className="learn-reading-book">학습</span>}
+                      {unlearnEffect === "pot" && <span className="unlearn-pot-drop">삭제</span>}
+                      {unlearnEffect === "hammer" && <span className="unlearn-hammer-swing">해제</span>}
                       {isHitAnimating && <span className="unlearn-hit-text">{skillText(t, "learning.bonk")}</span>}
                     </div>
 

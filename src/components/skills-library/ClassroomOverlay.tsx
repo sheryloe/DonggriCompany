@@ -21,12 +21,12 @@ export default function ClassroomOverlay({ t, show, skillName, providers, agents
       <div className="w-full max-w-2xl">
         <div className="classroom-scene">
           <div className="classroom-blackboard">
-            <div className="classroom-chalk-text">skills</div>
+            <div className="classroom-chalk-text">Skill 학습</div>
           </div>
 
           <div className="classroom-claw-teacher">
-            <img src="/claw-empire.png" alt="Teacher" />
-            <span className="classroom-chalk-pointer">SKILL</span>
+            <img src="/claw-empire.png" alt="Skill 교육 담당자" />
+            <span className="classroom-chalk-pointer">학습</span>
           </div>
 
           <div className="classroom-sparkle-group">
@@ -37,7 +37,7 @@ export default function ClassroomOverlay({ t, show, skillName, providers, agents
 
           <div className="absolute top-[125px] left-1/2 -translate-x-1/2 z-20">
             <div className="px-3 py-1 rounded-full bg-violet-500/20 border border-violet-400/30 text-violet-200 text-xs font-medium animate-in slide-in-from-top-2 duration-500">
-              SKILL · {skillName}
+              Skill · {skillName}
             </div>
           </div>
 
@@ -54,8 +54,8 @@ export default function ClassroomOverlay({ t, show, skillName, providers, agents
                       rounded="xl"
                       imagePosition="center top"
                     />
-                    <span className="classroom-student-notebook">NOTE</span>
-                    <span className="classroom-student-pencil">PEN</span>
+                    <span className="classroom-student-notebook">노트</span>
+                    <span className="classroom-student-pencil">펜</span>
                     <span
                       className="classroom-stars"
                       style={{

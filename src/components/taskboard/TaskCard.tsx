@@ -1,15 +1,13 @@
 import { useState } from "react";
-import type { Agent, Department, SubTask, Task, TaskStatus, GoalCommandKey, GoalCommandPreset } from "../../types";
+import type { Agent, Department, GoalCommandKey, GoalCommandPreset, SubTask, Task, TaskStatus } from "../../types";
 import { useI18n } from "../../i18n";
 import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import AgentAvatar from "../AgentAvatar";
-import AgentSelect from "../AgentSelect";
 import DiffModal from "./DiffModal";
 import { getGoalCommandTeamLabel, getGoalCommandTitle } from "./goal-command-text";
 import {
   getTaskTypeBadge,
   isHideableStatus,
-  priorityIcon,
   priorityLabel,
   STATUS_OPTIONS,
   taskStatusLabel,
@@ -37,35 +35,62 @@ interface TaskCardProps {
   onUnhideTask?: (id: string) => void;
 }
 
-const SUBTASK_STATUS_ICON: Record<string, string> = {
-  pending: "\u23F3",
-  in_progress: "\uD83D\uDD28",
-  done: "\u2705",
-  blocked: "\uD83D\uDEAB",
+const SUBTASK_STATUS_LABEL: Record<string, string> = {
+  pending: "대기",
+  in_progress: "진행",
+  done: "완료",
+  blocked: "차단",
 };
+
+function tKo(labels: { ko?: string; en?: string }): string {
+  return labels.ko ?? labels.en ?? "";
+}
+
+function parseWorkflowMeta(task: Task): Record<string, unknown> {
+  if (!task.workflow_meta_json) return {};
+  try {
+    const parsed = JSON.parse(task.workflow_meta_json);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
 
 function resolveGoalCommandMeta(
   task: Task,
 ): Pick<GoalCommandPreset, "key" | "teamPreset" | "workflowPackKey" | "slashCommand"> | null {
-  if (!task.workflow_meta_json) return null;
-  try {
-    const parsed = JSON.parse(task.workflow_meta_json);
-    if (!parsed || typeof parsed !== "object") return null;
-    const key = typeof parsed.goal_command === "string" ? parsed.goal_command : "";
-    const teamPreset = typeof parsed.team_preset === "string" ? parsed.team_preset : "";
-    const workflowPackKey =
-      typeof parsed.workflow_pack_key === "string" ? parsed.workflow_pack_key : task.workflow_pack_key;
-    const slashCommand = typeof parsed.slash_command === "string" ? parsed.slash_command : `/dg-${key}`;
-    if (!key || !teamPreset || !workflowPackKey) return null;
-    return {
-      key: key as GoalCommandKey,
-      teamPreset: teamPreset as GoalCommandPreset["teamPreset"],
-      workflowPackKey: workflowPackKey as GoalCommandPreset["workflowPackKey"],
-      slashCommand: slashCommand as GoalCommandPreset["slashCommand"],
-    };
-  } catch {
-    return null;
-  }
+  const parsed = parseWorkflowMeta(task);
+  const key = typeof parsed.goal_command === "string" ? parsed.goal_command : "";
+  const teamPreset = typeof parsed.team_preset === "string" ? parsed.team_preset : "";
+  const workflowPackKey =
+    typeof parsed.workflow_pack_key === "string" ? parsed.workflow_pack_key : task.workflow_pack_key;
+  const slashCommand = typeof parsed.slash_command === "string" ? parsed.slash_command : `/dg-${key}`;
+  if (!key || !teamPreset || !workflowPackKey) return null;
+  return {
+    key: key as GoalCommandKey,
+    teamPreset: teamPreset as GoalCommandPreset["teamPreset"],
+    workflowPackKey: workflowPackKey as GoalCommandPreset["workflowPackKey"],
+    slashCommand: slashCommand as GoalCommandPreset["slashCommand"],
+  };
+}
+
+function resolveAutoRoutingMeta(task: Task): {
+  projectConfidence: number;
+  agentConfidence: number;
+  requiresPmoTriage: boolean;
+} | null {
+  const parsed = parseWorkflowMeta(task);
+  if (parsed.auto_routing_version !== "donggri_task_auto_routing_v1") return null;
+  return {
+    projectConfidence: typeof parsed.project_routing_confidence === "number" ? parsed.project_routing_confidence : 0,
+    agentConfidence: typeof parsed.agent_routing_confidence === "number" ? parsed.agent_routing_confidence : 0,
+    requiresPmoTriage: Boolean(parsed.requires_pmo_triage),
+  };
+}
+
+function getProjectName(task: Task): string | null {
+  const value = (task as Task & { project_name?: string | null }).project_name;
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 export default function TaskCard({
@@ -88,23 +113,25 @@ export default function TaskCard({
   onHideTask,
   onUnhideTask,
 }: TaskCardProps) {
+  void onAssignTask;
   void onMergeTask;
   void onDiscardTask;
-  const { t, locale: localeTag, language: locale } = useI18n();
+
+  const { locale: localeTag, language: locale } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
   const [showSubtasks, setShowSubtasks] = useState(false);
-  const [agentWarning, setAgentWarning] = useState(false);
 
   const assignedAgent = task.assigned_agent ?? agents.find((agent) => agent.id === task.assigned_agent_id);
   const fallbackAssignedName =
     (locale === "ko" ? task.agent_name_ko || task.agent_name : task.agent_name || task.agent_name_ko) ||
     task.assigned_agent_id;
-  const assignedDisplayName = assignedAgent ? (locale === "ko" ? assignedAgent.name_ko : assignedAgent.name) : null;
-  const assignedLabel = assignedDisplayName || fallbackAssignedName || null;
-  const department = departments.find((d) => d.id === task.department_id);
-  const typeBadge = getTaskTypeBadge(task.task_type, t);
+  const assignedLabel = assignedAgent ? assignedAgent.name_ko || assignedAgent.name : fallbackAssignedName || null;
+  const department = departments.find((departmentItem) => departmentItem.id === task.department_id);
+  const typeBadge = getTaskTypeBadge(task.task_type, tKo);
   const goalCommandMeta = resolveGoalCommandMeta(task);
+  const autoRoutingMeta = resolveAutoRoutingMeta(task);
+  const projectName = getProjectName(task);
 
   const canRun = task.status === "planned" || task.status === "inbox";
   const canStop = task.status === "in_progress";
@@ -123,16 +150,14 @@ export default function TaskCard({
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <button
-          onClick={() => setExpanded((v) => !v)}
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
           className="flex-1 text-left text-sm font-semibold leading-snug text-white"
         >
           {task.title}
         </button>
-        <span
-          className="flex-shrink-0 text-base"
-          title={`${t({ ko: "우선순위", en: "Priority", ja: "優先度", zh: "优先级" })}: ${priorityLabel(task.priority, t)}`}
-        >
-          {priorityIcon(task.priority)}
+        <span className="shrink-0 rounded-full bg-slate-700 px-2 py-0.5 text-[11px] text-slate-200">
+          우선순위 {priorityLabel(task.priority, tKo)}
         </span>
       </div>
 
@@ -144,20 +169,19 @@ export default function TaskCard({
 
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${typeBadge.color}`}>{typeBadge.label}</span>
-        {isHiddenTask && (
-          <span className="rounded-full bg-cyan-900/60 px-2 py-0.5 text-xs text-cyan-200">
-            🙈 {t({ ko: "숨김", en: "Hidden", ja: "非表示", zh: "隐藏" })}
-          </span>
-        )}
+        {isHiddenTask && <span className="rounded-full bg-cyan-900/60 px-2 py-0.5 text-xs text-cyan-200">숨김</span>}
         {department && (
           <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
-            {department.icon} {locale === "ko" ? department.name_ko : department.name}
+            {department.icon} {department.name_ko || department.name}
           </span>
+        )}
+        {projectName && (
+          <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">프로젝트 {projectName}</span>
         )}
         {goalCommandMeta && (
           <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-100">
-            {getGoalCommandTitle(goalCommandMeta as GoalCommandPreset, locale)} ·{" "}
-            {getGoalCommandTeamLabel(goalCommandMeta as GoalCommandPreset, locale)}
+            {getGoalCommandTitle(goalCommandMeta as GoalCommandPreset, "ko")} ·{" "}
+            {getGoalCommandTeamLabel(goalCommandMeta as GoalCommandPreset, "ko")}
           </span>
         )}
       </div>
@@ -170,7 +194,7 @@ export default function TaskCard({
         >
           {STATUS_OPTIONS.map((status) => (
             <option key={status} value={status}>
-              {taskStatusLabel(status as TaskStatus, t)}
+              {taskStatusLabel(status as TaskStatus, tKo)}
             </option>
           ))}
         </select>
@@ -186,68 +210,48 @@ export default function TaskCard({
           ) : assignedLabel ? (
             <span className="text-xs text-slate-300">{assignedLabel}</span>
           ) : (
-            <span className="text-xs text-slate-500">
-              {t({ ko: "미배정", en: "Unassigned", ja: "未割り当て", zh: "未分配" })}
-            </span>
+            <span className="text-xs text-slate-500">자동 배정 대기</span>
           )}
         </div>
         <span className="text-xs text-slate-500">{timeAgo(task.created_at, localeTag)}</span>
       </div>
 
-      <div
-        className={`mb-3 rounded-lg transition-all ${agentWarning ? "ring-2 ring-red-500 animate-[shake_0.4s_ease-in-out]" : ""}`}
-      >
-        <AgentSelect
-          agents={agents}
-          departments={departments}
-          value={task.assigned_agent_id ?? ""}
-          placeholder={
-            assignedAgent || !assignedLabel
-              ? undefined
-              : t({
-                  ko: `배정됨(숨김): ${assignedLabel}`,
-                  en: `Assigned (hidden): ${assignedLabel}`,
-                  ja: `割り当て済み(非表示): ${assignedLabel}`,
-                  zh: `已分配（隐藏）: ${assignedLabel}`,
-                })
-          }
-          onChange={(agentId) => {
-            setAgentWarning(false);
-            if (agentId) {
-              onAssignTask(task.id, agentId);
-            } else {
-              onUpdateTask(task.id, { assigned_agent_id: null });
-            }
-          }}
-        />
-        {agentWarning && (
-          <p className="mt-1 text-xs font-medium text-red-400 animate-[shake_0.4s_ease-in-out]">
-            {t({
-              ko: "담당자를 배정해주세요!",
-              en: "Please assign an agent!",
-              ja: "担当者を割り当ててください！",
-              zh: "请分配负责人！",
-            })}
-          </p>
-        )}
+      <div className="mb-3 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-semibold text-cyan-50">자동 배정</span>
+          {autoRoutingMeta && (
+            <span className="font-mono text-[10px] text-cyan-100/70">
+              P {Math.round(autoRoutingMeta.projectConfidence * 100)} / A{" "}
+              {Math.round(autoRoutingMeta.agentConfidence * 100)}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-cyan-100/75">
+          {autoRoutingMeta?.requiresPmoTriage
+            ? "프로젝트 판정 신뢰도가 낮아 PMO 검토 대기 중입니다."
+            : assignedLabel
+              ? `규칙에 따라 ${assignedLabel}에게 자동 배정되었습니다.`
+              : "실행 시점에 규칙 기반으로 담당 직원을 다시 판정합니다."}
+        </p>
       </div>
 
       {(task.subtask_total ?? 0) > 0 && (
         <div className="mb-3">
           <button
-            onClick={() => setShowSubtasks((v) => !v)}
+            type="button"
+            onClick={() => setShowSubtasks((value) => !value)}
             className="mb-1.5 flex w-full items-center gap-2 text-left"
           >
-            <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-700">
               <div
-                className="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all"
                 style={{ width: `${Math.round(((task.subtask_done ?? 0) / (task.subtask_total ?? 1)) * 100)}%` }}
               />
             </div>
-            <span className="text-xs text-slate-400 whitespace-nowrap">
+            <span className="whitespace-nowrap text-xs text-slate-400">
               {task.subtask_done ?? 0}/{task.subtask_total ?? 0}
             </span>
-            <span className="text-xs text-slate-500">{showSubtasks ? "▲" : "▼"}</span>
+            <span className="text-xs text-slate-500">{showSubtasks ? "접기" : "열기"}</span>
           </button>
           {showSubtasks && taskSubtasks.length > 0 && (
             <div className="space-y-1 pl-1">
@@ -257,30 +261,29 @@ export default function TaskCard({
                   : null;
                 return (
                   <div key={subtask.id} className="flex items-center gap-1.5 text-xs">
-                    <span>{SUBTASK_STATUS_ICON[subtask.status] || "\u23F3"}</span>
+                    <span className="rounded bg-slate-700 px-1 py-0.5 text-[10px] text-slate-300">
+                      {SUBTASK_STATUS_LABEL[subtask.status] || subtask.status}
+                    </span>
                     <span
-                      className={`flex-1 truncate ${subtask.status === "done" ? "line-through text-slate-500" : "text-slate-300"}`}
+                      className={`flex-1 truncate ${subtask.status === "done" ? "text-slate-500 line-through" : "text-slate-300"}`}
                     >
                       {normalizeSubtaskTitleForUi(subtask.title)}
                     </span>
                     {targetDepartment && (
                       <span
                         className="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium"
-                        style={{ backgroundColor: targetDepartment.color + "30", color: targetDepartment.color }}
+                        style={{ backgroundColor: `${targetDepartment.color}30`, color: targetDepartment.color }}
                       >
                         {targetDepartment.icon} {targetDepartment.name_ko}
                       </span>
                     )}
                     {subtask.delegated_task_id && subtask.status !== "done" && (
-                      <span
-                        className="text-blue-400 shrink-0"
-                        title={t({ ko: "위임됨", en: "Delegated", ja: "委任済み", zh: "已委派" })}
-                      >
-                        🔗
+                      <span className="shrink-0 text-blue-400" title="위임됨">
+                        위임
                       </span>
                     )}
                     {subtask.status === "blocked" && subtask.blocked_reason && (
-                      <span className="text-red-400 text-[10px] truncate max-w-[80px]" title={subtask.blocked_reason}>
+                      <span className="max-w-[80px] truncate text-[10px] text-red-400" title={subtask.blocked_reason}>
                         {subtask.blocked_reason}
                       </span>
                     )}
@@ -295,58 +298,46 @@ export default function TaskCard({
       <div className="flex flex-wrap items-center gap-1.5">
         {canRun && (
           <button
-            onClick={() => {
-              if (!task.assigned_agent_id) {
-                setAgentWarning(true);
-                setTimeout(() => setAgentWarning(false), 3000);
-                return;
-              }
-              onRunTask(task.id);
-            }}
-            title={t({ ko: "작업 실행", en: "Run task", ja: "タスク実行", zh: "运行任务" })}
+            type="button"
+            onClick={() => onRunTask(task.id)}
+            title="작업 실행"
             className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-green-700 px-2 py-1.5 text-xs font-medium text-white transition hover:bg-green-600"
           >
-            ▶ {t({ ko: "실행", en: "Run", ja: "実行", zh: "运行" })}
+            실행
           </button>
         )}
         {canPause && (
           <button
-            onClick={() => onPauseTask!(task.id)}
-            title={t({ ko: "작업 일시중지", en: "Pause task", ja: "タスク一時停止", zh: "暂停任务" })}
+            type="button"
+            onClick={() => onPauseTask?.(task.id)}
+            title="작업 일시정지"
             className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-orange-700 px-2 py-1.5 text-xs font-medium text-white transition hover:bg-orange-600"
           >
-            ⏸ {t({ ko: "일시중지", en: "Pause", ja: "一時停止", zh: "暂停" })}
+            일시정지
           </button>
         )}
         {canStop && (
           <button
+            type="button"
             onClick={() => {
-              if (
-                confirm(
-                  t({
-                    ko: `"${task.title}" 작업을 중지할까요?\n\n경고: Stop 처리 시 해당 프로젝트 변경분은 롤백됩니다.`,
-                    en: `Stop "${task.title}"?\n\nWarning: stopping will roll back project changes.`,
-                    ja: `「${task.title}」を停止しますか？\n\n警告: 停止するとプロジェクトの変更はロールバックされます。`,
-                    zh: `要停止“${task.title}”吗？\n\n警告：停止后将回滚该项目的更改。`,
-                  }),
-                )
-              ) {
+              if (confirm(`"${task.title}" 작업을 중지할까요?\n\n중지하면 격리 작업 브랜치 변경분이 롤백됩니다.`)) {
                 onStopTask(task.id);
               }
             }}
-            title={t({ ko: "작업 중지", en: "Cancel task", ja: "タスク停止", zh: "取消任务" })}
+            title="작업 중지"
             className="flex items-center justify-center gap-1 rounded-lg bg-red-800 px-2 py-1.5 text-xs font-medium text-white transition hover:bg-red-700"
           >
-            ⏹ {t({ ko: "중지", en: "Cancel", ja: "キャンセル", zh: "取消" })}
+            중지
           </button>
         )}
         {canResume && (
           <button
-            onClick={() => onResumeTask!(task.id)}
-            title={t({ ko: "작업 재개", en: "Resume task", ja: "タスク再開", zh: "恢复任务" })}
+            type="button"
+            onClick={() => onResumeTask?.(task.id)}
+            title="작업 재개"
             className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-blue-700 px-2 py-1.5 text-xs font-medium text-white transition hover:bg-blue-600"
           >
-            ↩ {t({ ko: "재개", en: "Resume", ja: "再開", zh: "恢复" })}
+            재개
           </button>
         )}
         {(task.status === "in_progress" ||
@@ -355,16 +346,12 @@ export default function TaskCard({
           task.status === "pending") &&
           onOpenTerminal && (
             <button
+              type="button"
               onClick={() => onOpenTerminal(task.id)}
-              title={t({
-                ko: "터미널 출력 보기",
-                en: "View terminal output",
-                ja: "ターミナル出力を見る",
-                zh: "查看终端输出",
-              })}
+              title="터미널 출력 보기"
               className="flex items-center justify-center rounded-lg bg-slate-700 px-2 py-1.5 text-xs text-slate-300 transition hover:bg-slate-600 hover:text-white"
             >
-              &#128421;
+              로그
             </button>
           )}
         {(task.status === "planned" ||
@@ -375,74 +362,54 @@ export default function TaskCard({
           task.status === "pending") &&
           onOpenMeetingMinutes && (
             <button
+              type="button"
               onClick={() => onOpenMeetingMinutes(task.id)}
-              title={t({
-                ko: "회의록 보기",
-                en: "View meeting minutes",
-                ja: "会議録を見る",
-                zh: "查看会议纪要",
-              })}
+              title="회의록 보기"
               className="flex items-center justify-center rounded-lg bg-cyan-800/70 px-2 py-1.5 text-xs text-cyan-200 transition hover:bg-cyan-700 hover:text-white"
             >
-              📝
+              회의록
             </button>
           )}
         {task.status === "review" && (
           <button
+            type="button"
             onClick={() => setShowDiff(true)}
-            title={t({
-              ko: "변경사항 보기 (Git diff)",
-              en: "View changes (Git diff)",
-              ja: "変更を見る (Git diff)",
-              zh: "查看更改 (Git diff)",
-            })}
+            title="변경사항 보기"
             className="flex items-center justify-center gap-1 rounded-lg bg-purple-800 px-2 py-1.5 text-xs font-medium text-purple-200 transition hover:bg-purple-700"
           >
-            {t({ ko: "Diff", en: "Diff", ja: "差分", zh: "差异" })}
+            Diff
           </button>
         )}
         {canHideTask && !isHiddenTask && onHideTask && (
           <button
+            type="button"
             onClick={() => onHideTask(task.id)}
-            title={t({
-              ko: "완료/보류/취소 작업 숨기기",
-              en: "Hide done/pending/cancelled task",
-              ja: "完了/保留/キャンセルのタスクを非表示",
-              zh: "隐藏已完成/待处理/已取消任务",
-            })}
+            title="업무 숨기기"
             className="flex items-center justify-center gap-1 rounded-lg bg-slate-700 px-2 py-1.5 text-xs text-slate-300 transition hover:bg-slate-600 hover:text-white"
           >
-            🙈 {t({ ko: "숨김", en: "Hide", ja: "非表示", zh: "隐藏" })}
+            숨김
           </button>
         )}
         {canHideTask && !!isHiddenTask && onUnhideTask && (
           <button
+            type="button"
             onClick={() => onUnhideTask(task.id)}
-            title={t({ ko: "숨긴 작업 복원", en: "Restore hidden task", ja: "非表示タスクを復元", zh: "恢复隐藏任务" })}
+            title="숨김 업무 복원"
             className="flex items-center justify-center gap-1 rounded-lg bg-blue-800 px-2 py-1.5 text-xs text-blue-200 transition hover:bg-blue-700 hover:text-white"
           >
-            👁 {t({ ko: "복원", en: "Restore", ja: "復元", zh: "恢复" })}
+            복원
           </button>
         )}
         {canDelete && (
           <button
+            type="button"
             onClick={() => {
-              if (
-                confirm(
-                  t({
-                    ko: `"${task.title}" 업무를 삭제할까요?`,
-                    en: `Delete "${task.title}"?`,
-                    ja: `「${task.title}」を削除しますか？`,
-                    zh: `要删除“${task.title}”吗？`,
-                  }),
-                )
-              )
-                onDeleteTask(task.id);
+              if (confirm(`"${task.title}" 업무를 삭제할까요?`)) onDeleteTask(task.id);
             }}
-            title={t({ ko: "작업 삭제", en: "Delete task", ja: "タスク削除", zh: "删除任务" })}
+            title="업무 삭제"
             className="flex items-center justify-center rounded-lg bg-red-900/60 px-2 py-1.5 text-xs text-red-400 transition hover:bg-red-800 hover:text-red-300"
           >
-            🗑
+            삭제
           </button>
         )}
       </div>

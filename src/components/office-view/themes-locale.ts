@@ -1,4 +1,4 @@
-import { type Graphics, type Text, TextStyle } from "pixi.js";
+import { type Graphics, type Text } from "pixi.js";
 import type { UiLanguage } from "../../i18n";
 import type { MeetingReviewDecision } from "../../types";
 import type { RoomTheme } from "./model";
@@ -17,17 +17,16 @@ const OFFICE_PASTEL_LIGHT = {
   slate: 0x586378,
 };
 
-/* ── Dark (late-night coding session) palette ── */
 const OFFICE_PASTEL_DARK = {
-  creamWhite: 0x0e1020,
-  creamDeep: 0x0c0e1e,
-  softMint: 0x122030,
-  softMintDeep: 0x0e1a28,
-  dustyRose: 0x201020,
-  dustyRoseDeep: 0x1a0c1a,
-  warmSand: 0x1a1810,
-  warmWood: 0x16130c,
-  cocoa: 0x140f08,
+  creamWhite: 0xf5ead7,
+  creamDeep: 0xd9c4a5,
+  softMint: 0x5fc7b8,
+  softMintDeep: 0x2b8c80,
+  dustyRose: 0xce7892,
+  dustyRoseDeep: 0x964d64,
+  warmSand: 0xe0b56f,
+  warmWood: 0xad7643,
+  cocoa: 0x5e3824,
   ink: 0xc8cee0,
   slate: 0x7888a8,
 };
@@ -41,10 +40,10 @@ const DEFAULT_CEO_THEME_LIGHT: RoomTheme = {
   accent: 0xa77d0c,
 };
 const DEFAULT_CEO_THEME_DARK: RoomTheme = {
-  floor1: 0x101020,
-  floor2: 0x0e0e1c,
-  wall: 0x2a2450,
-  accent: 0x584818,
+  floor1: 0xd8c18a,
+  floor2: 0xc9a96d,
+  wall: 0x7b6130,
+  accent: 0xe3aa28,
 };
 
 const DEFAULT_BREAK_THEME_LIGHT: RoomTheme = {
@@ -54,10 +53,10 @@ const DEFAULT_BREAK_THEME_LIGHT: RoomTheme = {
   accent: 0xf0c878,
 };
 const DEFAULT_BREAK_THEME_DARK: RoomTheme = {
-  floor1: 0x141210,
-  floor2: 0x10100e,
-  wall: 0x302a20,
-  accent: 0x4a3c18,
+  floor1: 0xf0c87a,
+  floor2: 0xdcae5a,
+  wall: 0x8f7040,
+  accent: 0xffcc57,
 };
 
 let DEFAULT_CEO_THEME = DEFAULT_CEO_THEME_LIGHT;
@@ -68,132 +67,152 @@ type SupportedLocale = UiLanguage;
 const LOCALE_TEXT = {
   ceoOffice: {
     ko: "CEO 오피스",
-    en: "CEO OFFICE",
-    ja: "CEOオフィス",
-    zh: "CEO办公室",
+    en: "CEO Office",
+    ja: "CEO Office",
+    zh: "CEO Office",
   },
   collabTable: {
     ko: "6인 협업 테이블",
-    en: "6P COLLAB TABLE",
-    ja: "6人コラボテーブル",
-    zh: "6人协作桌",
+    en: "6P Collab Table",
+    ja: "6P Collab Table",
+    zh: "6P Collab Table",
   },
-  statsEmployees: { ko: "직원", en: "Staff", ja: "スタッフ", zh: "员工" },
-  statsWorking: { ko: "작업중", en: "Working", ja: "作業中", zh: "处理中" },
-  statsProgress: { ko: "진행", en: "In Progress", ja: "進行", zh: "进行中" },
-  statsDone: { ko: "완료", en: "Done", ja: "完了", zh: "已完成" },
+  statsEmployees: { ko: "직원", en: "Staff", ja: "Staff", zh: "Staff" },
+  statsWorking: { ko: "근무 중", en: "Working", ja: "Working", zh: "Working" },
+  statsProgress: { ko: "진행", en: "In Progress", ja: "In Progress", zh: "In Progress" },
+  statsDone: { ko: "완료", en: "Done", ja: "Done", zh: "Done" },
   hint: {
     ko: "WASD/방향키/가상패드: CEO 이동  |  Enter: 상호작용",
     en: "WASD/Arrow/Virtual Pad: CEO Move  |  Enter: Interact",
-    ja: "WASD/矢印キー/仮想パッド: CEO移動  |  Enter: 操作",
-    zh: "WASD/方向键/虚拟手柄: CEO移动  |  Enter: 交互",
+    ja: "WASD/Arrow/Virtual Pad: CEO Move  |  Enter: Interact",
+    zh: "WASD/Arrow/Virtual Pad: CEO Move  |  Enter: Interact",
   },
   mobileEnter: {
-    ko: "Enter",
-    en: "Enter",
-    ja: "Enter",
-    zh: "Enter",
+    ko: "상호작용",
+    en: "Interact",
+    ja: "Interact",
+    zh: "Interact",
   },
   noAssignedAgent: {
     ko: "배정된 직원 없음",
     en: "No assigned staff",
-    ja: "担当スタッフなし",
-    zh: "暂无分配员工",
+    ja: "No assigned staff",
+    zh: "No assigned staff",
   },
   breakRoom: {
-    ko: "☕ 휴게실",
-    en: "☕ Break Room",
-    ja: "☕ 休憩室",
-    zh: "☕ 休息室",
+    ko: "휴게실",
+    en: "Break Room",
+    ja: "Break Room",
+    zh: "Break Room",
   },
   role: {
-    team_leader: { ko: "팀장", en: "Lead", ja: "リーダー", zh: "组长" },
-    senior: { ko: "시니어", en: "Senior", ja: "シニア", zh: "资深" },
-    junior: { ko: "주니어", en: "Junior", ja: "ジュニア", zh: "初级" },
-    intern: { ko: "인턴", en: "Intern", ja: "インターン", zh: "实习" },
-    part_time: { ko: "알바", en: "Part-time", ja: "アルバイト", zh: "兼职" },
+    team_leader: { ko: "팀장", en: "Lead", ja: "Lead", zh: "Lead" },
+    senior: { ko: "시니어", en: "Senior", ja: "Senior", zh: "Senior" },
+    junior: { ko: "주니어", en: "Junior", ja: "Junior", zh: "Junior" },
+    intern: { ko: "인턴", en: "Intern", ja: "Intern", zh: "Intern" },
+    part_time: { ko: "파트타임", en: "Part-time", ja: "Part-time", zh: "Part-time" },
   },
   partTime: {
-    ko: "알바",
+    ko: "파트타임",
     en: "Part-time",
-    ja: "アルバイト",
-    zh: "兼职",
+    ja: "Part-time",
+    zh: "Part-time",
   },
   collabBadge: {
-    ko: "🤝 협업",
-    en: "🤝 Collaboration",
-    ja: "🤝 協業",
-    zh: "🤝 协作",
+    ko: "협업",
+    en: "Collaboration",
+    ja: "Collaboration",
+    zh: "Collaboration",
   },
   meetingBadgeKickoff: {
-    ko: "📣 회의",
-    en: "📣 Meeting",
-    ja: "📣 会議",
-    zh: "📣 会议",
+    ko: "회의",
+    en: "Meeting",
+    ja: "Meeting",
+    zh: "Meeting",
   },
   meetingBadgeReviewing: {
-    ko: "🔎 검토중",
-    en: "🔎 Reviewing",
-    ja: "🔎 検討中",
-    zh: "🔎 评审中",
+    ko: "검토 중",
+    en: "Reviewing",
+    ja: "Reviewing",
+    zh: "Reviewing",
   },
   meetingBadgeApproved: {
-    ko: "✅ 승인",
-    en: "✅ Approval",
-    ja: "✅ 承認",
-    zh: "✅ 审批",
+    ko: "승인",
+    en: "Approved",
+    ja: "Approved",
+    zh: "Approved",
   },
   meetingBadgeHold: {
-    ko: "⚠ 보류",
-    en: "⚠ Hold",
-    ja: "⚠ 保留",
-    zh: "⚠ 暂缓",
+    ko: "보류",
+    en: "Hold",
+    ja: "Hold",
+    zh: "Hold",
   },
   kickoffLines: {
-    ko: ["유관부서 영향도 확인중", "리스크/의존성 공유중", "일정/우선순위 조율중", "담당 경계 정의중"],
+    ko: ["영향 범위 확인 중", "리스크와 의존성 공유 중", "일정과 우선순위 조율 중", "담당 경계 정의 중"],
     en: [
       "Checking cross-team impact",
-      "Sharing risks/dependencies",
-      "Aligning schedule/priorities",
+      "Sharing risks and dependencies",
+      "Aligning schedule and priorities",
       "Defining ownership boundaries",
     ],
-    ja: ["関連部署への影響を確認中", "リスク/依存関係を共有中", "日程/優先度を調整中", "担当境界を定義中"],
-    zh: ["正在确认跨团队影响", "正在共享风险/依赖关系", "正在协调排期/优先级", "正在定义职责边界"],
+    ja: [
+      "Checking cross-team impact",
+      "Sharing risks and dependencies",
+      "Aligning schedule and priorities",
+      "Defining ownership boundaries",
+    ],
+    zh: [
+      "Checking cross-team impact",
+      "Sharing risks and dependencies",
+      "Aligning schedule and priorities",
+      "Defining ownership boundaries",
+    ],
   },
   reviewLines: {
-    ko: ["보완사항 반영 확인중", "최종안 Approved 검토중", "수정 아이디어 공유중", "결과물 교차 검토중"],
+    ko: ["보완사항 반영 확인 중", "최종 승인안 검토 중", "수정 아이디어 공유 중", "결과물 교차 검증 중"],
     en: [
       "Verifying follow-up updates",
       "Reviewing final approval draft",
       "Sharing revision ideas",
       "Cross-checking deliverables",
     ],
-    ja: ["補完事項の反映を確認中", "最終承認案を確認中", "修正アイデアを共有中", "成果物を相互レビュー中"],
-    zh: ["正在确认补充项是否反映", "正在审阅最终审批方案", "正在共享修改思路", "正在交叉评审交付物"],
+    ja: [
+      "Verifying follow-up updates",
+      "Reviewing final approval draft",
+      "Sharing revision ideas",
+      "Cross-checking deliverables",
+    ],
+    zh: [
+      "Verifying follow-up updates",
+      "Reviewing final approval draft",
+      "Sharing revision ideas",
+      "Cross-checking deliverables",
+    ],
   },
   meetingTableHint: {
-    ko: "📝 회의 중: 테이블 클릭해 회의록 보기",
-    en: "📝 Meeting live: click table for minutes",
-    ja: "📝 会議中: テーブルをクリックして会議録を見る",
-    zh: "📝 会议进行中：点击桌子查看纪要",
+    ko: "회의 중: 테이블 클릭으로 회의록 보기",
+    en: "Meeting live: click table for minutes",
+    ja: "Meeting live: click table for minutes",
+    zh: "Meeting live: click table for minutes",
   },
   cliUsageTitle: {
     ko: "CLI 사용량",
     en: "CLI Usage",
-    ja: "CLI使用量",
-    zh: "CLI 使用量",
+    ja: "CLI Usage",
+    zh: "CLI Usage",
   },
   cliConnected: {
     ko: "연결됨",
     en: "connected",
-    ja: "接続中",
-    zh: "已连接",
+    ja: "connected",
+    zh: "connected",
   },
   cliRefreshTitle: {
     ko: "사용량 새로고침",
     en: "Refresh usage data",
-    ja: "使用量を更新",
-    zh: "刷新用量数据",
+    ja: "Refresh usage data",
+    zh: "Refresh usage data",
   },
   cliNotSignedIn: {
     ko: "로그인 필요",
@@ -204,8 +223,8 @@ const LOCALE_TEXT = {
   cliNoApi: {
     ko: "사용량 API 없음",
     en: "no usage API",
-    ja: "使用量APIなし",
-    zh: "无用量 API",
+    ja: "no usage API",
+    zh: "no usage API",
   },
   cliUnavailable: {
     ko: "사용량 조회 불가",
@@ -216,101 +235,67 @@ const LOCALE_TEXT = {
   cliLoading: {
     ko: "불러오는 중...",
     en: "loading...",
-    ja: "読み込み中...",
-    zh: "加载中...",
+    ja: "loading...",
+    zh: "loading...",
   },
   cliResets: {
     ko: "리셋까지",
     en: "resets",
-    ja: "リセットまで",
-    zh: "重置剩余",
+    ja: "resets",
+    zh: "resets",
   },
   cliNoData: {
     ko: "데이터 없음",
     en: "no data",
-    ja: "データなし",
-    zh: "无数据",
+    ja: "no data",
+    zh: "no data",
+  },
+  cliRetry: {
+    ko: "재시도",
+    en: "Retry",
+    ja: "Retry",
+    zh: "Retry",
   },
   soon: {
     ko: "곧",
     en: "soon",
-    ja: "まもなく",
-    zh: "即将",
+    ja: "soon",
+    zh: "soon",
   },
 };
 
-const BREAK_CHAT_MESSAGES: Record<SupportedLocale, string[]> = {
+const BREAK_CHAT_MESSAGES = {
   ko: [
-    "커피 한 잔 더~",
-    "오늘 점심 뭐 먹지?",
-    "아 졸려...",
-    "주말에 뭐 해?",
-    "이번 프로젝트 힘들다ㅋ",
-    "카페라떼 최고!",
-    "오늘 날씨 좋다~",
-    "야근 싫어ㅠ",
-    "맛있는 거 먹고 싶다",
-    "조금만 쉬자~",
-    "ㅋㅋㅋㅋ",
-    "간식 왔다!",
-    "5분만 더~",
-    "힘내자 파이팅!",
-    "에너지 충전 중...",
-    "집에 가고 싶다~",
+    "잠깐 쉬고 다시 합시다.",
+    "커피 한 잔 하고 복귀합니다.",
+    "리뷰 포인트 정리했어요.",
+    "다음 실행 전에 로그 확인해요.",
+    "오늘 빌드 흐름 괜찮네요.",
+    "회의 전 핵심만 압축합시다.",
   ],
   en: [
-    "One more cup of coffee~",
-    "What should we eat for lunch?",
-    "So sleepy...",
-    "Any weekend plans?",
-    "This project is tough lol",
-    "Cafe latte wins!",
-    "Nice weather today~",
-    "I hate overtime...",
-    "Craving something tasty",
-    "Let's take a short break~",
-    "LOL",
-    "Snacks are here!",
-    "5 more minutes~",
-    "Let's go, fighting!",
-    "Recharging energy...",
-    "I want to go home~",
+    "Taking a short break.",
+    "Coffee first, then back to work.",
+    "Review points are ready.",
+    "Check logs before the next run.",
+    "The build flow looks stable today.",
+    "Compress the key points before the meeting.",
   ],
   ja: [
-    "コーヒーもう一杯~",
-    "今日のランチ何にする?",
-    "眠い...",
-    "週末なにする?",
-    "今回のプロジェクト大変w",
-    "カフェラテ最高!",
-    "今日の天気いいね~",
-    "残業いやだ...",
-    "おいしいもの食べたい",
-    "ちょっと休もう~",
-    "www",
-    "おやつ来た!",
-    "あと5分だけ~",
-    "頑張ろう!",
-    "エネルギー充電中...",
-    "家に帰りたい~",
+    "Taking a short break.",
+    "Coffee first, then back to work.",
+    "Review points are ready.",
+    "Check logs before the next run.",
+    "The build flow looks stable today.",
+    "Compress the key points before the meeting.",
   ],
   zh: [
-    "再来一杯咖啡~",
-    "今天午饭吃什么?",
-    "好困...",
-    "周末准备做什么?",
-    "这个项目有点难哈哈",
-    "拿铁最棒!",
-    "今天天气真好~",
-    "不想加班...",
-    "想吃点好吃的",
-    "先休息一下吧~",
-    "哈哈哈哈",
-    "零食到了!",
-    "再来5分钟~",
-    "加油冲一波!",
-    "正在补充能量...",
-    "想回家了~",
+    "Taking a short break.",
+    "Coffee first, then back to work.",
+    "Review points are ready.",
+    "Check logs before the next run.",
+    "The build flow looks stable today.",
+    "Compress the key points before the meeting.",
   ],
 };
 
@@ -322,17 +307,13 @@ function inferReviewDecision(line?: string | null): MeetingReviewDecision {
   const cleaned = line?.replace(/\s+/g, " ").trim();
   if (!cleaned) return "reviewing";
   if (
-    /(보완|수정|보류|리스크|미흡|미완|추가.?필요|재검토|중단|불가|hold|revise|revision|changes?\s+requested|required|pending|risk|block|missing|incomplete|not\s+ready|保留|修正|风险|补充|未完成|暂缓|差し戻し)/i.test(
+    /(보류|보완|수정|미완|리스크|중단|hold|revise|revision|required|pending|risk|block|missing|incomplete|not\s+ready)/i.test(
       cleaned,
     )
   ) {
     return "hold";
   }
-  if (
-    /(승인|통과|문제없|진행.?가능|배포.?가능|approve|approved|lgtm|ship\s+it|go\s+ahead|承認|批准|通过|可发布)/i.test(
-      cleaned,
-    )
-  ) {
+  if (/(승인|통과|진행 가능|배포 가능|approve|approved|lgtm|ship\s+it|go\s+ahead)/i.test(cleaned)) {
     return "approved";
   }
   return "reviewing";
@@ -395,34 +376,34 @@ function paintMeetingBadge(
   badgeText.text = style.text;
 }
 
-// Break spots: positive x = offset from room left; negative x = offset from room right
-// These are calibrated to match furniture positions drawn in buildScene
 const BREAK_SPOTS = [
-  { x: 86, y: 72, dir: "D" }, // 왼쪽 소파 좌측 (sofa at baseX+50, width 80)
-  { x: 110, y: 72, dir: "D" }, // 왼쪽 소파 중앙
-  { x: 134, y: 72, dir: "D" }, // 왼쪽 소파 우측
-  { x: 30, y: 58, dir: "R" }, // 커피머신 앞 (machine at baseX, y+20)
-  { x: -112, y: 72, dir: "D" }, // 우측 소파 좌측 (sofa at rightX-120, width 80)
-  { x: -82, y: 72, dir: "D" }, // 우측 소파 우측
-  { x: -174, y: 56, dir: "L" }, // 하이테이블 왼쪽 (table at rightX-170, width 36)
-  { x: -144, y: 56, dir: "R" }, // 하이테이블 오른쪽
+  { x: 86, y: 72, dir: "D" },
+  { x: 110, y: 72, dir: "D" },
+  { x: 134, y: 72, dir: "D" },
+  { x: 30, y: 58, dir: "R" },
+  { x: -112, y: 72, dir: "D" },
+  { x: -82, y: 72, dir: "D" },
+  { x: -174, y: 56, dir: "L" },
+  { x: -144, y: 56, dir: "R" },
 ];
 
 const DEPT_THEME_LIGHT: Record<string, RoomTheme> = {
-  dev: { floor1: 0xd8e8f5, floor2: 0xcce1f2, wall: 0x6c96b7, accent: 0x5a9fd4 },
-  design: { floor1: 0xe8def2, floor2: 0xe1d4ee, wall: 0x9378ad, accent: 0x9a6fc4 },
-  planning: { floor1: 0xf0e1c5, floor2: 0xeddaba, wall: 0xae9871, accent: 0xd4a85a },
-  operations: { floor1: 0xd0eede, floor2: 0xc4ead5, wall: 0x6eaa89, accent: 0x5ac48a },
-  qa: { floor1: 0xf0cbcb, floor2: 0xedc0c0, wall: 0xae7979, accent: 0xd46a6a },
-  devsecops: { floor1: 0xf0d5c5, floor2: 0xedcdba, wall: 0xae8871, accent: 0xd4885a },
+  pmo: { floor1: 0xd2f4ec, floor2: 0xbfeee3, wall: 0x3c9285, accent: 0x0ea58f },
+  planning: { floor1: 0xffe6b8, floor2: 0xf8d89c, wall: 0xba8334, accent: 0xe0a53a },
+  dev: { floor1: 0xcde7ff, floor2: 0xb9dcfb, wall: 0x4b86bd, accent: 0x2f8bd8 },
+  design: { floor1: 0xe6d5ff, floor2: 0xdcc7fb, wall: 0x8461b4, accent: 0x9a70d8 },
+  qa: { floor1: 0xffd7d7, floor2: 0xf8c4c4, wall: 0xb85e64, accent: 0xe25d63 },
+  devsecops: { floor1: 0xffdec6, floor2: 0xf7c9ab, wall: 0xb56e41, accent: 0xe36f38 },
+  operations: { floor1: 0xd3f4d6, floor2: 0xbff0c8, wall: 0x5d9a61, accent: 0x2eb86a },
 };
 const DEPT_THEME_DARK: Record<string, RoomTheme> = {
-  dev: { floor1: 0x0c1620, floor2: 0x0a121c, wall: 0x1e3050, accent: 0x285890 },
-  design: { floor1: 0x120c20, floor2: 0x100a1e, wall: 0x2c1c50, accent: 0x482888 },
-  planning: { floor1: 0x18140c, floor2: 0x16120a, wall: 0x3a2c1c, accent: 0x785828 },
-  operations: { floor1: 0x0c1a18, floor2: 0x0a1614, wall: 0x1c4030, accent: 0x287848 },
-  qa: { floor1: 0x1a0c10, floor2: 0x180a0e, wall: 0x401c1c, accent: 0x782828 },
-  devsecops: { floor1: 0x18100c, floor2: 0x160e0a, wall: 0x3a241c, accent: 0x783828 },
+  pmo: { floor1: 0x59d0c1, floor2: 0x36afa0, wall: 0x18766c, accent: 0x2dd4bf },
+  planning: { floor1: 0xffc96a, floor2: 0xe4a63e, wall: 0x9a6820, accent: 0xfbbf24 },
+  dev: { floor1: 0x69bdf5, floor2: 0x3b91d1, wall: 0x276a9e, accent: 0x38bdf8 },
+  design: { floor1: 0xc59bff, floor2: 0x9f72e6, wall: 0x6d4aa5, accent: 0xc084fc },
+  qa: { floor1: 0xff8b96, floor2: 0xd86471, wall: 0x9c3e47, accent: 0xfb7185 },
+  devsecops: { floor1: 0xffa060, floor2: 0xd8793b, wall: 0x9a4a20, accent: 0xfb923c },
+  operations: { floor1: 0x71d88c, floor2: 0x45b765, wall: 0x2b7a43, accent: 0x4ade80 },
 };
 let DEPT_THEME = DEPT_THEME_LIGHT;
 

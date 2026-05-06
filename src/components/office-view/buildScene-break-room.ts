@@ -19,8 +19,16 @@ import {
   drawWallClock,
   hashStr,
 } from "./drawing-core";
-import { drawPlant } from "./drawing-furniture-a";
-import { drawCoffeeMachine, drawCoffeeTable, drawHighTable, drawSofa, drawVendingMachine } from "./drawing-furniture-b";
+import { drawPlant, drawWhiteboard } from "./drawing-furniture-a";
+import {
+  drawBookshelf,
+  drawCoffeeMachine,
+  drawCoffeeTable,
+  drawHighTable,
+  drawSofa,
+  drawVendingMachine,
+  drawWallMonitor,
+} from "./drawing-furniture-b";
 import type { OfficeFloorBand, SharedFacilityLayout } from "./officeFloorPlan";
 
 interface BuildBreakRoomParams {
@@ -71,8 +79,16 @@ export function buildBreakRoom({
   const breakRoom = new Container();
   const brx = 4;
   const bry = breakRoomY;
-  const brw = OFFICE_W - 8;
-  const brh = BREAK_ROOM_H;
+  const sharedContentRight = Math.max(0, ...(sharedFacilities ?? []).map((facility) => facility.x + facility.w));
+  const sharedContentBottom = Math.max(
+    bry + BREAK_ROOM_H,
+    ...(sharedFacilities ?? []).map((facility) => facility.y + facility.h),
+    ...(floorBands ?? [])
+      .filter((band) => band.id === "shared" || band.id === "rooftop")
+      .map((band) => band.y + band.h),
+  );
+  const brw = Math.min(OFFICE_W - 8, Math.max(360, sharedContentRight + 8));
+  const brh = Math.max(BREAK_ROOM_H, sharedContentBottom - bry + 8);
   breakRoomRectRef.current = { x: brx, y: bry, w: brw, h: brh };
 
   const brFloor = new Graphics();
@@ -266,8 +282,38 @@ function drawSharedFloorHeader(
   floorBands: OfficeFloorBand[] | undefined,
 ): void {
   const floor = floorBands?.find((band) => band.id === "shared");
+  drawFloorSectionHeader(
+    breakRoom,
+    brx,
+    bry,
+    brw,
+    `${floor?.level ?? "1F"} ${floor?.label ?? "\uACF5\uC6A9\uCE35"} / \uB85C\uBE44 / \uD734\uAC8C / \uD559\uC2B5 / \uD1F4\uADFC \uACF5\uBD80`,
+    accent,
+  );
+
+  const rooftop = floorBands?.find((band) => band.id === "rooftop");
+  if (rooftop) {
+    drawFloorSectionHeader(
+      breakRoom,
+      brx,
+      rooftop.y,
+      brw,
+      `${rooftop.level} ${rooftop.label} / \uD761\uC5F0\uC2E4 / \uB8E8\uD504\uAC00\uB4E0 / \uC57C\uC678 \uD734\uAC8C`,
+      rooftop.accent,
+    );
+  }
+}
+
+function drawFloorSectionHeader(
+  breakRoom: Container,
+  brx: number,
+  bry: number,
+  brw: number,
+  text: string,
+  accent: number,
+): void {
   const header = new Text({
-    text: `${floor?.level ?? "1F"} ${floor?.label ?? "\uACF5\uC6A9\uCE35"} / \uB85C\uBE44 / \uD734\uAC8C / \uD559\uC2B5 / \uD1F4\uADFC \uACF5\uBD80`,
+    text,
     style: new TextStyle({
       fontSize: 9,
       fill: 0xffffff,
@@ -295,7 +341,14 @@ function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLa
           ? 0xddebf6
           : facility.id === "after-hours"
             ? 0xdcdff0
-            : 0xffeadb;
+            : facility.id === "smoking"
+              ? 0xd9e1dc
+              : facility.id === "roof-garden"
+                ? 0xdcefd7
+                : facility.id === "roof-lounge"
+                  ? 0xe8e7d4
+                  : 0xffeadb;
+    drawFacilityShell(breakRoom, facility, zoneColor, breakTheme.accent);
     zone.roundRect(facility.x, facility.y, facility.w, facility.h, 6).fill({ color: zoneColor, alpha: 0.72 });
     zone.roundRect(facility.x, facility.y, facility.w, facility.h, 6).stroke({
       width: 1,
@@ -315,5 +368,137 @@ function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLa
     });
     label.position.set(facility.x + 8, facility.y + 6);
     breakRoom.addChild(label);
+
+    if (facility.id === "lobby") {
+      drawWallMonitor(breakRoom, facility.x + facility.w - 70, facility.y + 12, breakTheme.accent, 52, 26);
+      drawPlant(breakRoom, facility.x + 18, facility.y + facility.h - 20, 1);
+      drawHighTable(breakRoom, facility.x + 46, facility.y + facility.h - 42);
+      drawFacilityWindowRow(
+        breakRoom,
+        facility.x + 82,
+        facility.y + 16,
+        Math.max(42, facility.w - 164),
+        breakTheme.accent,
+      );
+    } else if (facility.id === "break") {
+      drawSofa(breakRoom, facility.x + 14, facility.y + facility.h - 28, 0xd49aa4);
+      drawCoffeeTable(breakRoom, facility.x + 100, facility.y + facility.h - 32);
+      drawCoffeeMachine(breakRoom, facility.x + facility.w - 44, facility.y + 18);
+      drawVendingMachine(breakRoom, facility.x + facility.w - 74, facility.y + 18);
+      drawMiniPendantLights(breakRoom, facility.x + 24, facility.y + 10, facility.w - 48, 0xf8d488);
+    } else if (facility.id === "study") {
+      drawBookshelf(breakRoom, facility.x + 12, facility.y + 22);
+      drawWhiteboard(breakRoom, facility.x + facility.w - 58, facility.y + 18);
+      drawHighTable(breakRoom, facility.x + Math.max(46, facility.w / 2 - 18), facility.y + facility.h - 44);
+      drawMiniPendantLights(breakRoom, facility.x + 24, facility.y + 10, facility.w - 48, 0x93c5fd);
+    } else if (facility.id === "after-hours") {
+      drawSofa(breakRoom, facility.x + 14, facility.y + facility.h - 26, 0x8fa0cf);
+      drawWallMonitor(breakRoom, facility.x + facility.w - 66, facility.y + 14, 0x8192c8, 48, 24);
+      drawPlant(breakRoom, facility.x + facility.w - 24, facility.y + facility.h - 20, 2);
+      drawFacilityWindowRow(breakRoom, facility.x + 74, facility.y + 17, Math.max(36, facility.w - 154), 0x8192c8);
+    } else if (facility.id === "smoking") {
+      drawSmokingRoom(breakRoom, facility, breakTheme.accent);
+    } else if (facility.id === "roof-garden") {
+      drawRoofGarden(breakRoom, facility);
+    } else {
+      drawRoofLounge(breakRoom, facility, breakTheme.accent);
+    }
   }
+}
+
+function drawFacilityShell(parent: Container, facility: SharedFacilityLayout, zoneColor: number, accent: number): void {
+  const g = new Graphics();
+  g.roundRect(facility.x + 3, facility.y + 5, facility.w, facility.h, 8).fill({ color: 0x000000, alpha: 0.12 });
+  g.roundRect(facility.x + 1, facility.y + 1, facility.w - 2, 20, 6).fill({
+    color: blendColor(zoneColor, accent, 0.18),
+    alpha: 0.46,
+  });
+  g.rect(facility.x + 8, facility.y + facility.h - 10, facility.w - 16, 3).fill({
+    color: blendColor(accent, 0x000000, 0.34),
+    alpha: 0.26,
+  });
+  g.roundRect(facility.x + 4, facility.y + 4, facility.w - 8, facility.h - 8, 5).stroke({
+    width: 0.8,
+    color: 0xffffff,
+    alpha: 0.24,
+  });
+  parent.addChild(g);
+}
+
+function drawFacilityWindowRow(parent: Container, x: number, y: number, w: number, accent: number): void {
+  const g = new Graphics();
+  const safeW = Math.max(30, w);
+  g.roundRect(x, y, safeW, 18, 4).fill({ color: 0x10243a, alpha: 0.12 });
+  const paneCount = Math.max(1, Math.floor(safeW / 34));
+  const gap = 5;
+  const paneW = (safeW - gap * (paneCount + 1)) / paneCount;
+  for (let i = 0; i < paneCount; i += 1) {
+    const px = x + gap + i * (paneW + gap);
+    g.roundRect(px, y + 4, paneW, 10, 2).fill({ color: blendColor(accent, 0xffffff, 0.72), alpha: 0.54 });
+    g.rect(px + paneW / 2 - 0.5, y + 4, 1, 10).fill({ color: 0xffffff, alpha: 0.28 });
+  }
+  parent.addChild(g);
+}
+
+function drawMiniPendantLights(parent: Container, x: number, y: number, w: number, color: number): void {
+  const g = new Graphics();
+  const count = Math.max(2, Math.min(5, Math.floor(w / 46)));
+  const step = w / count;
+  for (let i = 0; i < count; i += 1) {
+    const lx = x + step * i + step / 2;
+    g.rect(lx, y, 1, 10).fill({ color: 0x5b4632, alpha: 0.5 });
+    g.roundRect(lx - 7, y + 9, 14, 5, 2).fill({ color, alpha: 0.82 });
+    g.ellipse(lx, y + 17, 18, 6).fill({ color, alpha: 0.08 });
+  }
+  parent.addChild(g);
+}
+
+function drawSmokingRoom(parent: Container, facility: SharedFacilityLayout, accent: number): void {
+  const g = new Graphics();
+  const boothX = facility.x + 16;
+  const boothY = facility.y + 24;
+  const boothW = Math.min(86, facility.w * 0.34);
+  const boothH = Math.max(38, facility.h - 42);
+  g.roundRect(boothX, boothY, boothW, boothH, 6).fill({ color: 0xe8f1ee, alpha: 0.86 });
+  g.roundRect(boothX, boothY, boothW, boothH, 6).stroke({ width: 1.2, color: 0x7aa08e, alpha: 0.64 });
+  g.rect(boothX + boothW / 2 - 1, boothY + 6, 2, boothH - 12).fill({ color: 0x7aa08e, alpha: 0.26 });
+  g.roundRect(boothX + boothW - 20, boothY + 10, 10, 20, 2).fill({ color: 0x9bb7aa, alpha: 0.5 });
+  g.roundRect(facility.x + facility.w - 72, facility.y + 22, 44, 18, 5).fill({ color: accent, alpha: 0.22 });
+  g.circle(facility.x + facility.w - 52, facility.y + 50, 11).fill({ color: 0x80938a, alpha: 0.24 });
+  g.rect(facility.x + facility.w - 60, facility.y + 49, 16, 2).fill({ color: 0x53645d, alpha: 0.54 });
+  parent.addChild(g);
+
+  const label = new Text({
+    text: "환기 가동",
+    style: new TextStyle({ fontSize: 7, fill: 0x47574f, fontWeight: "bold", fontFamily: "system-ui, sans-serif" }),
+  });
+  label.position.set(facility.x + facility.w - 68, facility.y + 26);
+  parent.addChild(label);
+}
+
+function drawRoofGarden(parent: Container, facility: SharedFacilityLayout): void {
+  const g = new Graphics();
+  g.roundRect(facility.x + 16, facility.y + 24, facility.w - 32, 18, 5).fill({ color: 0xb7d59d, alpha: 0.72 });
+  g.roundRect(facility.x + 18, facility.y + facility.h - 30, facility.w - 36, 12, 5).fill({
+    color: 0xa4784e,
+    alpha: 0.58,
+  });
+  for (let i = 0; i < 8; i += 1) {
+    const px = facility.x + 30 + i * Math.max(20, (facility.w - 60) / 7);
+    g.circle(px, facility.y + facility.h - 36, 7 + (i % 2)).fill({
+      color: i % 2 === 0 ? 0x4f9f5f : 0x6abf69,
+      alpha: 0.84,
+    });
+    g.rect(px - 1, facility.y + facility.h - 33, 2, 10).fill({ color: 0x5b6f39, alpha: 0.58 });
+  }
+  parent.addChild(g);
+  drawFacilityWindowRow(parent, facility.x + 28, facility.y + 20, Math.max(42, facility.w - 56), 0x22c55e);
+}
+
+function drawRoofLounge(parent: Container, facility: SharedFacilityLayout, accent: number): void {
+  drawSofa(parent, facility.x + 16, facility.y + facility.h - 26, 0xd4bd83);
+  drawCoffeeTable(parent, facility.x + 104, facility.y + facility.h - 30);
+  drawHighTable(parent, facility.x + facility.w - 82, facility.y + facility.h - 46);
+  drawPlant(parent, facility.x + facility.w - 28, facility.y + facility.h - 20, 2);
+  drawMiniPendantLights(parent, facility.x + 26, facility.y + 12, facility.w - 52, accent);
 }

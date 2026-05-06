@@ -67,7 +67,7 @@ function splitMessageByLimit(text: string, limit: number): string[] {
 }
 
 function localeInstructionForDirect(lang: Lang): string {
-  return lang === "ko" ? "한국어로 답하세요." : "Respond in English.";
+  return lang === "ko" ? "한국어로 답변하세요." : "Respond in English.";
 }
 
 export function createDirectReplyRuntime(deps: DirectReplyRuntimeDeps) {

@@ -15,6 +15,7 @@ import VirtualPadOverlay from "./office-view/VirtualPadOverlay";
 import {
   type OfficeViewProps,
   type Delivery,
+  type OfficeCeoTransit,
   type RoomRect,
   type WallClockVisual,
   canScrollOnAxis,
@@ -69,6 +70,7 @@ export default function OfficeView({
   const keysRef = useRef<Record<string, boolean>>({});
   const ceoPosRef = useRef({ x: 180, y: 60 });
   const ceoSpriteRef = useRef<Container | null>(null);
+  const ceoTransitRef = useRef<OfficeCeoTransit | null>(null);
   const crownRef = useRef<Text | null>(null);
   const highlightRef = useRef<Graphics | null>(null);
   const animItemsRef = useRef<
@@ -168,37 +170,51 @@ export default function OfficeView({
     });
   }, [setMoveDirectionPressed]);
 
-  const scrollToOfficeArea = useCallback((area: "shared" | "strategy" | "production" | "quality") => {
-    const container = containerRef.current;
-    if (!container) return;
-    const departmentGroups: Record<"shared" | "strategy" | "production" | "quality", string[]> = {
+  type OfficeMoveArea = "shared" | "rooftop" | "strategy" | "production" | "quality";
+
+  const moveCeoToOfficeArea = useCallback((area: OfficeMoveArea, mode: "stairs" | "elevator") => {
+    const departmentGroups: Record<OfficeMoveArea, string[]> = {
       shared: [],
+      rooftop: [],
       strategy: ["pmo", "planning"],
       production: ["dev", "design"],
       quality: ["qa", "devsecops", "operations"],
     };
+    const breakRoomRect = breakRoomRectRef.current;
     const targetY =
       area === "shared"
-        ? (breakRoomRectRef.current?.y ?? 0)
-        : Math.min(
-            ...roomRectsRef.current
-              .filter((room) => departmentGroups[area].includes(room.dept.id))
-              .map((room) => room.y),
-          );
+        ? (breakRoomRect?.y ?? 0)
+        : area === "rooftop"
+          ? (breakRoomRect?.y ?? 0) + Math.max(190, Math.floor((breakRoomRect?.h ?? 320) * 0.58))
+          : Math.min(
+              ...roomRectsRef.current
+                .filter((room) => departmentGroups[area].includes(room.dept.id))
+                .map((room) => room.y),
+            );
     if (!Number.isFinite(targetY)) return;
 
-    const hostY =
-      findScrollContainer(container, "y") ??
-      scrollHostYRef.current ??
-      (document.scrollingElement as HTMLElement | null);
-    if (!hostY) return;
-    const canvas = container.querySelector("canvas");
-    const scaleY = canvas ? canvas.getBoundingClientRect().height / Math.max(1, totalHRef.current) : 1;
-    const containerRect = container.getBoundingClientRect();
-    const hostRect = hostY.getBoundingClientRect();
-    const targetTop = hostY.scrollTop + containerRect.top - hostRect.top + targetY * scaleY - 24;
-    const maxTop = Math.max(0, hostY.scrollHeight - hostY.clientHeight);
-    hostY.scrollTo({ top: Math.max(0, Math.min(maxTop, targetTop)), behavior: "smooth" });
+    const targetRooms = roomRectsRef.current.filter((room) => departmentGroups[area].includes(room.dept.id));
+    const destinationRoom = targetRooms[0] ?? roomRectsRef.current[0];
+    const destinationX =
+      area === "shared" || area === "rooftop"
+        ? Math.max(96, Math.min(officeWRef.current - 120, Math.floor(officeWRef.current * 0.28)))
+        : destinationRoom
+          ? destinationRoom.x + Math.min(destinationRoom.w - 42, 74)
+          : Math.max(96, Math.floor(officeWRef.current * 0.3));
+    const destinationY = Math.max(42, targetY + 42);
+    const coreX = Math.max(82, officeWRef.current - 74);
+    const currentY = ceoPosRef.current.y;
+
+    ceoTransitRef.current = {
+      area,
+      mode,
+      phase: "walk_to_core",
+      coreX,
+      coreY: currentY,
+      destinationX,
+      destinationY,
+      pauseTicks: 0,
+    };
   }, []);
 
   const officeSummaryCards = useMemo(() => {
@@ -210,12 +226,11 @@ export default function OfficeView({
       { label: "진행 업무", value: inProgressTasks, detail: `검토 대기 ${reviewTasks}` },
       { label: "근무 직원", value: workingAgents, detail: `전체 ${agents.length}` },
       { label: "호출 Subagent", value: activeSubAgents, detail: "전문 실행 풀" },
-      { label: "운영 층", value: 4, detail: "공용·전략·제작·품질" },
+      { label: "운영 층", value: 5, detail: "공용·옥상·전략·제작·품질" },
     ];
   }, [agents, subAgents, tasks]);
 
   const followCeoInView = useCallback(() => {
-    if (!showVirtualPadRef.current) return;
     const container = containerRef.current;
     if (!container) return;
 
@@ -300,7 +315,7 @@ export default function OfficeView({
     [clearVirtualMovement],
   );
 
-  /* ── BUILD SCENE (no app destroy, just stage clear + rebuild) ── */
+  /* BUILD SCENE (no app destroy, just stage clear + rebuild) */
   const buildScene = useCallback(() => {
     buildOfficeScene({
       appRef,
@@ -364,6 +379,7 @@ export default function OfficeView({
       themeHighlightTargetIdRef,
       ceoOfficeRectRef,
       breakRoomRectRef,
+      ceoTransitRef,
       officeWRef,
       totalHRef,
       dataRef,
@@ -440,9 +456,10 @@ export default function OfficeView({
   return (
     <div className="w-full overflow-auto" style={{ minHeight: "100%" }}>
       <div className="mx-auto mb-3 flex w-full max-w-5xl flex-wrap items-center gap-2 rounded-2xl border border-cyan-400/15 bg-slate-950/45 px-3 py-2 text-xs text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur">
-        <span className="mr-1 font-semibold text-cyan-100">층 선택</span>
+        <span className="mr-1 font-semibold text-cyan-100">층 이동</span>
         {[
           ["shared", "1F 공용층"],
+          ["rooftop", "RF 옥상층"],
           ["strategy", "2F 전략층"],
           ["production", "3F 제작층"],
           ["quality", "4F 품질/운영층"],
@@ -451,12 +468,30 @@ export default function OfficeView({
             key={area}
             type="button"
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 font-medium text-slate-200 transition hover:border-cyan-300/40 hover:bg-cyan-300/10 active:translate-y-px"
-            onClick={() => scrollToOfficeArea(area as "shared" | "strategy" | "production" | "quality")}
+            onClick={() => moveCeoToOfficeArea(area as OfficeMoveArea, "elevator")}
           >
-            {label}
+            {label} · 엘리베이터
           </button>
         ))}
-        <span className="ml-auto hidden text-slate-400 md:inline">7부서 21명 기준 · 세부 전문성은 subagent 호출</span>
+        {[
+          ["shared", "1F"],
+          ["rooftop", "RF"],
+          ["strategy", "2F"],
+          ["production", "3F"],
+          ["quality", "4F"],
+        ].map(([area, label]) => (
+          <button
+            key={`${area}-stairs`}
+            type="button"
+            className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-2.5 py-1.5 font-medium text-amber-100 transition hover:border-amber-200/50 hover:bg-amber-300/15 active:translate-y-px"
+            onClick={() => moveCeoToOfficeArea(area as OfficeMoveArea, "stairs")}
+          >
+            {label} 계단
+          </button>
+        ))}
+        <span className="ml-auto hidden text-slate-400 md:inline">
+          WASD/방향키로 CEO 이동 · Enter/Space 상호작용 · 19명 운영
+        </span>
       </div>
       <div className="mx-auto mb-3 grid w-full max-w-5xl grid-cols-2 gap-2 md:grid-cols-4">
         {officeSummaryCards.map((card) => (

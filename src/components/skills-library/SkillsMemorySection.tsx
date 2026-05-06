@@ -47,7 +47,7 @@ export default function SkillsMemorySection({
               key={skill.skill_id}
               className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-100"
             >
-              {skill.skill_id} · 사용 {skill.use_count}회 · 숙련 {Math.round(skill.proficiency * 100)}%
+              {skill.skill_id} · 사용 {skill.use_count}회 · 숙련도 {Math.round(skill.proficiency * 100)}%
             </span>
           ))}
         </div>

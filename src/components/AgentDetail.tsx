@@ -2,6 +2,7 @@
 import type { CliAccountPoolView, OAuthStatus } from "../api";
 import * as api from "../api";
 import { getRoleDisplayLabel } from "../app/canonical-display";
+import { resolveAgentVisualProfile } from "../agent-visual-profiles";
 import { localeName, useI18n } from "../i18n";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../i18n/canonical-label-registry";
 import type { Agent, AgentMemoryResponse, Department, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
@@ -112,12 +113,11 @@ export default function AgentDetail({
     return providerLabel;
   }, [agent.api_model, agent.cli_account_pool_id, agent.cli_provider]);
   const visualProfileSummary = useMemo(() => {
-    if (agent.agent_profile?.visual_profile_key) {
-      return agent.agent_profile.visual_profile_key.replace("agent-visual-", "프로필 ");
-    }
+    const visualProfile = resolveAgentVisualProfile(agent);
+    if (visualProfile?.label_ko) return visualProfile.label_ko;
     if (typeof agent.sprite_number === "number") return `스프라이트 ${agent.sprite_number}`;
     return "-";
-  }, [agent.agent_profile, agent.sprite_number]);
+  }, [agent]);
 
   useEffect(() => {
     setSelectedCli(agent.cli_provider);

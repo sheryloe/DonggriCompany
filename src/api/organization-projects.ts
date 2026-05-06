@@ -245,6 +245,7 @@ export async function createTask(input: {
   priority?: number;
   project_id?: string;
   project_path?: string;
+  project_hint?: string;
   assigned_agent_id?: string;
   workflow_pack_key?: WorkflowPackKey;
   workflow_meta_json?: Record<string, unknown> | string;
@@ -289,8 +290,12 @@ export async function deleteTask(id: string): Promise<void> {
   await del(`/api/tasks/${id}`);
 }
 
-export async function assignTask(id: string, agentId: string): Promise<void> {
-  await post(`/api/tasks/${id}/assign`, { agent_id: agentId });
+export async function assignTask(
+  id: string,
+  agentId: string,
+  overrideReason = "advanced_ui_manual_override",
+): Promise<void> {
+  await post(`/api/tasks/${id}/assign`, { agent_id: agentId, override_reason: overrideReason });
 }
 
 export async function runTask(id: string): Promise<void> {

@@ -16,7 +16,7 @@ type CreateTaskHandler = (input: {
   priority?: number;
   project_id?: string;
   project_path?: string;
-  assigned_agent_id?: string;
+  project_hint?: string;
   workflow_pack_key?: WorkflowPackKey;
   workflow_meta_json?: Record<string, unknown> | string;
 }) => void | Promise<void>;
@@ -94,7 +94,7 @@ export async function submitTaskWithProjectHandling(
   options: SubmitTaskOptions = {},
 ): Promise<void> {
   const allowCreateMissingPath = options.allowCreateMissingPath ?? false;
-  const allowWithoutProject = options.allowWithoutProject ?? false;
+  const allowWithoutProject = options.allowWithoutProject ?? true;
   const {
     title,
     description,
@@ -134,6 +134,8 @@ export async function submitTaskWithProjectHandling(
     onRequireGitHubConnection,
   } = context;
 
+  void assignAgentId;
+
   if (!title.trim() || submitBusy) return;
 
   setFormFeedback(null);
@@ -148,26 +150,12 @@ export async function submitTaskWithProjectHandling(
     setFormFeedback({
       tone: "error",
       message: t({
-        ko: "선택한 프로젝트를 찾지 못했습니다. 다시 선택해 주세요.",
+        ko: "선택한 프로젝트를 찾을 수 없습니다. 다시 선택해 주세요.",
         en: "The selected project was not found. Please select again.",
         ja: "The selected project was not found. Please select again.",
         zh: "The selected project was not found. Please select again.",
       }),
     });
-    return;
-  }
-
-  if (!resolvedProject && projectQuery.trim() && !createNewProjectMode) {
-    setFormFeedback({
-      tone: "error",
-      message: t({
-        ko: "입력한 프로젝트를 확정하지 못했습니다. 목록에서 선택하거나 비워서 계속해 주세요.",
-        en: "Could not resolve the typed project. Pick from the list or clear it to continue.",
-        ja: "Could not resolve the typed project. Pick from the list or clear it to continue.",
-        zh: "Could not resolve the typed project. Pick from the list or clear it to continue.",
-      }),
-    });
-    setProjectDropdownOpen(true);
     return;
   }
 
@@ -202,7 +190,7 @@ export async function submitTaskWithProjectHandling(
       setFormFeedback({
         tone: "error",
         message: t({
-          ko: "레포지토리 이름을 입력해 주세요.",
+          ko: "저장소 이름을 입력해 주세요.",
           en: "Please enter a repository name.",
           ja: "Please enter a repository name.",
           zh: "Please enter a repository name.",
@@ -326,7 +314,7 @@ export async function submitTaskWithProjectHandling(
           setFormFeedback({
             tone: "error",
             message: t({
-              ko: `GitHub 레포 '${error.remoteRepoFullName || githubRepoName.trim() || "repository"}'는 생성됐지만 로컬 설정에 실패했습니다. 원격 레포는 유지됩니다. 경로: ${recoveryPath}${detail ? ` / 원인: ${detail}` : ""}`,
+              ko: `GitHub 저장소 '${error.remoteRepoFullName || githubRepoName.trim() || "repository"}'는 생성됐지만 로컬 설정에 실패했습니다. 원격 저장소는 유지됩니다. 경로: ${recoveryPath}${detail ? ` / 원인: ${detail}` : ""}`,
               en: `GitHub repository '${error.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${recoveryPath}${detail ? ` / Cause: ${detail}` : ""}`,
               ja: `GitHub repository '${error.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${recoveryPath}${detail ? ` / Cause: ${detail}` : ""}`,
               zh: `GitHub repository '${error.remoteRepoFullName || githubRepoName.trim() || "repository"}' was created, but local setup failed. The remote repository was kept. Path: ${recoveryPath}${detail ? ` / Cause: ${detail}` : ""}`,
@@ -345,7 +333,7 @@ export async function submitTaskWithProjectHandling(
         setFormFeedback({
           tone: "error",
           message: t({
-            ko: "이미 존재하는 레포지토리명입니다. 다른 이름을 입력해 주세요.",
+            ko: "이미 존재하는 저장소 이름입니다. 다른 이름을 입력해 주세요.",
             en: "This repository name already exists. Please choose another name.",
             ja: "This repository name already exists. Please choose another name.",
             zh: "This repository name already exists. Please choose another name.",
@@ -470,7 +458,7 @@ export async function submitTaskWithProjectHandling(
         priority,
         project_id: resolvedProject?.id,
         project_path: resolvedProject?.project_path,
-        assigned_agent_id: assignAgentId || undefined,
+        project_hint: !resolvedProject && projectQuery.trim() ? projectQuery.trim() : undefined,
         workflow_pack_key: selectedGoalCommandPreset?.workflowPackKey,
         workflow_meta_json: selectedGoalMeta,
       }),

@@ -10,7 +10,9 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
   const { getPreferredLanguage, normalizeTextField } = deps;
 
   function pickDecisionL10n(ko: string, en: string): string {
-    return getPreferredLanguage() === "ko" ? ko : en;
+    void en;
+    void getPreferredLanguage;
+    return ko;
   }
 
   function truncateLine(value: string, max = 220): string {
@@ -177,6 +179,7 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
       `${pickDecisionL10n("기획 리드 요약", "Planning lead summary")}:`,
       ...plannerSummaryLines.map((line) => `- ${line}`),
       ...(options.length > 0 ? [`${pickDecisionL10n("선택지", "Options")}:`, ...options] : []),
+      `ID: [DECISION:${item.id}]`,
       replyGuide,
       ...(recommendedOptions.length > 0
         ? [

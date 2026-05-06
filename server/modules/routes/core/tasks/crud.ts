@@ -17,6 +17,7 @@ import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack
 import { normalizeSubtaskTitleForDisplay } from "../../../workflow/subtasks/title-normalizer.ts";
 import { resolveGoalCommandForTaskCreate } from "../../../workflow/goal-commands.ts";
 import { mapLegacyDepartmentId } from "../../../bootstrap/schema/organization-manifest.ts";
+import { mergeTaskAutoRoutingWorkflowMeta, resolveTaskAutoRouting } from "./task-routing-resolver.ts";
 
 export type TaskCrudRouteDeps = Pick<
   RuntimeContext,
@@ -433,30 +434,44 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       routedPackDecision && routedPackDecision.packKey === "donggri" && routedPackDecision.confidence >= 0.72
         ? "donggri"
         : null;
-    const resolvedWorkflowPackKey = resolveWorkflowPackKeyForTask({
-      db: db as any,
-      explicitPackKey: explicitPackKey ?? autoRoutedPackKey,
+    const preliminaryDepartmentId =
+      normalizeDepartmentIdInput((body as any).department_id) ?? goalPreset?.departmentId ?? null;
+    const preliminaryTaskType = normalizeTextField((body as any).task_type) ?? goalPreset?.taskType ?? "general";
+    const autoRouting = resolveTaskAutoRouting(db as any, {
+      title,
+      description: descriptionText,
+      projectHint: (body as any).project_hint,
       projectId: resolvedProjectId,
+      projectPath: resolvedProjectPath,
+      workflowPackKey: explicitPackKey ?? autoRoutedPackKey,
+      departmentId: preliminaryDepartmentId,
+      taskType: preliminaryTaskType,
+      workflowMetaJson: goalCommandResolution.workflowMetaJson ?? (body as any).workflow_meta_json,
     });
+    resolvedProjectId = autoRouting.projectId;
+    resolvedProjectPath = autoRouting.projectPath;
+    const resolvedWorkflowPackKey = autoRouting.workflowPackKey;
     const canonicalTaskFields = buildCanonicalTaskFields({
       title,
       description: descriptionText,
       projectPath: resolvedProjectPath,
       workflowPackKey: resolvedWorkflowPackKey,
     });
-    const resolvedDepartmentId =
-      normalizeDepartmentIdInput((body as any).department_id) ?? goalPreset?.departmentId ?? null;
-    const resolvedAssignedAgentId = normalizeTextField((body as any).assigned_agent_id) ?? null;
-    const resolvedTaskType = normalizeTextField((body as any).task_type) ?? goalPreset?.taskType ?? "general";
+    const resolvedDepartmentId = autoRouting.departmentId;
+    const resolvedAssignedAgentId = autoRouting.assignedAgentId;
+    const resolvedTaskType = preliminaryTaskType;
     const bodyPriority = Number((body as any).priority);
     const resolvedPriority = Number.isFinite(bodyPriority) ? bodyPriority : (goalPreset?.priority ?? 0);
-    const resolvedWorkflowMetaJson =
+    const baseWorkflowMeta =
       goalCommandResolution.workflowMetaJson ??
       (typeof (body as any).workflow_meta_json === "string"
         ? (body as any).workflow_meta_json
         : (body as any).workflow_meta_json
           ? JSON.stringify((body as any).workflow_meta_json)
           : null);
+    const resolvedWorkflowMetaJson = mergeTaskAutoRoutingWorkflowMeta(baseWorkflowMeta, autoRouting);
+    const requestedStatus = normalizeTextField((body as any).status);
+    const resolvedStatus = requestedStatus ?? autoRouting.statusHint ?? "inbox";
 
     const insertColumns = [
       "id",
@@ -483,7 +498,7 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
       resolvedDepartmentId,
       resolvedAssignedAgentId,
       resolvedProjectId,
-      (body as any).status ?? "inbox",
+      resolvedStatus,
       resolvedPriority,
       resolvedTaskType,
       resolvedWorkflowPackKey,
@@ -520,10 +535,15 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     if (autoRoutedPackKey && resolvedWorkflowPackKey === autoRoutedPackKey) {
       markOfficePackHydrated(autoRoutedPackKey);
     }
+    if (resolvedAssignedAgentId) {
+      db.prepare(
+        "UPDATE agents SET current_task_id = ? WHERE id = ? AND (current_task_id IS NULL OR current_task_id = '')",
+      ).run(id, resolvedAssignedAgentId);
+    }
     recordTaskCreationAudit({
       taskId: id,
       taskTitle: title,
-      taskStatus: String((body as any).status ?? "inbox"),
+      taskStatus: String(resolvedStatus),
       departmentId: resolvedDepartmentId,
       assignedAgentId: resolvedAssignedAgentId,
       taskType: resolvedTaskType,
@@ -549,7 +569,7 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
             task: {
               id,
               title,
-              status: String((body as any).status ?? "inbox"),
+              status: String(resolvedStatus),
               priority: resolvedPriority,
               taskType: resolvedTaskType,
             },
@@ -565,6 +585,11 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
     if (goalPreset) {
       appendTaskLog(id, "system", `Goal command routed: ${goalPreset.key} team=${goalPreset.teamPreset}`);
     }
+    appendTaskLog(
+      id,
+      "system",
+      `Auto routing: project=${autoRouting.projectRouting.source}/${autoRouting.projectRouting.confidence} agent=${autoRouting.agentRouting.source}/${autoRouting.agentRouting.confidence}`,
+    );
 
     const taskRow = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
     const task =

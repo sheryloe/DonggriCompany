@@ -34,7 +34,7 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
-          <div className="text-xs font-semibold text-rose-300 mb-3">LOAD FAILED</div>
+          <div className="text-xs font-semibold text-rose-300 mb-3">불러오기 실패</div>
           <div className="text-slate-400 text-sm">{skillText(t, "loading.failed")}</div>
           <div className="text-slate-500 text-xs mt-1">{vm.error}</div>
           <button

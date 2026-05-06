@@ -166,6 +166,49 @@ describe("gateway client", () => {
     expect(body.chat_id).toBe("-100222");
   });
 
+  it("notifyTaskStatus falls back to an enabled scoped Telegram session when no broadcast session exists", async () => {
+    const dbPath = createTestDb({
+      messengerChannels: {
+        telegram: {
+          token: "tg-token",
+          sessions: [
+            {
+              id: "ops-room",
+              name: "Operations Room",
+              targetId: "-100333",
+              enabled: true,
+              departmentId: "operations",
+            },
+          ],
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const gateway = await importGatewayModule({
+      DB_PATH: dbPath,
+      OPENCLAW_CONFIG: undefined,
+    });
+
+    gateway.notifyTaskStatus("task-3", "ISO 품질 기반 V-모델 생성 프로세스 수립", "in_progress", "ko");
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.telegram.org/bottg-token/sendMessage");
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as {
+      chat_id?: string;
+      text?: string;
+    };
+    expect(body.chat_id).toBe("-100333");
+    expect(body.text).toContain("[진행 시작]");
+  });
+
   it("listMessengerSessions exposes only one global Telegram session", async () => {
     const dbPath = createTestDb({
       messengerChannels: {
@@ -420,7 +463,7 @@ describe("gateway client", () => {
       text: "hello department",
     });
 
-    expect(result).toEqual({ routed: "department_bot", departmentId: "development" });
+    expect(result).toEqual({ routed: "department_bot", departmentId: "dev" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.telegram.org/bottg-dev-token/sendMessage");
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as { chat_id?: string };
@@ -452,7 +495,7 @@ describe("gateway client", () => {
       OPENCLAW_CONFIG: undefined,
     });
 
-    const text = "[development][task-1][planned]\n아리아 (개발팀장): 한글 발신 테스트";
+    const text = "[개발][task-1][계획됨]\n아리아(개발팀): 한국어 발신 테스트입니다.";
     await gateway.sendDepartmentTelegramMessage({
       sessionKey: "telegram:global",
       departmentId: "development",
@@ -461,7 +504,7 @@ describe("gateway client", () => {
 
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as { text?: string };
     expect(body.text).toBe(text);
-    expect(body.text).not.toMatch(/[�]|[?]{4,}|媛|硫|蹂|洹|濡/);
+    expect(body.text).not.toMatch(/�|[?]{4,}|占|揶|筌|癰|域|嚥/);
   });
 
   it("sendDepartmentTelegramMessage falls back to the global bot when no department bot is mapped", async () => {
@@ -576,7 +619,7 @@ describe("gateway client", () => {
       text: "hello env",
     });
 
-    expect(result).toEqual({ routed: "department_bot", departmentId: "development" });
+    expect(result).toEqual({ routed: "department_bot", departmentId: "dev" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.telegram.org/bottg-env-dev-token/sendMessage");
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as { chat_id?: string };

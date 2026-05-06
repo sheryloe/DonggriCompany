@@ -107,6 +107,7 @@ interface AppMainLayoutProps {
     priority?: number;
     project_id?: string;
     project_path?: string;
+    project_hint?: string;
     assigned_agent_id?: string;
     workflow_pack_key?: WorkflowPackKey;
     workflow_meta_json?: Record<string, unknown> | string;
@@ -438,7 +439,7 @@ export default function AppMainLayout({
 
                 {view === "tasks" && (
                   <TaskBoard
-                    tasks={tasksForActivePack}
+                    tasks={tasks}
                     agents={displayAgents}
                     departments={displayDepartments}
                     subtasks={subtasks}

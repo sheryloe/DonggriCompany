@@ -15,6 +15,17 @@ import {
   type CategorizedSkill,
   type TFunction,
 } from "./model";
+import {
+  getAuditDisplayName,
+  getOAuthProviderDisplayName,
+  getPlatformDisplayName,
+  getSkillDetailDescription,
+  getSkillDetailTitle,
+  getSkillDetailWhenToUse,
+  getSkillDisplayDescription,
+  getSkillDisplayTitle,
+  getSupportedTargetDisplayName,
+} from "./skillDisplay";
 import { skillText, skillTextVars } from "./skillLibraryText";
 
 interface SkillsGridProps {
@@ -100,6 +111,9 @@ export default function SkillsGrid({
           const detail = detailCache[detailKey];
           const isDonggriSkill = skill.origin === "donggri";
           const installing = installingCodexSkill === skill.skillId;
+          const displayTitle = getSkillDisplayTitle(skill);
+          const displayDescription = getSkillDisplayDescription(skill, t);
+          const detailWhenToUse = detail && typeof detail === "object" ? getSkillDetailWhenToUse(detail, skill) : [];
 
           return (
             <div
@@ -114,7 +128,7 @@ export default function SkillsGrid({
                     <span className={badge.color}>{badge.text}</span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-white">{skill.name}</div>
+                    <div className="truncate text-sm font-semibold text-white">{displayTitle}</div>
                     <div className="mt-0.5 truncate text-xs text-slate-500">{skill.repo}</div>
                   </div>
                 </div>
@@ -142,9 +156,7 @@ export default function SkillsGrid({
                 )}
               </div>
 
-              {skill.description && (
-                <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-slate-400">{skill.description}</p>
-              )}
+              <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-slate-400">{displayDescription}</p>
 
               <div className="mb-3 flex flex-wrap gap-1.5">
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border ${catColor}`}>
@@ -155,16 +167,25 @@ export default function SkillsGrid({
                 </span>
                 {skill.requiredOAuth?.map((provider) => {
                   const readiness = oauthReadinessLabel(oauthStatus, provider, t);
+                  const providerName = getOAuthProviderDisplayName(provider);
                   return (
                     <span
                       key={`${detailKey}-oauth-${provider}`}
                       className="text-[10px] px-2 py-0.5 rounded-full border border-blue-500/25 bg-blue-500/10 text-blue-200"
-                      title={`OAuth ${provider}: ${readiness}`}
+                      title={`OAuth ${providerName}: ${readiness}`}
                     >
-                      OAuth: {provider} · {readiness}
+                      OAuth: {providerName} · {readiness}
                     </span>
                   );
                 })}
+                {skill.supportedTargets?.slice(0, 3).map((target) => (
+                  <span
+                    key={`${detailKey}-target-${target}`}
+                    className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600/60 bg-slate-900/50 text-slate-300"
+                  >
+                    {getSupportedTargetDisplayName(target)}
+                  </span>
+                ))}
                 {skill.codexInstalled && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-200">
                     {skillText(t, "grid.codexInstalled")}
@@ -207,7 +228,7 @@ export default function SkillsGrid({
                   <button
                     onClick={() => onCopy(skill)}
                     className="px-2 py-1 text-[10px] bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-md hover:bg-blue-600/30 transition-all"
-                    title={isDonggriSkill ? "Copy Codex sync command" : `npx skills add ${skill.repo}`}
+                    title={isDonggriSkill ? "Codex 동기화 명령 복사" : `npx skills add ${skill.repo}`}
                   >
                     {copiedSkill === skill.name ? skillText(t, "grid.copied") : skillText(t, "grid.copy")}
                   </button>
@@ -237,18 +258,18 @@ export default function SkillsGrid({
 
                   {detail && typeof detail === "object" && (
                     <div className="space-y-3">
-                      {detail.title && <div className="text-sm font-semibold text-white">{detail.title}</div>}
-                      {detail.description && (
-                        <p className="text-xs text-slate-300 leading-relaxed">{detail.description}</p>
-                      )}
+                      <div className="text-sm font-semibold text-white">{getSkillDetailTitle(detail, skill)}</div>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {getSkillDetailDescription(detail, skill, t)}
+                      </p>
 
-                      {detail.whenToUse.length > 0 && (
+                      {detailWhenToUse.length > 0 && (
                         <div className="space-y-1.5">
                           <div className="text-[10px] text-slate-500 uppercase tracking-wider">
                             {skillText(t, "grid.whenToUse")}
                           </div>
                           <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-300">
-                            {detail.whenToUse.slice(0, 6).map((item, idx) => (
+                            {detailWhenToUse.slice(0, 6).map((item, idx) => (
                               <li key={`${detailKey}-when-${idx}`}>{item}</li>
                             ))}
                           </ul>
@@ -280,7 +301,8 @@ export default function SkillsGrid({
                                 key={platform.name}
                                 className="text-[10px] px-2 py-0.5 bg-slate-800/80 border border-slate-700/50 rounded-md text-slate-400"
                               >
-                                {platform.name} <span className="text-empire-green">{platform.installs}</span>
+                                {getPlatformDisplayName(platform.name)}{" "}
+                                <span className="text-empire-green">{platform.installs}</span>
                               </span>
                             ))}
                           </div>
@@ -300,7 +322,7 @@ export default function SkillsGrid({
                                     : "text-red-400 bg-red-500/10 border-red-500/30"
                               }`}
                             >
-                              {audit.name}: {localizeAuditStatus(audit.status, t)}
+                              {getAuditDisplayName(audit.name)}: {localizeAuditStatus(audit.status, t)}
                             </span>
                           ))}
                         </div>
@@ -320,7 +342,7 @@ export default function SkillsGrid({
 
       {filtered.length === 0 && (
         <div className="text-center py-16">
-          <div className="text-xs font-semibold text-slate-500 mb-3">NO RESULTS</div>
+          <div className="text-xs font-semibold text-slate-500 mb-3">검색 결과 없음</div>
           <div className="text-slate-400 text-sm">{skillText(t, "grid.noResults")}</div>
           <div className="text-slate-500 text-xs mt-1">{skillText(t, "grid.tryDifferentKeyword")}</div>
         </div>

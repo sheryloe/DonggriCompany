@@ -2,7 +2,7 @@
 import { notifyTaskStatus } from "../../../../gateway/client.ts";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import type { AgentRow } from "../../shared/types.ts";
-import { resolveConstrainedAgentScopeForTask, selectAutoAssignableAgentForTask } from "./execution-run-auto-assign.ts";
+import { resolveConstrainedAgentScopeForTask } from "./execution-run-auto-assign.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
 import { buildAgentPromptProfileBlock } from "../../../workflow/agents/agent-profile.ts";
@@ -17,6 +17,7 @@ import {
   loadPendingInterruptPrompts,
 } from "../../../workflow/core/interrupt-injection-tools.ts";
 import { buildMemoryContextBlock } from "../../../memory/store.ts";
+import { mergeTaskAutoRoutingWorkflowMeta, resolveTaskAutoRouting } from "./task-routing-resolver.ts";
 
 export type TaskRunRouteDeps = Pick<
   RuntimeContext,
@@ -102,6 +103,8 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
           project_id: string | null;
           workflow_pack_key: string | null;
           project_path: string | null;
+          task_type: string | null;
+          workflow_meta_json: string | null;
           status: string;
         }
       | undefined;
@@ -143,7 +146,56 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
       });
     }
 
-    let agentId = task.assigned_agent_id || (req.body?.agent_id as string | undefined);
+    let agentId = task.assigned_agent_id || undefined;
+    let requiresPmoTriage = false;
+    const applyAutoRouting = (reason: string): void => {
+      const routing = resolveTaskAutoRouting(db as any, {
+        title: task.title,
+        description: task.description,
+        projectId: task.project_id,
+        projectPath: task.project_path,
+        workflowPackKey: task.workflow_pack_key,
+        departmentId: task.department_id,
+        taskType: task.task_type,
+        workflowMetaJson: task.workflow_meta_json,
+      });
+      requiresPmoTriage = routing.requiresPmoTriage;
+      task.project_id = routing.projectId;
+      task.project_path = routing.projectPath;
+      task.workflow_pack_key = routing.workflowPackKey;
+      task.department_id = routing.departmentId;
+      task.workflow_meta_json = mergeTaskAutoRoutingWorkflowMeta(task.workflow_meta_json, routing);
+      if (routing.assignedAgentId) agentId = routing.assignedAgentId;
+
+      const updateTs = nowMs();
+      db.prepare(
+        `UPDATE tasks
+         SET project_id = ?, project_path = ?, workflow_pack_key = ?, department_id = ?, assigned_agent_id = ?, workflow_meta_json = ?,
+             status = CASE WHEN status = 'inbox' AND ? IS NOT NULL THEN 'planned' ELSE status END,
+             updated_at = ?
+         WHERE id = ?`,
+      ).run(
+        task.project_id,
+        task.project_path,
+        task.workflow_pack_key,
+        task.department_id,
+        agentId ?? null,
+        task.workflow_meta_json,
+        agentId ?? null,
+        updateTs,
+        id,
+      );
+      if (agentId) {
+        db.prepare(
+          "UPDATE agents SET current_task_id = ? WHERE id = ? AND (current_task_id IS NULL OR current_task_id = '')",
+        ).run(id, agentId);
+      }
+      appendTaskLog(
+        id,
+        "system",
+        `Auto routing refreshed (${reason}): project=${routing.projectRouting.source}/${routing.projectRouting.confidence} agent=${routing.agentRouting.source}/${routing.agentRouting.confidence}`,
+      );
+    };
     if (agentId) {
       const constrainedAgentIds = resolveConstrainedAgentScopeForTask(db as any, {
         workflow_pack_key: task.workflow_pack_key,
@@ -164,29 +216,21 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
       }
     }
     if (!agentId) {
-      const autoSelected = selectAutoAssignableAgentForTask(db as any, {
-        workflow_pack_key: task.workflow_pack_key,
-        department_id: task.department_id,
-        project_id: task.project_id,
+      applyAutoRouting("missing_agent");
+    } else if (!task.project_id || !task.project_path) {
+      applyAutoRouting("missing_project");
+    }
+    if (requiresPmoTriage && (!task.project_id || !task.project_path)) {
+      appendTaskLog(id, "system", "execution_blocked auto_project_triage_required");
+      return res.status(409).json({
+        error: "auto_project_triage_required",
+        message: "자동 프로젝트 판정 신뢰도가 낮아 PMO 검토 대기 상태입니다.",
       });
-      if (autoSelected) {
-        agentId = autoSelected.agent.id;
-        const assignedAt = nowMs();
-        db.prepare(
-          "UPDATE tasks SET assigned_agent_id = ?, department_id = COALESCE(department_id, ?), status = CASE WHEN status = 'inbox' THEN 'planned' ELSE status END, updated_at = ? WHERE id = ?",
-        ).run(agentId, autoSelected.agent.department_id, assignedAt, id);
-        db.prepare("UPDATE agents SET current_task_id = ? WHERE id = ?").run(id, agentId);
-        appendTaskLog(
-          id,
-          "system",
-          `Auto-assigned by workflow pack (${autoSelected.packKey}): ${autoSelected.agent.name}`,
-        );
-      }
     }
     if (!agentId) {
       return res.status(400).json({
-        error: "no_agent_assigned",
-        message: "Assign an agent before running.",
+        error: "auto_route_no_runnable_agent",
+        message: "자동 배정 가능한 직원이 없습니다.",
       });
     }
 

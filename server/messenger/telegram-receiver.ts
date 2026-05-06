@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+﻿import type { DatabaseSync } from "node:sqlite";
 import { INBOX_WEBHOOK_SECRET, OAUTH_BASE_HOST, PORT } from "../config/runtime.ts";
 import { handleCalendarIntakeTelegramCommand } from "./calendar-intake-receiver.ts";
 import { handleGmailIntakeTelegramCommand } from "./gmail-intake-receiver.ts";
@@ -386,9 +386,13 @@ async function forwardTelegramUpdate(params: {
 
   // CEO Notification Auto-Reply Logic for Directives and Tasks
   if (text.startsWith("$") || text.startsWith("#")) {
+    const resolvedReplyStr = text.startsWith("$")
+      ? "CEO \uC9C0\uC2DC \uC218\uC2E0 \uC644\uB8CC. PMO\uAC00 \uC5C5\uBB34\uB97C \uC811\uC218\uD558\uACE0 \uBC30\uC815\uC744 \uC2DC\uC791\uD569\uB2C8\uB2E4."
+      : "\uD0DC\uC2A4\uD06C \uB4F1\uB85D \uC644\uB8CC. \uC790\uB3D9 \uB77C\uC6B0\uD305\uC73C\uB85C \uC5C5\uBB34 \uBCF4\uB4DC\uC5D0 \uB4F1\uB85D\uD588\uC2B5\uB2C8\uB2E4.";
     const replyStr = text.startsWith("$")
       ? "✅ CEO 지시 수신 완료. 기획팀장(PM)에게 업무를 이관 및 회의 소집 대기 중입니다."
       : "✅ 태스크 등록 완료. 에이전트 인박스로 이관되었습니다.";
+    void replyStr;
 
     await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
@@ -396,7 +400,7 @@ async function forwardTelegramUpdate(params: {
       body: JSON.stringify({
         chat_id: chatId,
         reply_to_message_id: message.message_id,
-        text: replyStr,
+        text: resolvedReplyStr,
       }),
     }).catch(console.error);
   }

@@ -9,7 +9,13 @@ import {
 } from "../../agent-profile";
 import { getRoleDisplayLabel, getWorkflowRoleDisplayLabel } from "../../app/canonical-display";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../../i18n/canonical-label-registry";
-import { resolveAgentVisualProfile } from "../../agent-visual-profiles";
+import {
+  getAgentVisualProfileDescriptionKo,
+  getAgentVisualProfileStatusLabelKo,
+  getSpriteDirectionLabelKo,
+  resolveAgentVisualProfile,
+} from "../../agent-visual-profiles";
+import { getProjectModuleTitle } from "../../app/module-display";
 import type { Agent, AgentMemoryResponse, Department, SubAgent, SubTask, Task } from "../../types";
 import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import { getSubAgentSpriteNum, SUBTASK_STATUS_ICON, taskStatusLabel, taskTypeLabel, type TFunction } from "./constants";
@@ -106,6 +112,12 @@ export default function AgentDetailTabContent({
   const overrideText = resolveAgentProfileOverrideText(profile, agent.personality);
   const classPath = classPathText(profile);
   const visualProfile = resolveAgentVisualProfile(agent);
+  const visualProfileDescription = getAgentVisualProfileDescriptionKo(visualProfile);
+  const visualProfileSpriteText = `${visualProfile.sprite_profile.directions.map(getSpriteDirectionLabelKo).join(" / ")} · ${
+    visualProfile.sprite_profile.supports_walk ? "걷기 애니메이션 준비됨" : "정지 이미지 전용"
+  }`;
+  const visualProfileModuleText = visualProfile.preferred_asset_modules.map(getProjectModuleTitle).join(", ");
+  const visualProfileStatusText = getAgentVisualProfileStatusLabelKo(visualProfile.status);
   const canonicalFamily = agent.family ? getCanonicalFamilyLabel(agent.family, language) : "-";
   const canonicalStage = agent.career_stage ? getCanonicalStageLabel(agent.career_stage, language) : "-";
   const canonicalSource = canonicalSourceLabel(agent.canonical_identity_source, language);
@@ -240,27 +252,25 @@ export default function AgentDetailTabContent({
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             {infoField(t({ ko: "프로필", en: "Profile", ja: "Profile", zh: "Profile" }), visualProfile.label_ko)}
-            {infoField(
-              t({ ko: "스프라이트", en: "Sprite", ja: "Sprite", zh: "Sprite" }),
-              `${visualProfile.sprite_profile.directions.join(" / ")} · ${
-                visualProfile.sprite_profile.supports_walk ? "walk ready" : "static only"
-              }`,
-            )}
+            {infoField(t({ ko: "스프라이트", en: "Sprite", ja: "Sprite", zh: "Sprite" }), visualProfileSpriteText)}
             {infoField(
               t({ ko: "추천 모듈", en: "Recommended Modules", ja: "Recommended Modules", zh: "Recommended Modules" }),
-              visualProfile.preferred_asset_modules.join(", "),
+              visualProfileModuleText || "-",
             )}
-            {infoField(t({ ko: "상태", en: "Status", ja: "Status", zh: "Status" }), visualProfile.status)}
+            {infoField(t({ ko: "상태", en: "Status", ja: "Status", zh: "Status" }), visualProfileStatusText)}
           </div>
           <div className="mt-2 rounded-md bg-slate-900/50 p-2 text-xs leading-5 text-slate-300">
             <div className="font-semibold text-slate-200">
               {t({ ko: "캐릭터 설정", en: "Character Bible", ja: "Character Bible", zh: "Character Bible" })}
             </div>
-            <p className="mt-1">{visualProfile.character_bible_en}</p>
+            <p className="mt-1">{visualProfileDescription || "캐릭터 설정 설명이 아직 없습니다."}</p>
             <div className="mt-2 font-semibold text-slate-200">
-              {t({ ko: "스타일 프롬프트", en: "Style Prompt", ja: "Style Prompt", zh: "Style Prompt" })}
+              {t({ ko: "생성 규칙", en: "Generation Rules", ja: "Generation Rules", zh: "Generation Rules" })}
             </div>
-            <p className="mt-1">{visualProfile.style_prompt_en}</p>
+            <p className="mt-1">
+              화면에는 한국어 설명만 표시하고, 실제 이미지 생성 프롬프트와 캐릭터 설정은 영어 canonical 값으로
+              저장됩니다.
+            </p>
           </div>
         </div>
 

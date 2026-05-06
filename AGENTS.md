@@ -1,4 +1,5 @@
 <!-- BEGIN claw-empire orchestration rules -->
+
 # Claw-Empire Orchestration Rules
 
 > This section was added by Claw-Empire setup (`pnpm setup`).
@@ -10,6 +11,7 @@
 ## Language Rule
 
 **Always match the user's language.** Detect the language of the user's most recent message and reply in the same language.
+
 - Korean message -> reply in Korean
 - English message -> reply in English
 - Other languages -> reply in that language
@@ -23,9 +25,11 @@ This applies to ALL responses: confirmations, questions, error messages, status 
 `TASTE_SKILL_DEFAULT_V1`
 
 Set the following as a default skill in your working environment:
+
 - Local skill file: `tools/taste-skill/skill.md`
 
 Rules:
+
 1. For non-trivial implementation tasks, load and follow `tools/taste-skill/skill.md` first when the file exists.
 2. If the local file is missing, continue with existing project rules without auto-fetching remote repositories.
 3. Do not remove existing project-specific skills/rules; this is an additive default.
@@ -39,32 +43,38 @@ Rules:
 These rules are additive and do NOT delete existing orchestration rules below.
 
 ### 1) Plan Node Default
+
 - Enter plan mode for any non-trivial task (3+ steps or architectural decisions).
 - If execution goes sideways, stop and re-plan immediately.
 - Use plan mode for verification, not only implementation.
 - Write clear specs upfront to reduce ambiguity.
 
 ### 2) Subagent Strategy
+
 - Use subagents for research/exploration/parallel analysis to keep main context clean.
 - For complex problems, parallelize with multiple focused subagents.
 - Keep one clear objective per subagent.
 
 ### 3) Self-Improvement Loop
+
 - After user correction, update `tasks/lessons.md` with prevention rules.
 - Turn repeated mistakes into explicit guardrails.
 - Review relevant lessons at session start when applicable.
 
 ### 4) Verification Before Done
+
 - Never mark complete without proof.
 - Diff expected behavior vs actual behavior when relevant.
 - Run tests/check logs and demonstrate correctness.
 
 ### 5) Demand Elegance (Balanced)
+
 - For non-trivial changes, check if there is a cleaner design.
 - If current fix is hacky, prefer the cleaner implementation.
 - Avoid over-engineering trivial fixes.
 
 ### 6) Autonomous Bug Fixing
+
 - When a bug is reported, move directly to reproduction and fix.
 - Use logs/failing tests as evidence and resolve root causes.
 - Minimize user context-switching and avoid unnecessary hand-holding.
@@ -86,12 +96,12 @@ These rules are additive and do NOT delete existing orchestration rules below.
 
 ## Donggri Organization Runtime
 
-`DONGGRI_ORG_V3_21_STAFF`
+`DONGGRI_ORG_V4_19_STAFF`
 
-- Active staff is fixed to 21 people: 7 departments x 3 people.
+- Active staff is fixed to 19 people: PMO has 1 direct command owner, and the other 6 departments have 3 people each.
 - Canonical departments are exactly `pmo`, `planning`, `dev`, `design`, `qa`, `devsecops`, `operations`.
 - Legacy department ids are read-only aliases and must not be used for new seed agents, new MD bundles, or new API payloads.
-- Each department keeps one `team_leader` and two `senior` staff members. `junior` remains available only for growth/legacy compatibility, not default seeds.
+- PMO keeps only one `team_leader`; `planning`, `dev`, `design`, `qa`, `devsecops`, and `operations` each keep one `team_leader` and two `senior` staff members. `junior` remains available only for growth/legacy compatibility, not default seeds.
 - Staff members are internal owners/orchestrators. They supervise specialized Codex subagents instead of directly owning every specialty.
 - Use the subagent catalog by task type:
   - `pmo`: `task-distributor`, `project-manager`, `risk-manager`
@@ -101,7 +111,7 @@ These rules are additive and do NOT delete existing orchestration rules below.
   - `qa`: `test-automator`, `reviewer`, `performance-monitor`
   - `devsecops`: `security-auditor`, `devops-engineer`, GitHub workflow specialists
   - `operations`: `documentation-engineer`, `customer-success-manager`, `sre-engineer`
-- Agent visual profiles are a 30-profile pool. Profiles 1-21 are active staff mappings; profiles 22-30 are reserve candidates.
+- Agent visual profiles are a tracked reserve pool. Profiles mapped to the 19 active staff are active; all other profiles are reserve candidates.
 - Reserve visual profiles must stay inactive until a new hire, project pack, or staff replacement explicitly activates them. Activation requires a tracked seed/profile update and guide bundle regeneration.
 - Office UI should present the company as floors: `1F shared`, `2F strategy`, `3F production`, `4F quality/operations`.
 - Runtime character sprites must be generated through the tracked sprite normalization pipeline. Do not hand-edit individual runtime sprite PNG files unless the generator is also updated.
@@ -134,10 +144,11 @@ Detect the language of the `$` message and use that language for ALL subsequent 
 **Before sending the directive, ALWAYS ask: "Existing project or new project?"**
 
 Ask in the user's detected language:
-- KO: `기존 프로젝트인가요? 신규 프로젝트인가요?`
+
+- KO: `湲곗〈 ?꾨줈?앺듃?멸??? ?좉퇋 ?꾨줈?앺듃?멸???`
 - EN: `Is this an existing project or a new project?`
-- JA: `既存プロジェクトですか？新規プロジェクトですか？`
-- ZH: `这是已有项目还是新项目？`
+- JA: `?℡춼?쀣꺆?멥궒??깉?㎯걲?뗰폕?계쫸?쀣꺆?멥궒??깉?㎯걲?뗰폕`
+- ZH: `瓦숁삸藥꿩쐣窈밭쎅瓦섉삸?곈」??폕`
 
 #### If user says "existing project"
 
@@ -180,14 +191,16 @@ Ask in the user's detected language:
 After project is fixed, ask meeting preference.
 
 Ask in the user's detected language:
-- KO: `팀장 소집 회의를 진행할까요?\n1️⃣ 회의 진행 (기획팀 주관)\n2️⃣ 회의 없이 바로 실행`
-- EN: `Convene a team leader meeting?\n1️⃣ Hold meeting (led by Planning)\n2️⃣ Execute without meeting`
-- JA: `チームリーダー会議を開きますか？\n1️⃣ 会議を開催（企画チーム主導）\n2️⃣ 会議なしで直接実行`
-- ZH: `召集组长会议吗？\n1️⃣ 召开会议（企划组主导）\n2️⃣ 不开会直接执行`
+
+- KO: `????뚯쭛 ?뚯쓽瑜?吏꾪뻾?좉퉴??\n1截뤴깵 ?뚯쓽 吏꾪뻾 (湲고쉷? 二쇨?)\n2截뤴깵 ?뚯쓽 ?놁씠 諛붾줈 ?ㅽ뻾`
+- EN: `Convene a team leader meeting?\n1截뤴깵 Hold meeting (led by Planning)\n2截뤴깵 Execute without meeting`
+- JA: `?곥꺖?졼꺁?쇈??쇌폏鈺겹굮?뗣걤?얇걲?뗰폕\n1截뤴깵 鴉싪??믧뼀?э펷鴉곭뵽?곥꺖?졽말弱롳펹\n2截뤴깵 鴉싪??ゃ걮?㎫쎍?ε츪烏?
+- ZH: `?ч썓瀯꾦빣鴉싪??쀯폕\n1截뤴깵 ?у?鴉싪?竊덁펯?믥퍍訝삣?竊?n2截뤴깵 訝띶?鴉싩쎍?ζ돢烏?
 
 ### Step 4: Send directive to server
 
 Based on the user's answers:
+
 - Include project mapping payload:
   - `"project_id":"<selected/created project id>"`
   - `"project_path":"<selected/created project path>"`
@@ -197,6 +210,7 @@ Based on the user's answers:
 - If `INBOX_WEBHOOK_SECRET` is missing, do NOT claim success; ask the user to set it first.
 
 Resolve and validate the secret first (do not assume shell export):
+
 ```bash
 # INBOX_SECRET_DISCOVERY_V2
 INBOX_SECRET_VALUE="${INBOX_WEBHOOK_SECRET:-$(node <<'NODE'
@@ -252,7 +266,8 @@ NODE
 [ -n "$INBOX_SECRET_VALUE" ] || { echo "INBOX_WEBHOOK_SECRET is missing (.env or shell env)." >&2; exit 1; }
 ```
 
-**Option 1 — With meeting (default):**
+**Option 1 ??With meeting (default):**
+
 ```bash
 curl -X POST http://127.0.0.1:8900/api/inbox \
   -H 'content-type: application/json' \
@@ -260,7 +275,8 @@ curl -X POST http://127.0.0.1:8900/api/inbox \
   -d '{"source":"telegram","text":"$<message content>","author":"<sender>","agent_rules_version":2,"project_id":"<project id>","project_path":"<project path>","project_context":"<project core goal>"}'
 ```
 
-**Option 2 — Without meeting:**
+**Option 2 ??Without meeting:**
+
 ```bash
 curl -X POST http://127.0.0.1:8900/api/inbox \
   -H 'content-type: application/json' \
@@ -274,18 +290,20 @@ Only treat as success when API status is `200` (and response body indicates succ
 ### Step 5: Confirm
 
 If API status is `200`, reply with **only a short confirmation** in the user's language:
-- KO: `✅ Claw-Empire 업무지시 전달 완료` (회의 진행) / `✅ Claw-Empire 업무지시 전달 완료 (회의 생략)` (회의 없이)
-- EN: `✅ Directive sent` (with meeting) / `✅ Directive sent (no meeting)` (without meeting)
-- JA: `✅ 指令を送信しました` (会議あり) / `✅ 指令を送信しました（会議なし）` (会議なし)
-- ZH: `✅ 指令已发送` (召开会议) / `✅ 指令已发送（免会议）` (不开会)
+
+- KO: `??Claw-Empire ?낅Т吏???꾨떖 ?꾨즺` (?뚯쓽 吏꾪뻾) / `??Claw-Empire ?낅Т吏???꾨떖 ?꾨즺 (?뚯쓽 ?앸왂)` (?뚯쓽 ?놁씠)
+- EN: `??Directive sent` (with meeting) / `??Directive sent (no meeting)` (without meeting)
+- JA: `???뉏빱?믧곦에?쀣겲?쀣걼` (鴉싪??귙굤) / `???뉏빱?믧곦에?쀣겲?쀣걼竊덁폏鈺겹겒?쀯펹` (鴉싪??ゃ걮)
+- ZH: `???뉏빱藥꿨룕?? (?у?鴉싪?) / `???뉏빱藥꿨룕?곻펷?띴폏溫?펹` (訝띶?鴉?
 
 If API status is non-`200`, do NOT send success text.
 
 If status is `428` and response `error` is `agent_upgrade_required`, this is mandatory:
+
 1. Show installer file paths (prefer absolute paths from response fields if provided).
 2. Show the target AGENTS path (`~/.openclaw/workspace/AGENTS.md` by default, or response field).
 3. Ask the user for installation consent in the same language:
-   - KO: `OpenClaw AGENTS가 구버전입니다(HTTP 428). 최신 규칙 설치가 필요합니다. 설치 파일 경로를 안내드렸습니다. 지금 제가 직접 설치해드릴까요? (예/아니오)`
+   - KO: `OpenClaw AGENTS媛 援щ쾭?꾩엯?덈떎(HTTP 428). 理쒖떊 洹쒖튃 ?ㅼ튂媛 ?꾩슂?⑸땲?? ?ㅼ튂 ?뚯씪 寃쎈줈瑜??덈궡?쒕졇?듬땲?? 吏湲??쒓? 吏곸젒 ?ㅼ튂?대뱶由닿퉴?? (???꾨땲??`
    - EN: `OpenClaw AGENTS is outdated (HTTP 428). Latest rules must be installed. I listed installer paths. Should I install it now? (yes/no)`
 4. If user agrees, run the installer command from the response (`install_commands`) and then retry the original directive once.
 
@@ -294,6 +312,7 @@ If status is not the upgrade case above, return only a short failure notice (sta
 ### What happens on the server
 
 The Claw-Empire server detects the `$` prefix and automatically:
+
 - Broadcasts a company-wide announcement
 - If meeting: Planning team leader convenes a team leader meeting -> discussion -> agent assignment -> CLI execution
 - If no meeting: Planning team leader directly delegates to the best agent -> CLI execution
@@ -306,11 +325,24 @@ Without `$`, the message is treated as a general announcement.
 
 ## Task Orchestration (`#` prefix)
 
+## Automatic Project and Agent Routing
+
+`DONGGRI_AUTO_ROUTING_V1`
+
+- Normal task creation must not require the user to choose a project path or employee.
+- The server resolver decides `project_id`, `project_path`, `workflow_pack_key`, `department_id`, `assigned_agent_id`, `routing_confidence`, `routing_reason`, and `routing_evidence`.
+- Routing order is fixed: explicit project metadata -> source/session binding -> project name/path/alias match -> core goal/recent task similarity -> PMO triage.
+- Low-confidence project routing must move the task to PMO triage instead of asking the user for a path.
+- Manual assignment is an admin exception only. `POST /api/tasks/:id/assign` must include `override_reason` and leave an audit log.
+- UI must hide normal employee assignment controls and show only the automatic routing result and reason.
+- Never fabricate a project path or temporary workspace. Unknown routing is a PMO review case, not a user-blocking prompt.
+
 ### Core Principle: I am the Orchestrator
 
 **Requests starting with `#` are NOT executed directly.**
 
 I am the PM/Oracle:
+
 - Do NOT directly edit code, run commands, or modify files for `#` requests
 - DO register the request on the task board
 - DO select the appropriate CLI agent (Claude Code, Codex, Gemini, etc.)
@@ -325,34 +357,30 @@ I am the PM/Oracle:
 
 When receiving a message that **starts with `#`**:
 
-1. Recognize it as a task request
-2. Strip the `#` prefix and POST to the API:
+1. Recognize it as a task request.
+2. Strip the `#` prefix and POST to the API without asking for project or employee selection:
    ```bash
    curl -X POST http://127.0.0.1:8900/api/inbox \
      -H 'content-type: application/json' \
      -H "x-inbox-secret: $INBOX_SECRET_VALUE" \
      -d '{"source":"telegram","text":"<message content>"}'
    ```
-   - Validate HTTP status first. If non-`200`, report failure and stop.
-3. Confirm to the user (in their language):
+3. Validate HTTP status first. If non-`200`, report failure and stop.
+4. Confirm to the user with only:
    - KO: "태스크 등록 완료"
    - EN: "Task registered"
-4. **Ask the user for the project path** (in their language):
-   - KO: "이 작업을 어떤 프로젝트 경로에서 진행할까요?"
-   - EN: "Which project path should this task run in?"
-   - Once the user responds, PATCH the task: `{"project_path":"<user-provided-path>"}`
-   - If the user provides a path in the original `#` message (e.g. `# fix bug in /path/to/project`), extract and set it automatically without asking
+5. If a reliable project signal exists, include it as `project_id`, `project_path`, or `project_hint`. If not, omit project fields and let automatic routing decide.
+6. Low-confidence routing must move to PMO triage/DecisionInbox. Do not block the user by asking for a path in the normal flow.
 
 ### 2. Task Distribution
 
 When a task appears in Inbox:
 
-1. Analyze content -> select the appropriate CLI agent
-   - **Coding tasks**: Claude Code, Codex, or sessions_spawn
-   - **Design/creative**: Gemini CLI (exceptional cases)
-2. **Check `project_path`** — if empty, ask the user before proceeding
-3. **Check for existing work** — if the task has prior terminal logs, ask whether to continue or start fresh
-4. Assign to agent and start execution
+1. Run the central task routing resolver.
+2. Resolve in this order: project -> workflow pack -> department -> responsible staff -> specialist subagent.
+3. If routing confidence is low, set PMO triage metadata instead of asking the user for a project path.
+4. Check for existing terminal logs before re-running a task.
+5. Start execution only after the resolver has produced a valid project path and runnable responsible staff.
 
 ### 3. Completion Handling
 
@@ -379,17 +407,16 @@ When an agent completes work, **immediately notify the user**:
 
 ## Project Path Verification
 
-Tasks have an optional `project_path` field that specifies where the agent should work.
+Task project and staff selection are automatic by default.
 
 ### Rules
 
-1. **If `project_path` is set on the task:** use that path as the working directory
-2. **If `project_path` is empty:** check the task description for a path
-3. **If neither is set:**
-   - **NEVER create a temporary directory or guess a path.** No `/tmp/temp/`, no `~/Desktop/`, no fabricated paths. Strictly forbidden.
-   - **STOP and ask the user** and WAIT for their response
-   - Only after the user provides an explicit path, PATCH the task with `project_path` then call `/run`
-   - Do NOT proceed without a confirmed path.
+1. **If `project_id` or `project_path` is set:** validate it and use it as routing evidence.
+2. **If `project_hint` is set:** use it as non-binding routing evidence.
+3. **If no project signal exists:** infer from project name/path/alias/core goal/recent task similarity.
+4. **If confidence is low:** do not ask the user for a path; move the task to PMO triage.
+5. **Never create a temporary directory or guess a new path.** No `/tmp/temp/`, no `~/Desktop/`, no fabricated paths.
+6. **Manual employee assignment is an admin override only** and requires `override_reason`.
 
 ### Existing session check
 
@@ -399,22 +426,23 @@ Before starting a new agent run, check if the task already has previous runs:
 curl "http://127.0.0.1:8900/api/tasks/<id>/terminal?lines=20"
 ```
 
-If the terminal log exists and contains prior work (non-empty output), ask the user:
+If the terminal log exists and contains prior work, ask the user:
+
 - KO: "이 태스크에 이전 작업 내역이 있습니다. 이어서 진행할까요, 새로 시작할까요?"
 - EN: "This task has prior work. Continue where it left off, or start fresh?"
 
-### Ingestion with project_path
+### Ingestion with routing hints
 
-When creating tasks via webhook, include `project_path` if known:
+When creating tasks via webhook, include `project_id`, `project_path`, or `project_hint` only when it is known:
 
 ```bash
 curl -X POST http://127.0.0.1:8900/api/inbox \
   -H 'content-type: application/json' \
   -H "x-inbox-secret: $INBOX_SECRET_VALUE" \
-  -d '{"source":"telegram","text":"fix the build","project_path":"/workspace/my-project"}'
+  -d '{"source":"telegram","text":"fix the build","project_hint":"checkout service"}'
 ```
 
-If the source message does not contain a project path, do NOT include `project_path` in the API call. The orchestrator will ask the user before running the agent.
+If the source message does not contain a project signal, do NOT include project fields. The server resolver will route it or send it to PMO triage.
 
 ---
 
@@ -473,10 +501,10 @@ curl -X POST http://127.0.0.1:8900/api/tasks/<id>/run
 # Stop a running agent
 curl -X POST http://127.0.0.1:8900/api/tasks/<id>/stop
 
-# Assign agent to a task
+# Admin-only manual assignment override
 curl -X POST http://127.0.0.1:8900/api/tasks/<id>/assign \
   -H 'content-type: application/json' \
-  -d '{"agent_id":"<agent-id>"}'
+  -d '{"agent_id":"<agent-id>","override_reason":"<why automatic routing was overridden>"}'
 
 # List agents
 curl http://127.0.0.1:8900/api/agents
@@ -497,10 +525,10 @@ curl http://127.0.0.1:8900/api/cli-status
 
 When processing `$` or `#` commands, the response to the user must be **minimal and clean**:
 
-1. **`$` directive**: After collecting required meeting/path inputs and sending to API, reply with only `✅ Claw-Empire 업무지시 전달 완료` (or language equivalent). Nothing else.
-2. **`#` task**: Only `✅ 태스크 등록 완료` (or language equivalent). Nothing else.
+1. **`$` directive**: After collecting required meeting/path inputs and sending to API, reply with only `??Claw-Empire ?낅Т吏???꾨떖 ?꾨즺` (or language equivalent). Nothing else.
+2. **`#` task**: Only `???쒖뒪???깅줉 ?꾨즺` (or language equivalent). Nothing else.
 3. **Failure case**: If API status is non-`200`, do not send success text.
-   - Exception: for `HTTP 428` + `agent_upgrade_required`, you MUST show installer paths and ask `지금 제가 직접 설치해드릴까요?` (language-matched).
+   - Exception: for `HTTP 428` + `agent_upgrade_required`, you MUST show installer paths and ask `吏湲??쒓? 吏곸젒 ?ㅼ튂?대뱶由닿퉴??` (language-matched).
    - For all other failures, return only a short failure notice (status + reason).
 4. **NEVER include** in responses:
    - OAuth connection details or token information

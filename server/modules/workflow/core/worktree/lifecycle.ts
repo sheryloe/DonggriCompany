@@ -18,6 +18,7 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
   const gitAddInitialTimeoutMs = 120_000;
   const gitAddRetryTimeoutMs = 420_000;
   const gitCommitTimeoutMs = 180_000;
+  const gitWorktreeAddTimeoutMs = Math.max(15_000, Number(process.env.WORKTREE_ADD_TIMEOUT_MS ?? 120_000) || 120_000);
   const allowGitBootstrap = process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP === "1";
 
   function isGitRepo(dir: string): boolean {
@@ -163,6 +164,26 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
     }
   }
 
+  function appendGitInfoExclude(cwd: string, patterns: string[]): void {
+    const commonGitDirRaw = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd,
+      stdio: "pipe",
+      timeout: 5000,
+    })
+      .toString()
+      .trim();
+    const commonGitDir = path.isAbsolute(commonGitDirRaw)
+      ? commonGitDirRaw
+      : path.resolve(cwd, commonGitDirRaw);
+    const excludePath = path.join(commonGitDir, "info", "exclude");
+    fs.mkdirSync(path.dirname(excludePath), { recursive: true });
+    const existing = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, "utf8") : "";
+    const appendLines = patterns.filter((pattern) => !existing.split(/\r?\n/).includes(pattern));
+    if (appendLines.length <= 0) return;
+    const prefix = existing && !existing.endsWith("\n") ? "\n" : "";
+    fs.appendFileSync(excludePath, `${prefix}${appendLines.join("\n")}\n`, "utf8");
+  }
+
   function createWorktree(projectPath: string, taskId: string, agentName: string, baseBranch?: string): string | null {
     if (!ensureWorktreeBootstrapRepo(projectPath, taskId)) return null;
     if (!isGitRepo(projectPath)) return null;
@@ -232,7 +253,7 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
           execFileSync("git", addArgs, {
             cwd: projectPath,
             stdio: "pipe",
-            timeout: 15000,
+            timeout: gitWorktreeAddTimeoutMs,
           });
           selectedBranch = candidateBranch;
           selectedWorktreePath = candidatePath;
@@ -258,6 +279,19 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
         }
       } catch {
         // best effort: skill propagation failure should not block execution
+      }
+
+      try {
+        const runtimeNodeModules = path.join(process.cwd(), "node_modules");
+        const worktreeNodeModules = path.join(selectedWorktreePath, "node_modules");
+        if (fs.existsSync(runtimeNodeModules) && !fs.existsSync(worktreeNodeModules)) {
+          appendGitInfoExclude(selectedWorktreePath, ["node_modules", "node_modules/"]);
+          fs.symlinkSync(runtimeNodeModules, worktreeNodeModules, process.platform === "win32" ? "junction" : "dir");
+          appendTaskLog(taskId, "system", `Worktree dependency link created: ${worktreeNodeModules}`);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        appendTaskLog(taskId, "system", `Worktree dependency link skipped: ${msg}`);
       }
 
       taskWorktrees.set(taskId, { worktreePath: selectedWorktreePath, branchName: selectedBranch, projectPath });

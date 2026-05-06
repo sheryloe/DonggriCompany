@@ -35,6 +35,16 @@ const DEPARTMENT_SHORT_LABELS: Record<string, string> = {
   operations: "운영",
 };
 
+const ACTIVE_OFFICE_STAFF_LIMIT: Record<string, number> = {
+  pmo: 1,
+  planning: 3,
+  dev: 3,
+  design: 3,
+  qa: 3,
+  devsecops: 3,
+  operations: 3,
+};
+
 function spriteSrc(agent: Agent): string | null {
   if (typeof agent.sprite_number === "number" && Number.isFinite(agent.sprite_number)) {
     return buildAgentSpriteUrl(agent.sprite_number, "D", 1);
@@ -42,11 +52,28 @@ function spriteSrc(agent: Agent): string | null {
   return null;
 }
 
+function selectVisibleSidebarAgents(agents: Agent[]): Agent[] {
+  const counts = new Map<string, number>();
+  const rankRole = (role: string) => (role === "team_leader" ? 0 : role === "senior" ? 1 : 2);
+  return [...agents]
+    .sort((a, b) => rankRole(a.role) - rankRole(b.role) || a.created_at - b.created_at || a.name.localeCompare(b.name))
+    .filter((agent) => {
+      const departmentId = String(agent.department_id ?? "");
+      const limit = ACTIVE_OFFICE_STAFF_LIMIT[departmentId] ?? 0;
+      if (limit <= 0) return false;
+      const current = counts.get(departmentId) ?? 0;
+      if (current >= limit) return false;
+      counts.set(departmentId, current + 1);
+      return true;
+    });
+}
+
 export default function Sidebar({ currentView, onChangeView, departments, agents, settings, connected }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { locale } = useI18n();
-  const workingCount = agents.filter((agent) => agent.status === "working").length;
-  const totalAgents = agents.length;
+  const visibleAgents = useMemo(() => selectVisibleSidebarAgents(agents), [agents]);
+  const workingCount = visibleAgents.filter((agent) => agent.status === "working").length;
+  const totalAgents = visibleAgents.length;
   const origin = typeof window === "undefined" ? "http://127.0.0.1:8900" : window.location.origin;
   const visibleDepartments = useMemo(() => {
     const byId = new Map(departments.map((department) => [department.id, department]));
@@ -147,7 +174,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
           </div>
           <div className="space-y-1.5">
             {visibleDepartments.map((department) => {
-              const departmentAgents = agents.filter((agent) => agent.department_id === department.id);
+              const departmentAgents = visibleAgents.filter((agent) => agent.department_id === department.id);
               const working = departmentAgents.filter((agent) => agent.status === "working").length;
               const label = DEPARTMENT_SHORT_LABELS[department.id] ?? localeName(locale, department);
               return (

@@ -11,6 +11,16 @@ import {
   makeIdempotencyKey,
   previewProjectModule,
 } from "../api";
+import {
+  getAssetJobStatusLabel,
+  getProjectModuleBindingStatusLabel,
+  getProjectModuleCapabilityLabel,
+  getProjectModuleCategoryLabel,
+  getProjectModuleRiskLabel,
+  getProjectModuleSummary,
+  getProjectModuleTitle,
+  type ProjectModuleCategoryFilter,
+} from "../app/module-display";
 import type {
   AssetJob,
   Project,
@@ -19,66 +29,20 @@ import type {
   ProjectModuleCategoryKey,
   ProjectModuleManifest,
   ProjectModulePreview,
-  ProjectModuleRiskLevel,
 } from "../types";
 
-type CategoryFilter = "all" | ProjectModuleCategoryKey;
+type CategoryFilter = ProjectModuleCategoryFilter;
 
-const CATEGORY_LABELS: Record<CategoryFilter, string> = {
-  all: "전체",
-  "auth-provider": "OAuth / 인증",
-  "image-generation": "이미지 생성",
-  "game-asset": "게임 자산",
-  "project-template": "프로젝트 템플릿",
-  operations: "운영 자동화",
-};
-
-const MODULE_LABELS: Record<string, { title: string; summary: string }> = {
-  "google-oauth": {
-    title: "Google OAuth",
-    summary: "Google 로그인과 실행 계정 연결을 프로젝트에 재사용 가능한 계약으로 적용합니다.",
-  },
-  "naver-oauth": {
-    title: "Naver OAuth",
-    summary: "Naver OAuth 2.0 로그인 흐름을 secret 원문 없이 프로젝트 메타데이터로 연결합니다.",
-  },
-  "landscape-image": {
-    title: "풍경 이미지",
-    summary: "배경/풍경 이미지 생성을 위한 prompt pack과 검수 기준을 제공합니다.",
-  },
-  "character-image": {
-    title: "캐릭터 이미지",
-    summary: "캐릭터 정체성, 포즈, 의상 일관성을 유지하는 이미지 생성 모듈입니다.",
-  },
-  "sprite-4dir": {
-    title: "4방향 스프라이트",
-    summary: "front, left, back, right 기준 게임 캐릭터 스프라이트 생성 계약입니다.",
-  },
-};
-
-const RISK_LABELS: Record<ProjectModuleRiskLevel, string> = {
-  low: "낮음",
-  medium: "보통",
-  high: "높음",
-};
-
-const APPLY_STATUS_LABELS: Record<string, string> = {
-  previewed: "미리보기",
-  bound: "바인딩됨",
-  applied: "적용됨",
-  failed: "실패",
-  disabled: "비활성",
-};
+const CATEGORY_FILTERS: CategoryFilter[] = [
+  "all",
+  "auth-provider",
+  "image-generation",
+  "game-asset",
+  "project-template",
+  "operations",
+];
 
 const IMAGE_MODULE_KEYS = new Set(["landscape-image", "character-image", "sprite-4dir"]);
-
-function moduleTitle(module: ProjectModuleManifest): string {
-  return MODULE_LABELS[module.module_key]?.title ?? module.name;
-}
-
-function moduleSummary(module: ProjectModuleManifest): string {
-  return MODULE_LABELS[module.module_key]?.summary ?? module.summary;
-}
 
 function formatTime(value: number | null | undefined): string {
   if (!value) return "-";
@@ -94,20 +58,44 @@ function formatTime(value: number | null | undefined): string {
   }
 }
 
+function artifactActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    create: "생성",
+    update: "수정",
+    ensure_dir: "폴더 확인",
+  };
+  return labels[action] ?? "변경";
+}
+
+function secretStatusLabel(value: string): string {
+  if (value === "configured") return "설정됨";
+  if (value === "missing") return "누락";
+  return "확인 필요";
+}
+
 function errorMessage(error: unknown): string {
   if (isApiRequestError(error)) {
     const labels: Record<string, string> = {
-      project_not_found: "프로젝트를 찾을 수 없습니다.",
+      idempotency_key_required: "적용 식별자가 필요합니다. 다시 시도해 주세요.",
+      image_module_required: "이미지 생성 계열 모듈만 이미지 작업을 만들 수 있습니다.",
+      module_binding_exists: "이미 같은 모듈이 프로젝트에 연결되어 있습니다.",
       module_not_found: "모듈을 찾을 수 없습니다.",
+      project_not_found: "프로젝트를 찾을 수 없습니다.",
       project_path_mismatch: "선택한 프로젝트 경로와 요청 경로가 다릅니다.",
-      module_binding_exists: "이미 같은 모듈 바인딩이 있습니다.",
       project_path_unavailable: "프로젝트 경로가 없거나 접근할 수 없습니다.",
-      idempotency_key_required: "적용 idempotency key가 필요합니다.",
-      image_module_required: "이미지 생성 계열 모듈만 asset job을 만들 수 있습니다.",
     };
-    return labels[error.code ?? ""] ?? `요청 실패: ${error.status}`;
+    return labels[error.code ?? ""] ?? `요청 실패: HTTP ${error.status}`;
   }
   return error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
+}
+
+function selectedProjectLabel(project: Project): string {
+  const path = project.project_path ? ` · ${project.project_path}` : "";
+  return `${project.name}${path}`;
+}
+
+function moduleCanCreateAssetJob(module: ProjectModuleManifest | null): boolean {
+  return Boolean(module && IMAGE_MODULE_KEYS.has(module.module_key));
 }
 
 export default function ModulesLibrary() {
@@ -121,7 +109,9 @@ export default function ModulesLibrary() {
   const [projectBindings, setProjectBindings] = useState<ProjectModuleBinding[]>([]);
   const [applyRuns, setApplyRuns] = useState<ProjectModuleApplyRun[]>([]);
   const [assetJobs, setAssetJobs] = useState<AssetJob[]>([]);
-  const [assetBrief, setAssetBrief] = useState("프로젝트에 사용할 원본 캐릭터 또는 배경 이미지를 생성합니다.");
+  const [assetBrief, setAssetBrief] = useState(
+    "프로젝트에 사용할 원본 캐릭터, 4방향 스프라이트, 배경 이미지를 생성합니다.",
+  );
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -145,6 +135,8 @@ export default function ModulesLibrary() {
       ) ?? null
     );
   }, [createdBinding, projectBindings, selectedModule]);
+
+  const imageModuleSelected = moduleCanCreateAssetJob(selectedModule);
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -206,7 +198,7 @@ export default function ModulesLibrary() {
         project_path: selectedProject.project_path,
       });
       setPreview(nextPreview);
-      setNotice("미리보기를 생성했습니다. 파일은 아직 쓰지 않았습니다.");
+      setNotice("미리보기를 생성했습니다. 아직 프로젝트 파일에는 쓰지 않았습니다.");
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -253,7 +245,7 @@ export default function ModulesLibrary() {
   };
 
   const handleCreateAssetJob = async () => {
-    if (!selectedProject || !selectedModule || !IMAGE_MODULE_KEYS.has(selectedModule.module_key)) return;
+    if (!selectedProject || !selectedModule || !moduleCanCreateAssetJob(selectedModule)) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -264,7 +256,7 @@ export default function ModulesLibrary() {
         asset_brief: assetBrief,
       });
       await loadProjectState(selectedProject.id);
-      setNotice("이미지 생성 job 초안을 만들었습니다. Codex 실행자가 imagegen 경로로 생성해야 합니다.");
+      setNotice("이미지 생성 작업 초안을 만들었습니다. 실제 이미지는 Codex imagegen 실행자가 생성합니다.");
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -274,17 +266,17 @@ export default function ModulesLibrary() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 text-slate-100">
-      <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-5 shadow-xl shadow-slate-950/20">
+      <div className="rounded-3xl border border-slate-700 bg-slate-900/80 p-5 shadow-xl shadow-slate-950/20">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Project Module Registry</p>
+            <p className="text-xs font-semibold tracking-[0.2em] text-blue-300">프로젝트 기능 모듈 레지스트리</p>
             <h2 className="mt-2 text-2xl font-bold text-white">프로젝트 모듈</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-              Skill은 에이전트가 쓰는 기법이고, 모듈은 프로젝트에 적용 가능한 기능 패키지입니다. 모든 적용은 미리보기
-              생성 후 승인된 변경만 프로젝트에 씁니다.
+              모듈은 프로젝트에 가져다 붙이는 기능 패키지입니다. 내부 파일과 manifest는 영어 canonical key로 저장하지만,
+              화면에서는 한국어 이름과 설명으로만 보여줍니다.
             </p>
           </div>
-          <div className="min-w-[260px]">
+          <div className="min-w-[280px]">
             <label className="text-xs font-semibold text-slate-400">적용 대상 프로젝트</label>
             <select
               value={selectedProjectId}
@@ -296,7 +288,7 @@ export default function ModulesLibrary() {
               ) : (
                 projects.map((project) => (
                   <option key={project.id} value={project.id}>
-                    {project.name}
+                    {selectedProjectLabel(project)}
                   </option>
                 ))
               )}
@@ -306,7 +298,7 @@ export default function ModulesLibrary() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(Object.keys(CATEGORY_LABELS) as CategoryFilter[]).map((key) => (
+        {CATEGORY_FILTERS.map((key) => (
           <button
             key={key}
             type="button"
@@ -317,7 +309,7 @@ export default function ModulesLibrary() {
                 : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500"
             }`}
           >
-            {CATEGORY_LABELS[key]}
+            {getProjectModuleCategoryLabel(key)}
           </button>
         ))}
       </div>
@@ -343,28 +335,32 @@ export default function ModulesLibrary() {
               return (
                 <article
                   key={`${module.module_key}@${module.version}`}
-                  className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg shadow-slate-950/10"
+                  className="rounded-3xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg shadow-slate-950/10"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold text-blue-300">{CATEGORY_LABELS[module.category_key]}</p>
-                      <h3 className="mt-1 text-lg font-bold text-white">{moduleTitle(module)}</h3>
+                      <p className="text-xs font-semibold text-blue-300">
+                        {getProjectModuleCategoryLabel(module.category_key as ProjectModuleCategoryKey)}
+                      </p>
+                      <h3 className="mt-1 text-lg font-bold text-white">{getProjectModuleTitle(module)}</h3>
                     </div>
                     <span className="rounded-full border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-300">
-                      위험 {RISK_LABELS[module.risk_level]}
+                      위험 {getProjectModuleRiskLabel(module.risk_level)}
                     </span>
                   </div>
-                  <p className="mt-3 min-h-[48px] text-sm leading-6 text-slate-300">{moduleSummary(module)}</p>
+                  <p className="mt-3 min-h-[48px] text-sm leading-6 text-slate-300">
+                    {getProjectModuleSummary(module)}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {module.capabilities.slice(0, 4).map((capability) => (
                       <span key={capability} className="rounded-full bg-slate-800 px-2 py-1 text-[11px] text-slate-300">
-                        {capability}
+                        {getProjectModuleCapabilityLabel(capability)}
                       </span>
                     ))}
                   </div>
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <div className="text-xs text-slate-400">
-                      {applied ? `상태: ${APPLY_STATUS_LABELS[applied.status] ?? applied.status}` : "아직 미적용"}
+                      {applied ? `상태: ${getProjectModuleBindingStatusLabel(applied.status)}` : "아직 적용되지 않음"}
                     </div>
                     <button
                       type="button"
@@ -381,17 +377,17 @@ export default function ModulesLibrary() {
           </div>
 
           <aside className="space-y-4">
-            <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+            <section className="rounded-3xl border border-slate-800 bg-slate-900/80 p-4">
               <h3 className="text-sm font-semibold text-white">미리보기 / 적용</h3>
               {!selectedModule || !preview ? (
                 <p className="mt-3 text-sm leading-6 text-slate-400">
-                  왼쪽에서 모듈을 선택하면 파일 변경 없이 artifact delta를 먼저 확인합니다.
+                  왼쪽에서 모듈을 선택하면 파일을 쓰지 않고 먼저 변경 미리보기를 확인합니다.
                 </p>
               ) : (
                 <div className="mt-3 space-y-3">
                   <div>
-                    <p className="text-sm font-semibold text-white">{moduleTitle(selectedModule)}</p>
-                    <p className="mt-1 text-xs text-slate-400">{preview.binding_name}</p>
+                    <p className="text-sm font-semibold text-white">{getProjectModuleTitle(selectedModule)}</p>
+                    <p className="mt-1 text-xs text-slate-400">버전 {preview.module_version} 미리보기</p>
                   </div>
                   <div className="space-y-2">
                     {preview.artifact_delta.map((entry) => (
@@ -399,17 +395,17 @@ export default function ModulesLibrary() {
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-xs font-semibold text-slate-200">{entry.path}</span>
                           <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
-                            {entry.action}
+                            {artifactActionLabel(entry.action)}
                           </span>
                         </div>
-                        <p className="mt-1 text-xs text-slate-500">{entry.content_preview}</p>
+                        <p className="mt-1 text-xs text-slate-500">{entry.content_preview || "변경 미리보기 없음"}</p>
                       </div>
                     ))}
                   </div>
                   <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                    <p className="text-xs font-semibold text-slate-300">Secret 상태</p>
+                    <p className="text-xs font-semibold text-slate-300">필수 환경변수 상태</p>
                     {Object.keys(preview.secret_status).length === 0 ? (
-                      <p className="mt-1 text-xs text-slate-500">필요한 secret이 없습니다.</p>
+                      <p className="mt-1 text-xs text-slate-500">필요한 환경변수가 없습니다.</p>
                     ) : (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {Object.entries(preview.secret_status).map(([key, value]) => (
@@ -421,7 +417,7 @@ export default function ModulesLibrary() {
                                 : "bg-amber-500/15 text-amber-200"
                             }`}
                           >
-                            {key}: {value === "configured" ? "설정됨" : "누락"}
+                            {key}: {secretStatusLabel(value)}
                           </span>
                         ))}
                       </div>
@@ -449,11 +445,11 @@ export default function ModulesLibrary() {
               )}
             </section>
 
-            <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
-              <h3 className="text-sm font-semibold text-white">이미지 생성 job</h3>
+            <section className="rounded-3xl border border-slate-800 bg-slate-900/80 p-4">
+              <h3 className="text-sm font-semibold text-white">이미지 생성 작업</h3>
               <p className="mt-2 text-xs leading-5 text-slate-400">
-                서버는 prompt pack과 산출물 manifest를 관리하고, 실제 이미지는 Codex 실행자가 imagegen 경로로
-                생성합니다.
+                서버는 프롬프트 묶음과 산출물 manifest를 관리합니다. 실제 이미지는 Codex imagegen 실행자가 생성한 뒤
+                프로젝트 산출물 폴더로 복사합니다.
               </p>
               <textarea
                 value={assetBrief}
@@ -462,28 +458,26 @@ export default function ModulesLibrary() {
               />
               <button
                 type="button"
-                disabled={
-                  busy || !selectedProject || !selectedModule || !IMAGE_MODULE_KEYS.has(selectedModule.module_key)
-                }
+                disabled={busy || !selectedProject || !imageModuleSelected}
                 onClick={() => void handleCreateAssetJob()}
                 className="mt-2 w-full rounded-lg border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:text-slate-500"
               >
-                이미지 job 초안 만들기
+                이미지 작업 초안 만들기
               </button>
               <div className="mt-3 space-y-2">
-                {assetJobs.slice(0, 5).map((job) => (
+                {assetJobs.slice(0, 5).map((job, index) => (
                   <div key={job.id} className="rounded-lg bg-slate-950 p-3 text-xs text-slate-300">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-white">{job.asset_key}</span>
-                      <span>{job.status}</span>
+                      <span className="font-semibold text-white">생성 작업 {index + 1}</span>
+                      <span>{getAssetJobStatusLabel(job.status)}</span>
                     </div>
-                    <p className="mt-1 text-slate-500">{MODULE_LABELS[job.module_key]?.title ?? job.module_key}</p>
+                    <p className="mt-1 text-slate-500">{getProjectModuleTitle(job.module_key)}</p>
                   </div>
                 ))}
               </div>
             </section>
 
-            <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+            <section className="rounded-3xl border border-slate-800 bg-slate-900/80 p-4">
               <h3 className="text-sm font-semibold text-white">최근 적용 이력</h3>
               <div className="mt-3 space-y-2">
                 {applyRuns.length === 0 ? (
@@ -492,10 +486,10 @@ export default function ModulesLibrary() {
                   applyRuns.slice(0, 5).map((run) => (
                     <div key={run.id} className="rounded-lg bg-slate-950 p-3 text-xs text-slate-300">
                       <div className="flex items-center justify-between gap-2">
-                        <span>{run.status}</span>
+                        <span>{getProjectModuleBindingStatusLabel(run.status)}</span>
                         <span>{formatTime(run.created_at)}</span>
                       </div>
-                      <p className="mt-1 text-slate-500">{run.message ?? "-"}</p>
+                      <p className="mt-1 text-slate-500">{run.message ? "적용 결과가 기록되었습니다." : "-"}</p>
                     </div>
                   ))
                 )}

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { OAuthStatus } from "../../api";
+import type { OAuthStatus, SkillDetail } from "../../api";
 import type { Agent } from "../../types";
 import SkillsGrid from "./SkillsGrid";
 import type { CategorizedSkill, TFunction } from "./model";
@@ -9,7 +9,7 @@ vi.mock("../AgentAvatar", () => ({
   default: () => <span data-testid="agent-avatar" />,
 }));
 
-const t: TFunction = (message) => message.en;
+const t: TFunction = (message) => message.ko;
 
 const TEST_AGENT: Agent = {
   id: "agent-1",
@@ -44,18 +44,33 @@ const DONGGRI_SKILL: CategorizedSkill = {
   codexInstalled: false,
 };
 
-function renderGrid(oauthStatus: OAuthStatus | null, codexInstallError: string | null = null) {
+const DETAIL: SkillDetail = {
+  title: "Codex agentic coding workflow",
+  description: "Use Codex for long-horizon coding.",
+  whenToUse: ["Use when implementing complex features."],
+  weeklyInstalls: "12",
+  firstSeen: "2026-01-01T00:00:00.000Z",
+  installCommand: "codex skills install donggri-codex-55-agentic-coding",
+  platforms: [{ name: "codex", installs: "12" }],
+  audits: [{ name: "license", status: "pass" }],
+};
+
+function renderGrid(
+  oauthStatus: OAuthStatus | null,
+  codexInstallError: string | null = null,
+  hoveredSkill: string | null = null,
+) {
   render(
     <SkillsGrid
       t={t}
-      localeTag="en"
+      localeTag="ko-KR"
       agents={[TEST_AGENT]}
       filtered={[DONGGRI_SKILL]}
       learnedProvidersBySkill={new Map()}
       learnedRepresentatives={new Map()}
-      hoveredSkill={null}
+      hoveredSkill={hoveredSkill}
       setHoveredSkill={vi.fn()}
-      detailCache={{}}
+      detailCache={{ "donggri/skill-system/donggri-codex-55-agentic-coding": DETAIL }}
       tooltipRef={{ current: null }}
       hoverTimerRef={{ current: null }}
       copiedSkill={null}
@@ -72,15 +87,23 @@ function renderGrid(oauthStatus: OAuthStatus | null, codexInstallError: string |
 }
 
 describe("SkillsGrid", () => {
-  it("renders OAuth storage unavailable state and Codex install button", () => {
+  it("renders Korean Donggri description and hides raw English description", () => {
     renderGrid({ storageReady: false, providers: {} });
 
-    expect(screen.getByText("Codex Specialist")).toBeInTheDocument();
-    expect(screen.getByText("OAuth: github-copilot · storage unavailable")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Install to Codex" })).toBeEnabled();
+    expect(screen.getByText("Codex 전문 기능")).toBeInTheDocument();
+    expect(screen.getByText("Codex 장기 코딩 실행")).toBeInTheDocument();
+    expect(screen.getByText(/긴 호흡의 코드 분석/)).toBeInTheDocument();
+    expect(screen.queryByText("Codex agentic coding workflow.")).not.toBeInTheDocument();
   });
 
-  it("renders OAuth execution ready state", () => {
+  it("renders OAuth storage unavailable state and Codex install button in Korean", () => {
+    renderGrid({ storageReady: false, providers: {} });
+
+    expect(screen.getByText("OAuth: GitHub Copilot · 저장소 확인 필요")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Codex 앱에 설치" })).toBeEnabled();
+  });
+
+  it("renders OAuth execution ready state in Korean", () => {
     renderGrid({
       storageReady: true,
       providers: {
@@ -100,12 +123,22 @@ describe("SkillsGrid", () => {
       },
     });
 
-    expect(screen.getByText("OAuth: github-copilot · execution ready")).toBeInTheDocument();
+    expect(screen.getByText("OAuth: GitHub Copilot · 실행 준비 완료")).toBeInTheDocument();
   });
 
-  it("renders Codex install error banner", () => {
+  it("renders Codex install error banner in Korean", () => {
     renderGrid({ storageReady: true, providers: {} }, "install_failed");
 
-    expect(screen.getByText("Codex app install failed: install_failed")).toBeInTheDocument();
+    expect(screen.getByText("Codex 앱 설치 실패: install_failed")).toBeInTheDocument();
+  });
+
+  it("localizes tooltip detail text without leaking English description", () => {
+    renderGrid({ storageReady: true, providers: {} }, null, "donggri/skill-system/donggri-codex-55-agentic-coding");
+
+    expect(screen.getByText("사용 시점")).toBeInTheDocument();
+    expect(screen.getByText("라이선스: 통과")).toBeInTheDocument();
+    expect(screen.getByText("Codex 앱")).toBeInTheDocument();
+    expect(screen.queryByText("Use Codex for long-horizon coding.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Use when implementing complex features.")).not.toBeInTheDocument();
   });
 });

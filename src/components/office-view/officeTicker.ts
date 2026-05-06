@@ -3,6 +3,7 @@ import { Graphics, Text, TextStyle, type AnimatedSprite, type Container, type Sp
 import type { MeetingPresence } from "../../types";
 import {
   type Delivery,
+  type OfficeCeoTransit,
   type RoomRect,
   type SubCloneBurstParticle,
   type WallClockVisual,
@@ -82,8 +83,35 @@ export interface OfficeTickerContext {
   breakRoomRectRef: MutableRefObject<{ x: number; y: number; w: number; h: number } | null>;
   officeWRef: MutableRefObject<number>;
   totalHRef: MutableRefObject<number>;
+  ceoTransitRef: MutableRefObject<OfficeCeoTransit | null>;
   dataRef: MutableRefObject<OfficeTickerData>;
   followCeoInView: () => void;
+}
+
+function moveCeoToward(ctx: OfficeTickerContext, targetX: number, targetY: number, speed: number): boolean {
+  const ceo = ctx.ceoSpriteRef.current;
+  if (!ceo) return true;
+  const dx = targetX - ctx.ceoPosRef.current.x;
+  const dy = targetY - ctx.ceoPosRef.current.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance <= speed) {
+    ctx.ceoPosRef.current.x = Math.max(28, Math.min(ctx.officeWRef.current - 28, targetX));
+    ctx.ceoPosRef.current.y = Math.max(18, Math.min(ctx.totalHRef.current - 28, targetY));
+    ceo.position.set(ctx.ceoPosRef.current.x, ctx.ceoPosRef.current.y);
+    ctx.followCeoInView();
+    return true;
+  }
+  ctx.ceoPosRef.current.x = Math.max(
+    28,
+    Math.min(ctx.officeWRef.current - 28, ctx.ceoPosRef.current.x + (dx / distance) * speed),
+  );
+  ctx.ceoPosRef.current.y = Math.max(
+    18,
+    Math.min(ctx.totalHRef.current - 28, ctx.ceoPosRef.current.y + (dy / distance) * speed),
+  );
+  ceo.position.set(ctx.ceoPosRef.current.x, ctx.ceoPosRef.current.y);
+  ctx.followCeoInView();
+  return false;
 }
 
 export function runOfficeTickerStep(ctx: OfficeTickerContext): void {
@@ -99,18 +127,48 @@ export function runOfficeTickerStep(ctx: OfficeTickerContext): void {
   }
 
   if (ceo) {
-    let dx = 0;
-    let dy = 0;
-    if (keys["ArrowLeft"] || keys["KeyA"]) dx -= CEO_SPEED;
-    if (keys["ArrowRight"] || keys["KeyD"]) dx += CEO_SPEED;
-    if (keys["ArrowUp"] || keys["KeyW"]) dy -= CEO_SPEED;
-    if (keys["ArrowDown"] || keys["KeyS"]) dy += CEO_SPEED;
+    const transit = ctx.ceoTransitRef.current;
+    if (transit) {
+      const transitSpeed = transit.mode === "elevator" ? CEO_SPEED + 2 : CEO_SPEED;
+      if (transit.phase === "walk_to_core") {
+        const reachedCore = moveCeoToward(ctx, transit.coreX, transit.coreY, transitSpeed);
+        if (reachedCore) {
+          transit.phase = "transfer";
+          transit.pauseTicks = transit.mode === "elevator" ? 34 : 16;
+        }
+      } else if (transit.phase === "transfer") {
+        if (transit.pauseTicks > 0) {
+          transit.pauseTicks -= 1;
+        } else {
+          const reachedFloor = moveCeoToward(ctx, transit.coreX, transit.destinationY, transitSpeed + 1);
+          if (reachedFloor) {
+            transit.phase = "walk_to_destination";
+            transit.pauseTicks = transit.mode === "elevator" ? 16 : 6;
+          }
+        }
+      } else if (transit.pauseTicks > 0) {
+        transit.pauseTicks -= 1;
+      } else {
+        const reachedDestination = moveCeoToward(ctx, transit.destinationX, transit.destinationY, transitSpeed);
+        if (reachedDestination) {
+          transit.onArrive?.();
+          ctx.ceoTransitRef.current = null;
+        }
+      }
+    } else {
+      let dx = 0;
+      let dy = 0;
+      if (keys["ArrowLeft"] || keys["KeyA"]) dx -= CEO_SPEED;
+      if (keys["ArrowRight"] || keys["KeyD"]) dx += CEO_SPEED;
+      if (keys["ArrowUp"] || keys["KeyW"]) dy -= CEO_SPEED;
+      if (keys["ArrowDown"] || keys["KeyS"]) dy += CEO_SPEED;
 
-    if (dx || dy) {
-      ctx.ceoPosRef.current.x = Math.max(28, Math.min(ctx.officeWRef.current - 28, ctx.ceoPosRef.current.x + dx));
-      ctx.ceoPosRef.current.y = Math.max(18, Math.min(ctx.totalHRef.current - 28, ctx.ceoPosRef.current.y + dy));
-      ceo.position.set(ctx.ceoPosRef.current.x, ctx.ceoPosRef.current.y);
-      ctx.followCeoInView();
+      if (dx || dy) {
+        ctx.ceoPosRef.current.x = Math.max(28, Math.min(ctx.officeWRef.current - 28, ctx.ceoPosRef.current.x + dx));
+        ctx.ceoPosRef.current.y = Math.max(18, Math.min(ctx.totalHRef.current - 28, ctx.ceoPosRef.current.y + dy));
+        ceo.position.set(ctx.ceoPosRef.current.x, ctx.ceoPosRef.current.y);
+        ctx.followCeoInView();
+      }
     }
 
     const crown = ctx.crownRef.current;

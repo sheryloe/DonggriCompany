@@ -54,7 +54,7 @@ export default function CustomSkillModal({
           <div>
             <h3 className="text-base font-semibold text-white flex items-center gap-2">
               <span className="rounded-md border border-slate-600/60 px-1.5 py-0.5 text-[10px] text-slate-300">
-                CUSTOM
+                사용자
               </span>
               {skillText(t, "custom.title")}
             </h3>
@@ -148,7 +148,7 @@ export default function CustomSkillModal({
                           : "border-slate-600 bg-slate-800/60"
                       }`}
                     >
-                      {isSelected && "OK"}
+                      {isSelected && "선택"}
                     </div>
                   </button>
                 );

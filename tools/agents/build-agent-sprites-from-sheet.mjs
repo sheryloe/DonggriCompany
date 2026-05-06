@@ -16,9 +16,9 @@ const columns = 5;
 const rows = 7;
 const characterCount = 35;
 const runtimeMaxSpriteNumber = 44;
-const outputPadding = 4;
+const outputPadding = 12;
 const normalizedSpriteSize = 96;
-const normalizedMaxContentSize = 84;
+const normalizedMaxContentSize = 78;
 const backgroundDistanceThreshold = 12;
 const walkFrameOffsets = [
   { x: 0, y: 0 },
@@ -27,10 +27,10 @@ const walkFrameOffsets = [
 ];
 
 const poseSpecs = [
-  { key: "D", source: "F", frameNames: ["D-1", "D-2", "D-3"], centerRatio: 0.14, cropWidthRatio: 0.23 },
-  { key: "L", source: "L", frameNames: ["L-1", "L-2", "L-3"], centerRatio: 0.365, cropWidthRatio: 0.23 },
-  { key: "B", source: "B", frameNames: ["B-1", "B-2", "B-3"], centerRatio: 0.625, cropWidthRatio: 0.24 },
-  { key: "R", source: "R", frameNames: ["R-1", "R-2", "R-3"], centerRatio: 0.875, cropWidthRatio: 0.23 },
+  { key: "D", source: "F", frameNames: ["D-1", "D-2", "D-3"], centerRatio: 0.19, cropWidthRatio: 0.3 },
+  { key: "L", source: "L", frameNames: ["L-1", "L-2", "L-3"], centerRatio: 0.44, cropWidthRatio: 0.3 },
+  { key: "B", source: "B", frameNames: ["B-1", "B-2", "B-3"], centerRatio: 0.68, cropWidthRatio: 0.3 },
+  { key: "R", source: "R", frameNames: ["R-1", "R-2", "R-3"], centerRatio: 0.91, cropWidthRatio: 0.3 },
 ];
 
 function clamp(value, min, max) {
@@ -172,7 +172,8 @@ function removeHeaderArtifacts(data, width, height, channels) {
       }
     }
 
-    const isHeaderArtifact = maxY < height * 0.38;
+    const componentRatio = component.length / (width * height);
+    const isHeaderArtifact = maxY < height * 0.32 && componentRatio < 0.06;
     const isSpeckle = component.length < 10;
     if (!isHeaderArtifact && !isSpeckle) continue;
     for (const index of component) setTransparent(index);
@@ -181,12 +182,96 @@ function removeHeaderArtifacts(data, width, height, channels) {
   return output;
 }
 
+function keepPrimaryCharacterComponents(data, width, height, channels) {
+  const visited = new Uint8Array(width * height);
+  const components = [];
+
+  function alphaAt(index) {
+    return data[index * channels + 3];
+  }
+
+  for (let start = 0; start < width * height; start += 1) {
+    if (visited[start] || alphaAt(start) <= 8) continue;
+
+    const queue = [start];
+    const pixels = [];
+    visited[start] = 1;
+    let minX = start % width;
+    let maxX = minX;
+    let minY = Math.floor(start / width);
+    let maxY = minY;
+
+    while (queue.length > 0) {
+      const index = queue.shift();
+      pixels.push(index);
+      const x = index % width;
+      const y = Math.floor(index / width);
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+
+      for (const [nx, ny] of [
+        [x + 1, y],
+        [x - 1, y],
+        [x, y + 1],
+        [x, y - 1],
+        [x + 1, y + 1],
+        [x - 1, y - 1],
+        [x + 1, y - 1],
+        [x - 1, y + 1],
+      ]) {
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const next = ny * width + nx;
+        if (visited[next] || alphaAt(next) <= 8) continue;
+        visited[next] = 1;
+        queue.push(next);
+      }
+    }
+
+    if (pixels.length < 8) continue;
+    components.push({
+      pixels,
+      minX,
+      maxX,
+      minY,
+      maxY,
+      centerX: (minX + maxX) / 2,
+      count: pixels.length,
+    });
+  }
+
+  const primary = components.filter((component) => component.maxY > height * 0.34).sort((a, b) => b.count - a.count)[0];
+  if (!primary) return data;
+
+  const output = Buffer.from(data);
+  output.fill(0);
+  const primaryCenter = primary.centerX;
+  const keepDistance = width * 0.18;
+
+  for (const component of components) {
+    const isPrimary = component === primary;
+    const isNearPrimary = Math.abs(component.centerX - primaryCenter) <= keepDistance;
+    const isMeaningful = component.count >= primary.count * 0.08 || component.count >= 28;
+    const isCharacterHeight = component.maxY > primary.minY + 4;
+    if (!isPrimary && (!isNearPrimary || !isMeaningful || !isCharacterHeight)) continue;
+    for (const index of component.pixels) {
+      const offset = index * channels;
+      for (let channel = 0; channel < channels; channel += 1) {
+        output[offset + channel] = data[offset + channel];
+      }
+    }
+  }
+
+  return output;
+}
+
 async function extractPose(sheet, cell, poseSpec) {
   const cropWidth = Math.round(cell.width * poseSpec.cropWidthRatio);
-  const cropHeight = Math.round(cell.height * 0.62);
+  const cropHeight = Math.round(cell.height * 0.72);
   const centerX = Math.round(cell.x + cell.width * poseSpec.centerRatio);
   const cropLeft = clamp(Math.round(centerX - cropWidth / 2), cell.x, cell.x + cell.width - cropWidth);
-  const cropTop = clamp(Math.round(cell.y + cell.height * 0.26), cell.y, cell.y + cell.height - cropHeight);
+  const cropTop = clamp(Math.round(cell.y + cell.height * 0.22), cell.y, cell.y + cell.height - cropHeight);
 
   const { data, info } = await sheet
     .clone()
@@ -197,7 +282,8 @@ async function extractPose(sheet, cell, poseSpec) {
 
   const keyed = makeTransparentFromConnectedBackground(data, info.width, info.height, info.channels);
   const filtered = removeHeaderArtifacts(keyed, info.width, info.height, info.channels);
-  const transparent = findAlphaBounds(filtered, info.width, info.height, info.channels) ? filtered : keyed;
+  const primary = keepPrimaryCharacterComponents(filtered, info.width, info.height, info.channels);
+  const transparent = findAlphaBounds(primary, info.width, info.height, info.channels) ? primary : keyed;
   const bounds = findAlphaBounds(transparent, info.width, info.height, info.channels);
   if (!bounds) {
     throw new Error(`No sprite pixels found for ${cell.number}-${poseSpec.source}`);
@@ -235,7 +321,7 @@ async function normalizePoseFrame(buffer, frameIndex) {
   const width = metadata.width ?? normalizedMaxContentSize;
   const height = metadata.height ?? normalizedMaxContentSize;
   const left = Math.round((normalizedSpriteSize - width) / 2 + offset.x);
-  const top = Math.round(normalizedSpriteSize - height - 4 + offset.y);
+  const top = Math.round(normalizedSpriteSize - height - 8 + offset.y);
 
   return sharp({
     create: {

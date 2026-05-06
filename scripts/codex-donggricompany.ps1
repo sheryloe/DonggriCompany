@@ -6,8 +6,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ExpectedRepoRoot = "D:\Donggri_Platform\DonggriCompany"
-$ExpectedCodexHome = "D:\Donggri_Platform\.codex-homes\DonggriCompany"
+$ExpectedRepoRoot = "<PROJECT_ROOT>"
+$ExpectedCodexHome = "G:\LOCAL_DEV_DRIVE\repos\.codex-homes\DonggriCompany"
 
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $ExpectedRepoRootResolved = (Resolve-Path -LiteralPath $ExpectedRepoRoot).Path

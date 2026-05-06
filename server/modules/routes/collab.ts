@@ -55,6 +55,152 @@ export function hasDuplicateMessengerRelayLog(
   });
 }
 
+export function normalizeMessengerTextLine(raw: string): string {
+  return raw
+    .replace(/\[([^\]\n]{1,160})\]\((?:[^)\s]+)\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\b[A-Za-z]:\\[^\s,)]+/g, "[로컬 경로]")
+    .replace(/(?:\/workspace|\/app|\/mnt|\/home)\/[^\s,)]+/g, "[작업 경로]")
+    .replace(/[`*~>#]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function truncateMessengerText(value: string, max = 160): string {
+  const normalized = value.trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, Math.max(0, max - 3)).trimEnd()}...`;
+}
+
+function isNoisyMessengerReportLine(raw: string, plain: string): boolean {
+  const source = raw.trim().toLowerCase();
+  const normalized = plain.trim().toLowerCase();
+  if (!source && !normalized) return true;
+  if (/^\?\?\s+/.test(source)) return true;
+  if (source.includes(".climpire-worktrees")) return true;
+  if (source.includes("[uncommitted worktree changes]")) return true;
+  if (source.includes("/workspace/") || source.includes("\\workspace\\")) return true;
+  if (source.includes("/app/") || source.includes("\\app\\")) return true;
+  if (source.includes("changed files:")) return true;
+  if (plain.length > 220 && /node_modules|vitest|playwright|command not found/i.test(plain)) return true;
+  if (normalized === "...") return true;
+  return false;
+}
+
+function extractTaskTitleFromReportText(content: string, requestLine: string): string {
+  const source = requestLine || content;
+  const quoted = source.match(/['"]([^'"]{2,220})['"]/) ?? source.match(/\[([^\]]{2,220})\]/);
+  return truncateMessengerText(normalizeMessengerTextLine(quoted?.[1] ?? ""), 90);
+}
+
+function buildMessengerReportIdentityIntro(agent: AgentRow, content: string, requestLine: string): string {
+  const displayName = normalizeMessengerTextLine(agent.name_ko || agent.name || "담당자");
+  const avatar = normalizeMessengerTextLine(agent.avatar_emoji || "담당");
+  const taskTitle = extractTaskTitleFromReportText(content, requestLine);
+  return taskTitle
+    ? `${avatar} ${displayName} 보고: '${taskTitle}' 완료 결과입니다.`
+    : `${avatar} ${displayName} 보고: 완료 결과입니다.`;
+}
+
+function collectDerivedMessengerReportItems(content: string): string[] {
+  const items: string[] = [];
+  if (/docs[\\/](plans|reports)|KANBAN\.md|GANTT\.md|NEXT_ACTIONS\.md|STATUS\.md/i.test(content)) {
+    items.push("문서 산출물 생성 완료: 계획서, 보고서, 상태/칸반/간트 문서");
+  }
+  if (/git diff --check/i.test(content)) {
+    items.push("검증 완료: git diff --check");
+  }
+  if (/코드 변경이 없어 실행하지 않았습니다|no code changes/i.test(content)) {
+    items.push("코드 변경 없음: 문서 산출물 중심 작업");
+  }
+  if (/node_modules|vitest.+not found|playwright.+not found|command not found/i.test(content)) {
+    items.push("자동화 재실행 제한 확인: worktree 의존성 미설치");
+  }
+  if (/메뉴나 별도 앱 화면은 추가하지 않았습니다|no menu|no separate app/i.test(content)) {
+    items.push("범위 확인: 별도 메뉴나 앱 화면은 추가하지 않음");
+  }
+  return items;
+}
+
+function pushUniqueMessengerItem(items: string[], value: string, max = 3): void {
+  const cleaned = truncateMessengerText(normalizeMessengerTextLine(value), 150);
+  if (!cleaned) return;
+  if (items.some((item) => item === cleaned)) return;
+  items.push(cleaned);
+  if (items.length > max) items.length = max;
+}
+
+export function buildMessengerReportSummary(agent: AgentRow, content: string): string {
+  const shouldSummarize =
+    /\|\s*#\s*\|/i.test(content) ||
+    /\|\s*1\s*\|/.test(content) ||
+    /(결과|result)\s*:/i.test(content) ||
+    content.length >= 600 ||
+    /\/workspace\/|\.climpire-worktrees|\[uncommitted worktree changes\]/i.test(content);
+  if (!shouldSummarize) return content;
+
+  const rawLines = content.split(/\r?\n/);
+  const plainLines = rawLines.map((line) => normalizeMessengerTextLine(line));
+
+  const requestLine =
+    plainLines.find((line) => /(작업 완료|완료를 보고|reporting completion|completion result)/i.test(line)) ?? "";
+  const identityIntro = buildMessengerReportIdentityIntro(agent, content, requestLine);
+
+  const keyItems: string[] = [];
+  for (const line of rawLines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("|")) continue;
+    const cells = trimmed
+      .split("|")
+      .map((cell) => normalizeMessengerTextLine(cell))
+      .filter(Boolean);
+    if (cells.length < 3) continue;
+    const index = Number.parseInt(cells[0] ?? "", 10);
+    if (!Number.isFinite(index)) continue;
+    pushUniqueMessengerItem(keyItems, `${index}. ${cells[2] ? `[${cells[2]}] ` : ""}${cells[1]}`, 3);
+  }
+
+  let inResultSection = false;
+  for (let i = 0; i < rawLines.length && keyItems.length < 3; i += 1) {
+    const rawLine = rawLines[i] ?? "";
+    const plain = plainLines[i] ?? "";
+    if (!inResultSection) {
+      if (/(결과|result)\s*:?/i.test(rawLine) || /^(결과|result)\s*:?$/i.test(plain)) {
+        inResultSection = true;
+      }
+      continue;
+    }
+    if (isNoisyMessengerReportLine(rawLine, plain)) continue;
+    if (/(보완\/협업 진행 요약|Remediation\/Collaboration Progress|Changes|변경 사항)/i.test(plain)) break;
+    if (rawLine.trim().startsWith("|")) continue;
+    pushUniqueMessengerItem(keyItems, plain.replace(/^[-•*\s]+/, "").trim(), 3);
+  }
+
+  for (const item of collectDerivedMessengerReportItems(content)) {
+    if (keyItems.length >= 3) break;
+    pushUniqueMessengerItem(keyItems, item, 3);
+  }
+
+  if (keyItems.length <= 0) {
+    keyItems.push("작업 실행이 완료되어 검토 단계로 이동했습니다.");
+  }
+
+  const progressLine =
+    plainLines.find((line) =>
+      /(?:전체|total)\s*:\s*\d+\s*\/\s*\d+|(?:완료|completion|progress|진행)\s*[:：]?\s*(?:\d+\s*%|\d+\s*\/\s*\d+)/i.test(
+        line,
+      ),
+    ) ?? "";
+
+  const out: string[] = ["업무 완료 요약", identityIntro, "상태: 검토 중", "핵심 결과:"];
+  out.push(...keyItems.map((item, index) => `${index + 1}. ${item.replace(/^\d+\.\s*/, "")}`));
+  if (progressLine && !isNoisyMessengerReportLine(progressLine, progressLine)) {
+    out.push(`진행 요약: ${truncateMessengerText(progressLine, 160)}`);
+  }
+  out.push("다음 액션: 업무 보드에서 검토 후 승인 또는 보완 지시");
+  return out.join("\n");
+}
+
 export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
   const __ctx: RuntimeContext = ctx;
   const appendTaskLog = __ctx.appendTaskLog;
@@ -425,10 +571,39 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
   }
 
   function buildSingleGroupRelayHeader(taskId: string, departmentId: string, taskStatus: string): string {
-    const departmentLabel = departmentId !== "unknown" ? getDeptName(departmentId) : departmentId;
-    const normalizedDepartment = normalizeMessengerTextLine(departmentLabel || departmentId || "unknown");
-    const normalizedStatus = normalizeMessengerTextLine(taskStatus || "unknown");
+    const canonicalDepartmentId = mapLegacyDepartmentId(departmentId) ?? departmentId;
+    const departmentLabel =
+      canonicalDepartmentId !== "unknown" ? getDeptName(canonicalDepartmentId) : canonicalDepartmentId;
+    const normalizedDepartment = normalizeMessengerTextLine(departmentLabel || canonicalDepartmentId || "unknown");
+    const normalizedStatus = normalizeMessengerTextLine(getMessengerTaskStatusLabel(taskStatus));
     return `[${normalizedDepartment}][${taskId}][${normalizedStatus}]`;
+  }
+
+  function getMessengerTaskStatusLabel(taskStatus: string): string {
+    switch (
+      String(taskStatus ?? "")
+        .trim()
+        .toLowerCase()
+    ) {
+      case "inbox":
+        return "수신함";
+      case "planned":
+        return "계획됨";
+      case "collaborating":
+        return "협업 중";
+      case "in_progress":
+        return "진행 중";
+      case "review":
+        return "검토 중";
+      case "done":
+        return "완료";
+      case "pending":
+        return "보류";
+      case "cancelled":
+        return "취소";
+      default:
+        return taskStatus || "상태 미확인";
+    }
   }
 
   function getMessengerChunkLimit(channel: MessengerChannel): number {
@@ -463,132 +638,6 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     }
     if (remaining) chunks.push(remaining);
     return chunks;
-  }
-
-  function normalizeMessengerTextLine(raw: string): string {
-    return raw
-      .replace(/[`*_~>#]+/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  function truncateMessengerText(value: string, max = 160): string {
-    const normalized = value.trim();
-    if (normalized.length <= max) return normalized;
-    return `${normalized.slice(0, Math.max(0, max - 3)).trimEnd()}...`;
-  }
-
-  function extractTaskTitleFromReportText(content: string, requestLine: string): string {
-    const source = requestLine || content;
-    const quoted = source.match(/['"]([^'"]{2,220})['"]/) ?? source.match(/\[([^\]]{2,220})\]/);
-    const picked = quoted?.[1] ?? "";
-    return truncateMessengerText(normalizeMessengerTextLine(picked), 90);
-  }
-
-  function buildMessengerReportIdentityIntro(agent: AgentRow, content: string, requestLine: string): string {
-    const hasKorean = /[가-힣]/.test(content);
-    const hasJapanese = /[\u3040-\u30ff]/.test(content);
-    const hasChinese = /[\u4e00-\u9fff]/.test(content) && !hasJapanese;
-    const displayName = normalizeMessengerTextLine(agent.name_ko || agent.name || "Agent");
-    const avatar = normalizeMessengerTextLine(agent.avatar_emoji || "BOT");
-    const taskTitle = extractTaskTitleFromReportText(content, requestLine);
-
-    if (hasKorean) {
-      return taskTitle
-        ? `${avatar} ${displayName} 보고: '${taskTitle}' 완료 결과를 전달합니다.`
-        : `${avatar} ${displayName} 보고: 완료 결과를 전달합니다.`;
-    }
-    if (hasJapanese) {
-      return taskTitle
-        ? `${avatar} ${displayName} report: sharing completion result for '${taskTitle}'.`
-        : `${avatar} ${displayName} report: sharing completion result.`;
-    }
-    if (hasChinese) {
-      return taskTitle
-        ? `${avatar} ${displayName} report: sharing completion result for '${taskTitle}'.`
-        : `${avatar} ${displayName} report: sharing completion result.`;
-    }
-    return taskTitle
-      ? `${avatar} ${displayName} report: sharing completion result for '${taskTitle}'.`
-      : `${avatar} ${displayName} report: sharing completion result.`;
-  }
-
-  function buildMessengerReportSummary(agent: AgentRow, content: string): string {
-    const shouldSummarize =
-      /\|\s*#\s*\|/i.test(content) ||
-      /\|\s*1\s*\|/.test(content) ||
-      /(결과|result)\s*:/i.test(content) ||
-      content.length >= 900;
-    if (!shouldSummarize) return content;
-
-    const rawLines = content.split(/\r?\n/);
-    const plainLines = rawLines.map((line) => normalizeMessengerTextLine(line));
-
-    const requestLine =
-      plainLines.find((line) => /(업무 완료 보고|reporting completion|completion result)/i.test(line)) ?? "";
-    const identityIntro = buildMessengerReportIdentityIntro(agent, content, requestLine);
-    const progressLine =
-      plainLines.find((line) =>
-        /(?:전체|total)\s*:\s*\d+\s*\/\s*\d+|(?:완료|completion|progress|진행)\s*[:：]?\s*(?:\d+\s*%|\d+\s*\/\s*\d+)/i.test(
-          line,
-        ),
-      ) ?? "";
-
-    const tableItems: string[] = [];
-    for (const line of rawLines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("|")) continue;
-      const cells = trimmed
-        .split("|")
-        .map((cell) => normalizeMessengerTextLine(cell))
-        .filter(Boolean);
-      if (cells.length < 3) continue;
-      const index = Number.parseInt(cells[0] ?? "", 10);
-      if (!Number.isFinite(index)) continue;
-      const issue = cells[1] || "-";
-      const severity = cells[2] || "";
-      tableItems.push(`${index}. ${severity ? `[${severity}] ` : ""}${truncateMessengerText(issue, 120)}`);
-      if (tableItems.length >= 3) break;
-    }
-
-    const resultItems: string[] = [];
-    let inResultSection = false;
-    for (let i = 0; i < rawLines.length; i += 1) {
-      const rawLine = rawLines[i] ?? "";
-      const plain = plainLines[i] ?? "";
-      if (!inResultSection) {
-        if (/(결과|result)\s*:?/i.test(rawLine) || /^(결과|result)\s*:?$/i.test(plain)) {
-          inResultSection = true;
-        }
-        continue;
-      }
-      if (!plain || plain === "...") continue;
-      if (/^[#\-*]/u.test(rawLine.trim())) break;
-      if (/(보완\/협업 진행 요약|Remediation\/Collaboration Progress|Changes)/i.test(plain)) break;
-      if (rawLine.trim().startsWith("|")) continue;
-      const cleaned = plain.replace(/^[-•*\s]+/, "").trim();
-      if (!cleaned) continue;
-      resultItems.push(truncateMessengerText(cleaned, 150));
-      if (resultItems.length >= 3) break;
-    }
-
-    const keyItems = tableItems.length > 0 ? tableItems : resultItems.map((line, idx) => `${idx + 1}. ${line}`);
-    if (keyItems.length <= 0) return content;
-
-    const hasKorean = /[가-힣]/.test(content);
-    const title = hasKorean ? "업무 완료 요약" : "Task Completion Summary";
-    const keyLabel = hasKorean ? "핵심 결과" : "Key Results";
-    const progressLabel = hasKorean ? "진행 요약" : "Progress";
-    const detailHint = hasKorean
-      ? "상세 내용은 Claw-Empire 채팅창에서 확인하세요."
-      : "See Claw-Empire chat for full details.";
-
-    const out: string[] = [title, identityIntro];
-    out.push(`${keyLabel}:`);
-    out.push(...keyItems);
-    if (progressLine) out.push(`${progressLabel}: ${truncateMessengerText(progressLine, 160)}`);
-    out.push(detailHint);
-    return out.join("\n");
   }
 
   function formatMessengerBroadcastContent(agent: AgentRow, messageType: string, rawContent: string): string {

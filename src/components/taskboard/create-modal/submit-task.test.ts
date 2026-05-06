@@ -119,7 +119,7 @@ describe("submitTaskWithProjectHandling GitHub project flow", () => {
       priority: 3,
       project_id: "project-1",
       project_path: "D:\\Projects\\platform",
-      assigned_agent_id: undefined,
+      project_hint: undefined,
       workflow_pack_key: undefined,
       workflow_meta_json: undefined,
     });
@@ -172,7 +172,7 @@ describe("submitTaskWithProjectHandling GitHub project flow", () => {
       priority: 3,
       project_id: undefined,
       project_path: undefined,
-      assigned_agent_id: undefined,
+      project_hint: undefined,
       workflow_pack_key: "web_research_report",
       workflow_meta_json: {
         goal_command: "research",
@@ -189,6 +189,34 @@ describe("submitTaskWithProjectHandling GitHub project flow", () => {
         max_parallel_workstreams: 2,
         verification_gates: ["sources", "findings"],
       },
+    });
+  });
+
+  it("passes unresolved project text as a project hint instead of blocking submission", async () => {
+    const context = createContext({
+      createNewProjectMode: false,
+      projectQuery: "uncertain project",
+      projects: [],
+    });
+
+    await submitTaskWithProjectHandling(context, { allowWithoutProject: true });
+
+    expect(context.setFormFeedback).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: "error",
+      }),
+    );
+    expect(context.onCreate).toHaveBeenCalledWith({
+      title: "Ship v1",
+      description: "Launch the platform",
+      department_id: undefined,
+      task_type: "general",
+      priority: 3,
+      project_id: undefined,
+      project_path: undefined,
+      project_hint: "uncertain project",
+      workflow_pack_key: undefined,
+      workflow_meta_json: undefined,
     });
   });
 });

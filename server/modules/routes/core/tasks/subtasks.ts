@@ -181,6 +181,11 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
     if (!agentId || typeof agentId !== "string") {
       return res.status(400).json({ error: "agent_id_required" });
     }
+    const overrideReason =
+      typeof (req.body as any)?.override_reason === "string" ? (req.body as any).override_reason.trim() : "";
+    if (!overrideReason) {
+      return res.status(400).json({ error: "override_reason_required" });
+    }
 
     const agent = db.prepare("SELECT * FROM agents WHERE id = ?").get(agentId) as
       | {
@@ -205,7 +210,7 @@ export function registerTaskSubtaskRoutes(deps: TaskSubtaskRouteDeps): void {
     ).run(agentId, agent.department_id, t, id);
 
     db.prepare("UPDATE agents SET current_task_id = ? WHERE id = ?").run(id, agentId);
-    appendTaskLog(id, "system", `Assigned to agent: ${agent.name}`);
+    appendTaskLog(id, "system", `Manual assignment override: ${agent.name} (${overrideReason})`);
 
     const msgId = randomUUID();
     db.prepare(

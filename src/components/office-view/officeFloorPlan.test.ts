@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Agent, Department } from "../../types";
-import { buildOfficeFloorPlan } from "./officeFloorPlan";
+import { buildOfficeFloorPlan, estimateOfficeSceneWidth } from "./officeFloorPlan";
 
 const departments: Department[] = ["pmo", "planning", "dev", "design", "qa", "devsecops", "operations"].map(
   (id, index) => ({
@@ -17,7 +17,7 @@ const departments: Department[] = ["pmo", "planning", "dev", "design", "qa", "de
 );
 
 const agents: Agent[] = departments.flatMap((department) =>
-  Array.from({ length: 3 }, (_, index) => ({
+  Array.from({ length: department.id === "pmo" ? 1 : 3 }, (_, index) => ({
     id: `${department.id}-${index + 1}`,
     name: `${department.id}-${index + 1}`,
     name_ko: `${department.id}-${index + 1}`,
@@ -36,10 +36,12 @@ const agents: Agent[] = departments.flatMap((department) =>
 
 describe("buildOfficeFloorPlan", () => {
   it("places seven canonical departments into four office floors", () => {
-    const plan = buildOfficeFloorPlan({ officeW: 980, departments, agents });
+    const officeW = estimateOfficeSceneWidth({ viewportW: 980, departments });
+    const plan = buildOfficeFloorPlan({ officeW, departments, agents });
 
     expect(plan.floorBands.map((floor) => `${floor.level} ${floor.label}`)).toEqual([
       "1F 공용층",
+      "RF 옥상층",
       "2F 전략층",
       "3F 제작층",
       "4F 품질/운영층",
@@ -48,6 +50,30 @@ describe("buildOfficeFloorPlan", () => {
     expect(plan.roomLayouts.get("pmo")?.floorId).toBe("strategy");
     expect(plan.roomLayouts.get("dev")?.floorId).toBe("production");
     expect(plan.roomLayouts.get("operations")?.floorId).toBe("quality");
-    expect(plan.sharedFacilities.map((facility) => facility.id)).toEqual(["lobby", "break", "study", "after-hours"]);
+    expect(plan.sharedFacilities.map((facility) => facility.id)).toEqual([
+      "lobby",
+      "break",
+      "study",
+      "after-hours",
+      "smoking",
+      "roof-garden",
+      "roof-lounge",
+    ]);
+    expect(plan.sharedFacilities.find((facility) => facility.id === "smoking")?.label).toBe("흡연실");
+    expect(plan.transportCore?.h).toBeGreaterThan(700);
+  });
+
+  it("keeps the three-department quality floor wide instead of squeezing rooms", () => {
+    const officeW = estimateOfficeSceneWidth({ viewportW: 390, departments });
+    const plan = buildOfficeFloorPlan({ officeW, departments, agents });
+    const qualityRooms = ["qa", "devsecops", "operations"].map((id) => plan.roomLayouts.get(id));
+
+    expect(officeW).toBeGreaterThan(1000);
+    for (const room of qualityRooms) {
+      expect(room?.floorId).toBe("quality");
+      expect(room?.w).toBeGreaterThanOrEqual(304);
+    }
+    expect(qualityRooms[0]!.x + qualityRooms[0]!.w).toBeLessThan(qualityRooms[1]!.x);
+    expect(qualityRooms[1]!.x + qualityRooms[1]!.w).toBeLessThan(qualityRooms[2]!.x);
   });
 });

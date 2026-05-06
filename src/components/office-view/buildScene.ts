@@ -7,7 +7,8 @@ import { buildCeoAndHallway } from "./buildScene-ceo-hallway";
 import { buildDepartmentRooms } from "./buildScene-departments";
 import { buildBreakRoom } from "./buildScene-break-room";
 import { buildFinalLayers } from "./buildScene-final-layers";
-import { buildOfficeFloorPlan } from "./officeFloorPlan";
+import { buildOfficeFloorPlan, estimateOfficeSceneWidth } from "./officeFloorPlan";
+import { buildFloorAccessLayer } from "./buildScene-floor-access";
 
 export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   const {
@@ -112,7 +113,8 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   const spriteMap = buildSpriteMap(agents);
   spriteMapRef.current = spriteMap;
 
-  const OFFICE_W = officeWRef.current;
+  const OFFICE_W = estimateOfficeSceneWidth({ viewportW: officeWRef.current, departments });
+  officeWRef.current = OFFICE_W;
   const floorPlan = buildOfficeFloorPlan({ officeW: OFFICE_W, departments, agents });
   const deptCount = departments.length || 1;
   const baseRoomW = COLS_PER_ROW * SLOT_W + ROOM_PAD * 2;
@@ -153,6 +155,15 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
     ceoMeetingSeatsRef,
     wallClocksRef,
     ceoOfficeRectRef,
+  });
+
+  buildFloorAccessLayer({
+    app,
+    floorBands: floorPlan.floorBands,
+    transportCore: floorPlan.transportCore,
+    officeW: OFFICE_W,
+    totalH,
+    isDark,
   });
 
   buildDepartmentRooms({

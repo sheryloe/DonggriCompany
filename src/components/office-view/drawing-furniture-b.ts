@@ -192,6 +192,27 @@ function drawVendingMachine(parent: Container, x: number, y: number) {
   parent.addChild(g);
 }
 
+function drawWallMonitor(parent: Container, x: number, y: number, accent: number, width = 54, height = 30) {
+  const g = new Graphics();
+  const bezel = blendColor(accent, 0x07111f, 0.72);
+  const screen = blendColor(accent, 0xffffff, 0.24);
+
+  g.roundRect(x + 2, y + 3, width, height, 5).fill({ color: 0x000000, alpha: 0.16 });
+  g.roundRect(x, y, width, height, 5).fill(bezel);
+  g.roundRect(x + 3, y + 3, width - 6, height - 8, 3).fill(screen);
+  g.roundRect(x + 3, y + 3, width - 6, height - 8, 3).stroke({ width: 0.7, color: 0xffffff, alpha: 0.22 });
+
+  for (let i = 0; i < 4; i += 1) {
+    const lineY = y + 8 + i * 4;
+    g.roundRect(x + 8, lineY, width - 18 - i * 4, 1.2, 0.6).fill({ color: 0xffffff, alpha: 0.42 });
+  }
+  g.circle(x + width - 9, y + 8, 2.2).fill({ color: 0x102a43, alpha: 0.4 });
+  g.circle(x + width - 9, y + 8, 1.2).fill({ color: 0x7dd3fc, alpha: 0.8 });
+  g.rect(x + width / 2 - 2, y + height - 4, 4, 7).fill(bezel);
+  g.roundRect(x + width / 2 - 12, y + height + 2, 24, 3, 1.5).fill(bezel);
+  parent.addChild(g);
+}
+
 /* ================================================================== */
 /*  Helpers                                                            */
 /* ================================================================== */
@@ -226,6 +247,7 @@ export {
   drawCoffeeTable,
   drawHighTable,
   drawVendingMachine,
+  drawWallMonitor,
   formatReset,
   formatPeopleCount,
   formatTaskCount,

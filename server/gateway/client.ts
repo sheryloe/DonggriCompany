@@ -12,6 +12,7 @@ import {
   isNativeMessengerChannel,
   type MessengerChannel,
 } from "../messenger/channels.ts";
+import { mapLegacyDepartmentId } from "../modules/bootstrap/schema/organization-manifest.ts";
 
 const WAKE_DEBOUNCE_DEFAULT_MS = 12_000;
 const SETTINGS_CACHE_TTL_MS = 3_000;
@@ -116,12 +117,12 @@ const TELEGRAM_DEPARTMENT_BOT_ENV_MAP: Array<{
     targetEnv: ["TELEGRAM_CHAT_ID_PMO", "TELEGRAM_CHAT_ID_CEO_PMO", "TELEGRAM_CHAT_ID_PM"],
   },
   {
-    departmentId: "planning-architecture",
+    departmentId: "planning",
     tokenEnv: ["TELEGRAM_BOT_TOKEN_PLANNING", "TELEGRAM_BOT_TOKEN_ARCHITECTURE"],
     targetEnv: ["TELEGRAM_CHAT_ID_PLANNING", "TELEGRAM_CHAT_ID_ARCHITECTURE"],
   },
   {
-    departmentId: "development",
+    departmentId: "dev",
     tokenEnv: ["TELEGRAM_BOT_TOKEN_DEV", "TELEGRAM_BOT_TOKEN_DEVELOPMENT"],
     targetEnv: ["TELEGRAM_CHAT_ID_DEV", "TELEGRAM_CHAT_ID_DEVELOPMENT"],
   },
@@ -131,14 +132,31 @@ const TELEGRAM_DEPARTMENT_BOT_ENV_MAP: Array<{
     targetEnv: ["TELEGRAM_CHAT_ID_QA"],
   },
   {
-    departmentId: "ui-ux",
+    departmentId: "design",
     tokenEnv: ["TELEGRAM_BOT_TOKEN_DESIGN", "TELEGRAM_BOT_TOKEN_UI_UX"],
     targetEnv: ["TELEGRAM_CHAT_ID_DESIGN", "TELEGRAM_CHAT_ID_UI_UX"],
   },
   {
-    departmentId: "cicd-repo",
+    departmentId: "devsecops",
     tokenEnv: ["TELEGRAM_BOT_TOKEN_CICD_REPO", "TELEGRAM_BOT_TOKEN_DEVSECOPS"],
     targetEnv: ["TELEGRAM_CHAT_ID_CICD_REPO", "TELEGRAM_CHAT_ID_DEVSECOPS"],
+  },
+  {
+    departmentId: "operations",
+    tokenEnv: [
+      "TELEGRAM_BOT_TOKEN_OPERATIONS",
+      "TELEGRAM_BOT_TOKEN_MANAGEMENT",
+      "TELEGRAM_BOT_TOKEN_KNOWLEDGE_DOCS",
+      "TELEGRAM_BOT_TOKEN_API_RESEARCH",
+      "TELEGRAM_BOT_TOKEN_BLOGGENT",
+    ],
+    targetEnv: [
+      "TELEGRAM_CHAT_ID_OPERATIONS",
+      "TELEGRAM_CHAT_ID_MANAGEMENT",
+      "TELEGRAM_CHAT_ID_KNOWLEDGE_DOCS",
+      "TELEGRAM_CHAT_ID_API_RESEARCH",
+      "TELEGRAM_CHAT_ID_BLOGGENT",
+    ],
   },
   {
     departmentId: "security-approval",
@@ -228,7 +246,8 @@ function normalizeSession(
 }
 
 function normalizeDepartmentId(value: unknown): string {
-  return normalizeText(value).toLowerCase();
+  const normalized = normalizeText(value).toLowerCase();
+  return mapLegacyDepartmentId(normalized) ?? normalized;
 }
 
 function firstEnvValue(names: string[]): string {
@@ -301,7 +320,9 @@ function resolveTelegramDepartmentBotsFromEnv(defaultTargetId: string): Record<s
   for (const entry of TELEGRAM_DEPARTMENT_BOT_ENV_MAP) {
     const token = firstEnvValue(entry.tokenEnv);
     if (!token) continue;
-    bots[entry.departmentId] = {
+    const departmentId = normalizeDepartmentId(entry.departmentId);
+    if (!departmentId || bots[departmentId]) continue;
+    bots[departmentId] = {
       token,
       targetId: globalTargetId,
       enabled: true,
@@ -1202,6 +1223,21 @@ async function sendMessengerWake(text: string): Promise<void> {
       const token = normalizeText(session.token) || channelToken;
       if (channel !== "imessage" && !token) continue;
       targets.push({ channel, targetId: session.targetId, token });
+    }
+  }
+
+  if (targets.length === 0) {
+    const telegramConfig = config.telegram;
+    const preferredTelegramSession = pickPreferredTelegramSession(
+      telegramConfig.sessions.filter(
+        (session) => session.enabled && !session.agentId && normalizeText(session.targetId),
+      ),
+    );
+    if (preferredTelegramSession) {
+      const token = normalizeText(preferredTelegramSession.token) || telegramConfig.token;
+      if (token) {
+        targets.push({ channel: "telegram", targetId: preferredTelegramSession.targetId, token });
+      }
     }
   }
 

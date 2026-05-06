@@ -1,5 +1,5 @@
-export type OrganizationSeedVersion = "org-v3";
-export const ORGANIZATION_SEED_VERSION: OrganizationSeedVersion = "org-v3";
+export type OrganizationSeedVersion = "org-v4";
+export const ORGANIZATION_SEED_VERSION: OrganizationSeedVersion = "org-v4";
 
 export type OrganizationDepartmentId = "pmo" | "planning" | "dev" | "design" | "qa" | "devsecops" | "operations";
 
@@ -209,9 +209,7 @@ function seed(
   };
 }
 
-const ACTIVE_VISUAL_PROFILE_NUMBERS = new Set([
-  1, 2, 3, 6, 7, 8, 11, 12, 13, 16, 17, 18, 21, 22, 23, 26, 27, 28, 31, 32, 33,
-]);
+const ACTIVE_VISUAL_PROFILE_NUMBERS = new Set([1, 6, 7, 8, 11, 12, 13, 16, 17, 18, 21, 22, 23, 26, 27, 28, 31, 32, 33]);
 
 function visualProfile(index: number): AgentVisualProfileSeed {
   const key = `agent-visual-${String(index).padStart(2, "0")}`;
@@ -241,7 +239,7 @@ export const RESERVE_VISUAL_PROFILE_POLICY = {
   activation_sources: ["new_hire", "project_pack", "staff_replacement"],
   approval_gate: "ceo_or_pmo",
   required_actions: ["update_seed_profile", "regenerate_agent_guides", "verify_sprite_manifest"],
-  active_staff_profile_limit: 21,
+  active_staff_profile_limit: 19,
 } as const;
 
 export const DEFAULT_DEPARTMENT_SKILL_BUNDLES: Record<OrganizationDepartmentId, string[]> = {
@@ -303,46 +301,6 @@ export const ORGANIZATION_AGENT_SEEDS: OrganizationAgentSeed[] = [
     recommended_subagents: DEPARTMENT_SUBAGENT_RECOMMENDATIONS.pmo,
     review_lenses: ["scope", "priority", "dependency", "metrics", "risk"],
     max_review_rounds: 2,
-  }),
-  seed({
-    id: "seed-pmo-delivery-senior",
-    name: "Vector",
-    name_ko: "벡터",
-    department_id: "pmo",
-    role: "senior",
-    cli_provider: "codex",
-    avatar_emoji: "PMO",
-    personality: "Roadmap and delivery control specialist",
-    family: "product-manager",
-    career_stage: "senior",
-    specialization_key: "pmo.delivery-control",
-    authority_level: 4,
-    execution_capability_profile: "reviewer",
-    sprite_number: 2,
-    visual_profile_key: "agent-visual-02",
-    recommended_subagents: DEPARTMENT_SUBAGENT_RECOMMENDATIONS.pmo,
-    review_lenses: ["scope", "priority", "timeline", "metrics"],
-    max_review_rounds: null,
-  }),
-  seed({
-    id: "seed-pmo-risk-senior",
-    name: "Tempo",
-    name_ko: "템포",
-    department_id: "pmo",
-    role: "senior",
-    cli_provider: "codex",
-    avatar_emoji: "PMO",
-    personality: "Risk, evidence, and bottleneck coordinator",
-    family: "documenter",
-    career_stage: "senior",
-    specialization_key: "pmo.risk-evidence",
-    authority_level: 4,
-    execution_capability_profile: "reviewer",
-    sprite_number: 3,
-    visual_profile_key: "agent-visual-03",
-    recommended_subagents: DEPARTMENT_SUBAGENT_RECOMMENDATIONS.pmo,
-    review_lenses: ["timeline", "traceability", "risk"],
-    max_review_rounds: null,
   }),
   seed({
     id: "seed-planning-lead",

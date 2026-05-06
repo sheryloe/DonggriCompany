@@ -12,6 +12,11 @@ import EmojiPicker from "./EmojiPicker";
 import type { FormData } from "./types";
 
 const CLI_POOL_PROVIDERS: FormData["cli_provider"][] = ["codex", "gemini", "jules"];
+const SPRITE_PREVIEW_LABELS: Record<"D" | "L" | "R", string> = {
+  D: "앞",
+  L: "왼쪽",
+  R: "오른쪽",
+};
 
 type CanonicalEditableField =
   | "family"
@@ -509,8 +514,8 @@ export default function AgentFormModal({
                 </div>
                 <div>
                   {tr(
-                    "화면 표시는 현재 언어를 따르고, 표준 키와 원본 파일은 영어로 유지합니다.",
-                    "The UI follows the selected locale, while canonical keys and source files remain in English.",
+                    "화면 표시는 한국어로 고정하고, 표준 키와 원본 파일은 영어로 유지합니다.",
+                    "The UI is fixed to Korean, while canonical keys and source files remain in English.",
                   )}
                 </div>
               </div>
@@ -581,7 +586,7 @@ export default function AgentFormModal({
                 {(["D", "L", "R"] as const).map((dir) => (
                   <div key={dir} className="text-center">
                     <div className="mb-1 text-[10px]" style={{ color: "var(--th-text-muted)" }}>
-                      {dir}
+                      {SPRITE_PREVIEW_LABELS[dir]}
                     </div>
                     <div
                       className="flex h-24 items-center justify-center rounded-lg p-2"

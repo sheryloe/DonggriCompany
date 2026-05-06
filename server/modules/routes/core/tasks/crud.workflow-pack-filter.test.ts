@@ -59,7 +59,15 @@ function createTaskCrudHarness(): { db: DatabaseSync; routes: Map<string, RouteH
     CREATE TABLE agents (
       id TEXT PRIMARY KEY,
       name TEXT,
-      avatar_emoji TEXT
+      avatar_emoji TEXT,
+      department_id TEXT,
+      role TEXT,
+      cli_provider TEXT,
+      oauth_account_id TEXT,
+      status TEXT NOT NULL DEFAULT 'idle',
+      current_task_id TEXT,
+      stats_tasks_done INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE departments (
       id TEXT PRIMARY KEY,
@@ -72,8 +80,14 @@ function createTaskCrudHarness(): { db: DatabaseSync; routes: Map<string, RouteH
       core_goal TEXT,
       project_path TEXT,
       default_pack_key TEXT NOT NULL DEFAULT 'development',
+      assignment_mode TEXT NOT NULL DEFAULT 'auto',
       last_used_at INTEGER,
-      updated_at INTEGER
+      updated_at INTEGER,
+      created_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE project_agents (
+      project_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL
     );
     CREATE TABLE subtasks (
       id TEXT PRIMARY KEY,
@@ -363,7 +377,7 @@ describe("task CRUD workflow pack behavior", () => {
         };
       };
       expect(payload.task.workflow_pack_key).toBe("web_research_report");
-      expect(payload.task.department_id).toBe("operations");
+      expect(payload.task.department_id).toBe("pmo");
       expect(payload.task.task_type).toBe("analysis");
       expect(payload.task.priority).toBe(3);
       expect(JSON.parse(payload.task.workflow_meta_json)).toMatchObject({
@@ -374,6 +388,7 @@ describe("task CRUD workflow pack behavior", () => {
         routing_reason: "user_selected_goal",
         required_departments: ["pmo", "operations"],
         max_parallel_workstreams: 2,
+        requires_pmo_triage: true,
       });
     } finally {
       db.close();
@@ -398,7 +413,7 @@ describe("task CRUD workflow pack behavior", () => {
 
       expect(res.statusCode).toBe(200);
       const payload = res.payload as { task: { workflow_meta_json: string; department_id: string } };
-      expect(payload.task.department_id).toBe("devsecops");
+      expect(payload.task.department_id).toBe("pmo");
       expect(JSON.parse(payload.task.workflow_meta_json)).toMatchObject({
         goal_command: "release",
         team_preset: "release_gate",
@@ -406,6 +421,7 @@ describe("task CRUD workflow pack behavior", () => {
         routing_reason: "slash_command_detected",
         required_departments: ["pmo", "devsecops", "qa", "operations"],
         max_parallel_workstreams: 3,
+        requires_pmo_triage: true,
       });
 
       const octoRes = createFakeResponse();
@@ -419,7 +435,10 @@ describe("task CRUD workflow pack behavior", () => {
       );
       expect(octoRes.statusCode).toBe(200);
       const octoPayload = octoRes.payload as { task: { workflow_meta_json: string | null } };
-      expect(octoPayload.task.workflow_meta_json).toBeNull();
+      expect(JSON.parse(octoPayload.task.workflow_meta_json ?? "{}")).toMatchObject({
+        auto_routing_version: "donggri_task_auto_routing_v1",
+      });
+      expect(JSON.parse(octoPayload.task.workflow_meta_json ?? "{}").goal_command).toBeUndefined();
     } finally {
       db.close();
     }
@@ -468,6 +487,125 @@ describe("task CRUD workflow pack behavior", () => {
       expect(res.statusCode).toBe(200);
       const payload = res.payload as { task?: { policy_version?: string | null } };
       expect(payload.task?.policy_version).toBeTruthy();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("auto-routes project, department, and agent at task creation time", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      db.prepare(
+        `
+          INSERT INTO projects (id, name, core_goal, project_path, default_pack_key, last_used_at, updated_at, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      ).run(
+        "project-alpha",
+        "Alpha Shop",
+        "React checkout and storefront platform",
+        "D:\\Projects\\alpha-shop",
+        "development",
+        20,
+        20,
+        10,
+      );
+      db.prepare(
+        `
+          INSERT INTO agents (
+            id, name, avatar_emoji, department_id, role, cli_provider, oauth_account_id,
+            status, current_task_id, stats_tasks_done, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      ).run("agent-dev", "Backend Senior", "D", "dev", "senior", "codex", null, "idle", null, 0, 1);
+
+      const handler = routes.get("POST /api/tasks") as RouteHandler | undefined;
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            title: "Fix Alpha Shop checkout bug",
+            description: "React checkout error needs repair",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as {
+        task: {
+          project_id: string;
+          project_path: string;
+          department_id: string;
+          assigned_agent_id: string;
+          status: string;
+          workflow_meta_json: string;
+        };
+      };
+      expect(payload.task.project_id).toBe("project-alpha");
+      expect(payload.task.project_path).toBe("D:\\Projects\\alpha-shop");
+      expect(payload.task.department_id).toBe("dev");
+      expect(payload.task.assigned_agent_id).toBe("agent-dev");
+      expect(payload.task.status).toBe("planned");
+      expect(JSON.parse(payload.task.workflow_meta_json)).toMatchObject({
+        auto_routing_version: "donggri_task_auto_routing_v1",
+        project_routing_source: "project_text_match",
+        agent_routing_source: "auto_agent_selector",
+        requires_pmo_triage: false,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("sends low-confidence project routing to PMO triage without asking for a path", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      db.prepare(
+        `
+          INSERT INTO agents (
+            id, name, avatar_emoji, department_id, role, cli_provider, oauth_account_id,
+            status, current_task_id, stats_tasks_done, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      ).run("agent-pmo", "PMO Lead", "P", "pmo", "team_leader", "codex", null, "idle", null, 0, 1);
+
+      const handler = routes.get("POST /api/tasks") as RouteHandler | undefined;
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.(
+        {
+          body: {
+            title: "Unmapped vague task",
+            description: "No matching project exists yet",
+          },
+        },
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as {
+        task: {
+          project_id: string | null;
+          project_path: string | null;
+          department_id: string;
+          assigned_agent_id: string;
+          status: string;
+          workflow_meta_json: string;
+        };
+      };
+      expect(payload.task.project_id).toBeNull();
+      expect(payload.task.project_path).toBeNull();
+      expect(payload.task.department_id).toBe("pmo");
+      expect(payload.task.assigned_agent_id).toBe("agent-pmo");
+      expect(payload.task.status).toBe("pending");
+      expect(JSON.parse(payload.task.workflow_meta_json)).toMatchObject({
+        project_routing_source: "pmo_triage",
+        requires_pmo_triage: true,
+      });
     } finally {
       db.close();
     }

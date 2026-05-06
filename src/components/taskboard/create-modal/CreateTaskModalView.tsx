@@ -1,5 +1,5 @@
 import type { ComponentProps, FormEventHandler } from "react";
-import type { Agent, Department, GoalCommandPreset, TaskType } from "../../../types";
+import type { Department, GoalCommandPreset, TaskType } from "../../../types";
 import { TASK_TYPE_OPTIONS, taskTypeLabel, type FormFeedback, type TFunction } from "../constants";
 import {
   getGoalCommandDescription,
@@ -9,7 +9,7 @@ import {
 } from "../goal-command-text";
 import CreateTaskModalOverlays from "./Overlays";
 import type { CreateTaskModalOverlaysProps } from "./overlay-types";
-import { AssigneeSection, PrioritySection, ProjectSection } from "./Sections";
+import { PrioritySection, ProjectSection } from "./Sections";
 
 interface CreateTaskModalViewProps {
   t: TFunction;
@@ -21,14 +21,12 @@ interface CreateTaskModalViewProps {
   departmentId: string;
   taskType: TaskType;
   priority: number;
-  assignAgentId: string;
   selectedGoalCommand: string;
   goalCommands: GoalCommandPreset[];
   goalCommandsLoading: boolean;
   submitBusy: boolean;
   formFeedback: FormFeedback | null;
   departments: Department[];
-  filteredAgents: Agent[];
   projectSectionProps: ComponentProps<typeof ProjectSection>;
   overlaysProps: CreateTaskModalOverlaysProps;
   onOpenDraftModal: () => void;
@@ -39,7 +37,6 @@ interface CreateTaskModalViewProps {
   onDepartmentChange: (value: string) => void;
   onTaskTypeChange: (value: TaskType) => void;
   onPriorityChange: (value: number) => void;
-  onAssignAgentChange: (value: string) => void;
   onGoalCommandSelect: (command: GoalCommandPreset) => void;
   onGoalCommandClear: () => void;
 }
@@ -54,14 +51,12 @@ export default function CreateTaskModalView({
   departmentId,
   taskType,
   priority,
-  assignAgentId,
   selectedGoalCommand,
   goalCommands,
   goalCommandsLoading,
   submitBusy,
   formFeedback,
   departments,
-  filteredAgents,
   projectSectionProps,
   overlaysProps,
   onOpenDraftModal,
@@ -72,7 +67,6 @@ export default function CreateTaskModalView({
   onDepartmentChange,
   onTaskTypeChange,
   onPriorityChange,
-  onAssignAgentChange,
   onGoalCommandSelect,
   onGoalCommandClear,
 }: CreateTaskModalViewProps) {
@@ -270,14 +264,12 @@ export default function CreateTaskModalView({
                 <PrioritySection priority={priority} t={t} onPriorityChange={onPriorityChange} />
               </div>
               <div className={createNewProjectMode ? "lg:hidden" : ""}>
-                <AssigneeSection
-                  agents={filteredAgents}
-                  departments={departments}
-                  departmentId={departmentId}
-                  assignAgentId={assignAgentId}
-                  t={t}
-                  onAssignAgentChange={onAssignAgentChange}
-                />
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs leading-relaxed text-cyan-100">
+                  <div className="font-semibold text-cyan-50">자동 라우팅</div>
+                  <p className="mt-1 text-cyan-100/80">
+                    프로젝트, 부서, 담당 직원은 업무 내용과 목표 명령 규칙으로 자동 판정됩니다.
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -285,14 +277,12 @@ export default function CreateTaskModalView({
               <aside className="hidden min-w-0 lg:block lg:transition-all lg:duration-300 lg:ease-out">
                 <div className="space-y-4 rounded-xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
                   <PrioritySection priority={priority} t={t} onPriorityChange={onPriorityChange} />
-                  <AssigneeSection
-                    agents={filteredAgents}
-                    departments={departments}
-                    departmentId={departmentId}
-                    assignAgentId={assignAgentId}
-                    t={t}
-                    onAssignAgentChange={onAssignAgentChange}
-                  />
+                  <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-xs leading-relaxed text-cyan-100">
+                    <div className="font-semibold text-cyan-50">자동 라우팅</div>
+                    <p className="mt-1 text-cyan-100/80">
+                      새 프로젝트 생성 후에도 담당 직원은 중앙 규칙으로 자동 배정됩니다.
+                    </p>
+                  </div>
                 </div>
               </aside>
             )}

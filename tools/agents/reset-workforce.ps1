@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [string]$BaseUrl = "http://127.0.0.1:8900",
-  [string]$ProjectRoot = "D:\Donggri_Platform\DonggriCompany",
+  [string]$ProjectRoot = "<PROJECT_ROOT>",
   [switch]$SkipTaskStop
 )
 

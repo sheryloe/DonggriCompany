@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectDecisionEventItem, ProjectReportHistoryItem, ProjectTaskHistoryItem } from "../../api";
 import { getProjectModules } from "../../api";
+import { getProjectModuleBindingStatusLabel, getProjectModuleTitle } from "../../app/module-display";
 import { approveMemoryPromotion, drainBeadsOutbox, scanMemoryPromotions } from "../../api/memory";
 import type { NativeMemory, Project, ProjectMemoryResponse, ProjectModuleBinding } from "../../types";
 import type { GroupedProjectTaskCard, ProjectDetailView, ProjectI18nTranslate } from "./types";
@@ -403,14 +404,14 @@ export default function ProjectInsightsPanel({
                 {projectModules.slice(0, 6).map((binding) => (
                   <div key={binding.id} className="rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-xs font-semibold text-slate-100">{binding.binding_name}</p>
+                      <p className="min-w-0 truncate text-xs font-semibold text-slate-100">
+                        {getProjectModuleTitle(binding.module_key)}
+                      </p>
                       <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">
-                        {binding.status === "applied" ? "적용됨" : "바인딩됨"}
+                        {getProjectModuleBindingStatusLabel(binding.status)}
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      {binding.module_key}@{binding.module_version}
-                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400">버전 {binding.module_version}</p>
                   </div>
                 ))}
               </div>

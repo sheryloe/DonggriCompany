@@ -48,25 +48,25 @@ const UI_TEXT: Record<
     learn: "학습",
     modalHeading: "스킬 학습 스쿼드",
     startLearning: "학습 시작",
-    running: "학습중",
+    running: "학습 중",
   },
   en: {
     learn: "학습",
     modalHeading: "스킬 학습 스쿼드",
     startLearning: "학습 시작",
-    running: "학습중",
+    running: "학습 중",
   },
   ja: {
     learn: "학습",
     modalHeading: "스킬 학습 스쿼드",
     startLearning: "학습 시작",
-    running: "학습중",
+    running: "학습 중",
   },
   zh: {
     learn: "학습",
     modalHeading: "스킬 학습 스쿼드",
     startLearning: "학습 시작",
-    running: "학습중",
+    running: "학습 중",
   },
 };
 
@@ -108,7 +108,7 @@ const TEST_AGENT: Agent = {
   department_id: "dep-1",
   role: "team_leader",
   cli_provider: "claude",
-  avatar_emoji: "🧭",
+  avatar_emoji: "A",
   personality: null,
   status: "idle",
   current_task_id: null,
@@ -229,7 +229,7 @@ describe("SkillsLibrary learning modal ESC close", () => {
     fireEvent.click(screen.getByRole("button", { name: exactText(UI_TEXT.en.learn) }));
 
     await screen.findByText(/Learned|학습됨/i);
-    fireEvent.click(screen.getAllByRole("button", { name: /Unlearn|학습 취소/i }).at(-1)!);
+    fireEvent.click(screen.getAllByRole("button", { name: /학습 해제/i }).at(-1)!);
 
     await waitFor(() => {
       expect(unlearnSkillMock).toHaveBeenCalledWith({

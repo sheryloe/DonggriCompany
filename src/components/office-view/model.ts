@@ -62,6 +62,18 @@ interface RoomRect {
   h: number;
 }
 
+interface OfficeCeoTransit {
+  area: "shared" | "rooftop" | "strategy" | "production" | "quality";
+  mode: "direct" | "stairs" | "elevator";
+  phase: "walk_to_core" | "transfer" | "walk_to_destination";
+  coreX: number;
+  coreY: number;
+  destinationX: number;
+  destinationY: number;
+  pauseTicks: number;
+  onArrive?: () => void;
+}
+
 interface WallClockVisual {
   hourHand: Graphics;
   minuteHand: Graphics;
@@ -264,6 +276,7 @@ export {
   type OfficeViewProps,
   type Delivery,
   type RoomRect,
+  type OfficeCeoTransit,
   type WallClockVisual,
   detachNode,
   destroyNode,

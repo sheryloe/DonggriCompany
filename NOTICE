@@ -1,0 +1,14 @@
+DonggriCompany
+
+This product includes software derived from Claw-Empire:
+https://github.com/GreenSheep01201/claw-empire
+
+Claw-Empire is Copyright 2026 GreenSheep01201
+and licensed under the Apache License, Version 2.0.
+
+DonggriCompany includes substantial modifications by the DonggriCompany maintainers,
+including project routing, Donggri Dev Drive operations, canonical department workflows,
+agent/staff guide customization, UI documentation, and runtime separation work.
+
+Third-party character assets are tracked separately in:
+assets/opensource/characters/THIRD_PARTY_LICENSES.md

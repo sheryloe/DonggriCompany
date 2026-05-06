@@ -1,7 +1,8 @@
 {
-  "name": "climpire",
+  "name": "donggri-company",
   "version": "2.0.4",
-  "description": "Claw-Empire - AI Agent Company Simulation. Command your CLI agent empire from the CEO desk.",
+  "description": "DonggriCompany - local-first AI company operations platform derived from Claw-Empire.",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "migrate:v1.0.5": "node scripts/auto-apply-v1.0.5.mjs",

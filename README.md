@@ -1,4 +1,4 @@
-﻿# DonggriCompany
+# DonggriCompany
 
 DonggriCompany는 로컬 PC에서 CEO 지시를 프로젝트 단위로 접수하고, 에이전트 조직에 분배하고, 실행/리뷰/보고까지 추적하는 AI 회사 운영 플랫폼입니다.
 
@@ -18,43 +18,62 @@ flowchart LR
 
 - CEO 지시 접수: `$` 지시와 일반 채팅을 프로젝트 문맥에 묶어서 처리합니다.
 - 프로젝트 관리: 기존 프로젝트 선택, 신규 프로젝트 생성, GitHub 저장소 생성/클론 흐름을 지원합니다.
-- 에이전트 조직 운영: 부서, 직급, canonical identity, CLI provider, 계정 풀, 스킬/프롬프트 프로필을 관리합니다.
+- 에이전트 조직 운영: 7개 canonical 부서, 19명 활성 직원, 직급, CLI provider, 계정 풀, 스킬/프롬프트 프로필을 관리합니다.
 - PMO 분업 흐름: 지시를 태스크/서브태스크로 나누고 부서/에이전트에게 배정합니다.
+- 자동 라우팅: 프로젝트, workflow pack, 부서, 담당 직원, specialist subagent를 서버 resolver가 결정합니다.
 - canonical 정책: provider/model override, workflow pack, legacy role 값을 실행 결정 소스가 아니라 compatibility 정보로 낮춥니다.
 - 리뷰/승인 게이트: quorum, authority, approval gate 부족 시 hard block을 걸고 `workflow_meta_json.review_consent`에 사유를 남깁니다.
 - 단일 텔레그램 그룹 보고: 모든 부서 보고를 하나의 텔레그램 그룹으로 보내고, 메시지 헤더 `[부서][task_id][상태]`로 구분합니다.
 - Codex 다중 인증풀: 호스트 로컬 `codex auth list/check/report` 기반 계정 풀 상태를 운영 화면에서 확인합니다.
 - Workflow Pack Inspector: workflow pack은 read-only projection으로 보고, 설정 write source로 쓰지 않습니다.
 - Canonical Policy Inspector: routing, governance, model tier, approval gate, validation, reload/rollback 상태를 확인합니다.
-- Docker 운영: 로컬 데이터 볼륨을 보존하면서 `docker compose up -d --build`로 재기동합니다.
+- Docker 운영: 런타임 데이터를 소스 저장소 밖에 보존하면서 `docker compose up -d --build`로 재기동할 수 있습니다.
 
 ## 주요 화면
 
-- Dashboard: 회사/프로젝트/태스크 상태 요약
-- Task Board: inbox, planned, in progress, review, done 흐름 관리
-- Chat / CEO Room: 지시 입력, 프로젝트 채널형 대화, 에이전트 응답 확인
-- Agent Manager: 직원 추가/수정, 부서/직급/능력치/CLI 계정 풀 관리
-- Office View: 부서/직원 상태를 사무실 형태로 표시
-- Project Manager: 프로젝트 생성, GitHub 연동, project staffing overlay, 진행 차트 확인
-- Settings: canonical inspector, workflow pack inspector, API/CLI/OAuth/Telegram 설정 관리
+- Manual: 서버 실행, 업무 등록, 직원 운영, Skill/모듈 적용, 품질 증거 관리 절차를 한 화면에 정리합니다.
+- Dashboard: 회사/프로젝트/태스크/provider 상태를 요약합니다.
+- Office View: 1F shared, 2F strategy, 3F production, 4F quality/operations 구조로 부서와 직원을 표시합니다.
+- Agent Manager: 직원 추가/수정, 부서/직급/능력치/CLI 계정 풀을 관리합니다.
+- Skill Library: Codex와 직원 작업에 연결되는 Skill 문서를 검색하고 상태를 확인합니다.
+- Modules: Google OAuth, NotebookLM import, 디자인 워크스페이스 같은 기능 패키지를 관리합니다.
+- Department Components: 부서별 책임 컴포넌트와 workflow pack 연결 상태를 확인합니다.
+- Task Board: inbox, planned, in progress, review, done 흐름을 관리합니다.
+- Settings: canonical inspector, workflow pack inspector, API/CLI/OAuth/Telegram 설정을 관리합니다.
+
+## 화면 캡처
+
+아래 이미지는 Browser Use로 `http://127.0.0.1:8800`의 실제 앱 화면을 캡처해 `docs/assets/readme/`에 저장한 것입니다.
+
+| Manual | Dashboard | Office View |
+|---|---|---|
+| <img src="docs/assets/readme/manual.png" alt="Donggri 운영 메뉴얼 화면" width="100%"> | <img src="docs/assets/readme/dashboard.png" alt="Donggri 대시보드 화면" width="100%"> | <img src="docs/assets/readme/office-view.png" alt="Donggri 오피스 화면" width="100%"> |
+
+| Agent Manager | Skill Library | Modules |
+|---|---|---|
+| <img src="docs/assets/readme/agent-manager.png" alt="직원 관리 화면" width="100%"> | <img src="docs/assets/readme/skills-library.png" alt="Skill 문서고 화면" width="100%"> | <img src="docs/assets/readme/modules-library.png" alt="모듈 화면" width="100%"> |
+
+| Department Components | Task Board | Settings |
+|---|---|---|
+| <img src="docs/assets/readme/department-components.png" alt="부서별 컴포넌트 화면" width="100%"> | <img src="docs/assets/readme/task-board.png" alt="업무 관리 화면" width="100%"> | <img src="docs/assets/readme/settings.png" alt="설정 화면" width="100%"> |
 
 ## 조직 모델
 
-기본 조직은 부서형 운영을 기준으로 설계되어 있습니다.
+현재 기본 조직은 7개 canonical 부서와 19명 활성 직원을 기준으로 설계되어 있습니다.
 
-- `development`: 프론트엔드/백엔드 구현
-- `planning-architecture`: 기획 및 설계
-- `ui-ux`: UI/UX 설계
-- `cicd-repo`: GitHub 저장소 생성, 브랜치, PR, 병합, 배포 흐름
-- `management`: 운영 상태 관리
-- `pmo`: CEO 지시 정리와 분배
-- `qa`: 테스트와 회귀 검증
-- `bloggent`: Bloggent CLI 기반 콘텐츠 운영
-- `api-research`: 무료 토큰/API 범위 내 조사
-- `security-approval`: 보안/승인 게이트
-- `knowledge-docs`: STATUS, KANBAN, GANTT, DECISIONS 같은 문서 유지
+- `pmo`: CEO 지시 정리, 분배, 리스크와 일정 통제
+- `planning`: 제품 기획, 요구사항 정리, 설계 방향 수립
+- `dev`: 프론트엔드/백엔드/TypeScript/데이터 접근 구현
+- `design`: UI/UX, 접근성, 사용자-facing 화면 품질
+- `qa`: 테스트, 회귀 검증, 리뷰와 품질 증거 관리
+- `devsecops`: GitHub workflow, CI, 보안, 배포와 인프라 운영
+- `operations`: 문서, 고객/사용자 보고, 신뢰성, runbook 유지
 
-각 직원은 저장용 canonical key를 유지합니다. 한국어 UI에서는 사용자에게 보이는 라벨을 한국어로 표시하고, 비한국어는 영어로 fallback합니다.
+PMO는 `team_leader` 1명만 유지합니다. 나머지 6개 부서는 각각 `team_leader` 1명과 `senior` 2명을 유지합니다. `junior`는 성장/legacy compatibility 용도로만 남기고 기본 seed로 사용하지 않습니다.
+
+각 직원은 저장용 canonical key를 유지합니다. 한국어 UI에서는 사용자에게 보이는 라벨을 한국어로 표시하고, 내부 key, API field, DB 값, policy text는 영어 canonical을 유지합니다.
+
+Legacy department ID는 read-only alias입니다. 신규 seed, MD bundle, API payload, routing payload에는 사용하지 않습니다.
 
 ## 실행 정책
 
@@ -66,6 +85,7 @@ DonggriCompany의 실행 정책은 아래 원칙을 따릅니다.
 - `role`, `workflow_role`, `acts_as_planning_leader`는 compatibility mirror입니다.
 - `workflow_pack_key`는 쓰기 결정 소스가 아니라 read-only projection/표시 정보입니다.
 - PMO chair와 authority/quorum/gate 규칙은 canonical identity 기준으로 판단합니다.
+- 라우팅 신뢰도가 낮으면 사용자에게 임시 경로를 묻지 않고 PMO triage로 보냅니다.
 
 ## 텔레그램 보고
 
@@ -187,9 +207,9 @@ docker compose logs --tail 200 donggricompany
 
 ```powershell
 $api = Test-NetConnection -ComputerName 127.0.0.1 -Port 8790 -InformationLevel Quiet
-$web = Test-NetConnection -ComputerName 127.0.0.1 -Port 7777 -InformationLevel Quiet
+$web = Test-NetConnection -ComputerName 127.0.0.1 -Port 8800 -InformationLevel Quiet
 "API_8790=$api"
-"WEB_7777=$web"
+"WEB_8800=$web"
 ```
 
 Docker socket은 기본 compose에서 사용하지 않습니다. runner가 Docker를 직접 제어해야 할 때만 전용 override를 사용합니다.
@@ -221,7 +241,7 @@ Docker 운영에서는 호스트의 `.codex/multi-auth` 저장소를 read-only�
 4. `/api/inbox` 또는 `/api/directives`로 지시를 등록합니다.
 5. 서버가 태스크 생성, 분업, 실행, 리뷰, 보고를 이어갑니다.
 
-`#`로 시작하는 요청은 직접 실행하지 않고 task board에 등록한 뒤 적절한 에이전트에게 분배하는 흐름으로 처리합니다.
+`#`로 시작하는 요청은 직접 실행하지 않고 task board에 등록한 뒤 자동 라우팅 resolver가 프로젝트와 담당 조직을 결정합니다.
 
 ## API 요약
 
@@ -236,6 +256,7 @@ Docker 운영에서는 호스트의 `.codex/multi-auth` 저장소를 read-only�
 - `POST /api/projects`
 - `GET /api/agents`
 - `POST /api/agents`
+- `GET /api/departments`
 - `GET /api/messenger/sessions`
 - `POST /api/messenger/send`
 - `POST /api/inbox`
@@ -243,6 +264,7 @@ Docker 운영에서는 호스트의 `.codex/multi-auth` 저장소를 read-only�
 - `POST /api/company/routing/preview`
 - `POST /api/company/reload-canonical-rules`
 - `GET /api/workflow-packs`
+- `GET /api/cli-status`
 
 보호 API는 세션 인증 또는 bearer token이 필요합니다.
 
@@ -293,6 +315,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8790/api/health" | ConvertTo-Json -Comp
 - `agents/`의 실제 기본 직원/부서 가이드
 - `scripts/`
 - `docs/`
+- `docs/assets/readme/`의 README용 UI 캡처
 - 설정/테스트 파일
 
 커밋 제외:
@@ -302,6 +325,8 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8790/api/health" | ConvertTo-Json -Comp
 - `logs/`
 - `test-results/`
 - `.tmp/`
+- `coverage/`
+- `dist/`
 - `agents/archive/`
 - `agents/ci_*`
 - `agents/e2e*`
@@ -346,6 +371,3 @@ corepack pnpm build; corepack pnpm test; docker compose config only after explic
 - Keep generated/heavy folders out of Codex scans and Git changes.
 - Use `docs/QUALITY_LOG.md` for traceable work records.
 <!-- END DONGGRI_DEV_DRIVE_STANDARD -->
-
-
-

@@ -6,14 +6,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ExpectedRepoRoot = "<PROJECT_ROOT>"
-$ExpectedCodexHome = "<RUNTIME_ROOT>\DonggriCompany\.codex-homes\DonggriCompany"
-
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
-$ExpectedRepoRootResolved = (Resolve-Path -LiteralPath $ExpectedRepoRoot).Path
-
-if ($RepoRoot -ne $ExpectedRepoRootResolved) {
-  throw "This wrapper must run from $ExpectedRepoRootResolved, but resolved $RepoRoot."
+$ExpectedCodexHome = if ([string]::IsNullOrWhiteSpace($env:DONGGRI_CODEX_HOME)) {
+  Join-Path $RepoRoot ".codex-home"
+} else {
+  $env:DONGGRI_CODEX_HOME
 }
 
 $AgentsPath = Join-Path $RepoRoot "AGENTS.md"

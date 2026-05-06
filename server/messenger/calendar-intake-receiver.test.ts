@@ -98,7 +98,7 @@ function createTestDb(options?: { oauth?: boolean; messenger?: boolean; row?: bo
       "hash",
       "# PRN\n\n## requirements\n\n프로젝트 준비",
       "approval_pending",
-      "<PROJECT_ROOT>",
+      "C:\\path\\to\\DonggriCompany",
       Date.now(),
       Date.now(),
     );
@@ -120,7 +120,7 @@ async function importReceiver(dbPath: string) {
     CALENDAR_INTAKE_LOOKBACK_DAYS: "1",
     CALENDAR_INTAKE_LOOKAHEAD_DAYS: "60",
     CALENDAR_INTAKE_TELEGRAM_SESSION_KEY: "telegram:global",
-    CALENDAR_INTAKE_DEFAULT_PROJECT_PATH: "<PROJECT_ROOT>",
+    CALENDAR_INTAKE_DEFAULT_PROJECT_PATH: "C:\\path\\to\\DonggriCompany",
   };
   return import("./calendar-intake-receiver.ts");
 }

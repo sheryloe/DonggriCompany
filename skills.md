@@ -1,4 +1,4 @@
-﻿# skills.md
+# skills.md
 
 이 문서는 DonggriCompany의 캐릭터(아바타) 실행 규칙을 한국어 기준으로 정리한 운영 문서입니다.
 
@@ -98,7 +98,7 @@ corepack pnpm run test:web
 corepack pnpm run test:api
 
 # 통합 스모크
-$env:QA_API_AUTH_TOKEN="__CHANGE_ME__"
+$env:QA_API_AUTH_TOKEN="<API_AUTH_TOKEN>"
 node .\scripts\qa\prn-review-pipeline-smoke.mjs
 
 # 도커 재기동 및 상태 확인

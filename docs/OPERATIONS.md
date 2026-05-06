@@ -7,7 +7,7 @@
 - WSL: Linux-only tasks only
 - Project root: `<PROJECT_ROOT>`
 - Runtime root: `<RUNTIME_ROOT>`
-- Project runtime candidate: `<RUNTIME_ROOT>\DonggriCompany`
+- Project runtime candidate: `<PROJECT_RUNTIME_ROOT>`
 - Package cache root: `<PACKAGE_CACHE_ROOT>`
 - Storage/archive root: `<STORAGE_ROOT>`
 
@@ -35,7 +35,7 @@ docker compose logs --tail 100
 ## Runtime Layout
 
 - Docker Compose stores runtime state outside the source repo by default.
-- Host runtime root: `<RUNTIME_ROOT>\DonggriCompany`
+- Host runtime root: `<PROJECT_RUNTIME_ROOT>`
 - Container data path: `/app/data`
 - Container task worktree path: `/runtime/worktrees/DonggriCompany`
 - Compose variable: `DONGGRI_RUNTIME_ROOT` defaults to `../runtime/DonggriCompany`.

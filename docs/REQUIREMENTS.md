@@ -1,4 +1,4 @@
-﻿# REQUIREMENTS.md
+# REQUIREMENTS.md
 
 ## Purpose
 Maintain `DonggriCompany` under the Donggri Dev Drive operating baseline without losing project-specific rules or user changes.
@@ -18,5 +18,5 @@ Maintain `DonggriCompany` under the Donggri Dev Drive operating baseline without
 ## Project Snapshot
 - Summary: Donggri organization, Claw-Empire/Codex operations, workflow, and internal platform workspace.
 - Stack: pnpm, Vite, TypeScript, Node server modules, Docker Compose, VS Code extension.
-- Runtime candidate: `<RUNTIME_ROOT>\DonggriCompany`
+- Runtime candidate: `<PROJECT_RUNTIME_ROOT>`
 

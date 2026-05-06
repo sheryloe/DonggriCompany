@@ -352,7 +352,7 @@ This repository is maintained under the Donggri Dev Drive migration baseline.
 
 - Active project root: `<PROJECT_ROOT>`
 - Runtime root: `<RUNTIME_ROOT>`
-- Project runtime candidate: `<RUNTIME_ROOT>\DonggriCompany`
+- Project runtime candidate: `<PROJECT_RUNTIME_ROOT>`
 - Local bare Git server: `<LOCAL_GIT_SERVER_ROOT>`
 - Package cache root: `<PACKAGE_CACHE_ROOT>`
 - Storage/archive root: `<STORAGE_ROOT>`

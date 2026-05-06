@@ -1,10 +1,10 @@
-﻿<!-- BEGIN DONGGRI_DEV_DRIVE_STANDARD -->
+<!-- BEGIN DONGGRI_DEV_DRIVE_STANDARD -->
 # Donggri Dev Drive Operating Standard
 
 ## Active Roots
 - Project root: `<PROJECT_ROOT>`
 - Runtime root: `<RUNTIME_ROOT>`
-- Project runtime candidate: `<RUNTIME_ROOT>\DonggriCompany`
+- Project runtime candidate: `<PROJECT_RUNTIME_ROOT>`
 - Local bare Git server: `<LOCAL_GIT_SERVER_ROOT>`
 - Package cache root: `<PACKAGE_CACHE_ROOT>`
 - Storage/archive root: `<STORAGE_ROOT>`
@@ -15,7 +15,7 @@
 - The old D runtime root has been removed after backup and is not an active runtime root.
 - Do not add new active references to the legacy D roots.
 - Convert active project references to `<PROJECT_ROOT>`.
-- Convert active runtime references to `<RUNTIME_ROOT>` or `<RUNTIME_ROOT>\DonggriCompany`.
+- Convert active runtime references to `<RUNTIME_ROOT>` or `<PROJECT_RUNTIME_ROOT>`.
 
 ## Operating Rules
 - Default language for user-facing responses is Korean.

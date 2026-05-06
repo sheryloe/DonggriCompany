@@ -1,12 +1,16 @@
 [CmdletBinding()]
 param(
   [string]$BaseUrl = "http://127.0.0.1:8900",
-  [string]$ProjectRoot = "<PROJECT_ROOT>",
+  [string]$ProjectRoot = "",
   [switch]$SkipTaskStop
 )
 
 $ErrorActionPreference = "Stop"
 $script:ApiSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+  $ProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
+}
 
 function Invoke-ApiJson {
   param(

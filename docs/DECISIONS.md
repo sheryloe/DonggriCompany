@@ -1,4 +1,4 @@
-﻿# DECISIONS.md
+# DECISIONS.md
 
 ## 2026-05-06 - Adopt Donggri Dev Drive Active Roots
 
@@ -18,7 +18,7 @@
 ## 2026-05-06 - Source and Runtime Separation
 
 - Background: Docker DB/logs/OAuth state and task worktrees were stored under the source checkout.
-- Decision: Store DonggriCompany runtime state under `<RUNTIME_ROOT>\DonggriCompany` and use `/runtime/worktrees/DonggriCompany` inside the container.
+- Decision: Store DonggriCompany runtime state under `<PROJECT_RUNTIME_ROOT>` and use `/runtime/worktrees/DonggriCompany` inside the container.
 - Reason: Keeps source Git state clean while preserving runtime data and isolated task worktrees.
 - Impact: Compose uses `DONGGRI_RUNTIME_ROOT`; task execution uses `WORKTREE_BASE_DIR`.
 - Alternatives: Keep `./data` and `.climpire-worktrees` under the repo; rejected because automated runs pollute the source checkout.

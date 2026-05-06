@@ -365,6 +365,7 @@ test.describe("CI coverage gap expansion", () => {
       const assignRes = await request.post(`/api/tasks/${taskId}/assign`, {
         data: {
           agent_id: leaderId,
+          override_reason: "CI verifies audited manual assignment override contract.",
         },
       });
       const assignJson = await expectOkJson<{ ok: boolean; task: Task }>(assignRes, "POST /api/tasks/:id/assign");

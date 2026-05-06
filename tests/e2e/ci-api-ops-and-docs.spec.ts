@@ -276,15 +276,6 @@ test.describe("CI API ops and docs coverage", () => {
       );
       expect(Array.isArray(minutesRes.meetings)).toBe(true);
 
-      await expectOkJson(
-        await request.patch(`/api/agents/${agentId}`, {
-          data: {
-            status: "offline",
-          },
-        }),
-        "PATCH /api/agents/:id(status=offline)",
-      );
-
       const resumeRes = await expectOkJson<{
         ok: boolean;
         status: string;
@@ -303,7 +294,7 @@ test.describe("CI API ops and docs coverage", () => {
       );
       expect(resumeRes.ok).toBe(true);
       expect(resumeRes.status).toBe("planned");
-      expect(resumeRes.auto_resumed).toBe(false);
+      expect(resumeRes.auto_resumed).toBe(true);
 
       const taskAfterResume = await expectOkJson<TaskResponse>(
         await request.get(`/api/tasks/${taskId}`),

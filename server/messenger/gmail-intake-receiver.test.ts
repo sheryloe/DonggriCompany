@@ -98,7 +98,7 @@ function createTestDb(options?: { oauth?: boolean; messenger?: boolean; row?: bo
       "[]",
       "# PRN\n\n## requirements\n\n승인 테스트",
       "approval_pending",
-      "D:\\Donggri_Platform\\DonggriCompany",
+      "<PROJECT_ROOT>",
       Date.now(),
       Date.now(),
     );
@@ -120,7 +120,7 @@ async function importReceiver(dbPath: string) {
     GMAIL_INTAKE_LOOKBACK_DAYS: "14",
     GMAIL_INTAKE_MAX_ATTACHMENT_MB: "10",
     GMAIL_INTAKE_TELEGRAM_SESSION_KEY: "telegram:global",
-    GMAIL_INTAKE_DEFAULT_PROJECT_PATH: "D:\\Donggri_Platform\\DonggriCompany",
+    GMAIL_INTAKE_DEFAULT_PROJECT_PATH: "<PROJECT_ROOT>",
   };
   return import("./gmail-intake-receiver.ts");
 }

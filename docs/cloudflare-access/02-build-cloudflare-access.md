@@ -42,7 +42,7 @@ Access 사용 가능 계정
 DonggriCompany:
 
 ```text
-D:\Donggri_Platform\DonggriCompany
+<PROJECT_ROOT>
 docker-compose.yml
 .env
 data volume
@@ -66,7 +66,7 @@ SESSION_DURATION=8h
 `.env`는 로컬에만 둔다. 실제 secret은 아래 명령으로 생성한다.
 
 ```powershell
-Set-Location "D:\Donggri_Platform\DonggriCompany"
+Set-Location "<PROJECT_ROOT>"
 
 $apiToken = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()
 $inboxSecret = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()
@@ -92,7 +92,7 @@ OAUTH_BASE_URL=https://$appHostname
 안전한 백업:
 
 ```powershell
-Set-Location "D:\Donggri_Platform\DonggriCompany"
+Set-Location "<PROJECT_ROOT>"
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 Copy-Item ".\.env" ".\.env.backup-$stamp" -ErrorAction SilentlyContinue
 ```
@@ -111,7 +111,7 @@ ALLOWED_ORIGIN_SUFFIXES: ${ALLOWED_ORIGIN_SUFFIXES:-.ts.net}
 반영 후 실행:
 
 ```powershell
-Set-Location "D:\Donggri_Platform\DonggriCompany"
+Set-Location "<PROJECT_ROOT>"
 docker compose up -d --build
 docker compose ps
 Invoke-RestMethod -Uri "http://127.0.0.1:8900/api/health" | ConvertTo-Json -Compress
@@ -202,7 +202,7 @@ Docker도 Windows 시작 시 실행되도록 Docker Desktop 설정에서 자동 
 ### 9.1 로컬 health
 
 ```powershell
-Set-Location "D:\Donggri_Platform\DonggriCompany"
+Set-Location "<PROJECT_ROOT>"
 Invoke-RestMethod -Uri "http://127.0.0.1:8900/api/health" | ConvertTo-Json -Compress
 ```
 
@@ -253,7 +253,7 @@ cloudflared tunnel cleanup donggri-company
 로컬 서버 중지:
 
 ```powershell
-Set-Location "D:\Donggri_Platform\DonggriCompany"
+Set-Location "<PROJECT_ROOT>"
 docker compose down
 ```
 

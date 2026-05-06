@@ -113,7 +113,7 @@ Cloudflare Tunnel + Cloudflare Access를 통해 DonggriCompany 대시보드를 �
 PowerShell smoke:
 
 ```powershell
-Set-Location "D:\Donggri_Platform\DonggriCompany"
+Set-Location "<PROJECT_ROOT>"
 
 docker compose ps
 Invoke-RestMethod -Uri "http://127.0.0.1:8900/api/health" | ConvertTo-Json -Compress

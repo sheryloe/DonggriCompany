@@ -104,7 +104,7 @@ Deny:
 `.env`에 최소값을 둔다. 실제 값은 긴 랜덤 문자열로 넣고 문서/채팅에 출력하지 않는다.
 
 ```powershell
-Set-Location "D:\Donggri_Platform\DonggriCompany"
+Set-Location "<PROJECT_ROOT>"
 
 $apiToken = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()
 $inboxSecret = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLower()
@@ -129,7 +129,7 @@ ALLOWED_ORIGIN_SUFFIXES: ${ALLOWED_ORIGIN_SUFFIXES:-.ts.net}
 ### 2. 서버 실행
 
 ```powershell
-Set-Location "D:\Donggri_Platform\DonggriCompany"
+Set-Location "<PROJECT_ROOT>"
 docker compose up -d --build
 docker compose ps
 Invoke-RestMethod -Uri "http://127.0.0.1:8900/api/health" | ConvertTo-Json -Compress
@@ -180,7 +180,7 @@ Policy: Include email == <내 이메일>
 실행:
 
 ```powershell
-Set-Location "D:\Donggri_Platform\DonggriCompany"
+Set-Location "<PROJECT_ROOT>"
 docker compose up -d --build
 Invoke-RestMethod -Uri "http://127.0.0.1:8900/api/health" | ConvertTo-Json -Compress
 

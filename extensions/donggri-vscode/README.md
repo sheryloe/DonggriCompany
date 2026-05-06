@@ -14,7 +14,7 @@
 ## Run in PowerShell
 
 ```powershell
-cd D:\Donggri_Platform\DonggriCompany
+cd <PROJECT_ROOT>
 corepack pnpm install
 corepack pnpm start
 ```
@@ -22,7 +22,7 @@ corepack pnpm start
 Open a second PowerShell window for the extension:
 
 ```powershell
-cd D:\Donggri_Platform\DonggriCompany\extensions\donggri-vscode
+cd <PROJECT_ROOT>\extensions\donggri-vscode
 corepack pnpm install
 corepack pnpm compile
 corepack pnpm test
@@ -31,7 +31,7 @@ corepack pnpm test
 ## F5 workflow
 
 1. Start the DonggriCompany server from the repository root.
-2. Open `D:\Donggri_Platform\DonggriCompany\extensions\donggri-vscode` in VS Code.
+2. Open `<PROJECT_ROOT>\extensions\donggri-vscode` in VS Code.
 3. Press `F5`.
 4. Wait for `Extension Development Host` to open.
 5. In the development host, open Chat and call `@donggri /bind`.

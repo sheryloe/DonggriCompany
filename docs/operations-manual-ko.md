@@ -13,7 +13,7 @@
 
 ### 1-1. 필수 환경 점검
 ```powershell
-Set-Location D:\Donggri_Platform\DonggriCompany
+Set-Location <PROJECT_ROOT>
 
 node -v
 pnpm -v
@@ -49,7 +49,7 @@ if ([string]::IsNullOrWhiteSpace($InboxSecret)) {
 ### 1-3. 서버 기동 + 헬스체크
 터미널 A:
 ```powershell
-Set-Location D:\Donggri_Platform\DonggriCompany
+Set-Location <PROJECT_ROOT>
 pnpm dev:local
 ```
 
@@ -194,7 +194,7 @@ $r
 
 428일 때 즉시 실행:
 ```powershell
-Set-Location D:\Donggri_Platform\DonggriCompany
+Set-Location <PROJECT_ROOT>
 powershell -ExecutionPolicy Bypass -File .\scripts\openclaw-setup.ps1
 ```
 

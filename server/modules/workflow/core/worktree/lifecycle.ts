@@ -190,9 +190,7 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
     })
       .toString()
       .trim();
-    const commonGitDir = path.isAbsolute(commonGitDirRaw)
-      ? commonGitDirRaw
-      : path.resolve(cwd, commonGitDirRaw);
+    const commonGitDir = path.isAbsolute(commonGitDirRaw) ? commonGitDirRaw : path.resolve(cwd, commonGitDirRaw);
     const excludePath = path.join(commonGitDir, "info", "exclude");
     fs.mkdirSync(path.dirname(excludePath), { recursive: true });
     const existing = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, "utf8") : "";

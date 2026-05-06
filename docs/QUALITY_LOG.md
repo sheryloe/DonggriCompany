@@ -35,3 +35,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Target tests, TypeScript, compose config, health check, and runtime worktree path check.
 - Risk: Existing OAuth refresh tokens in runtime DB may be expired; GitHub server OAuth remains a separate follow-up.
 - Follow-up: Commit these runtime separation changes only after user approval.
+
+## 2026-05-06 15:27 KST - GitHub CI Format Failure Fix
+
+- Request: Stop repeated GitHub Actions `CI` failures on `main`.
+- Change: Inspected the latest failed run and applied Prettier formatting to the worktree lifecycle module that failed `format:check`.
+- Changed files: `server/modules/workflow/core/worktree/lifecycle.ts`, `docs/QUALITY_LOG.md`.
+- Commands: `gh run view 25419489200 --log-failed`, `corepack pnpm exec prettier --write server/modules/workflow/core/worktree/lifecycle.ts`, direct Prettier check, targeted worktree lifecycle test, TypeScript check.
+- Validation: Prettier direct check passed, lifecycle API tests passed, TypeScript check passed, and `git diff --check` passed.
+- Risk: Local Windows `pnpm` shims under `node_modules/.bin` were missing after dependency reinstall, so direct package binaries were used for local verification; GitHub Ubuntu CI installs fresh dependencies and should use normal shims.
+- Follow-up: Commit and push after approval so GitHub Actions can re-run on `main`.

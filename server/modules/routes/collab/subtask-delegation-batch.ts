@@ -11,6 +11,7 @@ import { evaluateExecutionPathGate } from "../../workflow/core/execution-path-ga
 import type { Lang } from "../../../types/lang.ts";
 import { resolveWorkflowPackKeyForTask } from "../../workflow/packs/task-pack-resolver.ts";
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../workflow/core/video-skill-bootstrap.ts";
+import { resolveTaskWorktreeCandidatePaths } from "../../workflow/core/worktree/lifecycle.ts";
 import { resolveConstrainedAgentScopeForTask } from "../core/tasks/execution-run-auto-assign.ts";
 import type { AgentRow } from "./direct-chat.ts";
 import type { L10n } from "./language-policy.ts";
@@ -586,9 +587,10 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
             }>;
             const validSiblings: string[] = [];
             for (const sib of siblingRows) {
-              const shortId = sib.delegated_task_id.slice(0, 8);
-              const wtPath = path.join(projPath, ".climpire-worktrees", shortId);
-              if (fs.existsSync(wtPath)) {
+              const wtPath = resolveTaskWorktreeCandidatePaths(projPath, sib.delegated_task_id).find((candidate) =>
+                fs.existsSync(candidate),
+              );
+              if (wtPath) {
                 const deptLabel = sib.target_department_id
                   ? getDeptName(sib.target_department_id, parentTask.workflow_pack_key)
                   : "unknown";

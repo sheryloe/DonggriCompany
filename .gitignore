@@ -107,3 +107,13 @@ tools/ollama-image-local/outputs/
 * (1).*
 .env (1)
 * (1)
+
+# Donggri Dev Drive baseline
+!**/.env.example
+vendor/
+build/
+out/
+.next/
+.nuxt/
+.docker/
+docker-data/

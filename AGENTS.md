@@ -1,3 +1,52 @@
+﻿<!-- BEGIN DONGGRI_DEV_DRIVE_STANDARD -->
+# Donggri Dev Drive Operating Standard
+
+## Active Roots
+- Project root: `<PROJECT_ROOT>`
+- Runtime root: `<RUNTIME_ROOT>`
+- Project runtime candidate: `<RUNTIME_ROOT>\DonggriCompany`
+- Local bare Git server: `<LOCAL_GIT_SERVER_ROOT>`
+- Package cache root: `<PACKAGE_CACHE_ROOT>`
+- Storage/archive root: `<STORAGE_ROOT>`
+- Backup root pattern: `<WD_DRIVE>:\Donggri_Platform_Backup\projects\DonggriCompany\<YYYYMMDD-HHMMSS>`
+
+## Legacy Path Policy
+- The old D platform root has been removed after backup and is not an active project root.
+- The old D runtime root has been removed after backup and is not an active runtime root.
+- Do not add new active references to the legacy D roots.
+- Convert active project references to `<PROJECT_ROOT>`.
+- Convert active runtime references to `<RUNTIME_ROOT>` or `<RUNTIME_ROOT>\DonggriCompany`.
+
+## Operating Rules
+- Default language for user-facing responses is Korean.
+- Default OS is Windows and default shell is PowerShell.
+- Use WSL only for Linux-specific work.
+- Do not run Docker unless the user explicitly asks for Docker execution.
+- Do not run install/build/test commands as part of documentation-only work; document them as candidates in `README.md`.
+- Do not read or print real `.env` files.
+- Do not read or modify files whose names contain secret, token, credential, key, or password unless the user explicitly authorizes a safe targeted operation.
+- Do not scan generated/heavy folders such as `node_modules`, `.next`, `dist`, `build`, `coverage`, `.venv`, `venv`, `__pycache__`, `.cache`, `.pnpm-store`, `.turbo`, `.parcel-cache`, `.vite`, `out`, `target`, `bin`, or `obj`.
+- Present target files before modification when the change is non-trivial.
+- Keep the change set minimal and preserve unrelated user changes.
+- Do not rewrite Git history. Do not commit, push, reset, rebase, force push, delete branches, or stash without explicit request.
+- Treat `git pull --ff-only` as a candidate only when the worktree is clean; do not run it automatically.
+- Prefer updating `docs/QUALITY_LOG.md` after meaningful work.
+
+## Required Workflow
+1. inventory
+2. preview
+3. backup
+4. apply
+5. validation
+6. concise report
+
+## Project Notes
+- Summary: Donggri organization, Claw-Empire/Codex operations, workflow, and internal platform workspace.
+- Stack: pnpm, Vite, TypeScript, Node server modules, Docker Compose, VS Code extension.
+- Git: Git repository with devdrive and origin remotes.
+- Runtime note: Existing Claw-Empire orchestration rules remain project-specific rules; Dev Drive rules are additive.
+<!-- END DONGGRI_DEV_DRIVE_STANDARD -->
+
 <!-- BEGIN claw-empire orchestration rules -->
 
 # Claw-Empire Orchestration Rules
@@ -541,3 +590,5 @@ When processing `$` or `#` commands, the response to the user must be **minimal 
 ---
 
 <!-- END claw-empire orchestration rules -->
+
+

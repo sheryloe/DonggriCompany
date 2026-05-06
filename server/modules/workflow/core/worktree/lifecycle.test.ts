@@ -26,8 +26,14 @@ function initRepo(basePrefix: string): string {
 }
 
 const tempDirs: string[] = [];
+const originalWorktreeBaseDir = process.env.WORKTREE_BASE_DIR;
 
 afterEach(() => {
+  if (originalWorktreeBaseDir === undefined) {
+    delete process.env.WORKTREE_BASE_DIR;
+  } else {
+    process.env.WORKTREE_BASE_DIR = originalWorktreeBaseDir;
+  }
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (!dir) continue;
@@ -83,5 +89,28 @@ describe("worktree lifecycle branch collision handling", () => {
     tools.cleanupWorktree(repo, taskId);
     runGit(repo, ["worktree", "remove", occupiedPath, "--force"]);
     runGit(repo, ["branch", "-D", baseBranch]);
+  }, 20_000);
+
+  it("uses WORKTREE_BASE_DIR for isolated task worktrees when configured", () => {
+    const repo = initRepo("climpire-wt-runtime-repo-");
+    const runtimeWorktreeBase = fs.mkdtempSync(path.join(os.tmpdir(), "climpire-wt-runtime-base-"));
+    tempDirs.push(repo, runtimeWorktreeBase);
+    process.env.WORKTREE_BASE_DIR = runtimeWorktreeBase;
+
+    const shortId = "runtime1";
+    const taskId = `${shortId}-0000-0000-0000-000000000000`;
+    const taskWorktrees = new Map();
+    const tools = createWorktreeLifecycleTools({
+      appendTaskLog: () => {},
+      taskWorktrees,
+    });
+
+    const worktreePath = tools.createWorktree(repo, taskId, "Tester");
+    expect(worktreePath).toBe(path.join(runtimeWorktreeBase, shortId));
+    expect(fs.existsSync(String(worktreePath))).toBe(true);
+    expect(fs.existsSync(path.join(repo, ".climpire-worktrees"))).toBe(false);
+
+    tools.cleanupWorktree(repo, taskId);
+    expect(taskWorktrees.has(taskId)).toBe(false);
   }, 20_000);
 });

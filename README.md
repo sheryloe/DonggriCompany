@@ -1,4 +1,4 @@
-# DonggriCompany
+﻿# DonggriCompany
 
 DonggriCompany는 로컬 PC에서 CEO 지시를 프로젝트 단위로 접수하고, 에이전트 조직에 분배하고, 실행/리뷰/보고까지 추적하는 AI 회사 운영 플랫폼입니다.
 
@@ -148,6 +148,22 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8790/api/health" | ConvertTo-Json -Comp
 
 ## Docker 운영
 
+런타임 상태는 기본적으로 소스 저장소 밖에 보관합니다.
+
+- 호스트 런타임 루트: `..\runtime\DonggriCompany`
+- 컨테이너 DB/log 경로: `/app/data`
+- 컨테이너 작업 worktree 루트: `/runtime/worktrees/DonggriCompany`
+
+기존 `.\data` 기반 런타임을 처음 이관할 때는 대상이 없는 상태에서만 복사합니다.
+
+```powershell
+docker compose stop donggricompany
+New-Item -ItemType Directory -Force -Path ..\runtime\DonggriCompany | Out-Null
+Copy-Item .\data ..\runtime\DonggriCompany\data -Recurse
+Copy-Item .\data\office-accounts ..\runtime\DonggriCompany\office-accounts -Recurse
+New-Item -ItemType Directory -Force -Path ..\runtime\DonggriCompany\worktrees | Out-Null
+```
+
 시작/재빌드:
 
 ```powershell
@@ -262,8 +278,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8790/api/health" | ConvertTo-Json -Comp
 
 ## 데이터와 보존 정책
 
-- 기본 DB 경로: `data/claw-empire.sqlite`
+- 기본 Docker 호스트 DB 경로: `..\runtime\DonggriCompany\data\claw-empire.sqlite`
 - Docker DB 경로: `/app/data/claw-empire.sqlite`
+- 작업 worktree 경로: `..\runtime\DonggriCompany\worktrees`
 - DB, WAL, SHM 파일은 커밋하지 않습니다.
 - 복구가 필요한 경우 원본 DB와 sidecar 파일을 먼저 백업한 뒤 dump/import 또는 새 DB bootstrap을 수행합니다.
 
@@ -293,3 +310,42 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8790/api/health" | ConvertTo-Json -Comp
 ## License
 
 `LICENSE`를 참고하세요.
+
+<!-- BEGIN DONGGRI_DEV_DRIVE_STANDARD -->
+## Dev Drive Operating Baseline
+
+This repository is maintained under the Donggri Dev Drive migration baseline.
+
+- Active project root: `<PROJECT_ROOT>`
+- Runtime root: `<RUNTIME_ROOT>`
+- Project runtime candidate: `<RUNTIME_ROOT>\DonggriCompany`
+- Local bare Git server: `<LOCAL_GIT_SERVER_ROOT>`
+- Package cache root: `<PACKAGE_CACHE_ROOT>`
+- Storage/archive root: `<STORAGE_ROOT>`
+- The old D platform root has been removed after backup; use the G DevDrive project root.
+- The old D runtime root has been removed after backup; use the G DevDrive runtime root.
+
+### Stack Snapshot
+
+pnpm, Vite, TypeScript, Node server modules, Docker Compose, VS Code extension.
+
+### Command Preview
+
+The following commands are documentation candidates only. Do not run install/build/test/Docker commands unless the user explicitly asks for execution.
+
+```powershell
+Get-Location
+Get-ChildItem
+corepack pnpm build; corepack pnpm test; docker compose config only after explicit approval.
+```
+
+### Safety Rules
+
+- Do not read real `.env` files.
+- Do not commit secrets, tokens, credentials, keys, passwords, generated browser profiles, or runtime outputs.
+- Keep generated/heavy folders out of Codex scans and Git changes.
+- Use `docs/QUALITY_LOG.md` for traceable work records.
+<!-- END DONGGRI_DEV_DRIVE_STANDARD -->
+
+
+

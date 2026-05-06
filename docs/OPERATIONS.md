@@ -32,6 +32,15 @@ docker compose ps
 docker compose logs --tail 100
 ```
 
+## Runtime Layout
+
+- Docker Compose stores runtime state outside the source repo by default.
+- Host runtime root: `<RUNTIME_ROOT>\DonggriCompany`
+- Container data path: `/app/data`
+- Container task worktree path: `/runtime/worktrees/DonggriCompany`
+- Compose variable: `DONGGRI_RUNTIME_ROOT` defaults to `../runtime/DonggriCompany`.
+- App variable: `WORKTREE_BASE_DIR` defaults to `/runtime/worktrees/DonggriCompany`.
+
 ## Forbidden Without Explicit Approval
 
 ```powershell

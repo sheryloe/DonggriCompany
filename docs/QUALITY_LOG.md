@@ -55,3 +55,33 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Format, lint, OpenAPI, type check, build, and Playwright browser install passed in CI before the remaining E2E assertion was narrowed.
 - Risk: CI may expose further downstream E2E issues after these contract mismatches are fixed.
 - Follow-up: Push a follow-up commit and watch the next GitHub Actions run.
+
+## 2026-05-06 16:16 KST - Department Components MVP
+
+- Request: Implement a department-specific component tab with project-scoped history and office-room entry routing.
+- Change: Added the `departmentComponents` view, department component screen, design workspace flow, module manifest metadata, `project_component_events` storage/API, and design workspace module manifest.
+- Changed files: App navigation/layout files, `DepartmentComponentsView`, module API/schema/routes/tests, module manifest files, and related type/test files.
+- Commands: `corepack pnpm install --frozen-lockfile --force`, `corepack pnpm test:web -- DepartmentComponents`, `corepack pnpm test:web -- Sidebar.app-shell`, `corepack pnpm test:api -- modules`, `corepack pnpm build`, targeted Prettier check/write.
+- Validation: Department component UI tests passed, sidebar test passed, module API suite passed, and production build passed.
+- Risk: Local `node_modules` was missing pnpm-linked packages and binaries during verification; forced lockfile reinstall restored local shims without changing tracked lockfiles.
+- Follow-up: Add richer per-department data integrations when backend sources for PRs, builds, scans, SLOs, and QA runs are available.
+
+## 2026-05-06 17:00 KST - Department Components UI Operations Validation
+
+- Request: Rework the department component UI for operational usability, delete the current app project safely, create a runtime test project, and prove project-scoped events/tasks with screenshots.
+- Change: Removed the Live Ops rail from the department component view, widened the workbench into left component list/center work area/right history panels, changed design workspace into a wider operational layout, improved mobile wrapping, and hardened project deletion against existing FK references.
+- Changed files: `src/components/DepartmentComponentsView.tsx`, `src/app/AppHeaderBar.tsx`, `src/app/AppMainLayout.tsx`, `server/modules/routes/core/projects.ts`, `docs/QUALITY_LOG.md`.
+- Commands: Project delete/create API smoke, component event/task creation smoke, Playwright screenshots at `1440x960` and `390x844`, `corepack pnpm test:web -- DepartmentComponents`, `corepack pnpm test:web -- Sidebar.app-shell`, `corepack pnpm test:api -- modules`, `corepack pnpm build`.
+- Validation: Deleted app project `77bef962-f511-42bc-899d-09c50a85e826`; skipped folder deletion because `/workspace/DonggriCompany` was not a Windows-local path; created `<PROJECT_RUNTIME_ROOT>\department-components-test-20260506-074352`; generated PMO checkpoint event, design export event, and design task bound to the new project; screenshots showed no Live Ops rail, no horizontal overflow, and no console errors.
+- Risk: Long project paths are intentionally truncated with full path available in title/selector context; local pnpm `.bin` links disappeared during verification and required lockfile-safe reinstall.
+- Follow-up: Replace placeholder component metrics with real source integrations when PR/build/security/SLO/test-run feeds are connected.
+
+## 2026-05-06 17:20 KST - Decision Option Outcome Analysis
+
+- Request: Improve decision-making so each option, especially 1 and 2, shows detailed analysis and post-selection consequences.
+- Change: Added structured option analysis fields, generated fallback analysis for parsed agent decision requests, enriched workflow decision options for project review, timeout resume, and review rounds, and rendered rationale/result/risk/follow-up in the Decision Inbox UI.
+- Changed files: Decision Inbox server item builders/formatter/types, frontend API mapping, decision request parser, `DecisionInboxModal`, chat inline decision rendering, targeted tests, and `tasks/todo.md`.
+- Commands: `corepack pnpm exec prettier --write ...`, `corepack pnpm test:web -- decision-request decision-inbox`, `corepack pnpm test:api -- decision-inbox`, `corepack pnpm build`, `git diff --check`.
+- Validation: Web decision parser/inbox tests passed, API decision-inbox tests passed, production build passed, and whitespace check passed.
+- Risk: Generic fallback analysis for free-form agent messages is heuristic when the source message does not provide explicit consequences.
+- Follow-up: Let planner agents send explicit option analysis in their decision prompts so fallback text is needed less often.

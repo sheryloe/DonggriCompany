@@ -2,6 +2,7 @@ import { post, request } from "./core";
 
 import type {
   AssetJob,
+  ProjectComponentEvent,
   ProjectModuleApplyRun,
   ProjectModuleBinding,
   ProjectModuleManifest,
@@ -17,8 +18,32 @@ export interface ProjectModulePreviewInput {
   secret_refs?: Record<string, unknown>;
 }
 
-export async function getModules(category?: string): Promise<ProjectModuleManifest[]> {
-  const suffix = category ? `?category=${encodeURIComponent(category)}` : "";
+export interface ProjectModuleCatalogFilters {
+  category?: string;
+  departmentId?: string;
+}
+
+export interface ProjectComponentEventInput {
+  department_id: string;
+  component_key: string;
+  component_kind: string;
+  event_type: string;
+  title: string;
+  summary?: string;
+  payload?: Record<string, unknown>;
+  related_task_id?: string;
+  created_by?: string;
+}
+
+export async function getModules(filters?: string | ProjectModuleCatalogFilters): Promise<ProjectModuleManifest[]> {
+  const params = new URLSearchParams();
+  if (typeof filters === "string") {
+    if (filters) params.set("category", filters);
+  } else if (filters) {
+    if (filters.category) params.set("category", filters.category);
+    if (filters.departmentId) params.set("department_id", filters.departmentId);
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
   const response = await request<{ ok: boolean; modules: ProjectModuleManifest[] }>(`/api/modules${suffix}`);
   return response.modules;
 }
@@ -62,6 +87,31 @@ export async function getProjectModules(projectId: string): Promise<{
     apply_runs: ProjectModuleApplyRun[];
   }>(`/api/projects/${encodeURIComponent(projectId)}/modules`);
   return { bindings: response.bindings, apply_runs: response.apply_runs };
+}
+
+export async function getProjectComponentEvents(
+  projectId: string,
+  filters?: { departmentId?: string; componentKey?: string },
+): Promise<ProjectComponentEvent[]> {
+  const params = new URLSearchParams();
+  if (filters?.departmentId) params.set("department_id", filters.departmentId);
+  if (filters?.componentKey) params.set("component_key", filters.componentKey);
+  const query = params.toString();
+  const response = await request<{ ok: boolean; events: ProjectComponentEvent[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/component-events${query ? `?${query}` : ""}`,
+  );
+  return response.events;
+}
+
+export async function createProjectComponentEvent(
+  projectId: string,
+  input: ProjectComponentEventInput,
+): Promise<ProjectComponentEvent> {
+  const response = (await post(`/api/projects/${encodeURIComponent(projectId)}/component-events`, input)) as {
+    ok: boolean;
+    event: ProjectComponentEvent;
+  };
+  return response.event;
 }
 
 export async function applyProjectModule(

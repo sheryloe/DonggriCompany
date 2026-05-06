@@ -30,6 +30,15 @@ function seedProject(db: DatabaseSync, projectPath: string) {
   ).run(projectPath);
 }
 
+function seedSecondProject(db: DatabaseSync, projectPath: string) {
+  db.prepare(
+    `
+    INSERT INTO projects (id, name, project_path, core_goal, last_used_at, created_at, updated_at)
+    VALUES ('project-2', 'Second Module Project', ?, 'Separate component history.', 1, 1, 1)
+  `,
+  ).run(projectPath);
+}
+
 describe("project module routes", () => {
   let db: DatabaseSync | null = null;
   let projectDir = "";
@@ -57,6 +66,37 @@ describe("project module routes", () => {
       expect.arrayContaining([
         expect.objectContaining({ module_key: "google-oauth", category_key: "auth-provider" }),
         expect.objectContaining({ module_key: "sprite-4dir", category_key: "game-asset" }),
+      ]),
+    );
+  });
+
+  it("filters department component modules while keeping legacy manifests compatible", async () => {
+    const res = await request(app).get("/api/modules?department_id=design").expect(200);
+
+    expect(res.body.ok).toBe(true);
+    expect(res.body.modules).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          module_key: "design-workspace",
+          department_id: "design",
+          component_kind: "design_workspace",
+          project_scoped: true,
+        }),
+      ]),
+    );
+    expect(res.body.modules).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ module_key: "google-oauth" })]),
+    );
+
+    const catalog = await request(app).get("/api/modules").expect(200);
+    expect(catalog.body.modules).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          module_key: "google-oauth",
+          department_id: null,
+          entry_points: [],
+          project_scoped: false,
+        }),
       ]),
     );
   });
@@ -139,5 +179,59 @@ describe("project module routes", () => {
       engine: "imagegen_builtin",
     });
     expect(res.body.job.prompt_markdown).toContain("Approved results must be copied");
+  });
+
+  it("stores project component events with project isolation", async () => {
+    const secondProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), "donggri-module-test-second-"));
+    seedSecondProject(db!, secondProjectDir);
+    try {
+      await request(app)
+        .post("/api/projects/project-1/component-events")
+        .send({
+          department_id: "design",
+          component_key: "design-workspace",
+          component_kind: "design_workspace",
+          event_type: "snapshot",
+          title: "Hero draft v1",
+          summary: "Initial responsive pass",
+          payload: { breakpoint: "desktop" },
+        })
+        .expect(201);
+
+      await request(app)
+        .post("/api/projects/project-2/component-events")
+        .send({
+          department_id: "design",
+          component_key: "design-workspace",
+          component_kind: "design_workspace",
+          event_type: "export",
+          title: "Exported deck",
+          payload: { format: "pptx" },
+        })
+        .expect(201);
+
+      const projectOne = await request(app)
+        .get("/api/projects/project-1/component-events?department_id=design")
+        .expect(200);
+      const projectTwo = await request(app)
+        .get("/api/projects/project-2/component-events?department_id=design")
+        .expect(200);
+
+      expect(projectOne.body.events).toHaveLength(1);
+      expect(projectOne.body.events[0]).toMatchObject({
+        project_id: "project-1",
+        department_id: "design",
+        component_key: "design-workspace",
+        event_type: "snapshot",
+        payload: { breakpoint: "desktop" },
+      });
+      expect(projectTwo.body.events).toHaveLength(1);
+      expect(projectTwo.body.events[0]).toMatchObject({
+        project_id: "project-2",
+        event_type: "export",
+      });
+    } finally {
+      fs.rmSync(secondProjectDir, { recursive: true, force: true });
+    }
   });
 });

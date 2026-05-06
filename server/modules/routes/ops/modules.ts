@@ -14,6 +14,7 @@ const MODULE_CATEGORIES = new Set([
   "operations",
 ]);
 const IMAGE_MODULE_TYPES = new Set(["image_prompt_pack", "game_asset_pipeline"]);
+const DEPARTMENT_COMPONENT_IDS = new Set(["pmo", "planning", "dev", "design", "qa", "devsecops", "operations"]);
 
 export interface ModuleManifest {
   module_key: string;
@@ -28,6 +29,10 @@ export interface ModuleManifest {
   artifact_contract: Record<string, unknown>;
   license_policy: Record<string, unknown>;
   risk_level: "low" | "medium" | "high";
+  department_id?: string | null;
+  component_kind?: string | null;
+  entry_points?: string[];
+  project_scoped?: boolean;
   default_config?: Record<string, unknown>;
   prompt_pack?: Record<string, unknown>;
 }
@@ -58,6 +63,21 @@ interface ModulePreview {
   apply_required: boolean;
 }
 
+interface ProjectComponentEventRow {
+  id: string;
+  project_id: string;
+  department_id: string;
+  component_key: string;
+  component_kind: string;
+  event_type: string;
+  title: string;
+  summary: string | null;
+  payload_json: string;
+  related_task_id: string | null;
+  created_by: string | null;
+  created_at: number;
+}
+
 function readJsonFile(filePath: string): unknown {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
@@ -76,6 +96,21 @@ function validateModuleManifest(value: unknown, sourcePath: string): ModuleManif
   if (!manifest.module_type || typeof manifest.module_type !== "string") {
     throw new Error(`invalid_module_type:${manifest.module_key}`);
   }
+  if (
+    manifest.department_id != null &&
+    (typeof manifest.department_id !== "string" || !DEPARTMENT_COMPONENT_IDS.has(manifest.department_id))
+  ) {
+    throw new Error(`invalid_module_department:${manifest.module_key}`);
+  }
+  if (manifest.component_kind != null && typeof manifest.component_kind !== "string") {
+    throw new Error(`invalid_module_component_kind:${manifest.module_key}`);
+  }
+  if (manifest.entry_points != null && !Array.isArray(manifest.entry_points)) {
+    throw new Error(`invalid_module_entry_points:${manifest.module_key}`);
+  }
+  if (manifest.project_scoped != null && typeof manifest.project_scoped !== "boolean") {
+    throw new Error(`invalid_module_project_scoped:${manifest.module_key}`);
+  }
   if (!Array.isArray(manifest.capabilities)) throw new Error(`invalid_module_capabilities:${manifest.module_key}`);
   if (!Array.isArray(manifest.required_secrets)) throw new Error(`invalid_module_secrets:${manifest.module_key}`);
   if (!Array.isArray(manifest.required_runtime)) throw new Error(`invalid_module_runtime:${manifest.module_key}`);
@@ -92,6 +127,10 @@ function validateModuleManifest(value: unknown, sourcePath: string): ModuleManif
     artifact_contract: manifest.artifact_contract ?? {},
     license_policy: manifest.license_policy ?? { source: "pattern_reference_only" },
     risk_level: manifest.risk_level ?? "medium",
+    department_id: manifest.department_id ?? null,
+    component_kind: manifest.component_kind ?? null,
+    entry_points: Array.isArray(manifest.entry_points) ? manifest.entry_points.map((item) => String(item)) : [],
+    project_scoped: manifest.project_scoped ?? false,
     default_config: manifest.default_config ?? {},
     prompt_pack: manifest.prompt_pack,
   };
@@ -358,6 +397,23 @@ function rowToAssetJob(row: Record<string, unknown>) {
   };
 }
 
+function rowToProjectComponentEvent(row: ProjectComponentEventRow | Record<string, unknown>) {
+  return {
+    id: String(row.id),
+    project_id: String(row.project_id),
+    department_id: String(row.department_id),
+    component_key: String(row.component_key),
+    component_kind: String(row.component_kind),
+    event_type: String(row.event_type),
+    title: String(row.title),
+    summary: row.summary == null ? null : String(row.summary),
+    payload: safeJson(row.payload_json, {}),
+    related_task_id: row.related_task_id == null ? null : String(row.related_task_id),
+    created_by: row.created_by == null ? null : String(row.created_by),
+    created_at: Number(row.created_at ?? 0),
+  };
+}
+
 function safeJson(value: unknown, fallback: unknown): unknown {
   if (typeof value !== "string" || !value.trim()) return fallback;
   try {
@@ -461,7 +517,12 @@ export function registerModuleRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
   app.get("/api/modules", (req, res) => {
     try {
       const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
-      const modules = listDonggriModules().filter((module) => !category || module.category_key === category);
+      const departmentId = typeof req.query.department_id === "string" ? req.query.department_id.trim() : "";
+      const modules = listDonggriModules().filter((module) => {
+        if (category && module.category_key !== category) return false;
+        if (departmentId && module.department_id !== departmentId) return false;
+        return true;
+      });
       return res.json({ ok: true, modules });
     } catch (error) {
       return res.status(500).json({ error: "module_catalog_unavailable", detail: String(error) });
@@ -511,6 +572,81 @@ export function registerModuleRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
       .prepare("SELECT * FROM project_module_apply_runs WHERE project_id = ? ORDER BY created_at DESC LIMIT 50")
       .all(projectId) as Array<Record<string, unknown>>;
     return res.json({ ok: true, bindings: bindings.map(rowToBinding), apply_runs: runs.map(rowToApplyRun) });
+  });
+
+  app.get("/api/projects/:id/component-events", (req, res) => {
+    const projectId = String(req.params.id ?? "").trim();
+    if (!getProject(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    const departmentId = typeof req.query.department_id === "string" ? req.query.department_id.trim() : "";
+    const componentKey = typeof req.query.component_key === "string" ? req.query.component_key.trim() : "";
+    const clauses = ["project_id = ?"];
+    const values: string[] = [projectId];
+    if (departmentId) {
+      clauses.push("department_id = ?");
+      values.push(departmentId);
+    }
+    if (componentKey) {
+      clauses.push("component_key = ?");
+      values.push(componentKey);
+    }
+    const rows = db
+      .prepare(
+        `
+        SELECT * FROM project_component_events
+        WHERE ${clauses.join(" AND ")}
+        ORDER BY created_at DESC
+        LIMIT 100
+      `,
+      )
+      .all(...values) as unknown as ProjectComponentEventRow[];
+    return res.json({ ok: true, events: rows.map(rowToProjectComponentEvent) });
+  });
+
+  app.post("/api/projects/:id/component-events", (req, res) => {
+    const projectId = String(req.params.id ?? "").trim();
+    if (!getProject(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const departmentId = typeof body.department_id === "string" ? body.department_id.trim() : "";
+    const componentKey = typeof body.component_key === "string" ? body.component_key.trim() : "";
+    const componentKind = typeof body.component_kind === "string" ? body.component_kind.trim() : "";
+    const eventType = typeof body.event_type === "string" ? body.event_type.trim() : "";
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    if (!departmentId || !DEPARTMENT_COMPONENT_IDS.has(departmentId)) {
+      return res.status(400).json({ error: "department_id_required" });
+    }
+    if (!componentKey || !MODULE_KEY_RE.test(componentKey))
+      return res.status(400).json({ error: "component_key_required" });
+    if (!componentKind) return res.status(400).json({ error: "component_kind_required" });
+    if (!eventType) return res.status(400).json({ error: "event_type_required" });
+    if (!title) return res.status(400).json({ error: "title_required" });
+
+    const now = nowMs();
+    const id = randomUUID();
+    db.prepare(
+      `
+      INSERT INTO project_component_events (
+        id, project_id, department_id, component_key, component_kind, event_type, title, summary,
+        payload_json, related_task_id, created_by, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    ).run(
+      id,
+      projectId,
+      departmentId,
+      componentKey,
+      componentKind,
+      eventType,
+      title,
+      typeof body.summary === "string" ? body.summary : null,
+      JSON.stringify(parseObject(body.payload)),
+      typeof body.related_task_id === "string" ? body.related_task_id : null,
+      typeof body.created_by === "string" ? body.created_by : null,
+      now,
+    );
+    const row = db.prepare("SELECT * FROM project_component_events WHERE id = ?").get(id) as
+      | ProjectComponentEventRow
+      | undefined;
+    return res.status(201).json({ ok: true, event: row ? rowToProjectComponentEvent(row) : null });
   });
 
   app.post("/api/projects/:id/modules/:bindingId/apply", (req, res) => {

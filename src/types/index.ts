@@ -301,8 +301,27 @@ export interface ProjectModuleManifest {
   artifact_contract: Record<string, unknown>;
   license_policy: Record<string, unknown>;
   risk_level: ProjectModuleRiskLevel;
+  department_id?: string | null;
+  component_kind?: string | null;
+  entry_points?: string[];
+  project_scoped?: boolean;
   default_config?: Record<string, unknown>;
   prompt_pack?: Record<string, unknown>;
+}
+
+export interface ProjectComponentEvent {
+  id: string;
+  project_id: string;
+  department_id: string;
+  component_key: string;
+  component_kind: string;
+  event_type: string;
+  title: string;
+  summary: string | null;
+  payload: Record<string, unknown>;
+  related_task_id: string | null;
+  created_by: string | null;
+  created_at: number;
 }
 
 export interface ProjectModuleArtifactDelta {

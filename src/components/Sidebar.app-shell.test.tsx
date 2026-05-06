@@ -119,7 +119,17 @@ describe("Sidebar app shell", () => {
       </I18nProvider>,
     );
 
-    for (const label of ["오피스", "직원 관리", "Skill 문서고", "모듈", "메뉴얼", "대시보드", "업무 관리", "설정"]) {
+    for (const label of [
+      "오피스",
+      "직원 관리",
+      "Skill 문서고",
+      "모듈",
+      "부서별 컴포넌트",
+      "메뉴얼",
+      "대시보드",
+      "업무 관리",
+      "설정",
+    ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
 
@@ -130,7 +140,7 @@ describe("Sidebar app shell", () => {
     }
     expect(screen.getByText("연결됨")).toBeInTheDocument();
     expect(screen.getByText("직원 1/2 근무 중")).toBeInTheDocument();
-    expect(container.querySelectorAll("nav .sidebar-nav-icon")).toHaveLength(8);
+    expect(container.querySelectorAll("nav .sidebar-nav-icon")).toHaveLength(9);
     expect(container.querySelectorAll("nav .sidebar-nav-icon img")).toHaveLength(0);
   });
 });

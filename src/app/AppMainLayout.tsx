@@ -34,6 +34,7 @@ const TaskBoard = lazy(() => import("../components/TaskBoard"));
 const AgentManager = lazy(() => import("../components/AgentManager"));
 const SkillsLibrary = lazy(() => import("../components/SkillsLibrary"));
 const ModulesLibrary = lazy(() => import("../components/ModulesLibrary"));
+const DepartmentComponentsView = lazy(() => import("../components/DepartmentComponentsView"));
 const ManualLibrary = lazy(() => import("../components/ManualLibrary"));
 const SettingsPanel = lazy(() => import("../components/SettingsPanel"));
 
@@ -99,6 +100,9 @@ interface AppMainLayoutProps {
   onOpenActiveMeetingMinutes: (taskId: string) => void;
   onSelectAgent: (agent: Agent) => void;
   onSelectDepartment: (department: Department) => void;
+  activeDepartmentComponentId: string;
+  onChangeDepartmentComponent: (departmentId: string) => void;
+  onOpenDepartmentChat: (department: Department) => void;
   onCreateTask: (input: {
     title: string;
     description?: string;
@@ -172,6 +176,9 @@ export default function AppMainLayout({
   onOpenActiveMeetingMinutes,
   onSelectAgent,
   onSelectDepartment,
+  activeDepartmentComponentId,
+  onChangeDepartmentComponent,
+  onOpenDepartmentChat,
   onCreateTask,
   onUpdateTask,
   onDeleteTask,
@@ -401,7 +408,7 @@ export default function AppMainLayout({
             </div>
           )}
 
-          <div className="app-main-grid p-3 sm:p-4 lg:p-6">
+          <div className={view === "departmentComponents" ? "p-3 sm:p-4 lg:p-6" : "app-main-grid p-3 sm:p-4 lg:p-6"}>
             <div className="min-w-0">
               <Suspense
                 fallback={<div className="command-panel px-4 py-6 text-sm text-slate-300">{viewLoadingLabel}</div>}
@@ -471,6 +478,18 @@ export default function AppMainLayout({
 
                 {view === "modules" && <ModulesLibrary />}
 
+                {view === "departmentComponents" && (
+                  <DepartmentComponentsView
+                    departments={displayDepartments}
+                    agents={displayAgents}
+                    tasks={tasks}
+                    activeDepartmentId={activeDepartmentComponentId}
+                    onActiveDepartmentChange={onChangeDepartmentComponent}
+                    onCreateTask={handleCreateTaskForActivePack}
+                    onOpenDepartmentChat={onOpenDepartmentChat}
+                  />
+                )}
+
                 {view === "manual" && <ManualLibrary />}
 
                 {view === "settings" && (
@@ -490,7 +509,9 @@ export default function AppMainLayout({
                 )}
               </Suspense>
             </div>
-            <LiveOperationsRail agents={displayAgents} tasks={tasksForActivePack} connected={connected} />
+            {view !== "departmentComponents" && (
+              <LiveOperationsRail agents={displayAgents} tasks={tasksForActivePack} connected={connected} />
+            )}
           </div>
         </main>
 

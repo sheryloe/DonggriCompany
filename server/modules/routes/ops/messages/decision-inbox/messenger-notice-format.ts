@@ -54,6 +54,13 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
     return truncateLine(firstClause, 70);
   }
 
+  function summarizeDecisionOptionOutcome(option: DecisionInboxRouteItem["options"][number]): string {
+    const expectedResult = normalizeTextField(option.analysis?.expected_result);
+    if (expectedResult) return summarizeDecisionText(expectedResult, 110);
+    const { title, detail } = splitDecisionLabel(option.label || option.action || "-");
+    return summarizeDecisionOptionStance(detail || title);
+  }
+
   function extractSummaryClauses(summary: string, maxClauses = 4): string[] {
     const deduped: string[] = [];
     const seen = new Set<string>();
@@ -81,7 +88,12 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
     const nonSkipOptions = item.options.filter((option) => !isSkipOption(option));
     for (const option of nonSkipOptions.slice(0, 3)) {
       const { title, detail } = splitDecisionLabel(option.label || option.action || "-");
-      lines.push(truncateLine(`${title} - ${summarizeDecisionOptionStance(detail || title)}`, 95));
+      lines.push(
+        truncateLine(
+          `${title} - ${summarizeDecisionOptionOutcome(option) || summarizeDecisionOptionStance(detail || title)}`,
+          95,
+        ),
+      );
     }
     if (lines.length < 3) {
       lines.push(
@@ -131,9 +143,9 @@ export function createDecisionNoticeFormatter(deps: NoticeFormatterDeps) {
     ];
   }
 
-  function buildDecisionOptionPreview(option: { number: number; label: string; action: string }): string {
+  function buildDecisionOptionPreview(option: DecisionInboxRouteItem["options"][number]): string {
     const { title, detail } = splitDecisionLabel(option.label || option.action || "-");
-    return `${option.number}. ${truncateLine(`${title}: ${summarizeDecisionOptionStance(detail || title)}`, 92)}`;
+    return `${option.number}. ${truncateLine(`${title}: ${summarizeDecisionOptionOutcome(option) || summarizeDecisionOptionStance(detail || title)}`, 92)}`;
   }
 
   function resolvePlanningLeadName(item: DecisionInboxRouteItem): string {

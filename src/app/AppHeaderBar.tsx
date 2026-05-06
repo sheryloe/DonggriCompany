@@ -170,7 +170,7 @@ export default function AppHeaderBar({
               />
             </span>
           )}
-          <span className="truncate text-slate-50">{viewTitle}</span>
+          <span className="truncate text-slate-50 max-[430px]:hidden">{viewTitle}</span>
         </h1>
         {currentView === "manual" && (
           <button type="button" onClick={focusManualSearch} className="manual-header-search">

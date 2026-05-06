@@ -15,12 +15,17 @@
   "class_path": "dev > architect > engineering.lead",
   "promotion_policy": "{\"mode\":\"manual\",\"from_role\":\"senior\",\"to_role\":\"team_leader\",\"notes\":\"team_leader manual only\"}",
   "visual_profile_key": "agent-visual-11",
-  "preferred_subagents": ["backend-developer", "frontend-developer", "typescript-pro", "database-optimizer"],
+  "preferred_subagents": [
+    "backend-developer",
+    "frontend-developer",
+    "typescript-pro",
+    "database-optimizer"
+  ],
   "stats_tasks_done": 0,
   "stats_xp": 0,
   "memory_snapshot": [],
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-05-02T04:59:14.370Z"
+  "updated_at": "2026-05-06T07:19:35.935Z"
 }

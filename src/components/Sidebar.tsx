@@ -18,6 +18,7 @@ const NAV_ITEMS: Array<{ view: View; mark: string; label: string }> = [
   { view: "agents", mark: "AG", label: "직원 관리" },
   { view: "skills", mark: "SK", label: "Skill 문서고" },
   { view: "modules", mark: "MO", label: "모듈" },
+  { view: "departmentComponents", mark: "DC", label: "부서별 컴포넌트" },
   { view: "manual", mark: "MN", label: "메뉴얼" },
   { view: "dashboard", mark: "DB", label: "대시보드" },
   { view: "tasks", mark: "TS", label: "업무 관리" },

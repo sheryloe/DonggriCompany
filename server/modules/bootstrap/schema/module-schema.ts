@@ -62,5 +62,27 @@ CREATE TABLE IF NOT EXISTS asset_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_asset_jobs_project ON asset_jobs(project_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_asset_jobs_module ON asset_jobs(module_key, status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS project_component_events (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  department_id TEXT NOT NULL,
+  component_key TEXT NOT NULL,
+  component_kind TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  related_task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+  created_by TEXT,
+  created_at INTEGER DEFAULT (unixepoch()*1000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_component_events_project
+  ON project_component_events(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_project_component_events_department
+  ON project_component_events(project_id, department_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_project_component_events_component
+  ON project_component_events(project_id, component_key, created_at DESC);
   `);
 }

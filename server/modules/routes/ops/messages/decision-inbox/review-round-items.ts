@@ -4,6 +4,7 @@ import type {
   ReviewRoundDecisionItems,
   ReviewRoundReviewerVerdict,
 } from "./types.ts";
+import { buildDecisionOptionAnalysis } from "./option-analysis.ts";
 
 const DECISION_COLLECTING_STALE_MS = 20_000;
 
@@ -319,7 +320,7 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
       const previousBlockerCount = getPreviousRoundBlockerCount(row.task_id, row.meeting_round);
       const blockerDelta = previousBlockerCount === null ? null : blockerCount - previousBlockerCount;
 
-      const options = [
+      const optionsBase = [
         {
           number: 1,
           action: "apply_all_feedback",
@@ -336,6 +337,18 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
           label: t(lang, "최종판정으로 진행", "Proceed To Final Verdict", "最終判定へ進行", "进入最终判定"),
         },
       ];
+      const options = optionsBase.map((option) => ({
+        ...option,
+        analysis: buildDecisionOptionAnalysis({
+          kind: "review_round_pick",
+          number: option.number,
+          action: option.action,
+          label: option.label,
+          t: (ko, en, ja, zh) => t(lang, ko, en, ja, zh),
+          blockerCount,
+          reviewRound: row.meeting_round,
+        }),
+      }));
 
       const summary = t(
         lang,

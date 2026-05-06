@@ -15,12 +15,16 @@
   "class_path": "operations > memory-manager > operations.control",
   "promotion_policy": "{\"mode\":\"manual\",\"from_role\":\"senior\",\"to_role\":\"team_leader\",\"notes\":\"team_leader manual only\"}",
   "visual_profile_key": "agent-visual-31",
-  "preferred_subagents": ["documentation-engineer", "customer-success-manager", "sre-engineer"],
-  "stats_tasks_done": 0,
-  "stats_xp": 0,
+  "preferred_subagents": [
+    "documentation-engineer",
+    "customer-success-manager",
+    "sre-engineer"
+  ],
+  "stats_tasks_done": 1,
+  "stats_xp": 10,
   "memory_snapshot": [],
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-05-02T04:59:14.450Z"
+  "updated_at": "2026-05-06T07:19:36.058Z"
 }

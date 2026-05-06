@@ -124,12 +124,26 @@ export function createDecisionInboxMessengerBridge(deps: DecisionBridgeDeps) {
       .replace(/\s+/g, " ")
       .trim();
     const optionBlock = item.options
-      .map(
-        (option) =>
-          `${option.number}:${option.action}:${String(option.label || "")
-            .replace(/\s+/g, " ")
-            .trim()}`,
-      )
+      .map((option) => {
+        const label = String(option.label || "")
+          .replace(/\s+/g, " ")
+          .trim();
+        const analysis = option.analysis
+          ? [
+              option.analysis.rationale,
+              option.analysis.expected_result,
+              option.analysis.risk,
+              option.analysis.follow_up,
+            ]
+              .map((value) =>
+                String(value || "")
+                  .replace(/\s+/g, " ")
+                  .trim(),
+              )
+              .join(">")
+          : "";
+        return `${option.number}:${option.action}:${label}:${analysis}`;
+      })
       .join("|");
     const raw = [
       item.id,

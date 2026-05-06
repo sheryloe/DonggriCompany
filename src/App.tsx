@@ -85,6 +85,7 @@ export default function App() {
   const [decisionReplyBusyKey, setDecisionReplyBusyKey] = useState<string | null>(null);
   const [activeRoomThemeTargetId, setActiveRoomThemeTargetId] = useState<string | null>(null);
   const [customRoomThemes, setCustomRoomThemes] = useState<RoomThemeMap>(() => initialRoomThemes.themes);
+  const [activeDepartmentComponentId, setActiveDepartmentComponentId] = useState<string>("pmo");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileHeaderMenuOpen, setMobileHeaderMenuOpen] = useState(false);
   const [officePackBootstrappingLabel, setOfficePackBootstrappingLabel] = useState<string | null>(null);
@@ -272,6 +273,16 @@ export default function App() {
     [activePackKey, agents],
   );
 
+  const handleOpenDepartmentChat = useCallback(
+    (department: Department) => {
+      const leader =
+        overlayAgents.find((agent) => agent.department_id === department.id && agent.role === "team_leader") ??
+        undefined;
+      if (leader) actions.handleOpenChat(leader);
+    },
+    [actions, overlayAgents],
+  );
+
   if (loading) {
     return (
       <AppLoadingScreen language={labels.uiLanguage} title={labels.loadingTitle} subtitle={labels.loadingSubtitle} />
@@ -313,12 +324,12 @@ export default function App() {
       onOpenActiveMeetingMinutes={(taskId) => setTaskPanel({ taskId, tab: "minutes" })}
       onSelectAgent={setSelectedAgent}
       onSelectDepartment={(department) => {
-        const candidateAgents = overlayAgents;
-        const leader =
-          candidateAgents.find((agent) => agent.department_id === department.id && agent.role === "team_leader") ??
-          undefined;
-        if (leader) actions.handleOpenChat(leader);
+        setActiveDepartmentComponentId(department.id);
+        setView("departmentComponents");
       }}
+      activeDepartmentComponentId={activeDepartmentComponentId}
+      onChangeDepartmentComponent={setActiveDepartmentComponentId}
+      onOpenDepartmentChat={handleOpenDepartmentChat}
       onCreateTask={actions.handleCreateTask}
       onUpdateTask={actions.handleUpdateTask}
       onDeleteTask={actions.handleDeleteTask}

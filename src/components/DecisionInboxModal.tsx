@@ -29,11 +29,76 @@ function verdictLabel(
   };
 }
 
-function findOption(
-  item: DecisionInboxItem,
-  action: string,
-): { number: number; label: string; action?: string } | null {
+function findOption(item: DecisionInboxItem, action: string): DecisionInboxItem["options"][number] | null {
   return item.options.find((option) => option.action === action) ?? null;
+}
+
+function DecisionOptionAnalysisPanel({
+  option,
+  uiLanguage,
+}: {
+  option: DecisionInboxItem["options"][number];
+  uiLanguage: UiLanguage;
+}) {
+  const analysis = option.analysis;
+  if (!analysis) return null;
+  const rows = [
+    {
+      label: pickLang(uiLanguage, { ko: "판단 기준", en: "Rationale", ja: "判断基準", zh: "判断标准" }),
+      value: analysis.rationale,
+    },
+    {
+      label: pickLang(uiLanguage, { ko: "선택 후 결과", en: "Expected Result", ja: "選択後の結果", zh: "选择后结果" }),
+      value: analysis.expectedResult,
+    },
+    {
+      label: pickLang(uiLanguage, { ko: "리스크", en: "Risk", ja: "リスク", zh: "风险" }),
+      value: analysis.risk,
+    },
+    {
+      label: pickLang(uiLanguage, { ko: "후속 조치", en: "Follow-up", ja: "フォローアップ", zh: "后续动作" }),
+      value: analysis.followUp,
+    },
+  ].filter((row) => row.value);
+
+  if (rows.length <= 0) return null;
+  return (
+    <div className="mt-2 grid gap-1.5 text-[11px] leading-relaxed text-slate-300 sm:grid-cols-2">
+      {rows.map((row) => (
+        <div key={row.label} className="rounded-md border border-slate-700/60 bg-slate-950/45 px-2 py-1.5">
+          <span className="block text-[10px] font-semibold uppercase tracking-normal text-indigo-300">{row.label}</span>
+          <span className="mt-0.5 block min-w-0 break-words text-slate-200">{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DecisionOptionButton({
+  option,
+  isBusy,
+  disabled,
+  uiLanguage,
+  sendingText,
+  onClick,
+  className = "decision-inbox-option w-full rounded-md px-2.5 py-2 text-left text-xs transition disabled:cursor-not-allowed disabled:opacity-60",
+}: {
+  option: DecisionInboxItem["options"][number];
+  isBusy: boolean;
+  disabled?: boolean;
+  uiLanguage: UiLanguage;
+  sendingText: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled || isBusy} className={className}>
+      <span className="block min-w-0 break-words font-semibold">
+        {isBusy ? sendingText : `${option.number}. ${option.label}`}
+      </span>
+      {!isBusy ? <DecisionOptionAnalysisPanel option={option} uiLanguage={uiLanguage} /> : null}
+    </button>
+  );
 }
 
 export default function DecisionInboxModal({
@@ -333,14 +398,14 @@ export default function DecisionInboxModal({
                       {item.kind === "review_round_pick" ? (
                         <div className="space-y-2">
                           {applyAllOption ? (
-                            <button
-                              type="button"
-                              onClick={() => onReplyOption(item, applyAllOption.number)}
+                            <DecisionOptionButton
+                              option={applyAllOption}
+                              isBusy={isItemBusy}
                               disabled={isItemBusy}
-                              className="decision-inbox-option w-full rounded-md px-2.5 py-1.5 text-left text-xs transition disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {`${applyAllOption.number}. ${applyAllOption.label}`}
-                            </button>
+                              uiLanguage={uiLanguage}
+                              sendingText={t({ ko: "전송 중...", en: "Sending...", ja: "送信中...", zh: "发送中..." })}
+                              onClick={() => onReplyOption(item, applyAllOption.number)}
+                            />
                           ) : null}
 
                           {applySelectedOption ? (
@@ -348,6 +413,7 @@ export default function DecisionInboxModal({
                               <p className="text-[11px] text-slate-300">
                                 {`${applySelectedOption.number}. ${applySelectedOption.label}`}
                               </p>
+                              <DecisionOptionAnalysisPanel option={applySelectedOption} uiLanguage={uiLanguage} />
                               {optionNotes.length > 0 ? (
                                 <div className="space-y-1 rounded-md border border-slate-700/70 bg-slate-950/60 p-2">
                                   <p className="text-[11px] text-slate-400">
@@ -410,14 +476,15 @@ export default function DecisionInboxModal({
                           ) : null}
 
                           {proceedOption ? (
-                            <button
-                              type="button"
-                              onClick={() => onReplyOption(item, proceedOption.number)}
+                            <DecisionOptionButton
+                              option={proceedOption}
+                              isBusy={isItemBusy}
                               disabled={isItemBusy}
-                              className="decision-round-skip rounded-md px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {`${proceedOption.number}. ${proceedOption.label}`}
-                            </button>
+                              uiLanguage={uiLanguage}
+                              sendingText={t({ ko: "전송 중...", en: "Sending...", ja: "送信中...", zh: "发送中..." })}
+                              onClick={() => onReplyOption(item, proceedOption.number)}
+                              className="decision-round-skip w-full rounded-md px-2.5 py-2 text-left text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                            />
                           ) : null}
                         </div>
                       ) : item.options.length > 0 ? (
@@ -425,17 +492,15 @@ export default function DecisionInboxModal({
                           const key = `${item.id}:${option.number}`;
                           const isBusy = busyKey === key;
                           return (
-                            <button
+                            <DecisionOptionButton
                               key={key}
-                              type="button"
-                              onClick={() => handleOptionClick(item, option.number, option.action)}
+                              option={option}
+                              isBusy={isBusy}
                               disabled={isBusy}
-                              className="decision-inbox-option w-full rounded-md px-2.5 py-1.5 text-left text-xs transition disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {isBusy
-                                ? t({ ko: "전송 중...", en: "Sending...", ja: "送信中...", zh: "发送中..." })
-                                : `${option.number}. ${option.label}`}
-                            </button>
+                              uiLanguage={uiLanguage}
+                              sendingText={t({ ko: "전송 중...", en: "Sending...", ja: "送信中...", zh: "发送中..." })}
+                              onClick={() => handleOptionClick(item, option.number, option.action)}
+                            />
                           );
                         })
                       ) : (

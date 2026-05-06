@@ -1,0 +1,37 @@
+{
+  "module_key": "design-workspace",
+  "module_type": "department_component",
+  "category_key": "project-template",
+  "version": "1.0.0",
+  "name": "Project Design Workspace",
+  "summary": "Department component for project-scoped design versions, comment pins, responsive preview, and export events inspired by Open CoDesign workflows.",
+  "department_id": "design",
+  "component_kind": "design_workspace",
+  "entry_points": ["global_department_tab", "office_room", "project_detail"],
+  "project_scoped": true,
+  "capabilities": [
+    "design_version_history",
+    "comment_pins",
+    "responsive_preview",
+    "design_export_events",
+    "project_component_events"
+  ],
+  "required_secrets": [],
+  "required_runtime": ["browser_preview", "project_component_events"],
+  "artifact_contract": {
+    "event_table": "project_component_events",
+    "scopes": ["project_id", "department_id", "component_key"],
+    "export_formats": ["html", "pdf", "pptx", "zip", "markdown"]
+  },
+  "license_policy": {
+    "source": "pattern_reference_only",
+    "reference": "https://github.com/OpenCoworkAI/open-codesign",
+    "notes": "Use as workflow inspiration only; do not copy source code or branded assets without review."
+  },
+  "risk_level": "medium",
+  "default_config": {
+    "default_breakpoints": ["mobile", "tablet", "desktop"],
+    "export_formats": ["html", "pdf", "pptx", "zip", "markdown"],
+    "review_required": true
+  }
+}

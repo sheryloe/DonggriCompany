@@ -49,6 +49,22 @@ function TypingIndicator() {
   );
 }
 
+function DecisionInlineOptionSummary({ option, tr }: { option: DecisionOption; tr: Tr }) {
+  if (!option.analysis) return null;
+  return (
+    <span className="mt-1 block space-y-0.5 text-[10px] leading-snug opacity-80">
+      <span className="block">
+        <span className="font-semibold">{tr("결과", "Result", "結果", "结果")}: </span>
+        <span className="break-words">{option.analysis.expectedResult}</span>
+      </span>
+      <span className="block">
+        <span className="font-semibold">{tr("리스크", "Risk", "リスク", "风险")}: </span>
+        <span className="break-words">{option.analysis.risk}</span>
+      </span>
+    </span>
+  );
+}
+
 function normalizeMessageSenderName(msg: Message): string {
   return typeof msg.sender_name === "string" ? msg.sender_name.trim() : "";
 }
@@ -168,9 +184,12 @@ export default function ChatMessageList({
                                 disabled={isBusy}
                                 className="decision-inline-option w-full rounded-md px-2 py-1.5 text-left text-[11px] transition disabled:opacity-60"
                               >
-                                {isBusy
-                                  ? tr("전송 중...", "Sending...", "送信中...", "发送中...")
-                                  : `${option.number}. ${option.label}`}
+                                <span className="block break-words font-medium">
+                                  {isBusy
+                                    ? tr("전송 중...", "Sending...", "送信中...", "发送中...")
+                                    : `${option.number}. ${option.label}`}
+                                </span>
+                                {!isBusy ? <DecisionInlineOptionSummary option={option} tr={tr} /> : null}
                               </button>
                             );
                           })}
@@ -249,9 +268,12 @@ export default function ChatMessageList({
                               disabled={isBusy}
                               className="decision-inline-option w-full rounded-md px-2 py-1.5 text-left text-[11px] transition disabled:opacity-60"
                             >
-                              {isBusy
-                                ? tr("전송 중...", "Sending...", "送信中...", "发送中...")
-                                : `${option.number}. ${option.label}`}
+                              <span className="block break-words font-medium">
+                                {isBusy
+                                  ? tr("전송 중...", "Sending...", "送信中...", "发送中...")
+                                  : `${option.number}. ${option.label}`}
+                              </span>
+                              {!isBusy ? <DecisionInlineOptionSummary option={option} tr={tr} /> : null}
                             </button>
                           );
                         })}

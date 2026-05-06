@@ -5,6 +5,7 @@ import type {
   ProjectReviewTaskChoice,
   TimeoutResumeDecisionItem,
 } from "./types.ts";
+import { buildDecisionOptionAnalysis } from "./option-analysis.ts";
 
 const DECISION_COLLECTING_STALE_MS = 20_000;
 
@@ -200,7 +201,7 @@ export function createProjectAndTimeoutDecisionItems(
                 `プロジェクト'${projectName}'のアクティブ項目${activeTotal}件はすべてReview状態です。\n代表選択ステップは不要です。\n以下の選択肢から進行方法を選択してください。`,
                 `项目'${projectName}'的 ${activeTotal} 个活跃项已全部进入 Review。\n无需代表选择步骤。\n请从下方选项中选择推进方式。`,
               );
-      const readyOptions =
+      const readyOptionsBase =
         pendingChoices.length > 0
           ? [
               ...pendingChoices.map((task, index) => ({
@@ -234,6 +235,16 @@ export function createProjectAndTimeoutDecisionItems(
                 label: t("추가요청 입력", "Add Follow-up Request", "追加要請を入力", "输入追加请求"),
               },
             ];
+      const readyOptions = readyOptionsBase.map((option) => ({
+        ...option,
+        analysis: buildDecisionOptionAnalysis({
+          kind: "project_review_ready",
+          number: option.number,
+          action: option.action,
+          label: option.label,
+          t,
+        }),
+      }));
 
       const snapshotHash = buildProjectReviewSnapshotHash(
         row.project_id,
@@ -404,7 +415,16 @@ export function createProjectAndTimeoutDecisionItems(
           action: "keep_inbox",
           label: t("Inbox 유지", "Keep in Inbox", "Inboxで保留", "保留在 Inbox"),
         },
-      ],
+      ].map((option) => ({
+        ...option,
+        analysis: buildDecisionOptionAnalysis({
+          kind: "task_timeout_resume",
+          number: option.number,
+          action: option.action,
+          label: option.label,
+          t,
+        }),
+      })),
     }));
   }
 

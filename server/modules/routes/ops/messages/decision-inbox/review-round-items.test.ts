@@ -201,6 +201,9 @@ describe("review round decision items", () => {
       ]);
       expect(item?.blocker_count).toBe(2);
       expect(item?.option_notes).toContain("B blocker");
+      expect(item?.options[0]?.analysis?.expected_result).toContain("전체 피드백");
+      expect(item?.options[1]?.analysis?.risk).toContain("다음 라운드");
+      expect(item?.options[2]?.analysis?.follow_up).toContain("사후 리스크");
     } finally {
       db.close();
     }

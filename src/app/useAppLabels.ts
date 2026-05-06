@@ -21,6 +21,7 @@ const VIEW_TITLE: Record<View, string> = {
   tasks: "업무 관리",
   skills: "Skill 문서고",
   modules: "모듈",
+  departmentComponents: "부서별 컴포넌트",
   manual: "메뉴얼",
   settings: "설정",
 };

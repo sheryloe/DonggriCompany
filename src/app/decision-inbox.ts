@@ -1,6 +1,39 @@
 import type { DecisionInboxRouteItem } from "../api";
 import { normalizeLanguage, pickLang, type UiLanguage } from "../i18n";
 import type { DecisionInboxItem } from "../components/chat/decision-inbox";
+import { buildFallbackDecisionOptionAnalysis, type DecisionOptionAnalysis } from "../components/chat/decision-request";
+
+function mapOptionAnalysis(
+  analysis: DecisionInboxRouteItem["options"][number]["analysis"],
+): DecisionOptionAnalysis | undefined {
+  if (!analysis) return undefined;
+  const rationale = String(analysis.rationale ?? "").trim();
+  const expectedResult = String(analysis.expected_result ?? "").trim();
+  const risk = String(analysis.risk ?? "").trim();
+  const followUp = String(analysis.follow_up ?? "").trim();
+  if (!rationale && !expectedResult && !risk && !followUp) return undefined;
+  return {
+    rationale,
+    expectedResult,
+    risk,
+    followUp,
+  };
+}
+
+function mapWorkflowOption(
+  option: DecisionInboxRouteItem["options"][number],
+  label: string,
+): DecisionInboxItem["options"][number] {
+  const mapped = {
+    number: option.number,
+    label,
+    action: option.action,
+  };
+  return {
+    ...mapped,
+    analysis: mapOptionAnalysis(option.analysis) ?? buildFallbackDecisionOptionAnalysis(mapped),
+  };
+}
 
 function baseWorkflowDecisionItem(item: DecisionInboxRouteItem): Omit<DecisionInboxItem, "options"> {
   return {
@@ -136,11 +169,7 @@ function localizedOptionLabel(
 export function mapWorkflowDecisionItemsRaw(items: DecisionInboxRouteItem[]): DecisionInboxItem[] {
   return items.map((item) => ({
     ...baseWorkflowDecisionItem(item),
-    options: item.options.map((option) => ({
-      number: option.number,
-      label: option.label ?? option.action,
-      action: option.action,
-    })),
+    options: item.options.map((option) => mapWorkflowOption(option, option.label ?? option.action)),
   }));
 }
 
@@ -151,10 +180,8 @@ export function mapWorkflowDecisionItemsLocalized(
   const locale = normalizeLanguage(language);
   return items.map((item) => ({
     ...baseWorkflowDecisionItem(item),
-    options: item.options.map((option) => ({
-      number: option.number,
-      label: option.label ?? localizedOptionLabel(item.kind, option.action, option.number, locale),
-      action: option.action,
-    })),
+    options: item.options.map((option) =>
+      mapWorkflowOption(option, option.label ?? localizedOptionLabel(item.kind, option.action, option.number, locale)),
+    ),
   }));
 }

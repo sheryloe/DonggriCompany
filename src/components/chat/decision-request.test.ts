@@ -13,10 +13,12 @@ describe("parseDecisionRequest", () => {
 
     const parsed = parseDecisionRequest(content);
     expect(parsed).not.toBeNull();
-    expect(parsed?.options).toEqual([
+    expect(parsed?.options).toMatchObject([
       { number: 1, label: "현재 상태 그대로 QA 검증 계속" },
       { number: 2, label: "기준 커밋/브랜치 정리 후 QA 진행" },
     ]);
+    expect(parsed?.options[0]?.analysis?.expectedResult).toContain("실행 단계");
+    expect(parsed?.options[1]?.analysis?.risk).toBeTruthy();
   });
 
   it("parses inline English options", () => {
@@ -27,10 +29,12 @@ describe("parseDecisionRequest", () => {
     ].join("\n");
 
     const parsed = parseDecisionRequest(content);
-    expect(parsed?.options).toEqual([
+    expect(parsed?.options).toMatchObject([
       { number: 1, label: "Continue QA on current workspace" },
       { number: 2, label: "Reset to baseline branch and rerun QA" },
     ]);
+    expect(parsed?.options[0]?.analysis?.rationale).toBeTruthy();
+    expect(parsed?.options[1]?.analysis?.followUp).toBeTruthy();
   });
 
   it("returns null for normal numbered notes without decision hints", () => {

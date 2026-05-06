@@ -15,12 +15,16 @@
   "class_path": "operations > memory-manager > operations.runtime",
   "promotion_policy": "{\"mode\":\"manual\",\"notes\":\"default seed is senior; junior growth remains available for non-seed agents\"}",
   "visual_profile_key": "agent-visual-33",
-  "preferred_subagents": ["documentation-engineer", "customer-success-manager", "sre-engineer"],
+  "preferred_subagents": [
+    "documentation-engineer",
+    "customer-success-manager",
+    "sre-engineer"
+  ],
   "stats_tasks_done": 0,
   "stats_xp": 0,
   "memory_snapshot": [],
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-05-02T04:59:14.469Z"
+  "updated_at": "2026-05-06T07:19:36.072Z"
 }

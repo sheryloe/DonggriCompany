@@ -6,6 +6,14 @@ export type DecisionOption = {
   number: number;
   action: string;
   label: string;
+  analysis?: DecisionOptionAnalysis;
+};
+
+export type DecisionOptionAnalysis = {
+  rationale: string;
+  expected_result: string;
+  risk: string;
+  follow_up: string;
 };
 
 export type ReviewRoundReviewerVerdict = {

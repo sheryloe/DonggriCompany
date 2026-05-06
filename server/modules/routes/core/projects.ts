@@ -52,6 +52,13 @@ export function registerProjectRoutes({
     validateProjectAgentIds,
   } = createProjectRouteHelpers({ db, normalizeTextField });
 
+  const tableExists = (tableName: string): boolean =>
+    Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName));
+  const runIfTableExists = (tableName: string, sql: string, ...params: SQLInputValue[]): void => {
+    if (!tableExists(tableName)) return;
+    db.prepare(sql).run(...params);
+  };
+
   app.get("/api/projects", (req, res) => {
     const page = Math.max(Number(firstQueryValue(req.query.page)) || 1, 1);
     const pageSizeRaw = Number(firstQueryValue(req.query.page_size)) || 10;
@@ -492,8 +499,61 @@ export function registerProjectRoutes({
     const existing = db.prepare("SELECT id FROM projects WHERE id = ?").get(id);
     if (!existing) return res.status(404).json({ error: "not_found" });
 
-    db.prepare("UPDATE tasks SET project_id = NULL WHERE project_id = ?").run(id);
-    db.prepare("DELETE FROM projects WHERE id = ?").run(id);
+    runInTransaction(() => {
+      runIfTableExists("project_component_events", "DELETE FROM project_component_events WHERE project_id = ?", id);
+      runIfTableExists("project_module_apply_runs", "DELETE FROM project_module_apply_runs WHERE project_id = ?", id);
+      runIfTableExists("project_module_bindings", "DELETE FROM project_module_bindings WHERE project_id = ?", id);
+      runIfTableExists("asset_jobs", "UPDATE asset_jobs SET project_id = NULL WHERE project_id = ?", id);
+      runIfTableExists(
+        "project_review_decision_events",
+        "DELETE FROM project_review_decision_events WHERE project_id = ?",
+        id,
+      );
+      runIfTableExists(
+        "project_review_decision_states",
+        "DELETE FROM project_review_decision_states WHERE project_id = ?",
+        id,
+      );
+      runIfTableExists("project_agents", "DELETE FROM project_agents WHERE project_id = ?", id);
+      runIfTableExists("project_memories", "DELETE FROM project_memories WHERE project_id = ?", id);
+      runIfTableExists("memory_entity_relations", "DELETE FROM memory_entity_relations WHERE project_id = ?", id);
+      runIfTableExists("memory_entities", "DELETE FROM memory_entities WHERE project_id = ?", id);
+      runIfTableExists("memory_outbox", "DELETE FROM memory_outbox WHERE project_id = ?", id);
+      runIfTableExists(
+        "memory_quality_events",
+        "UPDATE memory_quality_events SET project_id = NULL WHERE project_id = ?",
+        id,
+      );
+      runIfTableExists("agent_memories", "UPDATE agent_memories SET project_id = NULL WHERE project_id = ?", id);
+      runIfTableExists(
+        "skill_usage_events",
+        "UPDATE skill_usage_events SET project_id = NULL WHERE project_id = ?",
+        id,
+      );
+      runIfTableExists(
+        "agent_growth_events",
+        "UPDATE agent_growth_events SET project_id = NULL WHERE project_id = ?",
+        id,
+      );
+      runIfTableExists("messages", "UPDATE messages SET project_id = NULL WHERE project_id = ?", id);
+      runIfTableExists(
+        "conversation_project_contexts",
+        "UPDATE conversation_project_contexts SET project_id = NULL WHERE project_id = ?",
+        id,
+      );
+      runIfTableExists(
+        "gmail_intake_messages",
+        "UPDATE gmail_intake_messages SET project_id = NULL WHERE project_id = ?",
+        id,
+      );
+      runIfTableExists(
+        "calendar_intake_events",
+        "UPDATE calendar_intake_events SET project_id = NULL WHERE project_id = ?",
+        id,
+      );
+      db.prepare("UPDATE tasks SET project_id = NULL WHERE project_id = ?").run(id);
+      db.prepare("DELETE FROM projects WHERE id = ?").run(id);
+    });
     res.json({ ok: true });
   });
 

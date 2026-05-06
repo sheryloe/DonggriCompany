@@ -49,9 +49,9 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 ## 2026-05-06 15:42 KST - GitHub CI E2E Contract Follow-up
 
 - Request: Continue resolving the GitHub Actions `CI` failure after the format step passed.
-- Change: Updated E2E coverage tests to include the required `override_reason` on manual assignment and to expect the current resume auto-run contract.
+- Change: Updated E2E coverage tests to include the required `override_reason` on manual assignment and to expect the current resume/auto-routing contract.
 - Changed files: `tests/e2e/ci-coverage-gap.spec.ts`, `tests/e2e/ci-api-ops-and-docs.spec.ts`, `docs/QUALITY_LOG.md`.
-- Commands: `gh run watch 25420206463 --exit-status`, targeted Playwright E2E verification, TypeScript check, staged diff/secret checks.
-- Validation: Pending local targeted E2E and CI rerun.
+- Commands: `gh run watch 25420206463 --exit-status`, `gh run watch 25420511417 --exit-status`, targeted Playwright E2E attempt, TypeScript check, staged diff/secret checks.
+- Validation: Format, lint, OpenAPI, type check, build, and Playwright browser install passed in CI before the remaining E2E assertion was narrowed.
 - Risk: CI may expose further downstream E2E issues after these contract mismatches are fixed.
 - Follow-up: Push a follow-up commit and watch the next GitHub Actions run.

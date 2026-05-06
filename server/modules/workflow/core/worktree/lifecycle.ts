@@ -13,6 +13,24 @@ type CreateWorktreeLifecycleToolsDeps = {
   taskWorktrees: Map<string, WorktreeInfo>;
 };
 
+const WORKTREE_CANDIDATE_SUFFIXES = ["", "-1", "-2", "-3"] as const;
+
+export function resolveWorktreeBasePath(projectPath: string): string {
+  const configured = (process.env.WORKTREE_BASE_DIR || "").trim();
+  if (!configured) return path.join(projectPath, ".climpire-worktrees");
+  return path.isAbsolute(configured) ? path.normalize(configured) : path.resolve(projectPath, configured);
+}
+
+export function resolveTaskWorktreeCandidatePaths(projectPath: string, taskId: string): string[] {
+  const shortId = taskId.slice(0, 8);
+  const worktreeBase = resolveWorktreeBasePath(projectPath);
+  return WORKTREE_CANDIDATE_SUFFIXES.map((suffix) => path.join(worktreeBase, `${shortId}${suffix}`));
+}
+
+export function resolveTaskWorktreePath(projectPath: string, taskId: string): string {
+  return resolveTaskWorktreeCandidatePaths(projectPath, taskId)[0]!;
+}
+
 export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsDeps) {
   const { appendTaskLog, taskWorktrees } = deps;
   const gitAddInitialTimeoutMs = 120_000;
@@ -190,8 +208,8 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
 
     const shortId = taskId.slice(0, 8);
     const branchName = `climpire/${shortId}`;
-    const worktreeBase = path.join(projectPath, ".climpire-worktrees");
-    const worktreePath = path.join(worktreeBase, shortId);
+    const worktreeBase = resolveWorktreeBasePath(projectPath);
+    const worktreePathCandidates = resolveTaskWorktreeCandidatePaths(projectPath, taskId);
 
     try {
       fs.mkdirSync(worktreeBase, { recursive: true });
@@ -215,15 +233,15 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
           .trim();
       }
 
-      const branchCandidates = [branchName, `${branchName}-1`, `${branchName}-2`, `${branchName}-3`];
+      const branchCandidates = WORKTREE_CANDIDATE_SUFFIXES.map((suffix) => `${branchName}${suffix}`);
       let created = false;
       let selectedBranch = branchName;
-      let selectedWorktreePath = worktreePath;
+      let selectedWorktreePath = worktreePathCandidates[0]!;
       let lastError: unknown = null;
 
       for (let idx = 0; idx < branchCandidates.length; idx += 1) {
         const candidateBranch = branchCandidates[idx]!;
-        const candidatePath = idx === 0 ? worktreePath : path.join(worktreeBase, `${shortId}-${idx}`);
+        const candidatePath = worktreePathCandidates[idx]!;
         try {
           if (fs.existsSync(candidatePath)) {
             fs.rmSync(candidatePath, { recursive: true, force: true });

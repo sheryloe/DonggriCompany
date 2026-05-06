@@ -67,6 +67,7 @@ services:
       LOGS_DIR: /app/data/logs
       PROJECT_PATH_ALLOWED_ROOTS: /app,/workspace/DonggriCompany
       WORKTREE_ADD_TIMEOUT_MS: 120000
+      WORKTREE_BASE_DIR: ${WORKTREE_BASE_DIR:-/runtime/worktrees/DonggriCompany}
       GIT_CONFIG_COUNT: 1
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: /workspace/DonggriCompany
@@ -79,8 +80,9 @@ services:
     ports:
       - "8900:8900"
     volumes:
-      - ./data:/app/data
-      - ./data/office-accounts:/app/.office-accounts
+      - ${DONGGRI_RUNTIME_ROOT:-../runtime/DonggriCompany}/data:/app/data
+      - ${DONGGRI_RUNTIME_ROOT:-../runtime/DonggriCompany}/office-accounts:/app/.office-accounts
+      - ${DONGGRI_RUNTIME_ROOT:-../runtime/DonggriCompany}/worktrees:/runtime/worktrees/DonggriCompany
       - .:/workspace/DonggriCompany
       - ${USERPROFILE}/.codex/multi-auth:/home/app/.codex/multi-auth:ro
     working_dir: /app

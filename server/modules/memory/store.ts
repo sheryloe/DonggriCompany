@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 
 export type NativeMemoryRow = {
@@ -35,6 +35,22 @@ export type MemorySearchRow = NativeMemoryRow & {
   source_table: "agent_memories" | "project_memories";
   rank: number;
 };
+
+type MemoryRankingMode = "default" | "semantic" | "vector";
+
+type MemoryEmbeddingRow = {
+  source_table: "agent_memories" | "project_memories";
+  memory_id: string;
+  embedding_model: string;
+  dims: number;
+  vector_json: string;
+  content_hash: string;
+  created_at: number;
+  updated_at: number;
+};
+
+const LOCAL_MEMORY_EMBEDDING_MODEL = "local-hash-v3";
+const LOCAL_MEMORY_EMBEDDING_DIMS = 128;
 
 export type SkillUsageSummaryRow = {
   skill_id: string;
@@ -497,6 +513,138 @@ function tokenizeSemanticText(value: string | null | undefined): string[] {
   ].slice(0, 48);
 }
 
+function tokenizeVectorText(value: string | null | undefined): string[] {
+  return (
+    String(value ?? "")
+      .toLowerCase()
+      .match(/[a-z0-9가-힣_]{2,}/g) ?? []
+  ).slice(0, 256);
+}
+
+function stableHash(value: string): Buffer {
+  return createHash("sha256").update(value).digest();
+}
+
+function memoryEmbeddingText(row: Pick<NativeMemoryRow, "title" | "body" | "display_summary_ko" | "tags_json">): string {
+  return [row.title, row.display_summary_ko ?? "", row.body, row.tags_json].filter(Boolean).join("\n");
+}
+
+function memoryEmbeddingHash(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+function buildLocalMemoryEmbedding(text: string, dims = LOCAL_MEMORY_EMBEDDING_DIMS): number[] {
+  const vector = Array.from({ length: dims }, () => 0);
+  const tokens = tokenizeVectorText(text);
+  for (const token of tokens) {
+    const digest = stableHash(token);
+    const index = digest.readUInt32BE(0) % dims;
+    vector[index] += 1;
+  }
+  const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  if (norm === 0) return vector;
+  return vector.map((value) => Number((value / norm).toFixed(6)));
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const len = Math.min(a.length, b.length);
+  if (len === 0) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < len; i += 1) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dot / Math.sqrt(normA * normB);
+}
+
+function ensureMemoryEmbeddingSchema(db: DatabaseSync): void {
+  db.exec(`
+CREATE TABLE IF NOT EXISTS memory_embeddings (
+  source_table TEXT NOT NULL CHECK(source_table IN ('agent_memories','project_memories')),
+  memory_id TEXT NOT NULL,
+  embedding_model TEXT NOT NULL,
+  dims INTEGER NOT NULL,
+  vector_json TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  PRIMARY KEY(source_table, memory_id, embedding_model)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_embeddings_model
+  ON memory_embeddings(embedding_model, updated_at DESC);
+CREATE TRIGGER IF NOT EXISTS trg_agent_memories_embeddings_delete AFTER DELETE ON agent_memories BEGIN
+  DELETE FROM memory_embeddings WHERE source_table = 'agent_memories' AND memory_id = old.id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_project_memories_embeddings_delete AFTER DELETE ON project_memories BEGIN
+  DELETE FROM memory_embeddings WHERE source_table = 'project_memories' AND memory_id = old.id;
+END;
+`);
+}
+
+function readVectorJson(value: string): number[] | null {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((item) => Number(item)).filter((item) => Number.isFinite(item)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function ensureMemoryEmbedding(db: DatabaseSync, row: MemorySearchRow, now: number): number[] {
+  ensureMemoryEmbeddingSchema(db);
+  const text = memoryEmbeddingText(row);
+  const contentHash = memoryEmbeddingHash(text);
+  const existing = db
+    .prepare(
+      `
+      SELECT source_table, memory_id, embedding_model, dims, vector_json, content_hash, created_at, updated_at
+      FROM memory_embeddings
+      WHERE source_table = ? AND memory_id = ? AND embedding_model = ?
+    `,
+    )
+    .get(row.source_table, row.id, LOCAL_MEMORY_EMBEDDING_MODEL) as MemoryEmbeddingRow | undefined;
+  const existingVector =
+    existing && existing.content_hash === contentHash && existing.dims === LOCAL_MEMORY_EMBEDDING_DIMS
+      ? readVectorJson(existing.vector_json)
+      : null;
+  if (existingVector) return existingVector;
+
+  const vector = buildLocalMemoryEmbedding(text);
+  db.prepare(
+    `
+    INSERT INTO memory_embeddings (
+      source_table, memory_id, embedding_model, dims, vector_json, content_hash, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(source_table, memory_id, embedding_model) DO UPDATE SET
+      dims = excluded.dims,
+      vector_json = excluded.vector_json,
+      content_hash = excluded.content_hash,
+      updated_at = excluded.updated_at
+  `,
+  ).run(
+    row.source_table,
+    row.id,
+    LOCAL_MEMORY_EMBEDDING_MODEL,
+    LOCAL_MEMORY_EMBEDDING_DIMS,
+    JSON.stringify(vector),
+    contentHash,
+    existing?.created_at ?? now,
+    now,
+  );
+  return vector;
+}
+
+function vectorQueryScore(db: DatabaseSync, row: MemorySearchRow, query: string, now: number): number {
+  const queryVector = buildLocalMemoryEmbedding(query);
+  const memoryVector = ensureMemoryEmbedding(db, row, now);
+  const similarity = cosineSimilarity(queryVector, memoryVector);
+  return Math.max(0, similarity) * 420;
+}
+
 function semanticQueryScore(row: MemorySearchRow, query: string): number {
   const queryTokens = tokenizeSemanticText(query);
   if (queryTokens.length === 0) return 0;
@@ -513,14 +661,16 @@ function semanticQueryScore(row: MemorySearchRow, query: string): number {
 }
 
 function memorySearchScore(
+  db: DatabaseSync,
   row: MemorySearchRow,
   now: number,
   query: string,
-  ranking: "default" | "semantic",
+  ranking: MemoryRankingMode,
 ): number {
   const ftsScore = Number.isFinite(Number(row.rank)) ? Math.max(0, 80 - Math.abs(Number(row.rank)) * 10) : 0;
   const usageScore = Math.min(30, Math.max(0, Number(row.retrieval_count ?? 0)) * 3);
   const semanticScore = ranking === "semantic" ? semanticQueryScore(row, query) : 0;
+  const vectorScore = ranking === "vector" ? vectorQueryScore(db, row, query, now) : 0;
   return (
     layerPriority(row.memory_layer) * 1000 +
     clampNumber(row.strength, 0.5, 0, 1) * 120 +
@@ -528,20 +678,22 @@ function memorySearchScore(
     memoryRecencyScore(row, now) +
     usageScore +
     ftsScore +
-    semanticScore
+    semanticScore +
+    vectorScore
   );
 }
 
 function rankMemoryRows(
+  db: DatabaseSync,
   rows: MemorySearchRow[],
   limit: number,
   now: number,
   query: string,
-  ranking: "default" | "semantic",
+  ranking: MemoryRankingMode,
 ): MemorySearchRow[] {
   const deduped = [...new Map(rows.map((row) => [`${row.source_table}:${row.id}`, row])).values()];
   return deduped
-    .map((row) => ({ row, score: memorySearchScore(row, now, query, ranking) }))
+    .map((row) => ({ row, score: memorySearchScore(db, row, now, query, ranking) }))
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       return Number(b.row.updated_at ?? 0) - Number(a.row.updated_at ?? 0);
@@ -566,7 +718,7 @@ export function searchMemories(
     updatedTo?: number | null;
     promotionStatus?: MemoryPromotionStatus | "all" | string | null;
     sourceType?: string | null;
-    ranking?: "default" | "semantic" | string | null;
+    ranking?: MemoryRankingMode | string | null;
     limit?: number | null;
     now?: number | null;
   },
@@ -582,7 +734,9 @@ export function searchMemories(
   const updatedTo = normalizeSearchTimestamp(input.updatedTo);
   const promotionStatus = normalizeText(input.promotionStatus);
   const sourceType = normalizeText(input.sourceType);
-  const ranking = normalizeText(input.ranking) === "semantic" ? "semantic" : "default";
+  const rankingInput = normalizeText(input.ranking);
+  const ranking: MemoryRankingMode =
+    rankingInput === "vector" ? "vector" : rankingInput === "semantic" ? "semantic" : "default";
   const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
   const params: SQLInputValue[] = [];
   const clauses = ["m.status = 'active'"];
@@ -717,7 +871,41 @@ export function searchMemories(
     }
   }
 
-  const ranked = rankMemoryRows(rows, limit, now, query, ranking);
+  if (ranking === "vector" && query) {
+    const candidateLimit = Math.max(100, limit * 10);
+    if (searchProjectMemories) {
+      rows.push(
+        ...((db
+          .prepare(
+            `
+            SELECT m.*, 'project_memories' AS source_table, 0 AS rank
+            FROM project_memories m
+            WHERE ${clauses.join(" AND ")}
+            ORDER BY m.strength DESC, m.updated_at DESC
+            LIMIT ?
+          `,
+          )
+          .all(...params, candidateLimit) as MemorySearchRow[]) ?? []),
+      );
+    }
+    if (searchAgentMemories) {
+      rows.push(
+        ...((db
+          .prepare(
+            `
+            SELECT m.*, 'agent_memories' AS source_table, 0 AS rank
+            FROM agent_memories m
+            WHERE ${clauses.join(" AND ")}
+            ORDER BY m.strength DESC, m.updated_at DESC
+            LIMIT ?
+          `,
+          )
+          .all(...params, candidateLimit) as MemorySearchRow[]) ?? []),
+      );
+    }
+  }
+
+  const ranked = rankMemoryRows(db, rows, limit, now, query, ranking);
   updateRetrievalStats(db, ranked, now);
   return ranked;
 }
@@ -745,6 +933,7 @@ export function buildSearchArchivalMemoryToolBlock(input: {
     "- updated_from/updated_to: optional epoch-millisecond updated_at range.",
     "- promotion_status: optional local, candidate, promoted, rejected, or all.",
     "- source_type: optional manual, task_run, beads, or all.",
+    "- ranking: optional default, semantic, or vector. Use vector when exact keywords are insufficient and project memory volume is manageable.",
     "- limit: 1-20 for prompt use.",
     input.projectId ? `Default project_id=${input.projectId}` : "",
     input.agentId ? `Default agent_id=${input.agentId}` : "",

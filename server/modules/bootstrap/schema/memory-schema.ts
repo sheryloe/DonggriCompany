@@ -218,6 +218,18 @@ CREATE TABLE IF NOT EXISTS memory_promotion_evidence (
   UNIQUE(candidate_key, candidate_type)
 );
 
+CREATE TABLE IF NOT EXISTS memory_embeddings (
+  source_table TEXT NOT NULL CHECK(source_table IN ('agent_memories','project_memories')),
+  memory_id TEXT NOT NULL,
+  embedding_model TEXT NOT NULL,
+  dims INTEGER NOT NULL,
+  vector_json TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  PRIMARY KEY(source_table, memory_id, embedding_model)
+);
+
 CREATE TABLE IF NOT EXISTS memory_outbox (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -300,6 +312,14 @@ CREATE INDEX IF NOT EXISTS idx_memory_entity_relations_project
   ON memory_entity_relations(project_id, relation);
 CREATE INDEX IF NOT EXISTS idx_memory_promotion_evidence_status
   ON memory_promotion_evidence(status, project_count DESC, evidence_count DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_embeddings_model
+  ON memory_embeddings(embedding_model, updated_at DESC);
+CREATE TRIGGER IF NOT EXISTS trg_agent_memories_embeddings_delete AFTER DELETE ON agent_memories BEGIN
+  DELETE FROM memory_embeddings WHERE source_table = 'agent_memories' AND memory_id = old.id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_project_memories_embeddings_delete AFTER DELETE ON project_memories BEGIN
+  DELETE FROM memory_embeddings WHERE source_table = 'project_memories' AND memory_id = old.id;
+END;
 CREATE INDEX IF NOT EXISTS idx_memory_outbox_project
   ON memory_outbox(project_id, target, status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_quality_events_project

@@ -6,7 +6,7 @@ type MemoryLayerFilter = "all" | "core" | "episodic" | "archival" | "global";
 type MemoryScopeFilter = "local" | "all" | "global";
 type MemoryPromotionFilter = "all" | "local" | "candidate" | "promoted" | "rejected";
 type MemorySourceFilter = "all" | "manual" | "task_run" | "beads";
-type MemoryRankingMode = "default" | "semantic";
+type MemoryRankingMode = "default" | "semantic" | "vector";
 
 type StoredMemorySearch = {
   id: string;
@@ -569,6 +569,7 @@ export default function MemorySearchPanel({
               >
                 <option value="default">기본</option>
                 <option value="semantic">semantic</option>
+                <option value="vector">vector DB</option>
               </select>
             </label>
             <label className="min-w-0 text-[11px] font-medium text-slate-400">

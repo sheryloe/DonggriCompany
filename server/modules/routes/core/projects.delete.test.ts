@@ -85,6 +85,17 @@ describe("project deletion foreign-key edge cases", () => {
     db!
       .prepare(
         `
+          INSERT INTO memory_embeddings (
+            source_table, memory_id, embedding_model, dims, vector_json, content_hash, created_at, updated_at
+          ) VALUES
+            ('agent_memories', 'agent-memory-1', 'local-hash-v3', 2, '[1,0]', 'agent-hash', 1, 1),
+            ('project_memories', 'project-memory-1', 'local-hash-v3', 2, '[0,1]', 'project-hash', 1, 1)
+        `,
+      )
+      .run();
+    db!
+      .prepare(
+        `
           INSERT INTO agent_memories (
             id, agent_id, project_id, memory_type, scope_type, title, body, tags_json,
             source_type, memory_layer, status, created_at, updated_at
@@ -122,6 +133,16 @@ describe("project deletion foreign-key edge cases", () => {
     expect(db!.prepare("SELECT project_id FROM agent_memories WHERE id = 'agent-memory-1'").get()).toEqual({
       project_id: null,
     });
+    expect(
+      db!
+        .prepare("SELECT memory_id FROM memory_embeddings WHERE source_table = 'agent_memories' AND memory_id = 'agent-memory-1'")
+        .get(),
+    ).toEqual({ memory_id: "agent-memory-1" });
+    expect(
+      db!
+        .prepare("SELECT memory_id FROM memory_embeddings WHERE source_table = 'project_memories' AND memory_id = 'project-memory-1'")
+        .get(),
+    ).toBeUndefined();
     expect(db!.prepare("SELECT id FROM project_memories WHERE id = 'project-memory-1'").get()).toBeUndefined();
     expect(db!.prepare("SELECT id FROM project_component_events WHERE id = 'event-1'").get()).toBeUndefined();
     expect(db!.prepare("SELECT id FROM projects WHERE id = 'project-keep'").get()).toEqual({ id: "project-keep" });

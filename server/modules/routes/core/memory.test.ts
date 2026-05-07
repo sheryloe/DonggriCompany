@@ -428,6 +428,52 @@ describe("memory routes", () => {
     expect(payload.memories[0].rank).toBeGreaterThan(payload.memories[1].rank);
   });
 
+  it("persists vector embeddings and uses cosine ranking when ranking=vector", () => {
+    const createProjectMemoryHandler = routes.get("POST /api/projects/:id/memory");
+    createProjectMemoryHandler?.(
+      {
+        params: { id: "project-1" },
+        body: {
+          title: "Provider fallback retry runbook",
+          body: "When provider capacity is unavailable, retry with the fallback pool and record the capacity event.",
+          memory_type: "lesson",
+          memory_layer: "archival",
+          tags: ["provider", "fallback", "retry", "capacity"],
+          strength: 0.2,
+        },
+      },
+      createFakeResponse(),
+    );
+    createProjectMemoryHandler?.(
+      {
+        params: { id: "project-1" },
+        body: {
+          title: "Provider note",
+          body: "Provider note without fallback operation detail.",
+          memory_type: "lesson",
+          memory_layer: "archival",
+          tags: ["provider"],
+          strength: 1,
+        },
+      },
+      createFakeResponse(),
+    );
+
+    const searchHandler = routes.get("GET /api/memory/search");
+    const res = createFakeResponse();
+    searchHandler?.(
+      { query: { q: "provider capacity fallback retry", project_id: "project-1", scope: "local", ranking: "vector" } },
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    const payload = res.payload as { memories: Array<{ title: string; rank: number }> };
+    expect(payload.memories[0].title).toBe("Provider fallback retry runbook");
+    expect(payload.memories[0].rank).toBeGreaterThan(payload.memories[1].rank);
+    const embeddingCount = db!.prepare("SELECT COUNT(*) AS cnt FROM memory_embeddings").get() as { cnt: number };
+    expect(embeddingCount.cnt).toBeGreaterThanOrEqual(2);
+  });
+
   it("creates and approves global skill promotion candidates from cross-project success evidence", () => {
     const now = 1_700_000_000_000;
     for (const [index, projectId] of ["project-1", "project-2", "project-3"].entries()) {
@@ -685,6 +731,12 @@ CREATE TABLE agent_growth_events (
       const columns = legacyDb.prepare("PRAGMA table_info(agent_memories)").all() as Array<{ name: string }>;
       expect(columns.map((column) => column.name)).toContain("memory_layer");
       expect(columns.map((column) => column.name)).toContain("promotion_status");
+      const embeddingColumns = legacyDb.prepare("PRAGMA table_info(memory_embeddings)").all() as Array<{
+        name: string;
+      }>;
+      expect(embeddingColumns.map((column) => column.name)).toEqual(
+        expect.arrayContaining(["source_table", "memory_id", "embedding_model", "dims", "vector_json", "content_hash"]),
+      );
       const ftsSetting = legacyDb.prepare("SELECT value FROM settings WHERE key = 'memoryFtsAvailable'").get() as
         | { value: string }
         | undefined;

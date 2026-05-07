@@ -255,3 +255,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Initial targeted web tests passed with 3 files and 13 tests; initial targeted API tests passed with 5 files and 29 tests; production build passed; diff whitespace check passed; final combined P0/P1/P2 web regression passed with 6 files and 17 tests; final combined API regression passed with 6 files and 32 tests.
 - Risk: Memory semantic ranking is a local lexical relevance scorer layered onto existing FTS/SQL, not an embedding/vector database yet. Saved/recent searches are browser-local and not synchronized across devices.
 - Follow-up: If higher recall is required, add an embedding/vector index with migration/backfill and an auditable saved-search server table.
+
+## 2026-05-07 23:32 KST - Memory Embedding Vector Ranking
+
+- Request: After committing the P0/P1/P2 slice, continue the remaining memory semantic ranking gap by adding an actual embedding/vector DB path.
+- Change: Added a `memory_embeddings` SQLite table, model/version keyed local hash embedding cache, delete cleanup triggers, vector search candidate expansion, cosine ranking mode, UI/API `ranking=vector` support, and regression coverage for project deletion cleanup.
+- Changed files: `server/modules/bootstrap/schema/memory-schema.ts`, `server/modules/memory/store.ts`, `server/modules/routes/core/memory.test.ts`, `server/modules/routes/core/projects.delete.test.ts`, `src/api/memory.ts`, `src/components/skills-library/MemorySearchPanel.tsx`, `src/components/skills-library/MemorySearchPanel.test.tsx`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:api -- memory projects.delete`, `corepack pnpm test:web -- MemorySearchPanel`.
+- Validation: API memory/project-delete tests passed with 2 files and 14 tests; MemorySearchPanel web tests passed with 1 file and 4 tests.
+- Risk: The first vector model is deterministic local hashed token embedding (`local-hash-v3`), suitable for offline operation and auditability, but not an external semantic embedding model or ANN index.
+- Follow-up: Add provider-backed embeddings and vector backfill when model capacity, cost controls, and migration observability are ready.

@@ -98,7 +98,7 @@ describe("MemorySearchPanel", () => {
     fireEvent.change(screen.getByTestId("memory-search-scope"), { target: { value: "all" } });
     fireEvent.change(screen.getByTestId("memory-search-promotion"), { target: { value: "promoted" } });
     fireEvent.change(screen.getByTestId("memory-search-source"), { target: { value: "task_run" } });
-    fireEvent.change(screen.getByTestId("memory-search-ranking"), { target: { value: "semantic" } });
+    fireEvent.change(screen.getByTestId("memory-search-ranking"), { target: { value: "vector" } });
     fireEvent.change(screen.getByTestId("memory-search-agent"), { target: { value: "agent-1" } });
 
     fireEvent.click(screen.getByRole("button", { name: "검색" }));
@@ -114,7 +114,7 @@ describe("MemorySearchPanel", () => {
         scope: "all",
         promotion_status: "promoted",
         source_type: "task_run",
-        ranking: "semantic",
+        ranking: "vector",
         agent_id: "agent-1",
         project_id: "project-1",
         created_from: expect.any(Number),
@@ -163,7 +163,7 @@ describe("MemorySearchPanel", () => {
     render(<MemorySearchPanel agents={[TEST_AGENT]} />);
 
     fireEvent.change(screen.getByTestId("memory-search-query"), { target: { value: "routing" } });
-    fireEvent.change(screen.getByTestId("memory-search-ranking"), { target: { value: "semantic" } });
+    fireEvent.change(screen.getByTestId("memory-search-ranking"), { target: { value: "vector" } });
     fireEvent.click(screen.getByRole("button", { name: "검색" }));
 
     await waitFor(() => {
@@ -177,6 +177,6 @@ describe("MemorySearchPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "초기화" }));
     fireEvent.click(screen.getAllByRole("button", { name: "routing" })[0]);
     expect(screen.getByTestId("memory-search-query")).toHaveValue("routing");
-    expect(screen.getByTestId("memory-search-ranking")).toHaveValue("semantic");
+    expect(screen.getByTestId("memory-search-ranking")).toHaveValue("vector");
   });
 });

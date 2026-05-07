@@ -1,5 +1,4 @@
 import { useState, useRef, useMemo, useCallback } from "react";
-import type { DecisionInboxItem } from "./components/chat/decision-inbox";
 import { useWebSocket } from "./hooks/useWebSocket";
 import type {
   Department,
@@ -30,7 +29,7 @@ import {
   mergeSettingsWithDefaults,
   readStoredRoomThemes,
 } from "./app/utils";
-import type { OAuthCallbackResult, RuntimeOs, RoomThemeMap, TaskPanelTab, View } from "./app/types";
+import type { OAuthCallbackResult, RuntimeOs, RoomThemeMap, View } from "./app/types";
 import { useRealtimeSync } from "./app/useRealtimeSync";
 import { useAppLabels } from "./app/useAppLabels";
 import AppLoadingScreen from "./app/AppLoadingScreen";
@@ -42,6 +41,7 @@ import { useUpdateStatusPolling } from "./app/useUpdateStatusPolling";
 import { useAppViewEffects } from "./app/useAppViewEffects";
 import { useAppBootstrapData } from "./app/useAppBootstrapData";
 import { useLiveSyncScheduler } from "./app/useLiveSyncScheduler";
+import { useAppOverlayState } from "./app/useAppOverlayState";
 import { resolvePackAgentViews, resolvePackDepartmentsForDisplay } from "./app/office-pack-display";
 import { normalizeOfficeWorkflowPack } from "./app/office-workflow-pack";
 
@@ -65,10 +65,6 @@ export default function App() {
   const [subAgents, setSubAgents] = useState<SubAgent[]>([]);
   const [subtasks, setSubtasks] = useState<SubTask[]>([]);
 
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [chatAgent, setChatAgent] = useState<Agent | null>(null);
-  const [showChat, setShowChat] = useState(false);
-  const [taskPanel, setTaskPanel] = useState<{ taskId: string; tab: TaskPanelTab } | null>(null);
   const [loading, setLoading] = useState(true);
   const [unreadAgentIds, setUnreadAgentIds] = useState<Set<string>>(new Set());
   const [crossDeptDeliveries, setCrossDeptDeliveries] = useState<CrossDeptDelivery[]>([]);
@@ -76,18 +72,39 @@ export default function App() {
   const [meetingPresence, setMeetingPresence] = useState<MeetingPresence[]>([]);
   const [oauthResult, setOauthResult] = useState<OAuthCallbackResult | null>(null);
   const [taskReport, setTaskReport] = useState<TaskReportDetail | null>(null);
-  const [showReportHistory, setShowReportHistory] = useState(false);
-  const [showAgentStatus, setShowAgentStatus] = useState(false);
-  const [showRoomManager, setShowRoomManager] = useState(false);
-  const [showDecisionInbox, setShowDecisionInbox] = useState(false);
-  const [decisionInboxLoading, setDecisionInboxLoading] = useState(false);
-  const [decisionInboxItems, setDecisionInboxItems] = useState<DecisionInboxItem[]>([]);
-  const [decisionReplyBusyKey, setDecisionReplyBusyKey] = useState<string | null>(null);
-  const [activeRoomThemeTargetId, setActiveRoomThemeTargetId] = useState<string | null>(null);
   const [customRoomThemes, setCustomRoomThemes] = useState<RoomThemeMap>(() => initialRoomThemes.themes);
-  const [activeDepartmentComponentId, setActiveDepartmentComponentId] = useState<string>("pmo");
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [mobileHeaderMenuOpen, setMobileHeaderMenuOpen] = useState(false);
+  const {
+    selectedAgent,
+    setSelectedAgent,
+    chatAgent,
+    setChatAgent,
+    showChat,
+    setShowChat,
+    taskPanel,
+    setTaskPanel,
+    showReportHistory,
+    setShowReportHistory,
+    showAgentStatus,
+    setShowAgentStatus,
+    showRoomManager,
+    setShowRoomManager,
+    showDecisionInbox,
+    setShowDecisionInbox,
+    decisionInboxLoading,
+    setDecisionInboxLoading,
+    decisionInboxItems,
+    setDecisionInboxItems,
+    decisionReplyBusyKey,
+    setDecisionReplyBusyKey,
+    activeRoomThemeTargetId,
+    setActiveRoomThemeTargetId,
+    activeDepartmentComponentId,
+    setActiveDepartmentComponentId,
+    mobileNavOpen,
+    setMobileNavOpen,
+    mobileHeaderMenuOpen,
+    setMobileHeaderMenuOpen,
+  } = useAppOverlayState();
   const [officePackBootstrappingLabel, setOfficePackBootstrappingLabel] = useState<string | null>(null);
   const [runtimeOs] = useState<RuntimeOs>(() => detectRuntimeOs());
   const [forceUpdateBanner] = useState<boolean>(() => isForceUpdateBannerEnabled());

@@ -195,3 +195,23 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Web tests passed with 2 files and 6 tests; API memory tests passed with 11 tests; production build and diff check passed.
 - Risk: Project selector uses first-page project search results only and does not yet provide saved/recent memory searches, audit export, or semantic/vector ranking.
 - Follow-up: Keep global command palette/search-history/export as the next patch set.
+
+## 2026-05-07 15:27 KST - Gemini Full System Review
+
+- Request: Run Gemini CLI for a full-system DonggriCompany code/system review report.
+- Change: Generated a read-only full-system review prompt and Gemini analysis report covering architecture, frontend UX, backend/data, workflow/agents/memory, security/operations, tests, risks, roadmap, and scores.
+- Changed files: `docs/analysis/GEMINI_PRO_FULL_SYSTEM_REVIEW_PROMPT_2026-05-07.md`, `docs/analysis/GEMINI_PRO_FULL_SYSTEM_REVIEW_2026-05-07.md`, `docs/QUALITY_LOG.md`.
+- Commands: `.\scripts\run-gemini-pro-analysis.ps1 -PromptFile '.\docs\analysis\GEMINI_PRO_FULL_SYSTEM_REVIEW_PROMPT_2026-05-07.md' -OutputPath '.\docs\analysis\GEMINI_PRO_FULL_SYSTEM_REVIEW_2026-05-07.md' -PrimaryModel 'gemini-3.1-pro-preview' -FallbackModel 'gemini-2.5-pro' -TimeoutSeconds 1200`.
+- Validation: `gemini-3.1-pro-preview` reported capacity 429 and the scripted fallback completed with `gemini-2.5-pro`; report structure and UTF-8 Korean rendering were checked.
+- Risk: The report is a Gemini CLI read-only review with generated/heavy/secret-bearing paths excluded; it should be treated as a system-level review, not a line-by-line security audit.
+- Follow-up: Convert the P0/P1/P2 roadmap into implementation tasks, starting with frontend state-management decomposition.
+
+## 2026-05-07 15:38 KST - App Overlay State Decomposition
+
+- Request: Use the Gemini full-system review as input, independently judge the improvement path, and start improving the DonggriCompany program.
+- Change: Confirmed Gemini's P0 frontend state-management risk, noted that the existing CI workflow already covers much of the reported P1 area, and extracted transient overlay/navigation state from `App.tsx` into `useAppOverlayState`.
+- Changed files: `src/App.tsx`, `src/app/useAppOverlayState.ts`, `src/app/useAppOverlayState.test.tsx`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:web -- useAppOverlayState AppHeaderBar`, `corepack pnpm build`.
+- Validation: Hook/AppHeaderBar web tests passed with 2 files and 4 tests; production build passed.
+- Risk: This is the first low-risk decomposition step, not a full external store migration; domain data state remains in `App.tsx` until the next slice extraction.
+- Follow-up: Continue P0 by extracting domain collections/actions or introducing a measured external store after the hook boundary proves stable.

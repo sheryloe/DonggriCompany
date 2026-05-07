@@ -10,13 +10,14 @@ import {
 import { getRoleDisplayLabel, getWorkflowRoleDisplayLabel } from "../../app/canonical-display";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../../i18n/canonical-label-registry";
 import {
+  AGENT_VISUAL_PROFILES,
   getAgentVisualProfileDescriptionKo,
   getAgentVisualProfileStatusLabelKo,
   getSpriteDirectionLabelKo,
   resolveAgentVisualProfile,
 } from "../../agent-visual-profiles";
 import { getProjectModuleTitle } from "../../app/module-display";
-import type { Agent, AgentMemoryResponse, Department, SubAgent, SubTask, Task } from "../../types";
+import type { Agent, AgentMemoryResponse, AgentVisualProfile, Department, SubAgent, SubTask, Task } from "../../types";
 import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
 import { getSubAgentSpriteNum, SUBTASK_STATUS_ICON, taskStatusLabel, taskTypeLabel, type TFunction } from "./constants";
 
@@ -38,6 +39,9 @@ interface AgentDetailTabContentProps {
   onOpenTerminal?: (taskId: string) => void;
   agentMemory?: AgentMemoryResponse | null;
   agentMemoryLoading?: boolean;
+  onApproveReserveProfile?: (profileKey: string) => void | Promise<void>;
+  approvingReserveProfileKey?: string | null;
+  reserveProfileError?: string | null;
 }
 
 function classPathText(profile: ReturnType<typeof normalizeAgentProfile>): string {
@@ -95,6 +99,9 @@ export default function AgentDetailTabContent({
   onOpenTerminal,
   agentMemory,
   agentMemoryLoading,
+  onApproveReserveProfile,
+  approvingReserveProfileKey,
+  reserveProfileError,
 }: AgentDetailTabContentProps) {
   const [memoryFilter, setMemoryFilter] = useState<AgentMemoryFilter>("all");
   const xpLevel = Math.floor(agent.stats_xp / 100) + 1;
@@ -162,10 +169,191 @@ export default function AgentDetailTabContent({
     { key: "episodic", label: "프로젝트 경험" },
     { key: "candidate", label: "전사 공통 Skill 후보" },
   ];
+  const skillUsage = agentMemory?.skill_usage ?? [];
+  const growthEvents = agentMemory?.growth_events ?? [];
+  const candidateMemoryCount = allAgentMemories.filter((memory) => memory.promotion_status === "candidate").length;
+  const activeSubAgentCount = agentSubAgents.filter((subAgent) => subAgent.status === "working").length;
+  const preferredSubagents = useMemo(() => {
+    const configured = profile.preferred_subagents ?? [];
+    if (configured.length > 0) return configured;
+    const liveTasks = agentSubAgents.map((subAgent) => subAgent.task.trim()).filter(Boolean);
+    if (liveTasks.length > 0) return liveTasks.slice(0, 4);
+    if (agent.family === "frontend" || agent.department_id === "design") {
+      return ["ui-designer", "ux-researcher", "accessibility-tester"];
+    }
+    if (agent.family === "qa" || agent.department_id === "qa") {
+      return ["test-automator", "reviewer", "performance-monitor"];
+    }
+    if (agent.family === "backend" || agent.department_id === "dev") {
+      return ["backend-developer", "typescript-pro", "database-optimizer"];
+    }
+    if (agent.department_id === "devsecops") {
+      return ["security-auditor", "devops-engineer", "github:gh-fix-ci"];
+    }
+    if (agent.department_id === "operations") {
+      return ["sre-engineer", "documentation-engineer", "customer-success-manager"];
+    }
+    return ["task-distributor", "project-manager", "risk-manager"];
+  }, [agent.department_id, agent.family, agentSubAgents, profile.preferred_subagents]);
+  const reserveProfileCandidates = useMemo<AgentVisualProfile[]>(() => {
+    const currentKey = visualProfile.agent_visual_profile_key;
+    const reservePool = AGENT_VISUAL_PROFILES.filter(
+      (candidate) => candidate.status === "reserve" && candidate.agent_visual_profile_key !== currentKey,
+    );
+    const fallbackPool = AGENT_VISUAL_PROFILES.filter((candidate) => candidate.agent_visual_profile_key !== currentKey);
+    return (reservePool.length > 0 ? reservePool : fallbackPool).slice(0, 4);
+  }, [visualProfile.agent_visual_profile_key]);
+  const generationHistory = [
+    {
+      label: "프로필 매핑",
+      value: visualProfile.agent_visual_profile_key,
+      detail: visualProfileStatusText,
+    },
+    {
+      label: "스프라이트",
+      value: typeof agent.sprite_number === "number" ? `#${agent.sprite_number}` : "미지정",
+      detail: visualProfile.sprite_profile.supports_walk ? "4방향 walk 준비" : "정적 이미지 전용",
+    },
+    {
+      label: "생성 모듈",
+      value: visualProfileModuleText || "연결 없음",
+      detail: "프로필 저장값 기준",
+    },
+  ];
 
   if (tab === "info") {
     return (
       <div className="space-y-3">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
+          <section
+            data-testid="agent-operational-profile-panel"
+            className="rounded-lg border border-slate-700 bg-slate-800/55 p-3"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">운영 프로필 보드</div>
+                <h3 className="mt-1 text-base font-semibold text-white">{visualProfile.label_ko}</h3>
+              </div>
+              <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] text-cyan-100">
+                {visualProfileStatusText}
+              </span>
+            </div>
+
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              <div className="rounded-md bg-slate-900/55 p-3">
+                <div className="text-[11px] font-semibold text-slate-400">캐릭터 설정</div>
+                <p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-300">
+                  {visualProfileDescription || "저장된 캐릭터 설정이 없습니다."}
+                </p>
+              </div>
+              <div className="rounded-md bg-slate-900/55 p-3">
+                <div className="text-[11px] font-semibold text-slate-400">스프라이트 설정</div>
+                <p className="mt-1 text-xs leading-5 text-slate-300">{visualProfileSpriteText}</p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Canvas {visualProfile.sprite_profile.canvas_size} · modules {visualProfileModuleText || "-"}
+                </p>
+              </div>
+              <div className="rounded-md bg-slate-900/55 p-3 md:col-span-2">
+                <div className="mb-2 text-[11px] font-semibold text-slate-400">생성 이력</div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {generationHistory.map((event) => (
+                    <div key={event.label} className="min-w-0 rounded border border-slate-700/70 px-2.5 py-2">
+                      <div className="text-[10px] text-slate-500">{event.label}</div>
+                      <div className="mt-1 truncate text-xs font-semibold text-slate-100" title={event.value}>
+                        {event.value}
+                      </div>
+                      <div className="mt-0.5 truncate text-[10px] text-slate-500" title={event.detail}>
+                        {event.detail}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <aside className="space-y-3">
+            <section
+              data-testid="agent-memory-growth-summary"
+              className="rounded-lg border border-slate-700 bg-slate-800/55 p-3"
+            >
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">기억·성장·위임</div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md bg-slate-900/55 p-2">
+                  <div className="text-lg font-bold text-white">{allAgentMemories.length}</div>
+                  <div className="text-[10px] text-slate-500">기억</div>
+                </div>
+                <div className="rounded-md bg-slate-900/55 p-2">
+                  <div className="text-lg font-bold text-white">{growthEvents.length}</div>
+                  <div className="text-[10px] text-slate-500">성장</div>
+                </div>
+                <div className="rounded-md bg-slate-900/55 p-2">
+                  <div className="text-lg font-bold text-white">{activeSubAgentCount}</div>
+                  <div className="text-[10px] text-slate-500">실행중</div>
+                </div>
+              </div>
+              <div className="mt-3 rounded-md bg-slate-900/55 p-2">
+                <div className="text-[11px] text-slate-500">추천 subagent</div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {preferredSubagents.map((subagent) => (
+                    <span
+                      key={subagent}
+                      className="max-w-full truncate rounded-full border border-slate-700 px-2 py-1 text-[11px] text-slate-200"
+                      title={subagent}
+                    >
+                      {subagent}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-2 text-[11px] text-slate-500">
+                전사 후보 기억 {candidateMemoryCount}개 · skill 기록 {skillUsage.length}개
+              </div>
+            </section>
+
+            <section
+              data-testid="reserve-profile-approval-panel"
+              className="rounded-lg border border-slate-700 bg-slate-800/55 p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">예비 프로필 승인</div>
+                <span className="text-[10px] text-slate-500">{reserveProfileCandidates.length} 후보</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {reserveProfileCandidates.map((candidate) => {
+                  const savingCandidate = approvingReserveProfileKey === candidate.agent_visual_profile_key;
+                  return (
+                    <div
+                      key={candidate.agent_visual_profile_key}
+                      className="rounded-md border border-slate-700/70 bg-slate-900/55 p-2"
+                    >
+                      <div className="min-w-0 text-xs font-semibold text-slate-100">{candidate.label_ko}</div>
+                      <div
+                        className="mt-1 truncate text-[10px] text-slate-500"
+                        title={candidate.agent_visual_profile_key}
+                      >
+                        {candidate.agent_visual_profile_key}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!onApproveReserveProfile || Boolean(approvingReserveProfileKey)}
+                        onClick={() => {
+                          void onApproveReserveProfile?.(candidate.agent_visual_profile_key);
+                        }}
+                        className="mt-2 w-full rounded-md bg-cyan-600 px-2 py-1.5 text-xs font-medium text-white transition hover:bg-cyan-500 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`${candidate.label_ko} 예비 프로필 승인`}
+                      >
+                        {savingCandidate ? "승인 저장 중..." : "교체 승인"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              {reserveProfileError ? <p className="mt-2 text-xs text-rose-300">{reserveProfileError}</p> : null}
+            </section>
+          </aside>
+        </div>
+
         <div className="rounded-lg bg-slate-700/30 p-3">
           <div className="mb-1 text-xs text-slate-500">
             {t({ ko: "표준 정체성", en: "Canonical Identity", ja: "Canonical Identity", zh: "Canonical Identity" })}
@@ -457,8 +645,6 @@ export default function AgentDetailTabContent({
 
   if (tab === "memory") {
     const memories = filteredAgentMemories;
-    const skillUsage = agentMemory?.skill_usage ?? [];
-    const growthEvents = agentMemory?.growth_events ?? [];
     return (
       <div className="space-y-3">
         {agentMemoryLoading ? (

@@ -184,6 +184,22 @@ function normalizeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeStringList(value: unknown, fallback: string[] = []): string[] {
+  const source = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[,\n]/g) : fallback;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of source) {
+    const text = normalizeString(entry);
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 function normalizeClassPath(value: unknown): AgentProfile["class_path"] {
   if (!value) return null;
   if (typeof value === "string") return value.trim() || null;
@@ -285,6 +301,8 @@ export function normalizeAgentProfile(input: unknown, fallbackRole: AgentRole = 
     custom_prompt_override: normalizeString(source.custom_prompt_override) || preset.custom_prompt_override,
     class_path: normalizeClassPath(source.class_path),
     promotion_policy: normalizePromotionPolicy(source.promotion_policy),
+    visual_profile_key: normalizeString(source.visual_profile_key) || preset.visual_profile_key || null,
+    preferred_subagents: normalizeStringList(source.preferred_subagents, preset.preferred_subagents ?? []),
   };
 }
 

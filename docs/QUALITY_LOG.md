@@ -105,3 +105,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: 528 expected runtime sprite PNG files inspected, 176 direction sets collectable, 0 errors, 0 warnings; web sprite tests passed.
 - Risk: The generator now records v2 walk-normalize metadata on future regeneration, but existing PNG assets were not regenerated in this P1 pass.
 - Follow-up: If sprite source art changes, run `corepack pnpm agents:sprites` first, then `corepack pnpm agents:sprites:check` before committing generated PNG/manifest changes.
+
+## 2026-05-07 09:34 KST - Agent Detail P2
+
+- Request: Continue from P1 to P2 and improve the employee detail screen.
+- Change: Added an operational profile board for visual profile, character settings, sprite settings, and generation history; surfaced memory/growth/subagent recommendations in the info view; connected reserve visual profile approval to `agent_profile.visual_profile_key` updates; preserved visual profile and preferred subagent fields during client/server profile normalization.
+- Changed files: `src/components/AgentDetail.tsx`, `src/components/agent-detail/AgentDetailTabContent.tsx`, `src/agent-profile.ts`, `server/modules/workflow/agents/agent-profile.ts`, targeted tests, `tasks/todo.md`, and this quality log.
+- Commands: `corepack pnpm exec prettier --write ...`, `corepack pnpm test:web -- AgentDetail AgentDetailTabContent`, `corepack pnpm test:api -- agent-profile`, `git diff --check`, `corepack pnpm build`.
+- Validation: Agent detail web tests passed, server agent-profile tests passed, whitespace check passed, and production build passed.
+- Risk: Reserve profile candidates currently fall back to the canonical visual profile pool when explicit `reserve` statuses are not populated.
+- Follow-up: Mark generated visual profile statuses as active/reserve from the staff mapping source when the seed profile manifest is promoted.

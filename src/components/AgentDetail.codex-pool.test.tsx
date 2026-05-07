@@ -11,8 +11,25 @@ vi.mock("./AgentAvatar", () => ({
   default: () => <div data-testid="agent-avatar" />,
 }));
 
+const tabContentMockState = vi.hoisted(() => ({
+  latestProps: null as { onApproveReserveProfile?: (profileKey: string) => void | Promise<void> } | null,
+}));
+
 vi.mock("./agent-detail/AgentDetailTabContent", () => ({
-  default: () => <div data-testid="agent-detail-tab-content" />,
+  default: (props: { onApproveReserveProfile?: (profileKey: string) => void | Promise<void> }) => {
+    tabContentMockState.latestProps = props;
+    return (
+      <button
+        type="button"
+        data-testid="agent-detail-tab-content"
+        onClick={() => {
+          void props.onApproveReserveProfile?.("design-artisan-storybook");
+        }}
+      >
+        approve reserve profile
+      </button>
+    );
+  },
 }));
 
 const department: Department = {
@@ -81,6 +98,7 @@ function makeAgent(overrides: Partial<Agent>): Agent {
 
 describe("AgentDetail cli execution settings", () => {
   beforeEach(() => {
+    tabContentMockState.latestProps = null;
     vi.restoreAllMocks();
     vi.spyOn(api, "getOAuthDebugStatus").mockResolvedValue({
       storageReady: true,
@@ -92,6 +110,45 @@ describe("AgentDetail cli execution settings", () => {
       skill_usage: [],
       growth_events: [],
     });
+  });
+
+  it("saves reserve visual profile approvals through agent profile updates", async () => {
+    const user = userEvent.setup();
+    const updateAgentMock = vi.spyOn(api, "updateAgent").mockResolvedValue();
+    vi.spyOn(api, "getCliAccountPools").mockResolvedValue([]);
+
+    const agent = makeAgent({
+      id: "agent-visual-1",
+      agent_profile: {
+        role_template: "junior",
+        growth_tier: 2,
+        capabilities: { execution: 3, architecture: 2, review: 2, research: 3, communication: 3, leadership: 2 },
+        prompt_style: { tone: 3, autonomy: 2, strictness: 3, collaboration: 4 },
+        specialties: [],
+        custom_prompt_override: null,
+        visual_profile_key: "systems-architect-animated-clean",
+        preferred_subagents: ["ui-designer"],
+      },
+    });
+
+    renderDetail(agent);
+
+    expect(tabContentMockState.latestProps?.onApproveReserveProfile).toBeTypeOf("function");
+    await user.click(screen.getByTestId("agent-detail-tab-content"));
+
+    await waitFor(() => {
+      expect(updateAgentMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(updateAgentMock).toHaveBeenCalledWith(
+      "agent-visual-1",
+      expect.objectContaining({
+        agent_profile: expect.objectContaining({
+          visual_profile_key: "design-artisan-storybook",
+          preferred_subagents: ["ui-designer"],
+        }),
+      }),
+    );
   });
 
   it("shows codex pool dropdown and sends only provider/pool settings", async () => {

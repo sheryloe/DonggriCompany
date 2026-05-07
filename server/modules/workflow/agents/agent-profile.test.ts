@@ -23,6 +23,8 @@ describe("server agent profile helpers", () => {
           auto_promote_at_xp: 300,
           team_leader_manual: true,
         },
+        visual_profile_key: "design-artisan-storybook",
+        preferred_subagents: ["ui-designer", "accessibility-tester", "ui-designer"],
       },
       "intern",
     );
@@ -41,6 +43,8 @@ describe("server agent profile helpers", () => {
       auto_promote_at_xp: 300,
       team_leader_manual: true,
     });
+    expect(profile.visual_profile_key).toBe("design-artisan-storybook");
+    expect(profile.preferred_subagents).toEqual(["ui-designer", "accessibility-tester"]);
   });
 
   it("maps xp to the recommended tier thresholds", () => {
@@ -58,6 +62,7 @@ describe("server agent profile helpers", () => {
         ...createPresetAgentProfile("senior"),
         growth_tier: 5,
         specialties: ["backend", "agent orchestration"],
+        preferred_subagents: ["backend-developer", "database-optimizer"],
         custom_prompt_override: "Escalate risk early and justify tradeoffs.",
         class_path: ["engineering", "backend", "platform"],
         promotion_policy: {
@@ -79,6 +84,7 @@ describe("server agent profile helpers", () => {
     expect(block).toContain("Promotion policy: @xp>=300");
     expect(block).not.toContain("junior -> senior");
     expect(block).toContain("Specialties: backend, agent orchestration");
+    expect(block).toContain("Preferred subagents: backend-developer, database-optimizer");
     expect(block).toContain("Review lenses to emphasize: security, performance");
     expect(block).toContain("Review depth: force_2_pass");
     expect(block).toContain("Custom override (highest priority): Escalate risk early and justify tradeoffs.");

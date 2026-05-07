@@ -43,6 +43,8 @@ export interface AgentProfile {
   custom_prompt_override: string | null;
   class_path?: AgentClassPath | string | string[] | null;
   promotion_policy?: AgentPromotionPolicy | string | null;
+  visual_profile_key?: string | null;
+  preferred_subagents?: string[];
 }
 
 const PROFILE_PRESETS: Record<AgentRoleTemplate, AgentProfile> = {
@@ -219,6 +221,10 @@ function normalizeSpecialties(value: unknown, fallback: string[] = []): string[]
   return out;
 }
 
+function normalizeStringList(value: unknown, fallback: string[] = []): string[] {
+  return normalizeSpecialties(value, fallback);
+}
+
 function normalizeCapabilities(value: unknown, fallback: AgentCapabilityMatrix): AgentCapabilityMatrix {
   const source = parseJsonObject(value) ?? {};
   return {
@@ -299,6 +305,8 @@ export function normalizeAgentProfile(value: unknown, fallbackRole: AgentRoleTem
     custom_prompt_override: normalizeText(source.custom_prompt_override) || null,
     class_path: normalizeClassPath(source.class_path),
     promotion_policy: normalizePromotionPolicy(source.promotion_policy),
+    visual_profile_key: normalizeText(source.visual_profile_key) || null,
+    preferred_subagents: normalizeStringList(source.preferred_subagents),
   };
 }
 
@@ -352,6 +360,7 @@ export function buildAgentPromptProfileBlock(input: {
     `collaboration=${collaborationWord(profile.prompt_style.collaboration)}(${profile.prompt_style.collaboration})`,
   ].join(", ");
   const specialties = profile.specialties.join(", ");
+  const preferredSubagents = (profile.preferred_subagents ?? []).join(", ");
   const reviewLenses = Array.isArray(workflowProfile?.review_lenses)
     ? workflowProfile?.review_lenses.filter((value) => normalizeText(value).length > 0).join(", ")
     : "";
@@ -399,6 +408,7 @@ export function buildAgentPromptProfileBlock(input: {
     `- Capability matrix: ${capabilitySummary}`,
     `- Working style: ${styleSummary}`,
     specialties ? `- Specialties: ${specialties}` : "",
+    preferredSubagents ? `- Preferred subagents: ${preferredSubagents}` : "",
     reviewLenses ? `- Review lenses to emphasize: ${reviewLenses}` : "",
     reviewDepth ? `- Review depth: ${reviewDepth}` : "",
     workflowProfile?.role === "primary_author" && workflowProfile.max_review_rounds

@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CliAccountPoolView, OAuthStatus } from "../api";
 import * as api from "../api";
+import { normalizeAgentProfile } from "../agent-profile";
 import { getRoleDisplayLabel } from "../app/canonical-display";
 import { resolveAgentVisualProfile } from "../agent-visual-profiles";
 import { localeName, useI18n } from "../i18n";
@@ -57,6 +58,8 @@ export default function AgentDetail({
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [agentMemory, setAgentMemory] = useState<AgentMemoryResponse | null>(null);
   const [agentMemoryLoading, setAgentMemoryLoading] = useState(false);
+  const [reserveProfileSavingKey, setReserveProfileSavingKey] = useState<string | null>(null);
+  const [reserveProfileError, setReserveProfileError] = useState<string | null>(null);
 
   const agentTasks = tasks.filter((task) => task.assigned_agent_id === agent.id);
   const agentSubAgents = subAgents.filter((subAgent) => subAgent.parentAgentId === agent.id);
@@ -234,6 +237,34 @@ export default function AgentDetail({
     setSelectedOAuthAccountId(agent.oauth_account_id ?? "");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
   }, [agent.cli_account_pool_id, agent.cli_provider, agent.oauth_account_id]);
+
+  const handleApproveReserveProfile = useCallback(
+    async (profileKey: string) => {
+      setReserveProfileSavingKey(profileKey);
+      setReserveProfileError(null);
+      try {
+        const nextProfile = {
+          ...normalizeAgentProfile(agent.agent_profile, agent.role),
+          visual_profile_key: profileKey,
+        };
+        await api.updateAgent(agent.id, { agent_profile: nextProfile });
+        onAgentUpdated?.();
+      } catch (error) {
+        console.error("Failed to approve reserve visual profile:", error);
+        setReserveProfileError(
+          t({
+            ko: "예비 비주얼 프로필 승인 저장에 실패했습니다.",
+            en: "Failed to save the reserve visual profile approval.",
+            ja: "Failed to save the reserve visual profile approval.",
+            zh: "Failed to save the reserve visual profile approval.",
+          }),
+        );
+      } finally {
+        setReserveProfileSavingKey(null);
+      }
+    },
+    [agent.agent_profile, agent.id, agent.role, onAgentUpdated, t],
+  );
 
   return (
     <div
@@ -494,6 +525,9 @@ export default function AgentDetail({
             onOpenTerminal={onOpenTerminal}
             agentMemory={agentMemory}
             agentMemoryLoading={agentMemoryLoading}
+            onApproveReserveProfile={handleApproveReserveProfile}
+            approvingReserveProfileKey={reserveProfileSavingKey}
+            reserveProfileError={reserveProfileError}
           />
         </div>
       </div>

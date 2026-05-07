@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getSkillUsageSummary } from "../../api";
 import type { Agent, SkillUsageSummary } from "../../types";
 import SkillHistoryPanel from "../SkillHistoryPanel";
+import MemorySearchPanel from "./MemorySearchPanel";
 import type { TFunction } from "./model";
 import { skillText } from "./skillLibraryText";
 
@@ -40,8 +41,9 @@ export default function SkillsMemorySection({
         <div className="text-sm font-semibold text-slate-100">{skillText(t, "memory.title")}</div>
         <div className="text-[11px] text-slate-500">{skillText(t, "memory.subtitle")}</div>
       </div>
+      <MemorySearchPanel agents={agents} />
       {usageSummary.length > 0 ? (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="my-3 flex flex-wrap gap-2">
           {usageSummary.slice(0, 8).map((skill) => (
             <span
               key={skill.skill_id}

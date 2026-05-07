@@ -78,12 +78,17 @@ export async function searchMemory(input: {
   thread_id?: string | null;
   layer?: string | null;
   scope?: "local" | "global" | "all";
+  tags?: string[] | string | null;
+  created_from?: number | string | null;
+  created_to?: number | string | null;
+  updated_from?: number | string | null;
+  updated_to?: number | string | null;
   limit?: number;
 }): Promise<NativeMemory[]> {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(input)) {
     if (value === undefined || value === null || value === "") continue;
-    params.set(key, String(value));
+    params.set(key, Array.isArray(value) ? value.join(",") : String(value));
   }
   const payload = await request<{ ok: boolean; memories: NativeMemory[] }>(`/api/memory/search?${params.toString()}`);
   return payload.memories;

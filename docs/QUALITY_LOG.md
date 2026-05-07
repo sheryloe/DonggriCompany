@@ -165,3 +165,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Gemini 3.1 continued to report capacity 429, fallback completed with `gemini-2.5-pro`, final document was normalized to remove a duplicated partial preface, and UTF-8 Korean rendering was verified.
 - Risk: The final verdict came from fallback `gemini-2.5-pro` because the preferred 3.1 preview model remained capacity constrained.
 - Follow-up: Commit the P5 P0/P1 change set, then proceed to P2/P3 follow-up work identified in the final review.
+
+## 2026-05-07 14:41 KST - Memory Search UI
+
+- Request: Commit the current P5 P0/P1 change set, then start the Gemini-recommended memory search UI patch set.
+- Change: Committed the P5 P0/P1 work as `f59d783`, added a long-term memory search panel to the Skills memory section, exposed query/tag/created/updated date/layer/scope/agent/project filters, rendered memory result summaries with tags and timestamps, and extended the client search API to serialize array/date filter parameters.
+- Changed files: `src/api/memory.ts`, `src/components/skills-library/MemorySearchPanel.tsx`, `src/components/skills-library/MemorySearchPanel.test.tsx`, `src/components/skills-library/SkillsMemorySection.tsx`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:web -- MemorySearchPanel SkillsLibrary`, `corepack pnpm build`.
+- Validation: MemorySearchPanel and SkillsLibrary web tests passed, and production build passed.
+- Risk: The project filter currently accepts raw `project_id`; a richer project selector would improve operator ergonomics when project metadata is already loaded elsewhere in the app.
+- Follow-up: Connect the memory search panel to project selector context or a project lookup endpoint so operators do not need to paste project ids manually.

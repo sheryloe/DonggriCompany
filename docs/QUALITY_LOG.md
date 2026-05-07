@@ -175,3 +175,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: MemorySearchPanel and SkillsLibrary web tests passed, and production build passed.
 - Risk: The project filter currently accepts raw `project_id`; a richer project selector would improve operator ergonomics when project metadata is already loaded elsewhere in the app.
 - Follow-up: Connect the memory search panel to project selector context or a project lookup endpoint so operators do not need to paste project ids manually.
+
+## 2026-05-07 14:49 KST - Gemini Memory Search UI Review
+
+- Request: After committing the remaining memory search UI changes, run Gemini CLI with `gemini-3.1-pro-preview` first and produce a detailed review/improvement analysis report.
+- Change: Generated a bounded Gemini review prompt and analysis report for memory search UI commit `6761f34`.
+- Changed files: `docs/analysis/GEMINI_PRO_MEMORY_SEARCH_UI_REVIEW_PROMPT_2026-05-07.md`, `docs/analysis/GEMINI_PRO_MEMORY_SEARCH_UI_REVIEW_2026-05-07.md`, `docs/QUALITY_LOG.md`.
+- Commands: `.\scripts\run-gemini-pro-analysis.ps1 -PromptFile '.\docs\analysis\GEMINI_PRO_MEMORY_SEARCH_UI_REVIEW_PROMPT_2026-05-07.md' -OutputPath '.\docs\analysis\GEMINI_PRO_MEMORY_SEARCH_UI_REVIEW_2026-05-07.md' -PrimaryModel 'gemini-3.1-pro-preview' -FallbackModel 'gemini-2.5-pro' -TimeoutSeconds 900`.
+- Validation: Gemini CLI completed with `gemini-3.1-pro-preview` directly, without fallback; UTF-8 Korean report rendering was verified.
+- Risk: Gemini report is evidence-based from the supplied prompt and validation summary, not an independent filesystem/tool inspection.
+- Follow-up: Use the report's next patch set as the P1/P2 backlog, starting with a project selector for memory search.

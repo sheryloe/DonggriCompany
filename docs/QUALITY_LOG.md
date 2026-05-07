@@ -95,3 +95,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Web targeted suite passed, API decision-inbox suite passed, production build passed, OpenAPI check passed, and whitespace check passed.
 - Risk: Planner JSON quality still depends on the planning agent following the contract; invalid or partial planner analysis is ignored and template/fallback analysis remains available.
 - Follow-up: Add live planner-output observability if production prompts repeatedly fall back to template analysis.
+
+## 2026-05-07 09:22 KST - Walk Normalize P1
+
+- Request: Proceed from P0 to P1 in priority order after committing the P0 decision-option work.
+- Change: Split the agent sprite walk-normalize contract into a reusable config, moved direction-specific reference crop/anchor/frame-offset rules out of the generator, added a repeatable sprite asset quality checker, generated a deterministic walk animation smoke report, and added runtime walk actor tests.
+- Changed files: `tools/agents/build-agent-sprites-from-sheet.mjs`, `tools/agents/walk-normalize-config.mjs`, `tools/agents/check-walk-normalize-assets.mjs`, `public/generated/agent-visual-profiles/walk-animation-smoke-v1.json`, `src/components/office-view/spriteActors.test.ts`, `package.json`, `tasks/todo.md`, and this quality log.
+- Commands: `corepack pnpm run agents:sprites:check`, `node --check tools/agents/build-agent-sprites-from-sheet.mjs`, `node --check tools/agents/walk-normalize-config.mjs`, `node --check tools/agents/check-walk-normalize-assets.mjs`, `corepack pnpm test:web -- spriteAssets spriteActors`.
+- Validation: 528 expected runtime sprite PNG files inspected, 176 direction sets collectable, 0 errors, 0 warnings; web sprite tests passed.
+- Risk: The generator now records v2 walk-normalize metadata on future regeneration, but existing PNG assets were not regenerated in this P1 pass.
+- Follow-up: If sprite source art changes, run `corepack pnpm agents:sprites` first, then `corepack pnpm agents:sprites:check` before committing generated PNG/manifest changes.

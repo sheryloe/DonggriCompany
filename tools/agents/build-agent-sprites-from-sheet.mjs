@@ -2,9 +2,21 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import prettier from "prettier";
 import sharp from "sharp";
+import {
+  buildReferenceCrop,
+  clamp,
+  getSourceCharacterCell,
+  getWalkFrameOffset,
+  outputSpec,
+  sourceSheet,
+  walkNormalizeDirections,
+  walkNormalizeFrames,
+  walkNormalizePoseSpecs,
+  walkNormalizeVersion,
+} from "./walk-normalize-config.mjs";
 
 const projectRoot = process.cwd();
-const sourcePath = path.join(projectRoot, "public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png");
+const sourcePath = path.join(projectRoot, sourceSheet.path);
 const spritesRoot = path.join(projectRoot, "public/sprites");
 const previewPath = path.join(projectRoot, "public/generated/agent-visual-profiles/runtime-sprite-preview-v1.png");
 const manifestPath = path.join(
@@ -12,30 +24,13 @@ const manifestPath = path.join(
   "public/generated/agent-visual-profiles/sprite-normalization-manifest-v1.json",
 );
 
-const columns = 5;
-const rows = 7;
-const characterCount = 35;
-const runtimeMaxSpriteNumber = 44;
-const outputPadding = 12;
-const normalizedSpriteSize = 96;
-const normalizedMaxContentSize = 78;
+const characterCount = sourceSheet.sourceCharacters;
+const runtimeMaxSpriteNumber = sourceSheet.runtimeMaxSprites;
+const outputPadding = outputSpec.cropPadding;
+const normalizedSpriteSize = outputSpec.spriteSize;
+const normalizedMaxContentSize = outputSpec.maxContentSize;
 const backgroundDistanceThreshold = 12;
-const walkFrameOffsets = [
-  { x: 0, y: 0 },
-  { x: -2, y: -1 },
-  { x: 2, y: 0 },
-];
-
-const poseSpecs = [
-  { key: "D", source: "F", frameNames: ["D-1", "D-2", "D-3"], centerRatio: 0.19, cropWidthRatio: 0.3 },
-  { key: "L", source: "L", frameNames: ["L-1", "L-2", "L-3"], centerRatio: 0.44, cropWidthRatio: 0.3 },
-  { key: "B", source: "B", frameNames: ["B-1", "B-2", "B-3"], centerRatio: 0.68, cropWidthRatio: 0.3 },
-  { key: "R", source: "R", frameNames: ["R-1", "R-2", "R-3"], centerRatio: 0.91, cropWidthRatio: 0.3 },
-];
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
+const poseSpecs = walkNormalizePoseSpecs;
 
 function colorDistance(a, b) {
   const dr = a[0] - b[0];
@@ -267,18 +262,9 @@ function keepPrimaryCharacterComponents(data, width, height, channels) {
 }
 
 async function extractPose(sheet, cell, poseSpec) {
-  const cropWidth = Math.round(cell.width * poseSpec.cropWidthRatio);
-  const cropHeight = Math.round(cell.height * 0.72);
-  const centerX = Math.round(cell.x + cell.width * poseSpec.centerRatio);
-  const cropLeft = clamp(Math.round(centerX - cropWidth / 2), cell.x, cell.x + cell.width - cropWidth);
-  const cropTop = clamp(Math.round(cell.y + cell.height * 0.22), cell.y, cell.y + cell.height - cropHeight);
+  const crop = buildReferenceCrop(cell, poseSpec);
 
-  const { data, info } = await sheet
-    .clone()
-    .extract({ left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const { data, info } = await sheet.clone().extract(crop).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
   const keyed = makeTransparentFromConnectedBackground(data, info.width, info.height, info.channels);
   const filtered = removeHeaderArtifacts(keyed, info.width, info.height, info.channels);
@@ -306,8 +292,8 @@ async function extractPose(sheet, cell, poseSpec) {
     .toBuffer();
 }
 
-async function normalizePoseFrame(buffer, frameIndex) {
-  const offset = walkFrameOffsets[frameIndex] ?? walkFrameOffsets[0];
+async function normalizePoseFrame(buffer, direction, frameIndex) {
+  const offset = getWalkFrameOffset(direction, frameIndex);
   const resized = await sharp(buffer)
     .resize({
       width: normalizedMaxContentSize,
@@ -402,18 +388,12 @@ async function main() {
   const manifestEntries = [];
 
   for (let number = 1; number <= characterCount; number += 1) {
-    const col = (number - 1) % columns;
-    const row = Math.floor((number - 1) / columns);
-    const x = Math.round((metadata.width / columns) * col);
-    const y = Math.round((metadata.height / rows) * row);
-    const nextX = Math.round((metadata.width / columns) * (col + 1));
-    const nextY = Math.round((metadata.height / rows) * (row + 1));
-    const cell = { number, x, y, width: nextX - x, height: nextY - y };
+    const cell = getSourceCharacterCell(metadata, number);
 
     for (const poseSpec of poseSpecs) {
       const poseBuffer = await extractPose(sheet, cell, poseSpec);
       for (const [frameIndex, frameName] of poseSpec.frameNames.entries()) {
-        const buffer = await normalizePoseFrame(poseBuffer, frameIndex);
+        const buffer = await normalizePoseFrame(poseBuffer, poseSpec.key, frameIndex);
         const runtimeKey = `${number}-${frameName}`;
         spriteBuffers.set(runtimeKey, buffer);
         await fs.writeFile(path.join(spritesRoot, `${runtimeKey}.png`), buffer);
@@ -424,6 +404,9 @@ async function main() {
           file: `public/sprites/${runtimeKey}.png`,
           source_character: number,
           source_pose: poseSpec.source,
+          reference_crop: buildReferenceCrop(cell, poseSpec),
+          anchor: poseSpec.anchor,
+          frame_offset: getWalkFrameOffset(poseSpec.key, frameIndex),
           normalized_size: normalizedSpriteSize,
         });
       }
@@ -432,8 +415,9 @@ async function main() {
 
   for (let number = characterCount + 1; number <= runtimeMaxSpriteNumber; number += 1) {
     const sourceNumber = ((number - 1) % characterCount) + 1;
+    const sourceCell = getSourceCharacterCell(metadata, sourceNumber);
     for (const poseSpec of poseSpecs) {
-      for (const frameName of poseSpec.frameNames) {
+      for (const [frameIndex, frameName] of poseSpec.frameNames.entries()) {
         const sourceFrame = `${sourceNumber}-${frameName}`;
         const runtimeKey = `${number}-${frameName}`;
         const buffer = spriteBuffers.get(sourceFrame);
@@ -443,10 +427,13 @@ async function main() {
         manifestEntries.push({
           sprite_number: number,
           direction: poseSpec.key,
-          frame: poseSpec.frameNames.indexOf(frameName) + 1,
+          frame: frameIndex + 1,
           file: `public/sprites/${runtimeKey}.png`,
           source_character: sourceNumber,
           source_pose: poseSpec.source,
+          reference_crop: buildReferenceCrop(sourceCell, poseSpec),
+          anchor: poseSpec.anchor,
+          frame_offset: getWalkFrameOffset(poseSpec.key, frameIndex),
           normalized_size: normalizedSpriteSize,
         });
       }
@@ -455,13 +442,24 @@ async function main() {
 
   await buildPreview(spriteBuffers);
   const manifest = {
-    version: "sprite-normalization-v1",
-    source: "public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png",
+    version: walkNormalizeVersion,
+    source: sourceSheet.path,
     runtime_sprites: runtimeMaxSpriteNumber,
     source_characters: characterCount,
-    directions: poseSpecs.map((poseSpec) => poseSpec.key),
-    frames_per_direction: 3,
+    directions: walkNormalizeDirections,
+    frames_per_direction: walkNormalizeFrames.length,
     normalized_size: normalizedSpriteSize,
+    max_content_size: normalizedMaxContentSize,
+    reference_crop_rules: poseSpecs.map((poseSpec) => ({
+      direction: poseSpec.key,
+      source_pose: poseSpec.source,
+      label: poseSpec.label,
+      reference_crop: poseSpec.referenceCrop,
+      anchor: poseSpec.anchor,
+      frame_offsets: poseSpec.frameNames.map((_, frameIndex) => getWalkFrameOffset(poseSpec.key, frameIndex)),
+    })),
+    preview_path: "public/generated/agent-visual-profiles/runtime-sprite-preview-v1.png",
+    smoke_report_path: "public/generated/agent-visual-profiles/walk-animation-smoke-v1.json",
     entries: manifestEntries,
   };
   await fs.writeFile(manifestPath, await prettier.format(JSON.stringify(manifest), { parser: "json" }), "utf8");

@@ -115,3 +115,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Agent detail web tests passed, server agent-profile tests passed, whitespace check passed, and production build passed.
 - Risk: Reserve profile candidates currently fall back to the canonical visual profile pool when explicit `reserve` statuses are not populated.
 - Follow-up: Mark generated visual profile statuses as active/reserve from the staff mapping source when the seed profile manifest is promoted.
+
+## 2026-05-07 10:37 KST - Task Card and Office Ops P3
+
+- Request: Commit P2, then proceed to P3 업무 카드/오피스 관제 in priority order.
+- Change: Added compact task-card operations metadata for goal command, responsible departments, verification gates, recent logs, and office timeline signals; unified task status labels/colors between task cards and the live operations rail; projected recent task logs from the task list API with schema compatibility checks.
+- Changed files: Task card/board components, live operations rail status helper/tests, task list API/tests, shared task types, `tasks/todo.md`, and this quality log.
+- Commands: `corepack pnpm exec prettier --write ...`, `corepack pnpm test:web -- TaskCard LiveOperationsRail`, `corepack pnpm test:api -- crud.workflow-pack-filter`, `corepack pnpm build`, `git diff --check`.
+- Validation: TaskCard and LiveOperationsRail web tests passed, task CRUD API tests passed, production build passed, and whitespace check passed.
+- Risk: Task timeline uses current in-memory office events; persisted historical meeting/call/delivery rows would be needed for long-term replay after reload.
+- Follow-up: P4 should add durable memory/search linkage so task reports can retrieve longer evidence trails beyond the compact card view.

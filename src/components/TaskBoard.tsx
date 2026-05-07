@@ -1,7 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
 import { bulkHideTasks } from "../api";
 import { useI18n } from "../i18n";
-import type { Agent, Department, SubTask, Task, WorkflowPackKey } from "../types";
+import type {
+  Agent,
+  CeoOfficeCall,
+  CrossDeptDelivery,
+  Department,
+  MeetingPresence,
+  SubTask,
+  Task,
+  WorkflowPackKey,
+} from "../types";
 import ProjectManagerModal from "./ProjectManagerModal";
 import BulkHideModal from "./taskboard/BulkHideModal";
 import CreateTaskModal from "./taskboard/CreateTaskModal";
@@ -14,6 +23,9 @@ interface TaskBoardProps {
   agents: Agent[];
   departments: Department[];
   subtasks: SubTask[];
+  meetingPresence?: MeetingPresence[];
+  ceoOfficeCalls?: CeoOfficeCall[];
+  crossDeptDeliveries?: CrossDeptDelivery[];
   onCreateTask: (input: {
     title: string;
     description?: string;
@@ -45,6 +57,9 @@ export function TaskBoard({
   agents,
   departments,
   subtasks,
+  meetingPresence = [],
+  ceoOfficeCalls = [],
+  crossDeptDeliveries = [],
   onCreateTask,
   onUpdateTask,
   onDeleteTask,
@@ -270,6 +285,9 @@ export function TaskBoard({
                       agents={agents}
                       departments={departments}
                       taskSubtasks={subtasksByTask[task.id] ?? []}
+                      meetingPresence={meetingPresence}
+                      ceoOfficeCalls={ceoOfficeCalls}
+                      crossDeptDeliveries={crossDeptDeliveries}
                       isHiddenTask={hiddenTaskIds.has(task.id)}
                       onUpdateTask={onUpdateTask}
                       onDeleteTask={onDeleteTask}

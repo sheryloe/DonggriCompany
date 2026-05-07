@@ -1,23 +1,11 @@
 import type { Agent, Task, TaskStatus } from "../types";
+import { getTaskStatusDotClass, getTaskStatusKoLabel, isLiveTaskStatus } from "./task-status-display";
 
 interface LiveOperationsRailProps {
   agents: Agent[];
   tasks: Task[];
   connected: boolean;
 }
-
-const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  inbox: "대기",
-  planned: "계획됨",
-  collaborating: "협업 중",
-  in_progress: "진행 중",
-  review: "검토 중",
-  done: "완료",
-  pending: "보류",
-  cancelled: "취소",
-};
-
-const LIVE_STATUSES = new Set<TaskStatus>(["planned", "collaborating", "in_progress", "review"]);
 
 function formatRelativeTime(value: number | null | undefined): string {
   if (!value) return "방금 전";
@@ -36,17 +24,14 @@ function agentSprite(agent: Agent | undefined): string | null {
 }
 
 function statusTone(status: TaskStatus): string {
-  if (status === "done") return "bg-emerald-400";
-  if (status === "cancelled") return "bg-rose-400";
-  if (LIVE_STATUSES.has(status)) return "bg-sky-400";
-  return "bg-slate-500";
+  return getTaskStatusDotClass(status);
 }
 
 export default function LiveOperationsRail({ agents, tasks, connected }: LiveOperationsRailProps) {
   const workingAgents = agents.filter((agent) => agent.status === "working");
   const idleAgents = agents.filter((agent) => agent.status === "idle");
   const liveTasks = tasks
-    .filter((task) => LIVE_STATUSES.has(task.status))
+    .filter((task) => isLiveTaskStatus(task.status))
     .sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0))
     .slice(0, 6);
   const recentTasks = [...tasks].sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0)).slice(0, 4);
@@ -107,7 +92,7 @@ export default function LiveOperationsRail({ agents, tasks, connected }: LiveOpe
                     </div>
                   </div>
                   <span className="rounded-md border border-sky-400/20 bg-sky-400/10 px-2 py-1 text-[10px] font-semibold text-sky-200">
-                    {TASK_STATUS_LABELS[task.status]}
+                    {getTaskStatusKoLabel(task.status)}
                   </span>
                 </div>
               );

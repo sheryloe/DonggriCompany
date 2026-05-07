@@ -528,6 +528,7 @@ export interface Task {
   subtask_total?: number;
   subtask_done?: number;
   hidden?: number;
+  recent_logs?: TaskLog[];
 }
 
 export type AssignmentMode = "auto" | "manual";

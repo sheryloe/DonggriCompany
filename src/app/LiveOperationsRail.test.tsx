@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { Agent, Task } from "../types";
 import LiveOperationsRail from "./LiveOperationsRail";
+import { getTaskStatusKoLabel } from "./task-status-display";
 
 const agent: Agent = {
   id: "agent-1",
@@ -45,7 +46,7 @@ describe("LiveOperationsRail", () => {
     expect(screen.getByText("라이브")).toBeInTheDocument();
     expect(screen.getByText("근무 직원")).toBeInTheDocument();
     expect(screen.getAllByText("앱 셸 리디자인")).toHaveLength(2);
-    expect(screen.getByText("진행 중")).toBeInTheDocument();
+    expect(screen.getByText(getTaskStatusKoLabel(task.status))).toBeInTheDocument();
     expect(screen.getByText("시스템 상태")).toBeInTheDocument();
     expect(screen.getByText("서버 연결")).toBeInTheDocument();
     expect(screen.getByText("최근 시스템 로그")).toBeInTheDocument();

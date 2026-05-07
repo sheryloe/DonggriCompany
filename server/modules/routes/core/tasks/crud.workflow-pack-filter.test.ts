@@ -95,6 +95,13 @@ function createTaskCrudHarness(): { db: DatabaseSync; routes: Map<string, RouteH
       status TEXT NOT NULL,
       delegated_task_id TEXT
     );
+    CREATE TABLE task_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
     CREATE TABLE settings (
       key TEXT PRIMARY KEY,
       value TEXT
@@ -234,6 +241,68 @@ describe("task CRUD workflow pack behavior", () => {
         id: "task-report-1",
         workflow_pack_key: "report",
       });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("returns compact recent task logs on GET /api/tasks", () => {
+    const { db, routes } = createTaskCrudHarness();
+    try {
+      db.prepare(
+        `
+          INSERT INTO tasks (
+            id, title, description, department_id, assigned_agent_id, project_id,
+            status, priority, task_type, workflow_pack_key, workflow_meta_json, output_format,
+            project_path, base_branch, result, started_at, completed_at, source_task_id, hidden, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      ).run(
+        "task-logs-1",
+        "Logged task",
+        null,
+        null,
+        null,
+        null,
+        "in_progress",
+        3,
+        "development",
+        "development",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0,
+        10,
+        30,
+      );
+      db.prepare("INSERT INTO task_logs (task_id, kind, message, created_at) VALUES (?, ?, ?, ?)").run(
+        "task-logs-1",
+        "system",
+        "old log",
+        20,
+      );
+      db.prepare("INSERT INTO task_logs (task_id, kind, message, created_at) VALUES (?, ?, ?, ?)").run(
+        "task-logs-1",
+        "agent",
+        "latest log",
+        40,
+      );
+
+      const handler = routes.get("GET /api/tasks");
+      expect(handler).toBeTypeOf("function");
+
+      const res = createFakeResponse();
+      handler?.({ query: {} }, res);
+
+      expect(res.statusCode).toBe(200);
+      const payload = res.payload as { tasks: Array<{ id: string; recent_logs: Array<{ message: string }> }> };
+      expect(payload.tasks).toHaveLength(1);
+      expect(payload.tasks[0].recent_logs.map((log) => log.message)).toEqual(["latest log", "old log"]);
     } finally {
       db.close();
     }

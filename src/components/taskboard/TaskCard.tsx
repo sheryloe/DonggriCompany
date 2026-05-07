@@ -1,10 +1,27 @@
 import { useState } from "react";
-import type { Agent, Department, GoalCommandKey, GoalCommandPreset, SubTask, Task, TaskStatus } from "../../types";
+import type {
+  Agent,
+  CeoOfficeCall,
+  CrossDeptDelivery,
+  Department,
+  GoalCommandPreset,
+  MeetingPresence,
+  SubTask,
+  Task,
+  TaskStatus,
+} from "../../types";
 import { useI18n } from "../../i18n";
 import { normalizeSubtaskTitleForUi } from "../../app/subtask-title-normalizer";
+import { getTaskStatusBadgeClass } from "../../app/task-status-display";
 import AgentAvatar from "../AgentAvatar";
 import DiffModal from "./DiffModal";
 import { getGoalCommandTeamLabel, getGoalCommandTitle } from "./goal-command-text";
+import {
+  resolveTaskGoalCommandMeta,
+  resolveTaskRecentLogs,
+  resolveTaskTimelineEvents,
+  resolveTaskVerificationGates,
+} from "./task-card-meta";
 import {
   getTaskTypeBadge,
   isHideableStatus,
@@ -19,6 +36,9 @@ interface TaskCardProps {
   agents: Agent[];
   departments: Department[];
   taskSubtasks: SubTask[];
+  meetingPresence?: MeetingPresence[];
+  ceoOfficeCalls?: CeoOfficeCall[];
+  crossDeptDeliveries?: CrossDeptDelivery[];
   isHiddenTask?: boolean;
   onUpdateTask: (id: string, data: Partial<Task>) => void;
   onDeleteTask: (id: string) => void;
@@ -46,40 +66,20 @@ function tKo(labels: { ko?: string; en?: string }): string {
   return labels.ko ?? labels.en ?? "";
 }
 
-function parseWorkflowMeta(task: Task): Record<string, unknown> {
-  if (!task.workflow_meta_json) return {};
-  try {
-    const parsed = JSON.parse(task.workflow_meta_json);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function resolveGoalCommandMeta(
-  task: Task,
-): Pick<GoalCommandPreset, "key" | "teamPreset" | "workflowPackKey" | "slashCommand"> | null {
-  const parsed = parseWorkflowMeta(task);
-  const key = typeof parsed.goal_command === "string" ? parsed.goal_command : "";
-  const teamPreset = typeof parsed.team_preset === "string" ? parsed.team_preset : "";
-  const workflowPackKey =
-    typeof parsed.workflow_pack_key === "string" ? parsed.workflow_pack_key : task.workflow_pack_key;
-  const slashCommand = typeof parsed.slash_command === "string" ? parsed.slash_command : `/dg-${key}`;
-  if (!key || !teamPreset || !workflowPackKey) return null;
-  return {
-    key: key as GoalCommandKey,
-    teamPreset: teamPreset as GoalCommandPreset["teamPreset"],
-    workflowPackKey: workflowPackKey as GoalCommandPreset["workflowPackKey"],
-    slashCommand: slashCommand as GoalCommandPreset["slashCommand"],
-  };
-}
-
 function resolveAutoRoutingMeta(task: Task): {
   projectConfidence: number;
   agentConfidence: number;
   requiresPmoTriage: boolean;
 } | null {
-  const parsed = parseWorkflowMeta(task);
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed =
+      task.workflow_meta_json && typeof task.workflow_meta_json === "string"
+        ? (JSON.parse(task.workflow_meta_json) as Record<string, unknown>)
+        : {};
+  } catch {
+    parsed = {};
+  }
   if (parsed.auto_routing_version !== "donggri_task_auto_routing_v1") return null;
   return {
     projectConfidence: typeof parsed.project_routing_confidence === "number" ? parsed.project_routing_confidence : 0,
@@ -98,6 +98,9 @@ export default function TaskCard({
   agents,
   departments,
   taskSubtasks,
+  meetingPresence = [],
+  ceoOfficeCalls = [],
+  crossDeptDeliveries = [],
   isHiddenTask,
   onUpdateTask,
   onDeleteTask,
@@ -129,9 +132,18 @@ export default function TaskCard({
   const assignedLabel = assignedAgent ? assignedAgent.name_ko || assignedAgent.name : fallbackAssignedName || null;
   const department = departments.find((departmentItem) => departmentItem.id === task.department_id);
   const typeBadge = getTaskTypeBadge(task.task_type, tKo);
-  const goalCommandMeta = resolveGoalCommandMeta(task);
+  const goalCommandMeta = resolveTaskGoalCommandMeta(task);
   const autoRoutingMeta = resolveAutoRoutingMeta(task);
   const projectName = getProjectName(task);
+  const verificationGates = resolveTaskVerificationGates(task);
+  const recentLogs = resolveTaskRecentLogs(task);
+  const timelineEvents = resolveTaskTimelineEvents({
+    task,
+    agents,
+    meetingPresence,
+    ceoOfficeCalls,
+    crossDeptDeliveries,
+  });
 
   const canRun = task.status === "planned" || task.status === "inbox";
   const canStop = task.status === "in_progress";
@@ -186,11 +198,91 @@ export default function TaskCard({
         )}
       </div>
 
+      {(goalCommandMeta || verificationGates.length > 0 || recentLogs.length > 0 || timelineEvents.length > 0) && (
+        <div className="mb-3 space-y-2 rounded-lg border border-slate-700/70 bg-slate-900/45 p-2.5">
+          {goalCommandMeta && (
+            <div className="grid gap-2 text-[11px] sm:grid-cols-2">
+              <div className="min-w-0">
+                <div className="text-slate-500">goal command</div>
+                <div className="mt-0.5 truncate font-mono text-cyan-100" title={goalCommandMeta.slashCommand}>
+                  {goalCommandMeta.slashCommand}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-slate-500">담당 부서</div>
+                <div className="mt-0.5 truncate text-slate-200" title={goalCommandMeta.requiredDepartments.join(", ")}>
+                  {goalCommandMeta.requiredDepartments.length > 0
+                    ? goalCommandMeta.requiredDepartments.join(", ")
+                    : department?.name_ko || department?.name || "-"}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {verificationGates.length > 0 && (
+            <div>
+              <div className="mb-1 text-[11px] text-slate-500">검증 게이트</div>
+              <div className="flex flex-wrap gap-1.5">
+                {verificationGates.map((gate) => (
+                  <span
+                    key={gate.key}
+                    className={`max-w-full truncate rounded-full border px-2 py-0.5 text-[11px] ${
+                      gate.tone === "blocked"
+                        ? "border-rose-400/40 bg-rose-500/10 text-rose-100"
+                        : gate.tone === "required"
+                          ? "border-amber-400/40 bg-amber-500/10 text-amber-100"
+                          : "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+                    }`}
+                    title={gate.key}
+                  >
+                    {gate.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {timelineEvents.length > 0 && (
+            <div>
+              <div className="mb-1 text-[11px] text-slate-500">업무 타임라인</div>
+              <div className="space-y-1">
+                {timelineEvents.map((event) => (
+                  <div key={event.key} className="grid grid-cols-[64px_minmax(0,1fr)] gap-2 text-[11px]">
+                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-center text-slate-300">{event.label}</span>
+                    <span className="truncate text-slate-400" title={event.detail}>
+                      {event.detail}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {recentLogs.length > 0 && (
+            <div>
+              <div className="mb-1 text-[11px] text-slate-500">최근 로그</div>
+              <div className="space-y-1">
+                {recentLogs.map((log) => (
+                  <div key={`${log.id}-${log.created_at}`} className="flex min-w-0 items-start gap-1.5 text-[11px]">
+                    <span className="mt-0.5 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-slate-300">
+                      {log.kind}
+                    </span>
+                    <span className="line-clamp-1 text-slate-400">{log.message}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mb-3">
         <select
           value={task.status}
           onChange={(event) => onUpdateTask(task.id, { status: event.target.value as TaskStatus })}
-          className="w-full rounded-lg border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-white outline-none transition focus:border-blue-500"
+          className={`w-full rounded-lg border px-2 py-1 text-xs outline-none transition focus:border-blue-500 ${getTaskStatusBadgeClass(
+            task.status,
+          )}`}
         >
           {STATUS_OPTIONS.map((status) => (
             <option key={status} value={status}>

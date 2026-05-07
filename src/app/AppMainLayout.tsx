@@ -450,6 +450,9 @@ export default function AppMainLayout({
                     agents={displayAgents}
                     departments={displayDepartments}
                     subtasks={subtasks}
+                    meetingPresence={meetingPresence}
+                    ceoOfficeCalls={ceoOfficeCalls}
+                    crossDeptDeliveries={crossDeptDeliveries}
                     onCreateTask={handleCreateTaskForActivePack}
                     onUpdateTask={onUpdateTask}
                     onDeleteTask={onDeleteTask}

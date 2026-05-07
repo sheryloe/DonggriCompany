@@ -113,6 +113,11 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
   const hasTaskResolvedPolicyColumn = hasColumn("tasks", "resolved_execution_policy_json");
   const hasTaskRequiredArtifactsColumn = hasColumn("tasks", "required_artifacts_json");
   const hasTaskApprovalGateStateColumn = hasColumn("tasks", "approval_gate_state_json");
+  const hasTaskLogsProjection =
+    hasColumn("task_logs", "task_id") &&
+    hasColumn("task_logs", "kind") &&
+    hasColumn("task_logs", "message") &&
+    hasColumn("task_logs", "created_at");
 
   function buildCanonicalTaskFields(params: {
     title: string;
@@ -379,6 +384,17 @@ export function registerTaskCrudRoutes(deps: TaskCrudRouteDeps): void {
             : task,
         )
       : tasks;
+    if (Array.isArray(normalizedTasks) && hasTaskLogsProjection) {
+      const recentLogsStmt = db.prepare(
+        "SELECT id, task_id, kind, message, created_at FROM task_logs WHERE task_id = ? ORDER BY created_at DESC LIMIT 2",
+      );
+      for (const task of normalizedTasks) {
+        if (!task || typeof task !== "object") continue;
+        const row = task as Record<string, unknown>;
+        const taskId = typeof row.id === "string" ? row.id : "";
+        row.recent_logs = taskId ? recentLogsStmt.all(taskId) : [];
+      }
+    }
     res.json({ tasks: normalizedTasks });
   });
 

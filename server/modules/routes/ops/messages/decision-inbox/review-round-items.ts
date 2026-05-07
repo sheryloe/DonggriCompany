@@ -5,6 +5,7 @@ import type {
   ReviewRoundReviewerVerdict,
 } from "./types.ts";
 import { buildDecisionOptionAnalysis } from "./option-analysis.ts";
+import { applyPlannerOptionAnalysis, extractPlannerDecisionAnalysis } from "./planner-option-analysis.ts";
 
 const DECISION_COLLECTING_STALE_MS = 20_000;
 
@@ -337,7 +338,7 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
           label: t(lang, "최종판정으로 진행", "Proceed To Final Verdict", "最終判定へ進行", "进入最终判定"),
         },
       ];
-      const options = optionsBase.map((option) => ({
+      const optionsTemplate = optionsBase.map((option) => ({
         ...option,
         analysis: buildDecisionOptionAnalysis({
           kind: "review_round_pick",
@@ -390,6 +391,7 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
           optionNotes,
           snapshotHash,
           lang,
+          options: optionsBase,
         });
       }
 
@@ -402,9 +404,13 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
             "规划摘要延迟 - 使用基线选项继续",
           )
         : t(lang, "기획팀 요약 완료", "Planning summary ready", "企画要約完了", "规划摘要已完成");
+      const rawPlannerSummary = useCollectingFallback ? "" : String(decisionState?.planner_summary ?? "").trim();
       const plannerSummary = useCollectingFallback
         ? ""
-        : formatPlannerSummaryForDisplay(String(decisionState?.planner_summary ?? "").trim());
+        : formatPlannerSummaryForDisplay(extractPlannerDecisionAnalysis(rawPlannerSummary).summary);
+      const options = useCollectingFallback
+        ? optionsTemplate
+        : applyPlannerOptionAnalysis(optionsTemplate, rawPlannerSummary);
       const combinedSummary = plannerSummary
         ? `${plannerHeader}\n${plannerSummary}\n\n${summary}`
         : `${plannerHeader}\n\n${summary}`;

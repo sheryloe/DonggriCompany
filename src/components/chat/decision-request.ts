@@ -1,8 +1,11 @@
+export type DecisionOptionAnalysisSource = "template" | "fallback" | "planner";
+
 export interface DecisionOptionAnalysis {
   rationale: string;
   expectedResult: string;
   risk: string;
   followUp: string;
+  source?: DecisionOptionAnalysisSource;
 }
 
 export interface DecisionOption {
@@ -19,7 +22,7 @@ export interface ParsedDecisionRequest {
 const NUMBERED_OPTION_RE = /^\s*(\d{1,2})\s*[.)]?\s*(.*)$/;
 const DECISION_HINT_RE = /(의사결정|진행\s*옵션|옵션|선택|방향|decision|options?|choose|proceed)/i;
 
-export function buildFallbackDecisionOptionAnalysis(option: {
+function buildFallbackDecisionOptionAnalysisTemplate(option: {
   number: number;
   label: string;
   action?: string;
@@ -62,6 +65,17 @@ export function buildFallbackDecisionOptionAnalysis(option: {
     expectedResult: "선택한 번호와 내용이 의사결정 회신으로 기록됩니다.",
     risk: "결정 근거가 부족하면 후속 질문이나 재작업이 발생할 수 있습니다.",
     followUp: "선택 이유와 확인해야 할 조건을 함께 남깁니다.",
+  };
+}
+
+export function buildFallbackDecisionOptionAnalysis(option: {
+  number: number;
+  label: string;
+  action?: string;
+}): DecisionOptionAnalysis {
+  return {
+    ...buildFallbackDecisionOptionAnalysisTemplate(option),
+    source: "fallback",
   };
 }
 

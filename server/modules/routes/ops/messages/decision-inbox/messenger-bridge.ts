@@ -134,6 +134,7 @@ export function createDecisionInboxMessengerBridge(deps: DecisionBridgeDeps) {
               option.analysis.expected_result,
               option.analysis.risk,
               option.analysis.follow_up,
+              option.analysis.source,
             ]
               .map((value) =>
                 String(value || "")

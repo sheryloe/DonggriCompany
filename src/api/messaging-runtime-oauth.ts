@@ -38,6 +38,7 @@ export type DecisionInboxRouteOption = {
     expected_result?: string;
     risk?: string;
     follow_up?: string;
+    source?: "template" | "fallback" | "planner";
   };
 };
 

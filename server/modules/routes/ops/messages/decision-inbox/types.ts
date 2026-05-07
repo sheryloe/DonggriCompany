@@ -9,11 +9,14 @@ export type DecisionOption = {
   analysis?: DecisionOptionAnalysis;
 };
 
+export type DecisionOptionAnalysisSource = "template" | "fallback" | "planner";
+
 export type DecisionOptionAnalysis = {
   rationale: string;
   expected_result: string;
   risk: string;
   follow_up: string;
+  source?: DecisionOptionAnalysisSource;
 };
 
 export type ReviewRoundReviewerVerdict = {
@@ -197,6 +200,7 @@ export interface ProjectReviewPlanningHelpers {
     projectPath: string | null,
     snapshotHash: string,
     lang: string,
+    options?: Array<{ number: number; action: string; label: string }>,
   ): void;
 }
 
@@ -211,6 +215,7 @@ export interface ReviewRoundPlanningInput {
   optionNotes: string[];
   snapshotHash: string;
   lang: string;
+  options?: Array<{ number: number; action: string; label: string }>;
 }
 
 export interface ReviewRoundPlanningDeps {

@@ -1,4 +1,5 @@
-import type { ReviewRoundPlanningDeps, ReviewRoundPlanningHelpers } from "./types.ts";
+import type { ReviewRoundPlanningDeps, ReviewRoundPlanningHelpers, ReviewRoundPlanningInput } from "./types.ts";
+import { extractPlannerDecisionAnalysis, serializePlannerDecisionAnalysis } from "./planner-option-analysis.ts";
 
 export function createReviewRoundPlanningHelpers(deps: ReviewRoundPlanningDeps): ReviewRoundPlanningHelpers {
   const {
@@ -66,18 +67,7 @@ export function createReviewRoundPlanningHelpers(deps: ReviewRoundPlanningDeps):
     );
   }
 
-  function queueReviewRoundPlanningConsolidation(input: {
-    projectId: string | null;
-    projectName: string | null;
-    projectPath: string | null;
-    taskId: string;
-    taskTitle: string;
-    meetingId: string;
-    reviewRound: number;
-    optionNotes: string[];
-    snapshotHash: string;
-    lang: string;
-  }): void {
+  function queueReviewRoundPlanningConsolidation(input: ReviewRoundPlanningInput): void {
     const inFlightKey = `${input.meetingId}:${input.snapshotHash}`;
     if (reviewRoundDecisionConsolidationInFlight.has(inFlightKey)) return;
     reviewRoundDecisionConsolidationInFlight.add(inFlightKey);
@@ -113,16 +103,28 @@ export function createReviewRoundPlanningHelpers(deps: ReviewRoundPlanningDeps):
                   l(["- 라운드 의견 없음"], ["- No round opinions"], ["- ラウンド意見なし"], ["- 无轮次意见"]),
                   input.lang,
                 );
+          const optionBlock =
+            input.options && input.options.length > 0
+              ? input.options.map((option) => `${option.number}) ${option.label} [${option.action}]`).join("\n")
+              : "- No current option list was provided. Use apply-all / apply-selected / final-verdict order.";
           const prompt = [
             `You are the planning lead (${planningLeader.name}).`,
             `Task: '${input.taskTitle}'`,
             `Review round: ${input.reviewRound}`,
             input.projectName ? `Project: '${input.projectName}'` : "Project: (none)",
             `Language: ${input.lang}`,
-            "Goal:",
-            "- Read all round options and summarize each team's stance.",
-            "- Recommend which option numbers the CEO should pick (multiple allowed), or explicitly recommend SKIP.",
-            "- Keep it concise and decision-oriented.",
+            "Output requirements:",
+            "- Return JSON only. Do not wrap it in markdown.",
+            '- Shape: {"summary":"...","options":[{"number":1,"rationale":"...","expected_result":"...","risk":"...","follow_up":"..."}]}',
+            "- Include one options[] entry for every listed decision option number.",
+            "- summary: concise decision-oriented recommendation; mention whether to apply all, apply selected, or proceed.",
+            "- rationale: why this option is appropriate now.",
+            "- expected_result: concrete downstream result if the CEO chooses it.",
+            "- risk: post-choice downside or operational cost.",
+            "- follow_up: the next check/action after choosing it.",
+            "",
+            "Decision options to analyze:",
+            optionBlock,
             "",
             "Round option sources:",
             sourceBlock,
@@ -137,14 +139,26 @@ export function createReviewRoundPlanningHelpers(deps: ReviewRoundPlanningDeps):
             const raw = String(run?.text || "").trim();
             const merged = preferred || raw;
             if (merged) {
-              const clipped = merged.length > 1800 ? `${merged.slice(0, 1797).trimEnd()}...` : merged;
-              plannerSummary = formatPlannerSummaryForDisplay(clipped);
+              const parsedRaw = extractPlannerDecisionAnalysis(raw || merged);
+              const parsedMerged = extractPlannerDecisionAnalysis(merged);
+              const optionAnalyses = parsedRaw.options.length > 0 ? parsedRaw.options : parsedMerged.options;
+              const displaySummary = preferred || parsedRaw.summary || parsedMerged.summary || merged;
+              const clipped =
+                displaySummary.length > 1800 ? `${displaySummary.slice(0, 1797).trimEnd()}...` : displaySummary;
+              plannerSummary = serializePlannerDecisionAnalysis(
+                formatPlannerSummaryForDisplay(clipped),
+                optionAnalyses,
+              );
             }
           } catch {
             plannerSummary = fallbackSummary;
           }
         }
-        plannerSummary = formatPlannerSummaryForDisplay(plannerSummary);
+        const parsedPlannerSummary = extractPlannerDecisionAnalysis(plannerSummary);
+        plannerSummary = serializePlannerDecisionAnalysis(
+          formatPlannerSummaryForDisplay(parsedPlannerSummary.summary),
+          parsedPlannerSummary.options,
+        );
 
         const updateResult = db
           .prepare(
@@ -170,16 +184,17 @@ export function createReviewRoundPlanningHelpers(deps: ReviewRoundPlanningDeps):
           ) as { changes?: number } | undefined;
 
         if ((updateResult?.changes ?? 0) > 0 && input.projectId) {
+          const displayPlannerSummary = formatPlannerSummaryForDisplay(plannerSummary);
           recordProjectReviewDecisionEvent({
             project_id: input.projectId,
             snapshot_hash: getProjectReviewDecisionState(input.projectId)?.snapshot_hash ?? null,
             event_type: "planning_summary",
             summary: pickL(
               l(
-                [`라운드 ${input.reviewRound} 기획팀장 취합\n${plannerSummary}`],
-                [`Round ${input.reviewRound} planning consolidation\n${plannerSummary}`],
-                [`ラウンド${input.reviewRound} 企画リード集約\n${plannerSummary}`],
-                [`第 ${input.reviewRound} 轮规划负责人汇总\n${plannerSummary}`],
+                [`라운드 ${input.reviewRound} 기획팀장 취합\n${displayPlannerSummary}`],
+                [`Round ${input.reviewRound} planning consolidation\n${displayPlannerSummary}`],
+                [`ラウンド${input.reviewRound} 企画リード集約\n${displayPlannerSummary}`],
+                [`第 ${input.reviewRound} 轮规划负责人汇总\n${displayPlannerSummary}`],
               ),
               input.lang,
             ),

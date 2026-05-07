@@ -4,6 +4,7 @@ import type {
   ProjectReviewPlanningDeps,
   ProjectReviewPlanningHelpers,
 } from "./types.ts";
+import { extractPlannerDecisionAnalysis, serializePlannerDecisionAnalysis } from "./planner-option-analysis.ts";
 
 export function createProjectReviewPlanningHelpers(deps: ProjectReviewPlanningDeps): ProjectReviewPlanningHelpers {
   const {
@@ -161,8 +162,8 @@ export function createProjectReviewPlanningHelpers(deps: ProjectReviewPlanningDe
   }
 
   function formatPlannerSummaryForDisplay(input: string): string {
-    let text = String(input ?? "")
-      .replace(/\r\n?/g, "\n")
+    let text = extractPlannerDecisionAnalysis(input)
+      .summary.replace(/\r\n?/g, "\n")
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
@@ -223,6 +224,7 @@ export function createProjectReviewPlanningHelpers(deps: ProjectReviewPlanningDe
     projectPath: string | null,
     snapshotHash: string,
     lang: string,
+    options: Array<{ number: number; action: string; label: string }> = [],
   ): void {
     const inFlightKey = `${projectId}:${snapshotHash}`;
     if (projectReviewDecisionConsolidationInFlight.has(inFlightKey)) return;
@@ -297,15 +299,28 @@ export function createProjectReviewPlanningHelpers(deps: ProjectReviewPlanningDe
           const sourceLines = taskRows
             .map((task, idx) => `${idx + 1}) ${task.title}\n- latest_report: ${clip(task.latest_report)}`)
             .join("\n");
+          const optionLines =
+            options.length > 0
+              ? options.map((option) => `${option.number}) ${option.label} [${option.action}]`).join("\n")
+              : "- No current option list was provided. Use the review item order when mapping option numbers.";
           const prompt = [
             `You are the planning lead (${planningLeader.name}).`,
             `Consolidate project-level review status for '${projectName}'.`,
             `Language: ${lang}`,
             "Output requirements:",
-            "- Provide one concise paragraph for CEO decision support.",
-            "- Include: representative selection guidance, meeting start condition, and follow-up request usage hint.",
+            "- Return JSON only. Do not wrap it in markdown.",
+            '- Shape: {"summary":"...","options":[{"number":1,"rationale":"...","expected_result":"...","risk":"...","follow_up":"..."}]}',
+            "- Include one options[] entry for every listed decision option number.",
+            "- summary: one concise paragraph under 10 lines for CEO decision support.",
+            "- rationale: why this option is appropriate now.",
+            "- expected_result: concrete downstream result if the CEO chooses it.",
+            "- risk: post-choice downside or operational cost.",
+            "- follow_up: the next check/action after choosing it.",
+            "- Include representative selection guidance, meeting start condition, and follow-up request usage hint.",
             "- If round-level decisions exist, reflect them explicitly in the recommendation.",
-            "- Keep it under 10 lines.",
+            "",
+            "Decision options to analyze:",
+            optionLines,
             "",
             "Review item sources:",
             sourceLines,
@@ -323,14 +338,26 @@ export function createProjectReviewPlanningHelpers(deps: ProjectReviewPlanningDe
             const raw = String(run?.text || "").trim();
             const merged = preferred || raw;
             if (merged) {
-              const clipped = merged.length > 1800 ? `${merged.slice(0, 1797).trimEnd()}...` : merged;
-              plannerSummary = formatPlannerSummaryForDisplay(clipped);
+              const parsedRaw = extractPlannerDecisionAnalysis(raw || merged);
+              const parsedMerged = extractPlannerDecisionAnalysis(merged);
+              const optionAnalyses = parsedRaw.options.length > 0 ? parsedRaw.options : parsedMerged.options;
+              const displaySummary = preferred || parsedRaw.summary || parsedMerged.summary || merged;
+              const clipped =
+                displaySummary.length > 1800 ? `${displaySummary.slice(0, 1797).trimEnd()}...` : displaySummary;
+              plannerSummary = serializePlannerDecisionAnalysis(
+                formatPlannerSummaryForDisplay(clipped),
+                optionAnalyses,
+              );
             }
           } catch {
             plannerSummary = fallbackSummary;
           }
         }
-        plannerSummary = formatPlannerSummaryForDisplay(plannerSummary);
+        const parsedPlannerSummary = extractPlannerDecisionAnalysis(plannerSummary);
+        plannerSummary = serializePlannerDecisionAnalysis(
+          formatPlannerSummaryForDisplay(parsedPlannerSummary.summary),
+          parsedPlannerSummary.options,
+        );
 
         const updateResult = db
           .prepare(
@@ -360,7 +387,7 @@ export function createProjectReviewPlanningHelpers(deps: ProjectReviewPlanningDe
             project_id: projectId,
             snapshot_hash: snapshotHash,
             event_type: "planning_summary",
-            summary: plannerSummary,
+            summary: formatPlannerSummaryForDisplay(plannerSummary),
           });
         }
       } catch {

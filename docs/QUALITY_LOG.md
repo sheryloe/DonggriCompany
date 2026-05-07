@@ -85,3 +85,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Web decision parser/inbox tests passed, API decision-inbox tests passed, production build passed, and whitespace check passed.
 - Risk: Generic fallback analysis for free-form agent messages is heuristic when the source message does not provide explicit consequences.
 - Follow-up: Let planner agents send explicit option analysis in their decision prompts so fallback text is needed less often.
+
+## 2026-05-06 18:02 KST - Decision Option Analysis P0 Closure
+
+- Request: Start closing the P0 gaps identified in the decision option analysis review.
+- Change: Added analysis source tracking (`template`, `fallback`, `planner`), extended planning-lead prompts to require JSON option analysis, stored planner option analysis alongside display summaries, applied planner analysis over template text, and added modal render coverage.
+- Changed files: Decision Inbox option analysis helpers, project/review planning and item builders, frontend decision mapping/types, `DecisionInboxModal`, targeted tests, `tasks/todo.md`, and this quality log.
+- Commands: `corepack pnpm exec prettier --write ...`, `corepack pnpm test:web -- DecisionInboxModal decision-request decision-inbox`, `corepack pnpm test:api -- decision-inbox`, `corepack pnpm build`, `corepack pnpm run openapi:check`, `git diff --check`.
+- Validation: Web targeted suite passed, API decision-inbox suite passed, production build passed, OpenAPI check passed, and whitespace check passed.
+- Risk: Planner JSON quality still depends on the planning agent following the contract; invalid or partial planner analysis is ignored and template/fallback analysis remains available.
+- Follow-up: Add live planner-output observability if production prompts repeatedly fall back to template analysis.

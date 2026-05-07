@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
+import { serializePlannerDecisionAnalysis } from "./planner-option-analysis.ts";
 import { createReviewRoundDecisionItems } from "./review-round-items.ts";
 import type { ReviewRoundDecisionState } from "./types.ts";
 
@@ -202,8 +203,61 @@ describe("review round decision items", () => {
       expect(item?.blocker_count).toBe(2);
       expect(item?.option_notes).toContain("B blocker");
       expect(item?.options[0]?.analysis?.expected_result).toContain("전체 피드백");
+      expect(item?.options[0]?.analysis?.source).toBe("template");
       expect(item?.options[1]?.analysis?.risk).toContain("다음 라운드");
       expect(item?.options[2]?.analysis?.follow_up).toContain("사후 리스크");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("ready planner summary의 option analysis를 기본 템플릿보다 우선 적용한다", () => {
+    const db = createDb();
+    try {
+      db.prepare("INSERT INTO projects (id, name) VALUES ('proj-1', 'Project 1')").run();
+      db.prepare(
+        `INSERT INTO tasks (id, title, status, source_task_id, project_id, project_path)
+         VALUES ('task-1', 'Task 1', 'review', NULL, 'proj-1', '/tmp/project')`,
+      ).run();
+      db.prepare(
+        `INSERT INTO meeting_minutes (id, task_id, meeting_type, round, status, started_at, completed_at, created_at)
+         VALUES ('meeting-1', 'task-1', 'review', 1, 'revision_requested', 1000, 2000, 1000)`,
+      ).run();
+      db.prepare(
+        `INSERT INTO review_revision_history (task_id, first_round, raw_note)
+         VALUES ('task-1', 1, 'A blocker')`,
+      ).run();
+
+      const states = new Map<string, ReviewRoundDecisionState | null>();
+      states.set("meeting-1", {
+        meeting_id: "meeting-1",
+        snapshot_hash: "meeting-1:1:A blocker",
+        status: "ready",
+        planner_summary: serializePlannerDecisionAnalysis("Planner recommends option 2.", [
+          {
+            number: 2,
+            rationale: "It narrows remediation to the highest-value blocker.",
+            expected_result: "Only selected blocker work is created.",
+            risk: "Skipped blockers may reappear next round.",
+            follow_up: "Verify selected feedback coverage before rerun.",
+            source: "planner",
+          },
+        ]),
+        planner_agent_id: "planner-1",
+        planner_agent_name: "Planner",
+        created_at: 4100,
+        updated_at: 5200,
+      });
+
+      const tools = buildDeps(db, states);
+      const item = tools.buildReviewRoundDecisionItems()[0];
+
+      expect(item?.summary).not.toContain("DECISION_OPTION_ANALYSIS_JSON");
+      expect(item?.options[1]?.analysis).toMatchObject({
+        source: "planner",
+        expected_result: "Only selected blocker work is created.",
+      });
+      expect(item?.options[0]?.analysis?.source).toBe("template");
     } finally {
       db.close();
     }

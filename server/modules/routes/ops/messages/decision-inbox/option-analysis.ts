@@ -71,7 +71,7 @@ function genericAnalysis(input: DecisionOptionAnalysisInput): DecisionOptionAnal
   };
 }
 
-export function buildDecisionOptionAnalysis(input: DecisionOptionAnalysisInput): DecisionOptionAnalysis {
+function buildDecisionOptionAnalysisTemplate(input: DecisionOptionAnalysisInput): DecisionOptionAnalysis {
   const { action, t } = input;
 
   if (action.startsWith("approve_task_review:")) {
@@ -307,4 +307,11 @@ export function buildDecisionOptionAnalysis(input: DecisionOptionAnalysisInput):
   }
 
   return genericAnalysis(input);
+}
+
+export function buildDecisionOptionAnalysis(input: DecisionOptionAnalysisInput): DecisionOptionAnalysis {
+  return {
+    ...buildDecisionOptionAnalysisTemplate(input),
+    source: "template",
+  };
 }

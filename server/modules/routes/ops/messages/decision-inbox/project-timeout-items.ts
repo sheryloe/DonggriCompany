@@ -6,6 +6,7 @@ import type {
   TimeoutResumeDecisionItem,
 } from "./types.ts";
 import { buildDecisionOptionAnalysis } from "./option-analysis.ts";
+import { applyPlannerOptionAnalysis, extractPlannerDecisionAnalysis } from "./planner-option-analysis.ts";
 
 const DECISION_COLLECTING_STALE_MS = 20_000;
 
@@ -235,7 +236,7 @@ export function createProjectAndTimeoutDecisionItems(
                 label: t("추가요청 입력", "Add Follow-up Request", "追加要請を入力", "输入追加请求"),
               },
             ];
-      const readyOptions = readyOptionsBase.map((option) => ({
+      const readyOptionsTemplate = readyOptionsBase.map((option) => ({
         ...option,
         analysis: buildDecisionOptionAnalysis({
           kind: "project_review_ready",
@@ -268,7 +269,14 @@ export function createProjectAndTimeoutDecisionItems(
         decisionState && decisionState.status === "collecting" && collectingElapsedMs >= DECISION_COLLECTING_STALE_MS,
       );
       if (!decisionState || (decisionState.status !== "ready" && !useCollectingFallback)) {
-        queueProjectReviewPlanningConsolidation(row.project_id, projectName, row.project_path, snapshotHash, lang);
+        queueProjectReviewPlanningConsolidation(
+          row.project_id,
+          projectName,
+          row.project_path,
+          snapshotHash,
+          lang,
+          readyOptionsBase,
+        );
         const collectingSummary = t(
           `프로젝트 '${projectName}'의 활성 항목 ${activeTotal}건이 모두 Review 상태입니다.\n기획팀장 의견 취합중...\n취합 완료 후 대표 선택지와 회의 진행 선택지가 나타납니다.`,
           `Project '${projectName}' has all ${activeTotal} active items in Review.\nPlanning lead is consolidating opinions...\nRepresentative options and meeting action will appear after consolidation.`,
@@ -307,9 +315,13 @@ export function createProjectAndTimeoutDecisionItems(
             "企画リード意見集約完了",
             "规划负责人意见汇总完成",
           );
+      const rawPlannerSummary = useCollectingFallback ? "" : String(decisionState?.planner_summary ?? "").trim();
       const plannerSummary = useCollectingFallback
         ? ""
-        : formatPlannerSummaryForDisplay(String(decisionState?.planner_summary ?? "").trim());
+        : formatPlannerSummaryForDisplay(extractPlannerDecisionAnalysis(rawPlannerSummary).summary);
+      const readyOptions = useCollectingFallback
+        ? readyOptionsTemplate
+        : applyPlannerOptionAnalysis(readyOptionsTemplate, rawPlannerSummary);
       const optionGuide =
         pendingChoices.length <= 0 ? readyOptions.map((option) => `${option.number}. ${option.label}`).join("\n") : "";
       const optionGuideBlock = optionGuide

@@ -1,7 +1,15 @@
 import type { DecisionInboxRouteItem } from "../api";
 import { normalizeLanguage, pickLang, type UiLanguage } from "../i18n";
 import type { DecisionInboxItem } from "../components/chat/decision-inbox";
-import { buildFallbackDecisionOptionAnalysis, type DecisionOptionAnalysis } from "../components/chat/decision-request";
+import {
+  buildFallbackDecisionOptionAnalysis,
+  type DecisionOptionAnalysis,
+  type DecisionOptionAnalysisSource,
+} from "../components/chat/decision-request";
+
+function normalizeAnalysisSource(source: unknown): DecisionOptionAnalysisSource | undefined {
+  return source === "template" || source === "fallback" || source === "planner" ? source : undefined;
+}
 
 function mapOptionAnalysis(
   analysis: DecisionInboxRouteItem["options"][number]["analysis"],
@@ -17,6 +25,7 @@ function mapOptionAnalysis(
     expectedResult,
     risk,
     followUp,
+    source: normalizeAnalysisSource(analysis.source),
   };
 }
 

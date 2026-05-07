@@ -5,6 +5,7 @@ import type { Agent } from "../types";
 import AgentAvatar, { buildSpriteMap } from "./AgentAvatar";
 import MessageContent from "./MessageContent";
 import type { DecisionInboxItem } from "./chat/decision-inbox";
+import type { DecisionOptionAnalysisSource } from "./chat/decision-request";
 import { formatDecisionInboxTime as formatTime, type DecisionInboxModalProps } from "./chat/decision-inbox-modal.meta";
 
 function verdictLabel(
@@ -31,6 +32,37 @@ function verdictLabel(
 
 function findOption(item: DecisionInboxItem, action: string): DecisionInboxItem["options"][number] | null {
   return item.options.find((option) => option.action === action) ?? null;
+}
+
+function decisionAnalysisSourceLabel(
+  source: DecisionOptionAnalysisSource | undefined,
+  uiLanguage: UiLanguage,
+): string | null {
+  if (source === "planner") {
+    return pickLang(uiLanguage, {
+      ko: "Planner 분석",
+      en: "Planner analysis",
+      ja: "Planner analysis",
+      zh: "Planner analysis",
+    });
+  }
+  if (source === "template") {
+    return pickLang(uiLanguage, {
+      ko: "기본 템플릿",
+      en: "Baseline template",
+      ja: "Baseline template",
+      zh: "Baseline template",
+    });
+  }
+  if (source === "fallback") {
+    return pickLang(uiLanguage, {
+      ko: "추정 분석",
+      en: "Estimated analysis",
+      ja: "Estimated analysis",
+      zh: "Estimated analysis",
+    });
+  }
+  return null;
 }
 
 function DecisionOptionAnalysisPanel({
@@ -62,14 +94,24 @@ function DecisionOptionAnalysisPanel({
   ].filter((row) => row.value);
 
   if (rows.length <= 0) return null;
+  const sourceLabel = decisionAnalysisSourceLabel(analysis.source, uiLanguage);
   return (
-    <div className="mt-2 grid gap-1.5 text-[11px] leading-relaxed text-slate-300 sm:grid-cols-2">
-      {rows.map((row) => (
-        <div key={row.label} className="rounded-md border border-slate-700/60 bg-slate-950/45 px-2 py-1.5">
-          <span className="block text-[10px] font-semibold uppercase tracking-normal text-indigo-300">{row.label}</span>
-          <span className="mt-0.5 block min-w-0 break-words text-slate-200">{row.value}</span>
-        </div>
-      ))}
+    <div className="mt-2 space-y-1.5">
+      {sourceLabel ? (
+        <span className="inline-flex rounded-full border border-indigo-400/40 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-200">
+          {sourceLabel}
+        </span>
+      ) : null}
+      <div className="grid gap-1.5 text-[11px] leading-relaxed text-slate-300 sm:grid-cols-2">
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-md border border-slate-700/60 bg-slate-950/45 px-2 py-1.5">
+            <span className="block text-[10px] font-semibold uppercase tracking-normal text-indigo-300">
+              {row.label}
+            </span>
+            <span className="mt-0.5 block min-w-0 break-words text-slate-200">{row.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

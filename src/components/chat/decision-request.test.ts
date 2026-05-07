@@ -18,6 +18,7 @@ describe("parseDecisionRequest", () => {
       { number: 2, label: "기준 커밋/브랜치 정리 후 QA 진행" },
     ]);
     expect(parsed?.options[0]?.analysis?.expectedResult).toContain("실행 단계");
+    expect(parsed?.options[0]?.analysis?.source).toBe("fallback");
     expect(parsed?.options[1]?.analysis?.risk).toBeTruthy();
   });
 
@@ -34,6 +35,7 @@ describe("parseDecisionRequest", () => {
       { number: 2, label: "Reset to baseline branch and rerun QA" },
     ]);
     expect(parsed?.options[0]?.analysis?.rationale).toBeTruthy();
+    expect(parsed?.options[0]?.analysis?.source).toBe("fallback");
     expect(parsed?.options[1]?.analysis?.followUp).toBeTruthy();
   });
 

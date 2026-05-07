@@ -125,3 +125,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: TaskCard and LiveOperationsRail web tests passed, task CRUD API tests passed, production build passed, and whitespace check passed.
 - Risk: Task timeline uses current in-memory office events; persisted historical meeting/call/delivery rows would be needed for long-term replay after reload.
 - Follow-up: P4 should add durable memory/search linkage so task reports can retrieve longer evidence trails beyond the compact card view.
+
+## 2026-05-07 12:45 KST - Archival Memory Search P4
+
+- Request: Commit P3, then proceed to P4 장기기억 검색 고도화 in priority order.
+- Change: Added a dedicated `search_archival_memory` HTTP tool prompt block, enriched promotion candidate evidence with skill usage, task results, and task-run memory references, and covered approved-only global lesson injection.
+- Changed files: `server/modules/memory/store.ts`, `server/modules/routes/core/memory.test.ts`, `tasks/todo.md`, and this quality log.
+- Commands: `corepack pnpm exec prettier --write ...`, `corepack pnpm test:api -- memory`, `corepack pnpm build`, `git diff --check`.
+- Validation: Memory API tests passed, production build passed, and whitespace check passed.
+- Risk: Promotion candidate evidence is still bounded to the latest 12 skill usage rows and task-run memory references; deeper historical evidence remains discoverable through `search_archival_memory`.
+- Follow-up: P5 should connect ISO quality evidence fields to task reports and memory quality events.

@@ -625,6 +625,34 @@ export function searchMemories(
   return ranked;
 }
 
+export function buildSearchArchivalMemoryToolBlock(input: {
+  projectId?: string | null;
+  agentId?: string | null;
+  threadId?: string | null;
+}): string {
+  return [
+    "[HTTP Tool: search_archival_memory]",
+    "name=search_archival_memory",
+    "method=GET",
+    "endpoint=/api/memory/search",
+    "Purpose: retrieve additional project-scoped archival, episodic, or core memory only when the provided context is insufficient.",
+    "Query params:",
+    "- q: required search text from the active task question or failure symptom.",
+    "- project_id: active project id; keep this set for project isolation.",
+    "- agent_id: optional active agent id for agent-local experience.",
+    "- thread_id: optional task/session id when looking for continuation memory.",
+    "- layer: core, episodic, archival, global, or all. Use all only when you need mixed local layers.",
+    "- scope: local by default. Use global only for approved promoted summaries, not raw cross-project memories.",
+    "- limit: 1-20 for prompt use.",
+    input.projectId ? `Default project_id=${input.projectId}` : "",
+    input.agentId ? `Default agent_id=${input.agentId}` : "",
+    input.threadId ? `Default thread_id=${input.threadId}` : "",
+    "Safety: never import raw memory from another project. Cross-project knowledge is allowed only when it appears as an approved global lesson summary.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function listMemoryOutbox(db: DatabaseSync, projectId: string, limit = 20): MemoryOutboxRow[] {
   return db
     .prepare(
@@ -808,6 +836,127 @@ export function markMemoryOutboxFailed(
   return (db.prepare("SELECT * FROM memory_outbox WHERE id = ?").get(input.id) as MemoryOutboxRow | undefined) ?? null;
 }
 
+type SkillPromotionUsageEvidence = {
+  project_id: string | null;
+  agent_id: string | null;
+  task_id: string | null;
+  confidence: number;
+  notes: string | null;
+  created_at: number;
+};
+
+type SkillPromotionTaskEvidence = {
+  task_id: string;
+  project_id: string | null;
+  title: string;
+  status: string;
+  result_summary: string;
+};
+
+type SkillPromotionMemoryRefEvidence = {
+  source_table: "agent_memories" | "project_memories";
+  id: string;
+  project_id: string | null;
+  agent_id: string | null;
+  memory_type: string;
+  memory_layer: string;
+  title: string;
+  source_id: string | null;
+};
+
+function collectSkillPromotionEvidence(
+  db: DatabaseSync,
+  skillId: string,
+): {
+  skill_usage: SkillPromotionUsageEvidence[];
+  task_results: SkillPromotionTaskEvidence[];
+  memory_refs: SkillPromotionMemoryRefEvidence[];
+} {
+  const usageRows = db
+    .prepare(
+      `
+      SELECT project_id, agent_id, task_id, confidence, notes, created_at
+      FROM skill_usage_events
+      WHERE skill_id = ?
+        AND outcome = 'success'
+        AND project_id IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 12
+    `,
+    )
+    .all(skillId) as Array<{
+    project_id: string | null;
+    agent_id: string | null;
+    task_id: string | null;
+    confidence: number;
+    notes: string | null;
+    created_at: number;
+  }>;
+  const taskIds = [...new Set(usageRows.map((row) => normalizeText(row.task_id)).filter(Boolean))].slice(0, 12);
+  const taskResults: SkillPromotionTaskEvidence[] = [];
+  const memoryRefs: SkillPromotionMemoryRefEvidence[] = [];
+
+  for (const taskId of taskIds) {
+    const taskRow = db
+      .prepare(
+        `
+        SELECT id, project_id, title, status, result
+        FROM tasks
+        WHERE id = ?
+        LIMIT 1
+      `,
+      )
+      .get(taskId) as
+      | { id: string; project_id: string | null; title: string; status: string; result: string | null }
+      | undefined;
+    if (taskRow) {
+      taskResults.push({
+        task_id: taskRow.id,
+        project_id: taskRow.project_id,
+        title: taskRow.title,
+        status: taskRow.status,
+        result_summary: summarizeResult(taskRow.result).slice(0, 360),
+      });
+    }
+    for (const tableName of ["project_memories", "agent_memories"] as const) {
+      const rows = db
+        .prepare(
+          `
+          SELECT id, project_id, agent_id, memory_type, memory_layer, title, source_id
+          FROM ${tableName}
+          WHERE source_type = 'task_run'
+            AND source_id = ?
+          ORDER BY strength DESC, updated_at DESC
+          LIMIT 4
+        `,
+        )
+        .all(taskId) as Array<{
+        id: string;
+        project_id: string | null;
+        agent_id: string | null;
+        memory_type: string;
+        memory_layer: string;
+        title: string;
+        source_id: string | null;
+      }>;
+      memoryRefs.push(...rows.map((row) => ({ ...row, source_table: tableName })));
+    }
+  }
+
+  return {
+    skill_usage: usageRows.map((row) => ({
+      project_id: row.project_id,
+      agent_id: row.agent_id,
+      task_id: row.task_id,
+      confidence: clampNumber(row.confidence, 0.7, 0, 1),
+      notes: row.notes,
+      created_at: row.created_at,
+    })),
+    task_results: taskResults.slice(0, 8),
+    memory_refs: memoryRefs.slice(0, 12),
+  };
+}
+
 export function scanMemoryPromotionCandidates(db: DatabaseSync, now = Date.now()): MemoryPromotionCandidateRow[] {
   const rows = db
     .prepare(
@@ -841,12 +990,15 @@ export function scanMemoryPromotionCandidates(db: DatabaseSync, now = Date.now()
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
+    const detailedEvidence = collectSkillPromotionEvidence(db, row.skill_id);
     const evidence = {
       skill_id: row.skill_id,
       projects,
       latest_at: row.latest_at,
       rule: "success_in_three_or_more_projects",
+      ...detailedEvidence,
     };
+    const evidenceDetailCount = detailedEvidence.task_results.length + detailedEvidence.memory_refs.length;
     db.prepare(
       `
       INSERT INTO memory_promotion_evidence (
@@ -868,7 +1020,7 @@ export function scanMemoryPromotionCandidates(db: DatabaseSync, now = Date.now()
       randomUUID(),
       candidateKey,
       `Global skill candidate: ${row.skill_id}`,
-      `Skill '${row.skill_id}' succeeded across ${row.project_count} projects and can be reviewed as shared operating knowledge.`,
+      `Skill '${row.skill_id}' succeeded across ${row.project_count} projects with ${evidenceDetailCount} linked task or memory evidence items.`,
       JSON.stringify([row.skill_id, "global_skill_candidate"]),
       JSON.stringify(evidence),
       row.evidence_count,
@@ -1153,6 +1305,13 @@ export function buildMemoryContextBlock(
 ): string {
   const limit = Math.max(1, Math.min(20, Math.trunc(Number(input.limit ?? 8))));
   const parts: string[] = ["[Memory Context]", "source=donggri_native_memory"];
+  parts.push(
+    buildSearchArchivalMemoryToolBlock({
+      projectId: input.projectId,
+      agentId: input.agentId,
+      threadId: input.threadId,
+    }),
+  );
   if (input.projectId) {
     const coreMemories = searchMemories(db, {
       projectId: input.projectId,
@@ -1212,7 +1371,7 @@ export function buildMemoryContextBlock(
     }
   }
   parts.push(
-    "Memory usage rule: use only project-scoped memories by default. Search archival memory through /api/memory/search when more context is needed. Do not import raw memories from other projects unless they are listed as approved global lessons.",
+    "Memory usage rule: use only project-scoped memories by default. Use search_archival_memory when more context is needed. Do not import raw memories from other projects unless they are listed as approved global lessons.",
   );
   return parts.length > 2 ? parts.join("\n") : "";
 }

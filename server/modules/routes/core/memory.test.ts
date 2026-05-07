@@ -266,15 +266,56 @@ describe("memory routes", () => {
   it("creates and approves global skill promotion candidates from cross-project success evidence", () => {
     const now = 1_700_000_000_000;
     for (const [index, projectId] of ["project-1", "project-2", "project-3"].entries()) {
+      const taskId = `task-skill-${index}`;
+      db!
+        .prepare(
+          `
+        INSERT INTO tasks (
+          id, title, description, assigned_agent_id, project_id, status, task_type,
+          workflow_pack_key, result, created_at, updated_at, completed_at
+        ) VALUES (?, ?, 'Skill promotion evidence task', 'agent-1', ?, 'done', 'development',
+          'development', ?, ?, ?, ?
+        )
+      `,
+        )
+        .run(
+          taskId,
+          `Reusable routing task ${index}`,
+          projectId,
+          `Reusable routing result ${index} with verified project memory.`,
+          now + index,
+          now + index,
+          now + index,
+        );
+      db!
+        .prepare(
+          `
+        INSERT INTO project_memories (
+          id, project_id, agent_id, memory_type, scope_type, title, body, source_type,
+          source_id, memory_layer, status, created_at, updated_at
+        ) VALUES (?, ?, 'agent-1', 'task_lesson', 'project', ?, ?, 'task_run',
+          ?, 'episodic', 'active', ?, ?
+        )
+      `,
+        )
+        .run(
+          `memory-skill-${index}`,
+          projectId,
+          `Memory evidence ${index}`,
+          `Project memory evidence for reusable routing ${index}.`,
+          taskId,
+          now + index,
+          now + index,
+        );
       db!
         .prepare(
           `
         INSERT INTO skill_usage_events (
           id, agent_id, project_id, task_id, skill_id, provider, outcome, confidence, notes, created_at
-        ) VALUES (?, 'agent-1', ?, NULL, 'react-router-repair', 'codex', 'success', 0.9, 'test evidence', ?)
+        ) VALUES (?, 'agent-1', ?, ?, 'react-router-repair', 'codex', 'success', 0.9, 'test evidence', ?)
       `,
         )
-        .run(`skill-${index}`, projectId, now + index);
+        .run(`skill-${index}`, projectId, taskId, now + index);
     }
 
     const scanHandler = routes.get("POST /api/memory/promotions/scan");
@@ -283,10 +324,23 @@ describe("memory routes", () => {
     expect(scanRes.statusCode).toBe(200);
     const candidates = (scanRes.payload as { candidates: Array<{ id: string; candidate_key: string }> }).candidates;
     expect(candidates.some((candidate) => candidate.candidate_key === "skill:react-router-repair")).toBe(true);
+    const scannedCandidate = candidates.find((candidate) => candidate.candidate_key === "skill:react-router-repair")!;
+    const candidateRow = db!
+      .prepare("SELECT summary, evidence_json FROM memory_promotion_evidence WHERE id = ?")
+      .get(scannedCandidate.id) as { summary: string; evidence_json: string };
+    const evidence = JSON.parse(candidateRow.evidence_json) as {
+      skill_usage: Array<{ task_id: string | null }>;
+      task_results: Array<{ task_id: string; result_summary: string }>;
+      memory_refs: Array<{ source_table: string; source_id: string | null }>;
+    };
+    expect(candidateRow.summary).toContain("linked task or memory evidence");
+    expect(evidence.skill_usage.every((row) => row.task_id?.startsWith("task-skill-"))).toBe(true);
+    expect(evidence.task_results.map((row) => row.result_summary).join("\n")).toContain("Reusable routing result");
+    expect(evidence.memory_refs.some((row) => row.source_table === "project_memories")).toBe(true);
 
     const approveHandler = routes.get("POST /api/memory/promotions/:id/approve");
     const approveRes = createFakeResponse();
-    approveHandler?.({ params: { id: candidates[0]!.id } }, approveRes);
+    approveHandler?.({ params: { id: scannedCandidate.id } }, approveRes);
     expect(approveRes.statusCode).toBe(200);
     expect(approveRes.payload).toMatchObject({ candidate: { status: "approved" } });
 
@@ -295,6 +349,47 @@ describe("memory routes", () => {
       .all() as Array<{ event_type: string; evidence_json: string }>;
     expect(qualityRows.some((row) => row.event_type === "global_memory_promotion_approved")).toBe(true);
     expect(qualityRows[0]?.evidence_json).toContain("react-router-repair");
+  });
+
+  it("renders approved global lessons and the archival memory HTTP tool without leaking raw cross-project memory", () => {
+    db!
+      .prepare(
+        `
+        INSERT INTO memory_promotion_evidence (
+          id, candidate_key, candidate_type, title, summary, tags_json, evidence_json,
+          evidence_count, project_count, confidence, status, approved_at, created_at, updated_at
+        ) VALUES
+          ('approved-global-1', 'skill:approved-routing', 'skill', 'Approved routing', 'Approved global routing summary.', '[]', '{}', 4, 3, 0.9, 'approved', 10, 10, 10),
+          ('candidate-global-1', 'skill:candidate-routing', 'skill', 'Candidate routing', 'Candidate summary must not be injected.', '[]', '{}', 4, 3, 0.9, 'candidate', NULL, 10, 10)
+      `,
+      )
+      .run();
+    db!
+      .prepare(
+        `
+        INSERT INTO project_memories (
+          id, project_id, agent_id, memory_type, scope_type, title, body, source_type,
+          source_id, memory_layer, promotion_status, status, created_at, updated_at
+        ) VALUES (
+          'other-project-memory', 'project-2', 'agent-1', 'lesson', 'project',
+          'Other project raw lesson', 'Raw cross-project memory body must stay out.',
+          'manual', NULL, 'archival', 'promoted', 'active', 20, 20
+        )
+      `,
+      )
+      .run();
+
+    const projectHandler = routes.get("GET /api/projects/:id/memory");
+    const res = createFakeResponse();
+    projectHandler?.({ params: { id: "project-1" } }, res);
+
+    expect(res.statusCode).toBe(200);
+    const preview = (res.payload as { memory_context_preview: string }).memory_context_preview;
+    expect(preview).toContain("[HTTP Tool: search_archival_memory]");
+    expect(preview).toContain("endpoint=/api/memory/search");
+    expect(preview).toContain("Approved global routing summary.");
+    expect(preview).not.toContain("Candidate summary must not be injected.");
+    expect(preview).not.toContain("Raw cross-project memory body must stay out.");
   });
 
   it("keeps Beads write bridge disabled by default and exposes outbox state", () => {

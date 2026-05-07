@@ -226,6 +226,60 @@ describe("memory routes", () => {
     expect(payload.memories.every((memory) => memory.project_id === "project-1")).toBe(true);
   });
 
+  it("filters memory search by tags and created date range", () => {
+    for (const memory of [
+      {
+        id: "memory-old-design",
+        title: "Old design decision",
+        tags: ["design", "approved"],
+        created_at: 1_000,
+      },
+      {
+        id: "memory-target-design",
+        title: "In-range design decision",
+        tags: ["design", "approved"],
+        created_at: 2_000,
+      },
+      {
+        id: "memory-target-dev",
+        title: "In-range dev decision",
+        tags: ["dev", "approved"],
+        created_at: 2_000,
+      },
+    ]) {
+      db!
+        .prepare(
+          `
+        INSERT INTO project_memories (
+          id, project_id, agent_id, memory_type, scope_type, title, body,
+          tags_json, source_type, memory_layer, status, created_at, updated_at
+        ) VALUES (?, 'project-1', 'agent-1', 'lesson', 'project', ?, 'Range filter body.',
+          ?, 'manual', 'archival', 'active', ?, ?
+        )
+      `,
+        )
+        .run(memory.id, memory.title, JSON.stringify(memory.tags), memory.created_at, memory.created_at);
+    }
+
+    const searchHandler = routes.get("GET /api/memory/search");
+    const res = createFakeResponse();
+    searchHandler?.(
+      {
+        query: {
+          project_id: "project-1",
+          tags: "design,approved",
+          created_from: "1500",
+          created_to: "2500",
+        },
+      },
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    const payload = res.payload as { memories: Array<{ id: string; title: string }> };
+    expect(payload.memories.map((memory) => memory.id)).toEqual(["memory-target-design"]);
+  });
+
   it("ranks core and episodic memories before archival matches", () => {
     const createProjectMemoryHandler = routes.get("POST /api/projects/:id/memory");
     for (const memory of [

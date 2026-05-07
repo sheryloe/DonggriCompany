@@ -10,7 +10,7 @@ import {
 import { getRoleDisplayLabel, getWorkflowRoleDisplayLabel } from "../../app/canonical-display";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../../i18n/canonical-label-registry";
 import {
-  AGENT_VISUAL_PROFILES,
+  getAgentVisualProfileFallbackPool,
   getAgentVisualProfileDescriptionKo,
   getAgentVisualProfileStatusLabelKo,
   getSpriteDirectionLabelKo,
@@ -197,11 +197,7 @@ export default function AgentDetailTabContent({
   }, [agent.department_id, agent.family, agentSubAgents, profile.preferred_subagents]);
   const reserveProfileCandidates = useMemo<AgentVisualProfile[]>(() => {
     const currentKey = visualProfile.agent_visual_profile_key;
-    const reservePool = AGENT_VISUAL_PROFILES.filter(
-      (candidate) => candidate.status === "reserve" && candidate.agent_visual_profile_key !== currentKey,
-    );
-    const fallbackPool = AGENT_VISUAL_PROFILES.filter((candidate) => candidate.agent_visual_profile_key !== currentKey);
-    return (reservePool.length > 0 ? reservePool : fallbackPool).slice(0, 4);
+    return getAgentVisualProfileFallbackPool(currentKey).slice(0, 4);
   }, [visualProfile.agent_visual_profile_key]);
   const generationHistory = [
     {

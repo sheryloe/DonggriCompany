@@ -135,3 +135,33 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Memory API tests passed, production build passed, and whitespace check passed.
 - Risk: Promotion candidate evidence is still bounded to the latest 12 skill usage rows and task-run memory references; deeper historical evidence remains discoverable through `search_archival_memory`.
 - Follow-up: P5 should connect ISO quality evidence fields to task reports and memory quality events.
+
+## 2026-05-07 13:08 KST - Gemini Pro P0-P4 Analysis Report
+
+- Request: Use Gemini CLI with a Pro model to produce an analysis report.
+- Change: Ran Gemini CLI in read-only plan mode against the repository context and saved the generated P0-P4 analysis report under `docs/reports/`.
+- Changed files: `docs/reports/GEMINI_PRO_ANALYSIS_P0_P4_2026-05-07.md`, `docs/QUALITY_LOG.md`.
+- Commands: `gemini --version`, `gemini --help`, `gemini -m gemini-3-pro-preview --approval-mode plan -p <analysis prompt>`.
+- Validation: Gemini CLI returned the report body; output also included server-side Pro model capacity retry logs, so only the generated report body was retained.
+- Risk: The CLI routed the Pro request through a preview Pro model and reported capacity 429 retries after output; rerun may be needed if exact model availability must be proven later.
+- Follow-up: Use the report recommendations to scope P5 ISO quality evidence automation.
+
+## 2026-05-07 13:50 KST - Gemini Pro Checklist and P5 P0/P1 Closure
+
+- Request: Re-run Gemini CLI with `gemini-3.1-pro-preview`, fall back to `gemini-2.5-pro` on 429/capacity failure, create a detailed checklist, and let Codex implement improvements from that checklist.
+- Change: Saved the Gemini detailed analysis/checklist under `docs/analysis/`, added a reusable Pro-to-Pro fallback runner script, centralized reserve-capable visual profile fallback selection, reused that fallback pool in the agent detail reserve approval UI, and extended archival memory search with tag and created/updated date range filters.
+- Changed files: `docs/analysis/GEMINI_PRO_DETAILED_CHECKLIST_P5_2026-05-07.md`, `scripts/run-gemini-pro-analysis.ps1`, `src/agent-visual-profiles.ts`, `src/agent-visual-profiles.test.ts`, `src/components/agent-detail/AgentDetailTabContent.tsx`, `server/modules/memory/store.ts`, `server/modules/routes/core/memory.ts`, `server/modules/routes/core/memory.test.ts`, `docs/QUALITY_LOG.md`.
+- Commands: `gemini -m gemini-3.1-pro-preview --approval-mode plan -p <analysis prompt>` with `GEMINI_CLI_TRUST_WORKSPACE=true`, fallback attempt to `gemini-2.5-pro`, `corepack pnpm exec prettier --write ...`, `corepack pnpm test:web -- agent-visual-profiles`, `corepack pnpm test:api -- memory`, `corepack pnpm test:web -- AgentDetailTabContent agent-visual-profiles`, `corepack pnpm build`.
+- Validation: Gemini 3.1 produced a usable checklist report while also reporting capacity 429 retry logs; residual Gemini CLI node processes from the timed-out fallback run were stopped. Visual profile tests passed, agent detail tests passed, memory API tests passed, and production build passed.
+- Risk: Future Gemini 3.1 Pro runs may still hit server capacity; the script now falls back automatically when the primary model exits nonzero, emits no output, times out, or reports 429/capacity. The current visual profile pool still has no explicit reserve status rows, so runtime fallback uses reserve rows when present and otherwise falls back to canonical seeded/active profiles.
+- Follow-up: Continue with checklist P2/P3 items: project component event timeline, design workspace asset-review specialization, and decision after-result tracking.
+
+## 2026-05-07 14:25 KST - Gemini Pro Final P5 Review
+
+- Request: After P5 P0/P1 work, run Gemini CLI again to create a full detailed analysis report and improvement-point document.
+- Change: Added a final review prompt, hardened the Gemini runner to capture UTF-8 output through `.NET Process`, reran `gemini-3.1-pro-preview` first with automatic `gemini-2.5-pro` fallback, and saved a cleaned final review report under `docs/analysis/`.
+- Changed files: `docs/analysis/GEMINI_PRO_FINAL_REVIEW_PROMPT_2026-05-07.md`, `docs/analysis/GEMINI_PRO_FINAL_REVIEW_AFTER_P5_2026-05-07.md`, `scripts/run-gemini-pro-analysis.ps1`, `docs/QUALITY_LOG.md`.
+- Commands: `.\scripts\run-gemini-pro-analysis.ps1 -PromptFile .\docs\analysis\GEMINI_PRO_FINAL_REVIEW_PROMPT_2026-05-07.md -OutputPath .\docs\analysis\GEMINI_PRO_FINAL_REVIEW_AFTER_P5_2026-05-07.md -PrimaryModel gemini-3.1-pro-preview -FallbackModel gemini-2.5-pro -TimeoutSeconds 900`, PowerShell parser validation, `corepack pnpm exec prettier --write ...`.
+- Validation: Gemini 3.1 continued to report capacity 429, fallback completed with `gemini-2.5-pro`, final document was normalized to remove a duplicated partial preface, and UTF-8 Korean rendering was verified.
+- Risk: The final verdict came from fallback `gemini-2.5-pro` because the preferred 3.1 preview model remained capacity constrained.
+- Follow-up: Commit the P5 P0/P1 change set, then proceed to P2/P3 follow-up work identified in the final review.

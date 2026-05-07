@@ -47,6 +47,17 @@ function parseTags(value: unknown): string[] {
   return [];
 }
 
+function parseTimestamp(value: unknown): number | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw !== "string" && typeof raw !== "number") return null;
+  const text = String(raw).trim();
+  if (!text) return null;
+  const numeric = Number(text);
+  if (Number.isFinite(numeric)) return Math.trunc(numeric);
+  const parsedDate = Date.parse(text);
+  return Number.isFinite(parsedDate) ? parsedDate : null;
+}
+
 function normalizeBodyText(ctx: Pick<RuntimeContext, "normalizeTextField">, value: unknown): string | null {
   return ctx.normalizeTextField(value);
 }
@@ -205,6 +216,11 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
       threadId: typeof req.query.thread_id === "string" ? req.query.thread_id : null,
       layer: typeof req.query.layer === "string" ? req.query.layer : null,
       scope: typeof req.query.scope === "string" ? req.query.scope : "local",
+      tags: parseTags(req.query.tags ?? req.query.tag),
+      createdFrom: parseTimestamp(req.query.created_from ?? req.query.created_after),
+      createdTo: parseTimestamp(req.query.created_to ?? req.query.created_before),
+      updatedFrom: parseTimestamp(req.query.updated_from ?? req.query.updated_after),
+      updatedTo: parseTimestamp(req.query.updated_to ?? req.query.updated_before),
       limit: Number(req.query.limit ?? 10),
       now: nowMs(),
     });

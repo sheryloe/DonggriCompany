@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_VISUAL_PROFILES, resolveAgentVisualProfile } from "./agent-visual-profiles";
+import {
+  AGENT_VISUAL_PROFILES,
+  getAgentVisualProfileFallbackPool,
+  resolveAgentVisualProfile,
+} from "./agent-visual-profiles";
 import type { Agent } from "./types";
 
 describe("agent visual profiles", () => {
@@ -23,5 +27,27 @@ describe("agent visual profiles", () => {
     const second = resolveAgentVisualProfile(agent);
     expect(first.agent_visual_profile_key).toBe(second.agent_visual_profile_key);
     expect(first.preferred_asset_modules).toEqual(["character-image", "sprite-4dir"]);
+  });
+
+  it("uses the reserve-capable fallback pool when an explicit profile key is missing", () => {
+    const agent = {
+      id: "agent-invalid-profile",
+      name: "Ari",
+      family: "backend",
+      specialization_key: "api",
+      sprite_number: 3,
+      agent_profile: {
+        visual_profile_key: "missing-profile-key",
+      },
+    } as Agent;
+
+    const fallbackPool = getAgentVisualProfileFallbackPool(agent.agent_profile?.visual_profile_key);
+    const resolved = resolveAgentVisualProfile(agent);
+
+    expect(fallbackPool.length).toBeGreaterThan(0);
+    expect(fallbackPool.map((profile) => profile.agent_visual_profile_key)).toContain(
+      resolved.agent_visual_profile_key,
+    );
+    expect(resolved.status).not.toBe("archived");
   });
 });

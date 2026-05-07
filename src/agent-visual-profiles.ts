@@ -137,6 +137,27 @@ function stableHash(value: string): number {
   return hash;
 }
 
+function isSelectableProfile(profile: AgentVisualProfile): boolean {
+  return profile.status !== "archived";
+}
+
+export function getAgentVisualProfileFallbackPool(excludeProfileKey?: string | null): AgentVisualProfile[] {
+  const excludeKey = excludeProfileKey?.trim();
+  const withoutCurrent = (profile: AgentVisualProfile) =>
+    isSelectableProfile(profile) && (!excludeKey || profile.agent_visual_profile_key !== excludeKey);
+  const reservePool = AGENT_VISUAL_PROFILES.filter(
+    (profile) => profile.status === "reserve" && withoutCurrent(profile),
+  );
+  if (reservePool.length > 0) return reservePool;
+
+  const canonicalPool = AGENT_VISUAL_PROFILES.filter(
+    (profile) => (profile.status === "seeded" || profile.status === "active") && withoutCurrent(profile),
+  );
+  if (canonicalPool.length > 0) return canonicalPool;
+
+  return AGENT_VISUAL_PROFILES.filter(withoutCurrent);
+}
+
 function splitProfileKey(profileKey: string): { archetypeKey: ArchetypeKey | null; styleKey: StyleKey | null } {
   const archetype = BASE_ARCHETYPES.find((entry) => profileKey.startsWith(`${entry.key}-`));
   const style = STYLE_VARIANTS.find((entry) => profileKey.endsWith(`-${entry.key}`));
@@ -149,14 +170,16 @@ function splitProfileKey(profileKey: string): { archetypeKey: ArchetypeKey | nul
 export function resolveAgentVisualProfile(agent: Agent, fallbackIndex = 0): AgentVisualProfile {
   const explicitKey = agent.agent_profile?.visual_profile_key;
   const explicitProfile = explicitKey
-    ? AGENT_VISUAL_PROFILES.find((profile) => profile.agent_visual_profile_key === explicitKey)
+    ? AGENT_VISUAL_PROFILES.find(
+        (profile) => profile.agent_visual_profile_key === explicitKey && isSelectableProfile(profile),
+      )
     : null;
   if (explicitProfile) return explicitProfile;
 
-  const basis = `${agent.id}:${agent.name}:${agent.family ?? ""}:${agent.specialization_key ?? ""}:${agent.sprite_number ?? ""}`;
-  const index =
-    AGENT_VISUAL_PROFILES.length > 0 ? stableHash(basis || String(fallbackIndex)) % AGENT_VISUAL_PROFILES.length : 0;
-  return AGENT_VISUAL_PROFILES[index];
+  const fallbackPool = getAgentVisualProfileFallbackPool(explicitKey);
+  const basis = `${agent.id}:${agent.name}:${agent.family ?? ""}:${agent.specialization_key ?? ""}:${agent.sprite_number ?? ""}:${explicitKey ?? ""}`;
+  const index = fallbackPool.length > 0 ? stableHash(basis || String(fallbackIndex)) % fallbackPool.length : 0;
+  return fallbackPool[index] ?? AGENT_VISUAL_PROFILES[0];
 }
 
 export function getAgentVisualProfileDescriptionKo(profile: AgentVisualProfile): string {

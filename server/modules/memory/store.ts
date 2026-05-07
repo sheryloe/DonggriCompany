@@ -415,6 +415,21 @@ function escapeFtsQuery(query: string): string {
     .join(" OR ");
 }
 
+function normalizeSearchTags(tags: string[] | null | undefined): string[] {
+  if (!Array.isArray(tags)) return [];
+  return [...new Set(tags.map((tag) => normalizeText(tag).toLowerCase().replace(/[%_"]/g, "")).filter(Boolean))].slice(
+    0,
+    12,
+  );
+}
+
+function normalizeSearchTimestamp(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+}
+
 function hasMemoryFts(db: DatabaseSync): boolean {
   try {
     const row = db.prepare("SELECT value FROM settings WHERE key = 'memoryFtsAvailable'").get() as
@@ -506,6 +521,11 @@ export function searchMemories(
     threadId?: string | null;
     layer?: string | null;
     scope?: "local" | "global" | "all" | string | null;
+    tags?: string[] | null;
+    createdFrom?: number | null;
+    createdTo?: number | null;
+    updatedFrom?: number | null;
+    updatedTo?: number | null;
     limit?: number | null;
     now?: number | null;
   },
@@ -514,6 +534,11 @@ export function searchMemories(
   const limit = Math.max(1, Math.min(50, Math.trunc(Number(input.limit ?? 10))));
   const layer = normalizeText(input.layer);
   const scope = normalizeText(input.scope) || "local";
+  const tags = normalizeSearchTags(input.tags);
+  const createdFrom = normalizeSearchTimestamp(input.createdFrom);
+  const createdTo = normalizeSearchTimestamp(input.createdTo);
+  const updatedFrom = normalizeSearchTimestamp(input.updatedFrom);
+  const updatedTo = normalizeSearchTimestamp(input.updatedTo);
   const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
   const params: SQLInputValue[] = [];
   const clauses = ["m.status = 'active'"];
@@ -538,6 +563,26 @@ export function searchMemories(
   if (layer && layer !== "all") {
     clauses.push("m.memory_layer = ?");
     params.push(normalizeMemoryLayer(layer));
+  }
+  for (const tag of tags) {
+    clauses.push("LOWER(m.tags_json) LIKE ?");
+    params.push(`%"${tag}"%`);
+  }
+  if (createdFrom !== null) {
+    clauses.push("m.created_at >= ?");
+    params.push(createdFrom);
+  }
+  if (createdTo !== null) {
+    clauses.push("m.created_at <= ?");
+    params.push(createdTo);
+  }
+  if (updatedFrom !== null) {
+    clauses.push("m.updated_at >= ?");
+    params.push(updatedFrom);
+  }
+  if (updatedTo !== null) {
+    clauses.push("m.updated_at <= ?");
+    params.push(updatedTo);
   }
 
   const searchAgentMemories = !input.projectId || input.agentId;
@@ -643,6 +688,9 @@ export function buildSearchArchivalMemoryToolBlock(input: {
     "- thread_id: optional task/session id when looking for continuation memory.",
     "- layer: core, episodic, archival, global, or all. Use all only when you need mixed local layers.",
     "- scope: local by default. Use global only for approved promoted summaries, not raw cross-project memories.",
+    "- tags: optional comma-separated canonical tags; all provided tags must match.",
+    "- created_from/created_to: optional epoch-millisecond created_at range.",
+    "- updated_from/updated_to: optional epoch-millisecond updated_at range.",
     "- limit: 1-20 for prompt use.",
     input.projectId ? `Default project_id=${input.projectId}` : "",
     input.agentId ? `Default agent_id=${input.agentId}` : "",

@@ -265,3 +265,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: API memory/project-delete tests passed with 2 files and 14 tests; MemorySearchPanel web tests passed with 1 file and 4 tests.
 - Risk: The first vector model is deterministic local hashed token embedding (`local-hash-v3`), suitable for offline operation and auditability, but not an external semantic embedding model or ANN index.
 - Follow-up: Add provider-backed embeddings and vector backfill when model capacity, cost controls, and migration observability are ready.
+
+## 2026-05-07 23:59 KST - Gemini ISO 9001 Software Completeness Review
+
+- Request: Use Gemini CLI to review the full codebase from an ISO 9001 quality and software-completeness perspective.
+- Change: Created a full-workspace Gemini Pro audit prompt and, after Pro capacity/time limits, generated a condensed evidence-based Gemini report with ISO 9001 readiness, software completeness scoring, subsystem scorecard, and prioritized improvement checklist.
+- Changed files: `docs/analysis/GEMINI_PRO_ISO9001_SOFTWARE_COMPLETENESS_PROMPT_2026-05-07.md`, `docs/analysis/GEMINI_CONDENSED_ISO9001_SOFTWARE_COMPLETENESS_PROMPT_2026-05-07.md`, `docs/analysis/GEMINI_CONDENSED_ISO9001_SOFTWARE_COMPLETENESS_REVIEW_2026-05-07.md`, `docs/QUALITY_LOG.md`.
+- Commands: `gemini --version`, `.\scripts\run-gemini-pro-analysis.ps1 -PromptFile '.\docs\analysis\GEMINI_PRO_ISO9001_SOFTWARE_COMPLETENESS_PROMPT_2026-05-07.md' -OutputPath '.\docs\analysis\GEMINI_PRO_ISO9001_SOFTWARE_COMPLETENESS_REVIEW_2026-05-07.md' -PrimaryModel 'gemini-3.1-pro-preview' -FallbackModel 'gemini-2.5-pro' -TimeoutSeconds 1200`, fallback retries with `gemini-3-pro-preview`, `gemini-2.5-flash`, and final condensed prompt through `gemini-3-pro-preview`.
+- Validation: Gemini CLI version `0.41.2` was available; full-workspace Pro attempts hit capacity 429 or timeout; the condensed evidence report completed with effective model `gemini-3-pro-preview`; UTF-8 Korean report content was verified with zero replacement characters.
+- Risk: The generated report is condensed evidence-based because full-workspace Pro code traversal was provider-constrained; it is not a line-by-line full source audit.
+- Follow-up: Use the report's next implementation candidates: server-side saved/recent memory searches, provider-backed embeddings, and long-term quality metrics storage.

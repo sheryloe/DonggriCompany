@@ -221,6 +221,8 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
       createdTo: parseTimestamp(req.query.created_to ?? req.query.created_before),
       updatedFrom: parseTimestamp(req.query.updated_from ?? req.query.updated_after),
       updatedTo: parseTimestamp(req.query.updated_to ?? req.query.updated_before),
+      promotionStatus: typeof req.query.promotion_status === "string" ? req.query.promotion_status : null,
+      sourceType: typeof req.query.source_type === "string" ? req.query.source_type : null,
       limit: Number(req.query.limit ?? 10),
       now: nowMs(),
     });

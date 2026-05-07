@@ -280,6 +280,73 @@ describe("memory routes", () => {
     expect(payload.memories.map((memory) => memory.id)).toEqual(["memory-target-design"]);
   });
 
+  it("filters memory search by promotion status and source type", () => {
+    for (const memory of [
+      {
+        id: "memory-local-manual",
+        title: "Local manual decision",
+        source_type: "manual",
+        promotion_status: "local",
+      },
+      {
+        id: "memory-promoted-manual",
+        title: "Promoted manual decision",
+        source_type: "manual",
+        promotion_status: "promoted",
+      },
+      {
+        id: "memory-local-task-run",
+        title: "Local task run decision",
+        source_type: "task_run",
+        promotion_status: "local",
+      },
+    ]) {
+      db!
+        .prepare(
+          `
+        INSERT INTO project_memories (
+          id, project_id, agent_id, memory_type, scope_type, title, body,
+          tags_json, source_type, memory_layer, promotion_status, status, created_at, updated_at
+        ) VALUES (?, 'project-1', 'agent-1', 'lesson', 'project', ?, 'Advanced filter body.',
+          '[]', ?, 'archival', ?, 'active', 3000, 3000
+        )
+      `,
+        )
+        .run(memory.id, memory.title, memory.source_type, memory.promotion_status);
+    }
+
+    const searchHandler = routes.get("GET /api/memory/search");
+    const promotedRes = createFakeResponse();
+    searchHandler?.(
+      {
+        query: {
+          project_id: "project-1",
+          promotion_status: "promoted",
+        },
+      },
+      promotedRes,
+    );
+
+    expect(promotedRes.statusCode).toBe(200);
+    const promotedPayload = promotedRes.payload as { memories: Array<{ id: string }> };
+    expect(promotedPayload.memories.map((memory) => memory.id)).toEqual(["memory-promoted-manual"]);
+
+    const sourceRes = createFakeResponse();
+    searchHandler?.(
+      {
+        query: {
+          project_id: "project-1",
+          source_type: "task_run",
+        },
+      },
+      sourceRes,
+    );
+
+    expect(sourceRes.statusCode).toBe(200);
+    const sourcePayload = sourceRes.payload as { memories: Array<{ id: string }> };
+    expect(sourcePayload.memories.map((memory) => memory.id)).toEqual(["memory-local-task-run"]);
+  });
+
   it("ranks core and episodic memories before archival matches", () => {
     const createProjectMemoryHandler = routes.get("POST /api/projects/:id/memory");
     for (const memory of [

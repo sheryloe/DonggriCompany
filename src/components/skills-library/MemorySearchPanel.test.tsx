@@ -1,15 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { searchMemory } from "../../api";
-import type { Agent, NativeMemory } from "../../types";
+import { getProjects, searchMemory } from "../../api";
+import type { Agent, NativeMemory, Project } from "../../types";
 import MemorySearchPanel from "./MemorySearchPanel";
 
 vi.mock("../../api", () => ({
+  getProjects: vi.fn(),
   isApiRequestError: vi.fn(() => false),
   searchMemory: vi.fn(),
 }));
 
+const getProjectsMock = vi.mocked(getProjects);
 const searchMemoryMock = vi.mocked(searchMemory);
 
 const TEST_AGENT: Agent = {
@@ -55,15 +57,36 @@ const TEST_MEMORY: NativeMemory = {
   last_used_at: null,
 };
 
+const TEST_PROJECT: Project = {
+  id: "project-1",
+  name: "Empire",
+  project_path: "G:\\Donggri_DevDrive\\repos\\runtime\\Empire",
+  core_goal: "부서별 컴포넌트 운영성 검증",
+  assignment_mode: "auto",
+  last_used_at: null,
+  created_at: 1,
+  updated_at: 1,
+};
+
 describe("MemorySearchPanel", () => {
   beforeEach(() => {
+    getProjectsMock.mockReset();
+    getProjectsMock.mockResolvedValue({
+      projects: [TEST_PROJECT],
+      page: 1,
+      page_size: 8,
+      total: 1,
+      total_pages: 1,
+    });
     searchMemoryMock.mockReset();
     searchMemoryMock.mockResolvedValue([TEST_MEMORY]);
   });
 
-  it("searches memories with text, tags, date range, layer, scope, and agent filter", async () => {
+  it("searches memories with selected project, advanced filters, tags, dates, layer, scope, and agent filter", async () => {
     render(<MemorySearchPanel agents={[TEST_AGENT]} />);
 
+    fireEvent.change(screen.getByTestId("memory-project-query"), { target: { value: "Empire" } });
+    fireEvent.click(await screen.findByTestId("memory-project-option-project-1"));
     fireEvent.change(screen.getByTestId("memory-search-query"), { target: { value: "routing" } });
     fireEvent.change(screen.getByTestId("memory-search-tags"), { target: { value: "design, approved" } });
     fireEvent.change(screen.getByTestId("memory-search-created-from"), { target: { value: "2026-05-01" } });
@@ -72,8 +95,9 @@ describe("MemorySearchPanel", () => {
     fireEvent.change(screen.getByTestId("memory-search-updated-to"), { target: { value: "2026-05-08" } });
     fireEvent.change(screen.getByTestId("memory-search-layer"), { target: { value: "archival" } });
     fireEvent.change(screen.getByTestId("memory-search-scope"), { target: { value: "all" } });
+    fireEvent.change(screen.getByTestId("memory-search-promotion"), { target: { value: "promoted" } });
+    fireEvent.change(screen.getByTestId("memory-search-source"), { target: { value: "task_run" } });
     fireEvent.change(screen.getByTestId("memory-search-agent"), { target: { value: "agent-1" } });
-    fireEvent.change(screen.getByTestId("memory-search-project"), { target: { value: "project-1" } });
 
     fireEvent.click(screen.getByRole("button", { name: "검색" }));
 
@@ -86,6 +110,8 @@ describe("MemorySearchPanel", () => {
         tags: ["design", "approved"],
         layer: "archival",
         scope: "all",
+        promotion_status: "promoted",
+        source_type: "task_run",
         agent_id: "agent-1",
         project_id: "project-1",
         created_from: expect.any(Number),
@@ -97,6 +123,7 @@ describe("MemorySearchPanel", () => {
     );
     expect(await screen.findByText("Design routing decision")).toBeInTheDocument();
     expect(screen.getByText("디자인 부서 이벤트를 컴포넌트 워크벤치로 연결했습니다.")).toBeInTheDocument();
+    expect(screen.getByText("project Empire")).toBeInTheDocument();
   });
 
   it("shows an empty search state after a successful search with no results", async () => {
@@ -107,5 +134,25 @@ describe("MemorySearchPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "검색" }));
 
     expect(await screen.findByText("검색 결과가 없습니다.")).toBeInTheDocument();
+  });
+
+  it("keeps the locked project selected after reset", async () => {
+    render(<MemorySearchPanel agents={[TEST_AGENT]} initialProject={TEST_PROJECT} lockProject defaultScope="all" />);
+
+    expect(screen.getByTestId("memory-selected-project")).toHaveTextContent("Empire");
+    fireEvent.change(screen.getByTestId("memory-search-query"), { target: { value: "temporary" } });
+    fireEvent.click(screen.getByRole("button", { name: "초기화" }));
+    expect(screen.getByTestId("memory-selected-project")).toHaveTextContent("Empire");
+
+    fireEvent.click(screen.getByRole("button", { name: "검색" }));
+    await waitFor(() => {
+      expect(searchMemoryMock).toHaveBeenCalledTimes(1);
+    });
+    expect(searchMemoryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        project_id: "project-1",
+        scope: "all",
+      }),
+    );
   });
 });

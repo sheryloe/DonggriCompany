@@ -185,3 +185,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Gemini CLI completed with `gemini-3.1-pro-preview` directly, without fallback; UTF-8 Korean report rendering was verified.
 - Risk: Gemini report is evidence-based from the supplied prompt and validation summary, not an independent filesystem/tool inspection.
 - Follow-up: Use the report's next patch set as the P1/P2 backlog, starting with a project selector for memory search.
+
+## 2026-05-07 15:12 KST - Memory Search UI Project Selector
+
+- Request: Implement the Gemini follow-up plan for the memory search UI by removing raw `project_id` input, adding project selection, adding advanced filters, and reusing the panel in the project memory tab.
+- Change: Added project search/selection to `MemorySearchPanel`, wired `promotion_status` and `source_type` through UI/client/server search, and embedded a locked project memory search panel in `ProjectInsightsPanel`.
+- Changed files: `server/modules/memory/store.ts`, `server/modules/routes/core/memory.ts`, `server/modules/routes/core/memory.test.ts`, `src/api/memory.ts`, `src/components/skills-library/MemorySearchPanel.tsx`, `src/components/skills-library/MemorySearchPanel.test.tsx`, `src/components/project-manager/ProjectInsightsPanel.tsx`, `src/components/project-manager/ProjectInsightsPanel.test.tsx`, `src/components/ProjectManagerModal.tsx`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:web -- MemorySearchPanel ProjectInsightsPanel`, `corepack pnpm test:api -- memory`, `corepack pnpm build`, `git diff --check`.
+- Validation: Web tests passed with 2 files and 6 tests; API memory tests passed with 11 tests; production build and diff check passed.
+- Risk: Project selector uses first-page project search results only and does not yet provide saved/recent memory searches, audit export, or semantic/vector ranking.
+- Follow-up: Keep global command palette/search-history/export as the next patch set.

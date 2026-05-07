@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getProjectModules, type ProjectDecisionEventItem, type ProjectTaskHistoryItem } from "../../api";
 import { approveMemoryPromotion, drainBeadsOutbox, scanMemoryPromotions } from "../../api/memory";
-import type { Project, ProjectMemoryResponse } from "../../types";
+import type { Agent, Project, ProjectMemoryResponse } from "../../types";
 import type { GroupedProjectTaskCard } from "./types";
 import ProjectInsightsPanel from "./ProjectInsightsPanel";
 
@@ -36,6 +36,24 @@ function buildProject(): Project {
     last_used_at: null,
     created_at: 1,
     updated_at: 1,
+  };
+}
+
+function buildAgent(): Agent {
+  return {
+    id: "agent-1",
+    name: "Planner",
+    name_ko: "기획 리더",
+    department_id: "planning",
+    role: "team_leader",
+    cli_provider: "codex",
+    avatar_emoji: "P",
+    personality: null,
+    status: "idle",
+    current_task_id: null,
+    stats_tasks_done: 0,
+    stats_xp: 0,
+    created_at: 1,
   };
 }
 
@@ -85,6 +103,7 @@ describe("ProjectInsightsPanel rollout20", () => {
         sortedDecisionEvents={[]}
         getDecisionEventLabel={(eventType) => eventType}
         handleOpenTaskDetail={vi.fn(async () => undefined)}
+        agents={[buildAgent()]}
       />,
     );
 
@@ -124,6 +143,7 @@ describe("ProjectInsightsPanel rollout20", () => {
         sortedDecisionEvents={decisionEvents}
         getDecisionEventLabel={(eventType) => eventType}
         handleOpenTaskDetail={vi.fn(async () => undefined)}
+        agents={[buildAgent()]}
       />,
     );
 
@@ -209,10 +229,12 @@ describe("ProjectInsightsPanel rollout20", () => {
         getDecisionEventLabel={(eventType) => eventType}
         handleOpenTaskDetail={vi.fn(async () => undefined)}
         projectMemory={projectMemory}
+        agents={[buildAgent()]}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "프로젝트 기억" }));
+    expect(screen.getByTestId("memory-selected-project")).toHaveTextContent("Empire");
     expect(screen.getByText("품질 증거")).toBeInTheDocument();
     expect(screen.getByText("Project memory reconcile")).toBeInTheDocument();
 

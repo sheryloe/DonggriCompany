@@ -526,6 +526,8 @@ export function searchMemories(
     createdTo?: number | null;
     updatedFrom?: number | null;
     updatedTo?: number | null;
+    promotionStatus?: MemoryPromotionStatus | "all" | string | null;
+    sourceType?: string | null;
     limit?: number | null;
     now?: number | null;
   },
@@ -539,6 +541,8 @@ export function searchMemories(
   const createdTo = normalizeSearchTimestamp(input.createdTo);
   const updatedFrom = normalizeSearchTimestamp(input.updatedFrom);
   const updatedTo = normalizeSearchTimestamp(input.updatedTo);
+  const promotionStatus = normalizeText(input.promotionStatus);
+  const sourceType = normalizeText(input.sourceType);
   const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
   const params: SQLInputValue[] = [];
   const clauses = ["m.status = 'active'"];
@@ -563,6 +567,14 @@ export function searchMemories(
   if (layer && layer !== "all") {
     clauses.push("m.memory_layer = ?");
     params.push(normalizeMemoryLayer(layer));
+  }
+  if (promotionStatus && promotionStatus !== "all") {
+    clauses.push("m.promotion_status = ?");
+    params.push(promotionStatus);
+  }
+  if (sourceType && sourceType !== "all") {
+    clauses.push("m.source_type = ?");
+    params.push(sourceType);
   }
   for (const tag of tags) {
     clauses.push("LOWER(m.tags_json) LIKE ?");
@@ -691,6 +703,8 @@ export function buildSearchArchivalMemoryToolBlock(input: {
     "- tags: optional comma-separated canonical tags; all provided tags must match.",
     "- created_from/created_to: optional epoch-millisecond created_at range.",
     "- updated_from/updated_to: optional epoch-millisecond updated_at range.",
+    "- promotion_status: optional local, candidate, promoted, rejected, or all.",
+    "- source_type: optional manual, task_run, beads, or all.",
     "- limit: 1-20 for prompt use.",
     input.projectId ? `Default project_id=${input.projectId}` : "",
     input.agentId ? `Default agent_id=${input.agentId}` : "",

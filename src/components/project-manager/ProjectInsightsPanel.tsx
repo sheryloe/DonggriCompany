@@ -3,7 +3,8 @@ import type { ProjectDecisionEventItem, ProjectReportHistoryItem, ProjectTaskHis
 import { getProjectModules } from "../../api";
 import { getProjectModuleBindingStatusLabel, getProjectModuleTitle } from "../../app/module-display";
 import { approveMemoryPromotion, drainBeadsOutbox, scanMemoryPromotions } from "../../api/memory";
-import type { NativeMemory, Project, ProjectMemoryResponse, ProjectModuleBinding } from "../../types";
+import type { Agent, NativeMemory, Project, ProjectMemoryResponse, ProjectModuleBinding } from "../../types";
+import MemorySearchPanel from "../skills-library/MemorySearchPanel";
 import type { GroupedProjectTaskCard, ProjectDetailView, ProjectI18nTranslate } from "./types";
 import { fmtTime } from "./utils";
 
@@ -80,6 +81,7 @@ interface ProjectInsightsPanelProps {
   handleOpenTaskDetail: (taskId: string) => Promise<void>;
   projectMemory?: ProjectMemoryResponse | null;
   projectMemoryLoading?: boolean;
+  agents: Agent[];
 }
 
 export default function ProjectInsightsPanel({
@@ -94,6 +96,7 @@ export default function ProjectInsightsPanel({
   handleOpenTaskDetail,
   projectMemory,
   projectMemoryLoading,
+  agents,
 }: ProjectInsightsPanelProps) {
   const [activeView, setActiveView] = useState<ProjectDetailView>("overview");
   const [projectModules, setProjectModules] = useState<ProjectModuleBinding[]>([]);
@@ -552,182 +555,193 @@ export default function ProjectInsightsPanel({
       )}
 
       {activeView === "memory" && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)]">
-          <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-sm font-semibold text-white">프로젝트 기억</h4>
-              {projectMemoryLoading ? <span className="text-[11px] text-slate-400">동기화 중</span> : null}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(["all", "core", "archival", "episodic", "candidate"] as ProjectMemoryFilter[]).map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setMemoryFilter(filter)}
-                  className={`rounded-full px-3 py-1.5 text-xs transition ${
-                    memoryFilter === filter
-                      ? "bg-cyan-500 text-slate-950"
-                      : "border border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-400"
-                  }`}
-                >
-                  {memoryFilterLabel(filter)}
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 space-y-2">
-              {filteredMemories.length === 0 ? (
-                <p className="text-xs text-slate-500">선택한 조건에 맞는 프로젝트 기억이 없습니다.</p>
-              ) : (
-                filteredMemories.slice(0, 14).map((memory) => (
-                  <div key={memory.id} className="rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-xs font-semibold text-slate-100">{memory.title}</p>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <span className="rounded bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-200">
-                          {memory.memory_layer}
-                        </span>
-                        <span className="rounded bg-slate-700 px-2 py-0.5 text-[10px] text-slate-200">
-                          {memory.memory_type}
-                        </span>
+        <div className="space-y-4">
+          {selectedProject ? (
+            <MemorySearchPanel agents={agents} initialProject={selectedProject} lockProject defaultScope="local" />
+          ) : null}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)]">
+            <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-sm font-semibold text-white">프로젝트 기억</h4>
+                {projectMemoryLoading ? <span className="text-[11px] text-slate-400">동기화 중</span> : null}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(["all", "core", "archival", "episodic", "candidate"] as ProjectMemoryFilter[]).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setMemoryFilter(filter)}
+                    className={`rounded-full px-3 py-1.5 text-xs transition ${
+                      memoryFilter === filter
+                        ? "bg-cyan-500 text-slate-950"
+                        : "border border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-400"
+                    }`}
+                  >
+                    {memoryFilterLabel(filter)}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 space-y-2">
+                {filteredMemories.length === 0 ? (
+                  <p className="text-xs text-slate-500">선택한 조건에 맞는 프로젝트 기억이 없습니다.</p>
+                ) : (
+                  filteredMemories.slice(0, 14).map((memory) => (
+                    <div key={memory.id} className="rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-xs font-semibold text-slate-100">{memory.title}</p>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <span className="rounded bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-200">
+                            {memory.memory_layer}
+                          </span>
+                          <span className="rounded bg-slate-700 px-2 py-0.5 text-[10px] text-slate-200">
+                            {memory.memory_type}
+                          </span>
+                        </div>
                       </div>
+                      <p className="mt-1 text-[11px] text-slate-400">{memory.display_summary_ko || memory.body}</p>
+                      {memory.promotion_status === "candidate" ? (
+                        <p className="mt-1 text-[10px] text-amber-200">전사 공통 Skill 후보</p>
+                      ) : null}
                     </div>
-                    <p className="mt-1 text-[11px] text-slate-400">{memory.display_summary_ko || memory.body}</p>
-                    {memory.promotion_status === "candidate" ? (
-                      <p className="mt-1 text-[10px] text-amber-200">전사 공통 Skill 후보</p>
-                    ) : null}
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+                <h4 className="text-sm font-semibold text-white">Beads 연동 상태</h4>
+                <div className="mt-3 space-y-2 text-xs text-slate-300">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-500">상태</span>
+                    <span>{beadsStatusLabel(projectMemory)}</span>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-              <h4 className="text-sm font-semibold text-white">Beads 연동 상태</h4>
-              <div className="mt-3 space-y-2 text-xs text-slate-300">
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-500">상태</span>
-                  <span>{beadsStatusLabel(projectMemory)}</span>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-500">CLI 설치</span>
+                    <span>{projectMemory?.beads_status?.installed ? "감지됨" : "미감지"}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-500">프로젝트 초기화</span>
+                    <span>{projectMemory?.beads_status?.initialized ? "연결됨" : "미연결"}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-500">ready 항목</span>
+                    <span>{projectMemory?.beads_status?.ready_count ?? "-"}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-500">Outbox 대기</span>
+                    <span>
+                      {(projectMemory?.memory_outbox ?? []).filter((item) => item.status === "pending").length}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-500">Outbox 실패</span>
+                    <span>
+                      {(projectMemory?.memory_outbox ?? []).filter((item) => item.status === "failed").length}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleDrainBeadsOutbox()}
+                    disabled={beadsDrainRunning || !selectedProject?.id}
+                    className="mt-2 w-full rounded-lg border border-cyan-400/30 px-3 py-2 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {beadsDrainRunning ? "동기화 재시도 중" : "Beads Outbox 동기화 재시도"}
+                  </button>
+                  {beadsActionMessage ? <p className="text-[11px] text-cyan-100">{beadsActionMessage}</p> : null}
+                  {projectMemory?.beads_status?.error ? (
+                    <p className="break-all rounded-lg bg-amber-500/10 px-3 py-2 text-amber-200">
+                      {projectMemory.beads_status.error}
+                    </p>
+                  ) : null}
                 </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-500">CLI 설치</span>
-                  <span>{projectMemory?.beads_status?.installed ? "감지됨" : "미감지"}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-500">프로젝트 초기화</span>
-                  <span>{projectMemory?.beads_status?.initialized ? "연결됨" : "미연결"}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-500">ready 항목</span>
-                  <span>{projectMemory?.beads_status?.ready_count ?? "-"}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-500">Outbox 대기</span>
-                  <span>{(projectMemory?.memory_outbox ?? []).filter((item) => item.status === "pending").length}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-500">Outbox 실패</span>
-                  <span>{(projectMemory?.memory_outbox ?? []).filter((item) => item.status === "failed").length}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleDrainBeadsOutbox()}
-                  disabled={beadsDrainRunning || !selectedProject?.id}
-                  className="mt-2 w-full rounded-lg border border-cyan-400/30 px-3 py-2 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {beadsDrainRunning ? "동기화 재시도 중" : "Beads Outbox 동기화 재시도"}
-                </button>
-                {beadsActionMessage ? <p className="text-[11px] text-cyan-100">{beadsActionMessage}</p> : null}
-                {projectMemory?.beads_status?.error ? (
-                  <p className="break-all rounded-lg bg-amber-500/10 px-3 py-2 text-amber-200">
-                    {projectMemory.beads_status.error}
-                  </p>
-                ) : null}
               </div>
-            </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="text-sm font-semibold text-white">전사 공통 Skill 후보</h4>
-                <button
-                  type="button"
-                  onClick={() => void handleScanPromotions()}
-                  disabled={promotionBusyId !== null}
-                  className="rounded-lg border border-amber-400/30 px-2 py-1 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-400/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {promotionBusyId === "scan" ? "스캔 중" : "후보 재스캔"}
-                </button>
-              </div>
-              <div className="mt-3 space-y-2">
-                {visiblePromotionCandidates.length === 0 ? (
-                  <p className="text-xs text-slate-500">
-                    승인 대기 후보가 없습니다. 여러 프로젝트에서 반복 성공한 skill이 쌓이면 표시됩니다.
-                  </p>
-                ) : (
-                  visiblePromotionCandidates.slice(0, 6).map((candidate) => (
-                    <div key={candidate.id} className="rounded-lg bg-slate-900/60 px-3 py-2">
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <span className="min-w-0 truncate font-medium text-slate-100">{candidate.title}</span>
-                        <span className="shrink-0 text-amber-200">{candidate.project_count}개 프로젝트</span>
+              <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-white">전사 공통 Skill 후보</h4>
+                  <button
+                    type="button"
+                    onClick={() => void handleScanPromotions()}
+                    disabled={promotionBusyId !== null}
+                    className="rounded-lg border border-amber-400/30 px-2 py-1 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {promotionBusyId === "scan" ? "스캔 중" : "후보 재스캔"}
+                  </button>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {visiblePromotionCandidates.length === 0 ? (
+                    <p className="text-xs text-slate-500">
+                      승인 대기 후보가 없습니다. 여러 프로젝트에서 반복 성공한 skill이 쌓이면 표시됩니다.
+                    </p>
+                  ) : (
+                    visiblePromotionCandidates.slice(0, 6).map((candidate) => (
+                      <div key={candidate.id} className="rounded-lg bg-slate-900/60 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="min-w-0 truncate font-medium text-slate-100">{candidate.title}</span>
+                          <span className="shrink-0 text-amber-200">{candidate.project_count}개 프로젝트</span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">{candidate.summary}</p>
+                        <button
+                          type="button"
+                          onClick={() => void handleApprovePromotion(candidate.id)}
+                          disabled={promotionBusyId !== null}
+                          className="mt-2 rounded-md bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {promotionBusyId === candidate.id ? "승인 중" : "전사 지식으로 승인"}
+                        </button>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">{candidate.summary}</p>
-                      <button
-                        type="button"
-                        onClick={() => void handleApprovePromotion(candidate.id)}
-                        disabled={promotionBusyId !== null}
-                        className="mt-2 rounded-md bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-100 transition hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {promotionBusyId === candidate.id ? "승인 중" : "전사 지식으로 승인"}
-                      </button>
-                    </div>
-                  ))
-                )}
-                {promotionActionMessage ? <p className="text-[11px] text-amber-100">{promotionActionMessage}</p> : null}
+                    ))
+                  )}
+                  {promotionActionMessage ? (
+                    <p className="text-[11px] text-amber-100">{promotionActionMessage}</p>
+                  ) : null}
+                </div>
               </div>
-            </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-              <h4 className="text-sm font-semibold text-white">품질 증거</h4>
-              <div className="mt-3 space-y-2">
-                {(projectMemory?.quality_events ?? []).length === 0 ? (
-                  <p className="text-xs text-slate-500">아직 기록된 기억 품질 증거가 없습니다.</p>
-                ) : (
-                  (projectMemory?.quality_events ?? []).slice(0, 5).map((event) => (
-                    <div key={event.id} className="rounded-lg bg-slate-900/60 px-3 py-2">
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <span className="min-w-0 truncate font-medium text-slate-100">{event.title}</span>
-                        <span className="shrink-0 rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">
-                          {event.status}
-                        </span>
+              <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+                <h4 className="text-sm font-semibold text-white">품질 증거</h4>
+                <div className="mt-3 space-y-2">
+                  {(projectMemory?.quality_events ?? []).length === 0 ? (
+                    <p className="text-xs text-slate-500">아직 기록된 기억 품질 증거가 없습니다.</p>
+                  ) : (
+                    (projectMemory?.quality_events ?? []).slice(0, 5).map((event) => (
+                      <div key={event.id} className="rounded-lg bg-slate-900/60 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="min-w-0 truncate font-medium text-slate-100">{event.title}</span>
+                          <span className="shrink-0 rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-200">
+                            {event.status}
+                          </span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">{event.summary}</p>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">{event.summary}</p>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
-              <h4 className="text-sm font-semibold text-white">스킬 성장 요약</h4>
-              <div className="mt-3 space-y-2">
-                {(projectMemory?.skill_usage ?? []).length === 0 ? (
-                  <p className="text-xs text-slate-500">프로젝트 기준 스킬 사용 이력이 없습니다.</p>
-                ) : (
-                  (projectMemory?.skill_usage ?? []).slice(0, 8).map((skill) => (
-                    <div key={skill.skill_id} className="rounded-lg bg-slate-900/60 px-3 py-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium text-slate-100">{skill.skill_id}</span>
-                        <span className="text-slate-400">사용 {skill.use_count}회</span>
+              <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+                <h4 className="text-sm font-semibold text-white">스킬 성장 요약</h4>
+                <div className="mt-3 space-y-2">
+                  {(projectMemory?.skill_usage ?? []).length === 0 ? (
+                    <p className="text-xs text-slate-500">프로젝트 기준 스킬 사용 이력이 없습니다.</p>
+                  ) : (
+                    (projectMemory?.skill_usage ?? []).slice(0, 8).map((skill) => (
+                      <div key={skill.skill_id} className="rounded-lg bg-slate-900/60 px-3 py-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-100">{skill.skill_id}</span>
+                          <span className="text-slate-400">사용 {skill.use_count}회</span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-700">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400"
+                            style={{ width: `${Math.round(Math.max(0, Math.min(1, skill.proficiency)) * 100)}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-700">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400"
-                          style={{ width: `${Math.round(Math.max(0, Math.min(1, skill.proficiency)) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>

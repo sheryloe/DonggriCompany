@@ -542,6 +542,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
                   handleOpenTaskDetail={handleOpenTaskDetail}
                   projectMemory={projectMemory}
                   projectMemoryLoading={projectMemoryLoading}
+                  agents={agents}
                 />
               </div>
             </>

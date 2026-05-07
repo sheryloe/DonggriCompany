@@ -301,7 +301,62 @@ function validateOfficialPresetApiKey(preset: OfficialApiProviderPreset | null, 
   return null;
 }
 
-type ModelFetchResult = { ok: true; models: string[] } | { ok: false; status: number; error: string };
+type ApiProviderRuntimeStatus = {
+  status: "ok" | "capacity_limited" | "retryable_error" | "error";
+  capacity_429: boolean;
+  retryable: boolean;
+  retry_after_seconds: number | null;
+  fallback_models: string[];
+  message: string;
+};
+
+type ModelFetchResult =
+  | { ok: true; models: string[] }
+  | { ok: false; status: number; error: string; retry_after_seconds: number | null };
+
+function parseRetryAfterSeconds(value: string | null): number | null {
+  if (!value) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric >= 0) return Math.trunc(numeric);
+  const date = Date.parse(value);
+  if (!Number.isFinite(date)) return null;
+  return Math.max(0, Math.ceil((date - Date.now()) / 1000));
+}
+
+function buildProviderRuntimeStatus(
+  result: ModelFetchResult,
+  fallbackModels: ReadonlyArray<string>,
+): ApiProviderRuntimeStatus {
+  if (result.ok) {
+    return {
+      status: "ok",
+      capacity_429: false,
+      retryable: false,
+      retry_after_seconds: null,
+      fallback_models: [...fallbackModels],
+      message: "models endpoint reachable",
+    };
+  }
+
+  const errorText = result.error.toLowerCase();
+  const capacityLimited =
+    result.status === 429 ||
+    /capacity|rate.?limit|quota|too many requests|resource exhausted|overloaded/.test(errorText);
+  const retryable =
+    capacityLimited || [408, 409, 425, 500, 502, 503, 504].includes(Number(result.status));
+  return {
+    status: capacityLimited ? "capacity_limited" : retryable ? "retryable_error" : "error",
+    capacity_429: result.status === 429,
+    retryable,
+    retry_after_seconds: result.retry_after_seconds,
+    fallback_models: [...fallbackModels],
+    message: capacityLimited
+      ? "provider capacity limited; retry later or use fallback models"
+      : retryable
+        ? "provider request failed with a retryable error"
+        : "provider request failed",
+  };
+}
 
 async function fetchModelsFromUrl(params: {
   url: string;
@@ -316,7 +371,12 @@ async function fetchModelsFromUrl(params: {
     });
     if (!resp.ok) {
       const errBody = await resp.text().catch(() => "");
-      return { ok: false, status: resp.status, error: errBody.slice(0, 500) };
+      return {
+        ok: false,
+        status: resp.status,
+        error: errBody.slice(0, 500),
+        retry_after_seconds: parseRetryAfterSeconds(resp.headers.get("retry-after")),
+      };
     }
     const data = await resp.json();
     const models = mergeModelLists(params.fallbackModels, params.parse(data));
@@ -326,6 +386,7 @@ async function fetchModelsFromUrl(params: {
       ok: false,
       status: 502,
       error: error instanceof Error ? error.message : String(error),
+      retry_after_seconds: null,
     };
   }
 }
@@ -556,7 +617,12 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
     }
 
     if (!resolved.ok) {
-      return res.json({ ok: false, status: resolved.status, error: resolved.error });
+      return res.json({
+        ok: false,
+        status: resolved.status,
+        error: resolved.error,
+        runtime_status: buildProviderRuntimeStatus(resolved, fallbackModels),
+      });
     }
 
     const now = nowMs();
@@ -566,7 +632,12 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
       now,
       id,
     );
-    res.json({ ok: true, model_count: resolved.models.length, models: resolved.models });
+    res.json({
+      ok: true,
+      model_count: resolved.models.length,
+      models: resolved.models,
+      runtime_status: buildProviderRuntimeStatus(resolved, fallbackModels),
+    });
   });
 
   app.get("/api/api-providers/:id/models", async (req, res) => {

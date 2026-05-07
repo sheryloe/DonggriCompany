@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import type { Agent, Department } from "../types";
-import type { TaskReportDetail, TaskReportDocument, TaskReportTeamSection } from "../api";
+import type { TaskReportDetail, TaskReportDocument, TaskReportQualityEvidence, TaskReportTeamSection } from "../api";
 import { archiveTaskReport, getTaskReportDetail } from "../api";
 import type { UiLanguage } from "../i18n";
 import { pickLang } from "../i18n";
@@ -46,6 +46,10 @@ function statusClass(status: string): string {
   if (status === "review") return "bg-blue-500/15 text-blue-300";
   if (status === "in_progress") return "bg-amber-500/15 text-amber-300";
   return "bg-slate-700/70 text-slate-300";
+}
+
+function evidenceValue(value: string | null | undefined): string {
+  return value?.trim() || "-";
 }
 
 export default function TaskReportPopup({ report, agents, departments, uiLanguage, onClose }: TaskReportPopupProps) {
@@ -214,6 +218,71 @@ export default function TaskReportPopup({ report, agents, departments, uiLanguag
     );
   };
 
+  const renderQualityEvidence = (evidence: TaskReportQualityEvidence | undefined, scopeKey: string) => {
+    if (!evidence) return null;
+    const traceabilityNotes = evidence.traceability_notes ?? [];
+    const rows = [
+      {
+        label: t({ ko: "변경 요청", en: "Change Request", ja: "Change Request", zh: "Change Request" }),
+        value: evidence.change_request,
+      },
+      {
+        label: t({ ko: "구현 결과", en: "Implementation", ja: "Implementation", zh: "Implementation" }),
+        value: evidence.implementation_result,
+      },
+      {
+        label: t({ ko: "검증 결과", en: "Verification", ja: "Verification", zh: "Verification" }),
+        value: evidence.verification_result,
+      },
+      {
+        label: t({ ko: "승인 기록", en: "Approval", ja: "Approval", zh: "Approval" }),
+        value: evidence.approval_record,
+      },
+      {
+        label: t({ ko: "Smoke 캡처", en: "Smoke Screenshot", ja: "Smoke Screenshot", zh: "Smoke Screenshot" }),
+        value: evidence.smoke_screenshot_path,
+      },
+      {
+        label: t({ ko: "Commit", en: "Commit", ja: "Commit", zh: "Commit" }),
+        value: evidence.commit_hash,
+      },
+      {
+        label: t({ ko: "CI 링크", en: "CI Link", ja: "CI Link", zh: "CI Link" }),
+        value: evidence.ci_url,
+      },
+    ];
+
+    return (
+      <div
+        className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-3"
+        data-testid={`task-report-evidence-${scopeKey}`}
+      >
+        <p className="mb-2 text-xs font-semibold text-cyan-100">
+          {t({ ko: "ISO 증거 연결", en: "ISO Evidence Links", ja: "ISO Evidence Links", zh: "ISO Evidence Links" })}
+        </p>
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {rows.map((row) => (
+            <div key={row.label} className="min-w-0 rounded bg-slate-950/35 px-2 py-1.5">
+              <div className="text-[10px] uppercase text-cyan-200/70">{row.label}</div>
+              <div className="mt-0.5 truncate text-[11px] text-slate-100" title={evidenceValue(row.value)}>
+                {evidenceValue(row.value)}
+              </div>
+            </div>
+          ))}
+        </div>
+        {traceabilityNotes.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {traceabilityNotes.map((note) => (
+              <span key={note} className="rounded-full border border-cyan-400/20 px-2 py-0.5 text-[10px] text-cyan-100">
+                {note}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderPlanningSummary = () => (
     <div className="space-y-3">
       <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
@@ -271,6 +340,7 @@ export default function TaskReportPopup({ report, agents, departments, uiLanguag
           </div>
         </div>
       )}
+      {renderQualityEvidence(currentReport.quality_evidence, "root")}
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">
           {t({ ko: "문서 원문", en: "Source Documents", ja: "原本文書", zh: "原始文档" })}
@@ -324,6 +394,8 @@ export default function TaskReportPopup({ report, agents, departments, uiLanguag
             </div>
           </div>
         )}
+
+        {renderQualityEvidence(team.quality_evidence, `team-${team.id}`)}
 
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">

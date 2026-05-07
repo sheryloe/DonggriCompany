@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type {
   ApiProvider,
   ApiProviderOfficialPreset,
+  ApiProviderRuntimeStatus,
   CliAccountPoolView,
   CliAccountVerifyResponse,
   SyncCodexPoolsResponse,
@@ -70,7 +71,15 @@ export interface ApiFormState {
   preset_key: string | null;
 }
 
-export type ApiTestResultMap = Record<string, { ok: boolean; msg: string }>;
+export type ApiTestResultMap = Record<
+  string,
+  {
+    ok: boolean;
+    msg: string;
+    status?: number;
+    runtime_status?: ApiProviderRuntimeStatus;
+  }
+>;
 
 export interface ApiAssignTarget {
   providerId: string;

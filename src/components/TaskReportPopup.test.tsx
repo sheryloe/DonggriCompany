@@ -70,4 +70,37 @@ describe("TaskReportPopup", () => {
 
     expect(screen.getByAltText("Ari")).toBeInTheDocument();
   });
+
+  it("shows ISO evidence links for smoke screenshot, commit, and CI", () => {
+    render(
+      <I18nProvider language="en">
+        <TaskReportPopup
+          report={
+            {
+              ...baseReport,
+              quality_evidence: {
+                change_request: "Ship feature",
+                implementation_result: "Implemented report evidence",
+                verification_result: "build passed",
+                approval_record: "Task status done",
+                traceability_notes: ["1 report document(s)"],
+                smoke_screenshot_path: "reports/smoke.png",
+                commit_hash: "abc1234",
+                ci_url: "https://github.com/org/repo/actions/runs/42",
+              },
+            } as any
+          }
+          agents={[]}
+          departments={[]}
+          uiLanguage="en"
+          onClose={() => {}}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByTestId("task-report-evidence-root")).toHaveTextContent("ISO 증거 연결");
+    expect(screen.getByText("reports/smoke.png")).toBeInTheDocument();
+    expect(screen.getByText("abc1234")).toBeInTheDocument();
+    expect(screen.getByText("https://github.com/org/repo/actions/runs/42")).toBeInTheDocument();
+  });
 });

@@ -19,6 +19,16 @@ function buildReviewRoundItem(): DecisionInboxItem {
     blockerCount: 2,
     blockerDelta: -1,
     optionNotes: ["보안 스캔 결과 보완", "모바일 레이아웃 정리"],
+    plannerAnalysisQuality: {
+      status: "partial",
+      expectedOptionCount: 3,
+      plannerOptionCount: 1,
+      coveredOptionCount: 1,
+      coverageRatio: 0.33,
+      missingOptionNumbers: [1, 3],
+      hasJsonBlock: true,
+      invalidJson: false,
+    },
     reviewerVerdicts: [],
     options: [
       {
@@ -82,6 +92,10 @@ describe("DecisionInboxModal", () => {
     expect(screen.getAllByText("선택 후 결과").length).toBeGreaterThan(0);
     expect(screen.getAllByText("리스크").length).toBeGreaterThan(0);
     expect(screen.getAllByText("후속 조치").length).toBeGreaterThan(0);
+    expect(screen.getByText("Planner JSON 품질")).toBeInTheDocument();
+    expect(screen.getByText("partial")).toBeInTheDocument();
+    expect(screen.getByText("1/3")).toBeInTheDocument();
+    expect(screen.getByText("누락: 1, 3")).toBeInTheDocument();
     expect(screen.getByText("Planner 분석")).toBeInTheDocument();
     expect(screen.getByText("선택한 번호와 메모만 보완 작업으로 생성됩니다.")).toBeInTheDocument();
   });

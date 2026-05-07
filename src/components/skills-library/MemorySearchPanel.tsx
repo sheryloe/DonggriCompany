@@ -6,6 +6,29 @@ type MemoryLayerFilter = "all" | "core" | "episodic" | "archival" | "global";
 type MemoryScopeFilter = "local" | "all" | "global";
 type MemoryPromotionFilter = "all" | "local" | "candidate" | "promoted" | "rejected";
 type MemorySourceFilter = "all" | "manual" | "task_run" | "beads";
+type MemoryRankingMode = "default" | "semantic";
+
+type StoredMemorySearch = {
+  id: string;
+  label: string;
+  query: string;
+  tagText: string;
+  createdFrom: string;
+  createdTo: string;
+  updatedFrom: string;
+  updatedTo: string;
+  layer: MemoryLayerFilter;
+  scope: MemoryScopeFilter;
+  promotionStatus: MemoryPromotionFilter;
+  sourceType: MemorySourceFilter;
+  rankingMode: MemoryRankingMode;
+  agentId: string;
+  project: Project | null;
+  createdAt: number;
+};
+
+const MEMORY_RECENT_SEARCHES_KEY = "donggri.memorySearch.recent.v1";
+const MEMORY_SAVED_SEARCHES_KEY = "donggri.memorySearch.saved.v1";
 
 interface MemorySearchPanelProps {
   agents: Agent[];
@@ -72,6 +95,21 @@ function projectDescription(project: Project): string {
   return project.core_goal?.trim() || "핵심 목표가 기록되지 않았습니다.";
 }
 
+function readStoredSearches(key: string): StoredMemorySearch[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? (parsed as StoredMemorySearch[]).slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredSearches(key: string, searches: StoredMemorySearch[]): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(searches.slice(0, 12)));
+}
+
 export default function MemorySearchPanel({
   agents,
   initialProject = null,
@@ -88,6 +126,7 @@ export default function MemorySearchPanel({
   const [scope, setScope] = useState<MemoryScopeFilter>(defaultScope);
   const [promotionStatus, setPromotionStatus] = useState<MemoryPromotionFilter>("all");
   const [sourceType, setSourceType] = useState<MemorySourceFilter>("all");
+  const [rankingMode, setRankingMode] = useState<MemoryRankingMode>("default");
   const [agentId, setAgentId] = useState("");
   const [selectedProject, setSelectedProject] = useState<Project | null>(initialProject);
   const [projectQuery, setProjectQuery] = useState(initialProject?.name ?? "");
@@ -98,6 +137,13 @@ export default function MemorySearchPanel({
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recentSearches, setRecentSearches] = useState<StoredMemorySearch[]>([]);
+  const [savedSearches, setSavedSearches] = useState<StoredMemorySearch[]>([]);
+
+  useEffect(() => {
+    setRecentSearches(readStoredSearches(MEMORY_RECENT_SEARCHES_KEY));
+    setSavedSearches(readStoredSearches(MEMORY_SAVED_SEARCHES_KEY));
+  }, []);
 
   useEffect(() => {
     setScope(defaultScope);
@@ -150,6 +196,77 @@ export default function MemorySearchPanel({
     return rows;
   }, [projectResults, selectedProject]);
 
+  const buildSearchSnapshot = (): StoredMemorySearch => {
+    const label =
+      query.trim() ||
+      selectedProject?.name ||
+      parseTags(tagText).join(", ") ||
+      `${layer}/${scope}/${promotionStatus}/${sourceType}`;
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      label,
+      query,
+      tagText,
+      createdFrom,
+      createdTo,
+      updatedFrom,
+      updatedTo,
+      layer,
+      scope,
+      promotionStatus,
+      sourceType,
+      rankingMode,
+      agentId,
+      project: selectedProject,
+      createdAt: Date.now(),
+    };
+  };
+
+  const applySearchSnapshot = (snapshot: StoredMemorySearch) => {
+    setQuery(snapshot.query);
+    setTagText(snapshot.tagText);
+    setCreatedFrom(snapshot.createdFrom);
+    setCreatedTo(snapshot.createdTo);
+    setUpdatedFrom(snapshot.updatedFrom);
+    setUpdatedTo(snapshot.updatedTo);
+    setLayer(snapshot.layer);
+    setScope(snapshot.scope);
+    setPromotionStatus(snapshot.promotionStatus);
+    setSourceType(snapshot.sourceType);
+    setRankingMode(snapshot.rankingMode ?? "default");
+    setAgentId(snapshot.agentId);
+    const nextProject = lockProject ? initialProject : snapshot.project;
+    setSelectedProject(nextProject ?? null);
+    setProjectQuery(nextProject?.name ?? "");
+  };
+
+  const rememberRecentSearch = (snapshot: StoredMemorySearch) => {
+    setRecentSearches((prev) => {
+      const deduped = prev.filter(
+        (item) =>
+          !(
+            item.query === snapshot.query &&
+            item.tagText === snapshot.tagText &&
+            item.project?.id === snapshot.project?.id &&
+            item.rankingMode === snapshot.rankingMode
+          ),
+      );
+      const next = [snapshot, ...deduped].slice(0, 5);
+      writeStoredSearches(MEMORY_RECENT_SEARCHES_KEY, next);
+      return next;
+    });
+  };
+
+  const handleSaveSearch = () => {
+    if (!canSearch) return;
+    const snapshot = buildSearchSnapshot();
+    setSavedSearches((prev) => {
+      const next = [snapshot, ...prev.filter((item) => item.label !== snapshot.label)].slice(0, 8);
+      writeStoredSearches(MEMORY_SAVED_SEARCHES_KEY, next);
+      return next;
+    });
+  };
+
   const canSearch =
     query.trim() ||
     tagText.trim() ||
@@ -186,11 +303,13 @@ export default function MemorySearchPanel({
         scope,
         promotion_status: promotionStatus === "all" ? null : promotionStatus,
         source_type: sourceType === "all" ? null : sourceType,
+        ranking: rankingMode,
         agent_id: agentId || null,
         project_id: selectedProject?.id ?? null,
         limit: 20,
       });
       setResults(rows);
+      rememberRecentSearch(buildSearchSnapshot());
     } catch (err) {
       setResults([]);
       setError(isApiRequestError(err) ? err.message : "메모리 검색에 실패했습니다.");
@@ -210,6 +329,7 @@ export default function MemorySearchPanel({
     setScope(defaultScope);
     setPromotionStatus("all");
     setSourceType("all");
+    setRankingMode("default");
     setAgentId("");
     setSelectedProject(lockProject ? initialProject : null);
     setProjectQuery(lockProject ? (initialProject?.name ?? "") : "");
@@ -381,7 +501,7 @@ export default function MemorySearchPanel({
             </label>
           </div>
 
-          <div className="mt-2 grid gap-2 md:grid-cols-[repeat(5,minmax(120px,1fr))_auto_auto]">
+          <div className="mt-2 grid gap-2 md:grid-cols-[repeat(6,minmax(120px,1fr))_auto_auto_auto]">
             <label className="text-[11px] font-medium text-slate-400">
               레이어
               <select
@@ -439,6 +559,18 @@ export default function MemorySearchPanel({
                 <option value="beads">beads</option>
               </select>
             </label>
+            <label className="text-[11px] font-medium text-slate-400">
+              랭킹
+              <select
+                data-testid="memory-search-ranking"
+                value={rankingMode}
+                onChange={(event) => setRankingMode(event.target.value as MemoryRankingMode)}
+                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-slate-100 outline-none transition focus:border-cyan-400"
+              >
+                <option value="default">기본</option>
+                <option value="semantic">semantic</option>
+              </select>
+            </label>
             <label className="min-w-0 text-[11px] font-medium text-slate-400">
               에이전트
               <select
@@ -465,6 +597,14 @@ export default function MemorySearchPanel({
             </button>
             <button
               type="button"
+              onClick={handleSaveSearch}
+              disabled={!canSearch}
+              className="self-end rounded-md border border-cyan-500/30 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/10 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              저장
+            </button>
+            <button
+              type="button"
               onClick={handleClear}
               className="self-end rounded-md border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 active:translate-y-px"
             >
@@ -473,6 +613,47 @@ export default function MemorySearchPanel({
           </div>
         </div>
       </div>
+
+      {(savedSearches.length > 0 || recentSearches.length > 0) && (
+        <div className="mt-3 grid gap-2 lg:grid-cols-2">
+          {savedSearches.length > 0 && (
+            <div className="rounded-lg border border-slate-800/80 bg-slate-950/35 p-2" data-testid="memory-saved-searches">
+              <div className="mb-1 text-[10px] font-semibold uppercase text-slate-500">저장 검색</div>
+              <div className="flex flex-wrap gap-1">
+                {savedSearches.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => applySearchSnapshot(item)}
+                    className="max-w-full truncate rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-1 text-[10px] text-cyan-100 hover:bg-cyan-500/20"
+                    title={item.label}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {recentSearches.length > 0 && (
+            <div className="rounded-lg border border-slate-800/80 bg-slate-950/35 p-2" data-testid="memory-recent-searches">
+              <div className="mb-1 text-[10px] font-semibold uppercase text-slate-500">최근 검색</div>
+              <div className="flex flex-wrap gap-1">
+                {recentSearches.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => applySearchSnapshot(item)}
+                    className="max-w-full truncate rounded-full border border-slate-700 px-2 py-1 text-[10px] text-slate-200 hover:bg-slate-800"
+                    title={item.label}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {error ? (
         <div className="mt-3 rounded-md border border-rose-500/30 bg-rose-500/10 p-2 text-xs text-rose-200">

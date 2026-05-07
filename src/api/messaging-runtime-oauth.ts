@@ -42,6 +42,17 @@ export type DecisionInboxRouteOption = {
   };
 };
 
+export type PlannerDecisionAnalysisQuality = {
+  status: "complete" | "partial" | "missing" | "invalid" | "not_applicable";
+  expected_option_count: number;
+  planner_option_count: number;
+  covered_option_count: number;
+  coverage_ratio: number;
+  missing_option_numbers: number[];
+  has_json_block: boolean;
+  invalid_json: boolean;
+};
+
 export type DecisionInboxReviewerVerdict = {
   agent_id: string | null;
   agent_name: string | null;
@@ -73,6 +84,7 @@ export type DecisionInboxRouteItem = {
   blocker_delta?: number | null;
   jules_applied?: boolean | null;
   option_notes?: string[];
+  planner_analysis_quality?: PlannerDecisionAnalysisQuality;
   options: DecisionInboxRouteOption[];
 };
 

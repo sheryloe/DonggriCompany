@@ -384,6 +384,50 @@ describe("memory routes", () => {
     expect(payload.memories.map((memory) => memory.memory_layer).slice(0, 3)).toEqual(["core", "episodic", "archival"]);
   });
 
+  it("supports semantic ranking mode for query-token relevance", () => {
+    const createProjectMemoryHandler = routes.get("POST /api/projects/:id/memory");
+    createProjectMemoryHandler?.(
+      {
+        params: { id: "project-1" },
+        body: {
+          title: "Capacity fallback retry runbook",
+          body: "When LLM capacity returns 429, retry later and use fallback models.",
+          memory_type: "lesson",
+          memory_layer: "archival",
+          tags: ["capacity", "fallback", "retry"],
+          strength: 0.3,
+        },
+      },
+      createFakeResponse(),
+    );
+    createProjectMemoryHandler?.(
+      {
+        params: { id: "project-1" },
+        body: {
+          title: "Capacity note",
+          body: "Capacity note with less operational detail.",
+          memory_type: "lesson",
+          memory_layer: "archival",
+          tags: ["capacity"],
+          strength: 1,
+        },
+      },
+      createFakeResponse(),
+    );
+
+    const searchHandler = routes.get("GET /api/memory/search");
+    const res = createFakeResponse();
+    searchHandler?.(
+      { query: { q: "capacity fallback retry", project_id: "project-1", scope: "local", ranking: "semantic" } },
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    const payload = res.payload as { memories: Array<{ title: string; rank: number }> };
+    expect(payload.memories[0].title).toBe("Capacity fallback retry runbook");
+    expect(payload.memories[0].rank).toBeGreaterThan(payload.memories[1].rank);
+  });
+
   it("creates and approves global skill promotion candidates from cross-project success evidence", () => {
     const now = 1_700_000_000_000;
     for (const [index, projectId] of ["project-1", "project-2", "project-3"].entries()) {

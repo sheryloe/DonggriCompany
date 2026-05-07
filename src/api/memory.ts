@@ -85,6 +85,7 @@ export async function searchMemory(input: {
   updated_to?: number | string | null;
   promotion_status?: "local" | "candidate" | "promoted" | "rejected" | "all" | string | null;
   source_type?: "manual" | "task_run" | "beads" | "all" | string | null;
+  ranking?: "default" | "semantic" | string | null;
   limit?: number;
 }): Promise<NativeMemory[]> {
   const params = new URLSearchParams();

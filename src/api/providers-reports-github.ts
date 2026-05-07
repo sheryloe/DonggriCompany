@@ -44,6 +44,15 @@ export interface ApiProviderOfficialPreset {
   required_api_key_prefix?: string;
 }
 
+export interface ApiProviderRuntimeStatus {
+  status: "ok" | "capacity_limited" | "retryable_error" | "error";
+  capacity_429: boolean;
+  retryable: boolean;
+  retry_after_seconds: number | null;
+  fallback_models: string[];
+  message: string;
+}
+
 export async function getApiProviders(): Promise<ApiProvider[]> {
   const j = await request<{ ok: boolean; providers: ApiProvider[] }>("/api/api-providers");
   return j.providers;
@@ -79,13 +88,21 @@ export async function deleteApiProvider(id: string): Promise<{ ok: boolean }> {
 
 export async function testApiProvider(
   id: string,
-): Promise<{ ok: boolean; model_count?: number; models?: string[]; error?: string; status?: number }> {
+): Promise<{
+  ok: boolean;
+  model_count?: number;
+  models?: string[];
+  error?: string;
+  status?: number;
+  runtime_status?: ApiProviderRuntimeStatus;
+}> {
   return post(`/api/api-providers/${id}/test`) as Promise<{
     ok: boolean;
     model_count?: number;
     models?: string[];
     error?: string;
     status?: number;
+    runtime_status?: ApiProviderRuntimeStatus;
   }>;
 }
 
@@ -148,6 +165,17 @@ export interface TaskReportDocument {
   content: string;
 }
 
+export interface TaskReportQualityEvidence {
+  change_request: string | null;
+  implementation_result: string | null;
+  verification_result: string | null;
+  approval_record: string | null;
+  traceability_notes: string[];
+  smoke_screenshot_path: string | null;
+  commit_hash: string | null;
+  ci_url: string | null;
+}
+
 export interface TaskReportTeamSection {
   id: string;
   task_id: string;
@@ -186,6 +214,7 @@ export interface TaskReportTeamSection {
     target_dept_name: string;
     target_dept_name_ko: string;
   }>;
+  quality_evidence?: TaskReportQualityEvidence;
 }
 
 export interface TaskReportDetail {
@@ -228,6 +257,7 @@ export interface TaskReportDetail {
     generated_at: number;
     documents: TaskReportDocument[];
   };
+  quality_evidence?: TaskReportQualityEvidence;
   team_reports?: TaskReportTeamSection[];
 }
 

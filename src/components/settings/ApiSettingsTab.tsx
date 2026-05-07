@@ -11,6 +11,12 @@ interface ApiSettingsTabProps {
   apiState: ApiStateBundle;
 }
 
+function runtimeStatusTone(status: string | undefined): string {
+  if (status === "capacity_limited") return "border-amber-500/30 bg-amber-500/10 text-amber-100";
+  if (status === "retryable_error") return "border-orange-500/30 bg-orange-500/10 text-orange-100";
+  return "border-red-500/25 bg-red-500/10 text-red-100";
+}
+
 export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTabProps) {
   const common = getSettingsCommonCopy(t);
   const copy = getApiSettingsCopy(t);
@@ -315,6 +321,23 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
               const presetLabel = provider.preset_key
                 ? (apiOfficialPresets[provider.preset_key]?.label ?? provider.preset_key)
                 : null;
+              const presetFallbackModels = provider.preset_key
+                ? (apiOfficialPresets[provider.preset_key]?.fallback_models ?? [])
+                : [];
+              const runtimeStatus = testResult?.runtime_status;
+              const runtimeFallbackModels =
+                runtimeStatus?.fallback_models && runtimeStatus.fallback_models.length > 0
+                  ? runtimeStatus.fallback_models
+                  : presetFallbackModels;
+              const retryAfterText =
+                runtimeStatus?.retry_after_seconds != null
+                  ? t({
+                      ko: `${runtimeStatus.retry_after_seconds}초 후 재시도`,
+                      en: `Retry after ${runtimeStatus.retry_after_seconds}s`,
+                      ja: `Retry after ${runtimeStatus.retry_after_seconds}s`,
+                      zh: `Retry after ${runtimeStatus.retry_after_seconds}s`,
+                    })
+                  : t({ ko: "수동 재시도 필요", en: "Manual retry needed", ja: "Manual retry needed", zh: "Manual retry needed" });
 
               return (
                 <div
@@ -380,6 +403,18 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
 
                   <div className="mt-1.5 truncate text-[11px] font-mono text-slate-500">{provider.base_url}</div>
 
+                  {presetFallbackModels.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
+                      <span className="rounded border border-slate-600/60 bg-slate-900/50 px-1.5 py-0.5">
+                        {t({ ko: "fallback 후보", en: "fallback pool", ja: "fallback pool", zh: "fallback pool" })}
+                      </span>
+                      <span className="truncate" title={presetFallbackModels.join(", ")}>
+                        {presetFallbackModels.slice(0, 4).join(", ")}
+                        {presetFallbackModels.length > 4 ? ` +${presetFallbackModels.length - 4}` : ""}
+                      </span>
+                    </div>
+                  )}
+
                   {testResult && (
                     <div
                       className={`mt-2 rounded px-2.5 py-1.5 text-[11px] ${
@@ -389,6 +424,47 @@ export default function ApiSettingsTab({ t, localeTag, apiState }: ApiSettingsTa
                       }`}
                     >
                       {testResult.msg}
+                    </div>
+                  )}
+
+                  {runtimeStatus && runtimeStatus.status !== "ok" && (
+                    <div
+                      data-testid={`api-runtime-status-${provider.id}`}
+                      className={`mt-2 rounded border px-2.5 py-2 text-[11px] ${runtimeStatusTone(runtimeStatus.status)}`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold">
+                          {runtimeStatus.status === "capacity_limited"
+                            ? t({
+                                ko: "Provider capacity 제한",
+                                en: "Provider capacity limited",
+                                ja: "Provider capacity limited",
+                                zh: "Provider capacity limited",
+                              })
+                            : runtimeStatus.retryable
+                              ? t({
+                                  ko: "재시도 가능한 오류",
+                                  en: "Retryable provider error",
+                                  ja: "Retryable provider error",
+                                  zh: "Retryable provider error",
+                                })
+                              : t({
+                                  ko: "Provider 오류",
+                                  en: "Provider error",
+                                  ja: "Provider error",
+                                  zh: "Provider error",
+                                })}
+                        </span>
+                        <span>{runtimeStatus.capacity_429 ? "HTTP 429" : testResult.status ? `HTTP ${testResult.status}` : ""}</span>
+                      </div>
+                      <div className="mt-1 text-slate-300/90">{retryAfterText}</div>
+                      {runtimeFallbackModels.length > 0 && (
+                        <div className="mt-1 truncate text-slate-300/90" title={runtimeFallbackModels.join(", ")}>
+                          {t({ ko: "fallback", en: "fallback", ja: "fallback", zh: "fallback" })}:{" "}
+                          {runtimeFallbackModels.slice(0, 5).join(", ")}
+                          {runtimeFallbackModels.length > 5 ? ` +${runtimeFallbackModels.length - 5}` : ""}
+                        </div>
+                      )}
                     </div>
                   )}
 

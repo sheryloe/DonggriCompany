@@ -10,6 +10,7 @@ export function registerTaskReportRoutes(ctx: RuntimeContext): void {
     sortReportDocuments,
     fetchMeetingMinutesForTask,
     buildTaskSection,
+    mergeQualityEvidence,
   } = createTaskReportHelpers({ db, nowMs });
 
   app.get("/api/task-reports", (_req, res) => {
@@ -250,6 +251,7 @@ export function registerTaskReportRoutes(ctx: RuntimeContext): void {
         subtasks: rootSubtasks,
         meeting_minutes: rootMinutes,
         planning_summary: planningSummary,
+        quality_evidence: mergeQualityEvidence(rootTask, teamReports),
         team_reports: teamReports,
       });
     } catch (err) {

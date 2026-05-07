@@ -167,6 +167,125 @@ export function createTaskReportHelpers(deps: HelperDeps) {
     });
   }
 
+  function extractFirstMatch(texts: string[], pattern: RegExp): string | null {
+    for (const text of texts) {
+      if (!text) continue;
+      const match = text.match(pattern);
+      const value = match?.[1]?.trim();
+      if (value) return value.replace(/[),.;]+$/g, "");
+    }
+    return null;
+  }
+
+  function extractCommitHash(texts: string[]): string | null {
+    return (
+      extractFirstMatch(texts, /(?:commit|sha|revision|rev)[\s:#=-]*([a-f0-9]{7,40})/i) ??
+      extractFirstMatch(texts, /\/commit\/([a-f0-9]{7,40})/i) ??
+      null
+    );
+  }
+
+  function extractCiUrl(texts: string[]): string | null {
+    return extractFirstMatch(texts, /(https?:\/\/[^\s"'`<>]+(?:actions\/runs|pipelines|ci|build)[^\s"'`<>]*)/i);
+  }
+
+  function extractSmokeScreenshotPath(documents: Array<Record<string, unknown>>): string | null {
+    for (const doc of documents) {
+      const joined = `${normalizeTaskText(doc.path)} ${normalizeTaskText(doc.title)} ${normalizeTaskText(doc.mime)}`;
+      if (/\.(png|jpe?g|webp)\b/i.test(joined) || /^image\//i.test(normalizeTaskText(doc.mime))) {
+        return normalizeTaskText(doc.path) || normalizeTaskText(doc.title) || null;
+      }
+    }
+    return null;
+  }
+
+  function buildQualityEvidence(input: {
+    taskRow: Record<string, unknown>;
+    logs?: Array<{ kind?: string; message?: string; created_at?: number } | Record<string, unknown>>;
+    meetingMinutes?: Array<Record<string, unknown>>;
+    documents?: Array<Record<string, unknown>>;
+    reportMessages?: Array<Record<string, unknown>>;
+  }): Record<string, unknown> {
+    const logs = input.logs ?? [];
+    const meetingMinutes = input.meetingMinutes ?? [];
+    const documents = input.documents ?? [];
+    const reportMessages = input.reportMessages ?? [];
+    const taskResult = normalizeTaskText(input.taskRow.result);
+    const logTexts = logs.map((log) => normalizeTaskText((log as Record<string, unknown>).message));
+    const reportTexts = reportMessages.map((message) => normalizeTaskText(message.content));
+    const documentTexts = documents.flatMap((doc) => [
+      normalizeTaskText(doc.title),
+      normalizeTaskText(doc.path),
+      normalizeTaskText(doc.text_preview),
+      normalizeTaskText(doc.content).slice(0, 2_000),
+    ]);
+    const allTexts = [
+      normalizeTaskText(input.taskRow.title),
+      normalizeTaskText(input.taskRow.description),
+      taskResult,
+      ...logTexts,
+      ...reportTexts,
+      ...documentTexts,
+    ].filter(Boolean);
+    const verificationText =
+      logTexts.find((text) => /test|build|검증|테스트|passed|success|screenshot|smoke/i.test(text)) ??
+      documentTexts.find((text) => /test|build|검증|테스트|passed|success|screenshot|smoke/i.test(text)) ??
+      null;
+    const traceabilityNotes = [
+      reportMessages.length > 0 ? `${reportMessages.length} report message(s)` : "",
+      documents.length > 0 ? `${documents.length} report document(s)` : "",
+      meetingMinutes.length > 0 ? `${meetingMinutes.length} meeting minute(s)` : "",
+      logs.length > 0 ? `${logs.length} task log line(s)` : "",
+    ].filter(Boolean);
+
+    return {
+      change_request: normalizeTaskText(input.taskRow.description) || normalizeTaskText(input.taskRow.title) || null,
+      implementation_result: taskResult || reportTexts[0] || null,
+      verification_result: verificationText,
+      approval_record:
+        normalizeTaskText(input.taskRow.status) === "done"
+          ? `Task status done at ${Number(input.taskRow.completed_at ?? 0) || "-"}`
+          : null,
+      traceability_notes: traceabilityNotes,
+      smoke_screenshot_path: extractSmokeScreenshotPath(documents),
+      commit_hash: extractCommitHash(allTexts),
+      ci_url: extractCiUrl(allTexts),
+    };
+  }
+
+  function mergeQualityEvidence(
+    rootTask: Record<string, unknown>,
+    sections: Array<Record<string, unknown>>,
+  ): Record<string, unknown> {
+    const evidences = sections
+      .map((section) => section.quality_evidence as Record<string, unknown> | undefined)
+      .filter((evidence): evidence is Record<string, unknown> => Boolean(evidence));
+    const first = (key: string): string | null => {
+      for (const evidence of evidences) {
+        const value = normalizeTaskText(evidence[key]);
+        if (value) return value;
+      }
+      return null;
+    };
+    const notes = [
+      ...new Set(evidences.flatMap((evidence) => ((evidence.traceability_notes as string[] | undefined) ?? []))),
+    ].slice(0, 12);
+
+    return {
+      change_request: normalizeTaskText(rootTask.description) || normalizeTaskText(rootTask.title) || null,
+      implementation_result: first("implementation_result"),
+      verification_result: first("verification_result"),
+      approval_record:
+        normalizeTaskText(rootTask.status) === "done"
+          ? `Root task status done at ${Number(rootTask.completed_at ?? 0) || "-"}`
+          : first("approval_record"),
+      traceability_notes: notes,
+      smoke_screenshot_path: first("smoke_screenshot_path"),
+      commit_hash: first("commit_hash"),
+      ci_url: first("ci_url"),
+    };
+  }
+
   function fetchMeetingMinutesForTask(taskId: string): Array<Record<string, unknown>> {
     return db
       .prepare(
@@ -318,6 +437,13 @@ export function createTaskReportHelpers(deps: HelperDeps) {
       meeting_minutes: taskMinutes,
       documents: sortReportDocuments(docs),
       linked_subtasks: linkedSubtasks,
+      quality_evidence: buildQualityEvidence({
+        taskRow,
+        logs: taskLogs,
+        meetingMinutes: taskMinutes,
+        documents: sortReportDocuments(docs),
+        reportMessages,
+      }),
     };
   }
 
@@ -328,5 +454,7 @@ export function createTaskReportHelpers(deps: HelperDeps) {
     sortReportDocuments,
     fetchMeetingMinutesForTask,
     buildTaskSection,
+    buildQualityEvidence,
+    mergeQualityEvidence,
   };
 }

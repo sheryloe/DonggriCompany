@@ -316,9 +316,11 @@ export function createProjectAndTimeoutDecisionItems(
             "规划负责人意见汇总完成",
           );
       const rawPlannerSummary = useCollectingFallback ? "" : String(decisionState?.planner_summary ?? "").trim();
-      const plannerSummary = useCollectingFallback
-        ? ""
-        : formatPlannerSummaryForDisplay(extractPlannerDecisionAnalysis(rawPlannerSummary).summary);
+      const plannerAnalysis = extractPlannerDecisionAnalysis(
+        rawPlannerSummary,
+        readyOptionsTemplate.map((option) => option.number),
+      );
+      const plannerSummary = useCollectingFallback ? "" : formatPlannerSummaryForDisplay(plannerAnalysis.summary);
       const readyOptions = useCollectingFallback
         ? readyOptionsTemplate
         : applyPlannerOptionAnalysis(readyOptionsTemplate, rawPlannerSummary);
@@ -351,6 +353,7 @@ export function createProjectAndTimeoutDecisionItems(
         project_path: row.project_path,
         task_id: null,
         task_title: null,
+        planner_analysis_quality: plannerAnalysis.quality,
         options: readyOptions,
       });
     }

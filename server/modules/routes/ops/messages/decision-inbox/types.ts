@@ -19,6 +19,19 @@ export type DecisionOptionAnalysis = {
   source?: DecisionOptionAnalysisSource;
 };
 
+export type PlannerDecisionAnalysisQualityStatus = "complete" | "partial" | "missing" | "invalid" | "not_applicable";
+
+export type PlannerDecisionAnalysisQuality = {
+  status: PlannerDecisionAnalysisQualityStatus;
+  expected_option_count: number;
+  planner_option_count: number;
+  covered_option_count: number;
+  coverage_ratio: number;
+  missing_option_numbers: number[];
+  has_json_block: boolean;
+  invalid_json: boolean;
+};
+
 export type ReviewRoundReviewerVerdict = {
   agent_id: string | null;
   agent_name: string | null;
@@ -52,6 +65,7 @@ export interface DecisionInboxRouteItem {
   review_action_applied?: boolean | null;
   jules_applied?: boolean | null;
   option_notes?: string[];
+  planner_analysis_quality?: PlannerDecisionAnalysisQuality;
   options: DecisionOption[];
 }
 

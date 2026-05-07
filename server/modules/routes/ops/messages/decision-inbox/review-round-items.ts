@@ -405,9 +405,11 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
           )
         : t(lang, "기획팀 요약 완료", "Planning summary ready", "企画要約完了", "规划摘要已完成");
       const rawPlannerSummary = useCollectingFallback ? "" : String(decisionState?.planner_summary ?? "").trim();
-      const plannerSummary = useCollectingFallback
-        ? ""
-        : formatPlannerSummaryForDisplay(extractPlannerDecisionAnalysis(rawPlannerSummary).summary);
+      const plannerAnalysis = extractPlannerDecisionAnalysis(
+        rawPlannerSummary,
+        optionsTemplate.map((option) => option.number),
+      );
+      const plannerSummary = useCollectingFallback ? "" : formatPlannerSummaryForDisplay(plannerAnalysis.summary);
       const options = useCollectingFallback
         ? optionsTemplate
         : applyPlannerOptionAnalysis(optionsTemplate, rawPlannerSummary);
@@ -439,6 +441,7 @@ export function createReviewRoundDecisionItems(deps: ReviewRoundDecisionItemDeps
         review_action_applied: null,
         jules_applied: null,
         option_notes: optionNotes,
+        planner_analysis_quality: plannerAnalysis.quality,
         options,
       });
     }

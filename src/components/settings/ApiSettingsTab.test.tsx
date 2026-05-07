@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ApiProvider } from "../../api";
-import type { ApiAssignTarget, ApiFormState, ApiStateBundle } from "./types";
+import type { ApiAssignTarget, ApiFormState, ApiStateBundle, ApiTestResultMap } from "./types";
 import ApiSettingsTab from "./ApiSettingsTab";
 import { DEFAULT_API_FORM } from "./useApiProvidersState";
 
@@ -43,10 +43,12 @@ function TestHarness({
   providers = [],
   addMode = true,
   initialExpanded = {},
+  apiTestResult = {},
 }: {
   providers?: ApiProvider[];
   addMode?: boolean;
   initialExpanded?: Record<string, boolean>;
+  apiTestResult?: ApiTestResultMap;
 }) {
   const [apiAddMode, setApiAddMode] = useState(addMode);
   const [apiEditingId, setApiEditingId] = useState<string | null>(null);
@@ -66,7 +68,7 @@ function TestHarness({
     apiSaving: false,
     apiSaveError,
     apiTesting: null,
-    apiTestResult: {},
+    apiTestResult,
     apiModelsExpanded,
     apiAssignTarget,
     apiAssignAgents: [],
@@ -192,6 +194,49 @@ describe("ApiSettingsTab", () => {
     await user.click(screen.getByRole("button", { name: /Models \(2\)/ }));
     expect(screen.getByText("qwen3.5-plus")).toBeInTheDocument();
     expect(screen.getByText("glm-5")).toBeInTheDocument();
+  });
+
+  it("shows capacity, retry, and fallback state for 429 provider test failures", () => {
+    render(
+      <TestHarness
+        addMode={false}
+        apiTestResult={{
+          "provider-1": {
+            ok: false,
+            msg: "resource exhausted",
+            status: 429,
+            runtime_status: {
+              status: "capacity_limited",
+              capacity_429: true,
+              retryable: true,
+              retry_after_seconds: 90,
+              fallback_models: ["qwen3.5-plus", "glm-5"],
+              message: "provider capacity limited",
+            },
+          },
+        }}
+        providers={[
+          {
+            id: "provider-1",
+            name: "Bailian Coding Plan",
+            type: "openai",
+            base_url: "https://coding-intl.dashscope.aliyuncs.com/v1",
+            preset_key: "alibaba-coding-plan-openai",
+            has_api_key: true,
+            enabled: true,
+            models_cache: ["qwen3.5-plus", "glm-5"],
+            models_cached_at: 1_717_171_717_000,
+            created_at: 1_717_171_717_000,
+            updated_at: 1_717_171_717_000,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("api-runtime-status-provider-1")).toHaveTextContent("Provider capacity limited");
+    expect(screen.getByText("HTTP 429")).toBeInTheDocument();
+    expect(screen.getByText(/Retry after 90s/)).toBeInTheDocument();
+    expect(screen.getAllByText(/qwen3.5-plus/).length).toBeGreaterThan(0);
   });
 
   it("retries presets through the refresh button instead of auto-looping silently", async () => {

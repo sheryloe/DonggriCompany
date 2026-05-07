@@ -177,4 +177,59 @@ describe("task report helpers document extraction", () => {
       ]),
     );
   });
+
+  it("links ISO evidence fields from logs, images, commit hashes, and CI URLs", () => {
+    const db = setupDb();
+    dbs.push(db);
+    const tmpProject = fs.mkdtempSync(path.join(os.tmpdir(), "claw-report-evidence-"));
+    tempDirs.push(tmpProject);
+
+    const imagePath = path.join(tmpProject, "reports", "smoke.png");
+    fs.mkdirSync(path.dirname(imagePath), { recursive: true });
+    fs.writeFileSync(imagePath, "PNG_BINARY", "utf8");
+
+    db.prepare("INSERT INTO task_logs (id, task_id, kind, message, created_at) VALUES (?, ?, ?, ?, ?)").run(
+      "log-commit",
+      "task-evidence",
+      "system",
+      `Build passed. commit abc1234. CI https://github.com/org/repo/actions/runs/42. Smoke screenshot ${imagePath}`,
+      10,
+    );
+
+    const { buildTaskSection } = createTaskReportHelpers({
+      db: db as unknown as any,
+      nowMs: () => 1_700_000_000_000,
+    });
+
+    const section = buildTaskSection(
+      {
+        id: "task-evidence",
+        title: "Evidence task",
+        description: "Implement ISO evidence linking",
+        project_path: tmpProject,
+        result: "Implementation completed",
+        source_task_id: null,
+        status: "done",
+        department_id: "qa",
+        created_at: 1,
+        started_at: 2,
+        completed_at: 3,
+        agent_name: "Quality",
+        agent_name_ko: "Quality",
+        agent_role: "team_leader",
+        dept_name: "QA",
+        dept_name_ko: "QA",
+      },
+      [],
+    );
+
+    expect(section.quality_evidence).toMatchObject({
+      change_request: "Implement ISO evidence linking",
+      implementation_result: "Implementation completed",
+      verification_result: expect.stringContaining("Build passed"),
+      smoke_screenshot_path: expect.stringContaining("smoke.png"),
+      commit_hash: "abc1234",
+      ci_url: "https://github.com/org/repo/actions/runs/42",
+    });
+  });
 });

@@ -487,23 +487,61 @@ function memoryRecencyScore(row: NativeMemoryRow, now: number): number {
   return Math.max(0, 40 - ageDays);
 }
 
-function memorySearchScore(row: MemorySearchRow, now: number): number {
+function tokenizeSemanticText(value: string | null | undefined): string[] {
+  return [
+    ...new Set(
+      String(value ?? "")
+        .toLowerCase()
+        .match(/[a-z0-9가-힣_]{2,}/g) ?? [],
+    ),
+  ].slice(0, 48);
+}
+
+function semanticQueryScore(row: MemorySearchRow, query: string): number {
+  const queryTokens = tokenizeSemanticText(query);
+  if (queryTokens.length === 0) return 0;
+  const titleTokens = new Set(tokenizeSemanticText(row.title));
+  const bodyTokens = new Set(tokenizeSemanticText(row.body));
+  const tagTokens = new Set(tokenizeSemanticText(row.tags_json));
+  let score = 0;
+  for (const token of queryTokens) {
+    if (titleTokens.has(token)) score += 20;
+    if (tagTokens.has(token)) score += 12;
+    if (bodyTokens.has(token)) score += 6;
+  }
+  return Math.min(320, score * (1 + Math.min(0.5, queryTokens.length / 20)));
+}
+
+function memorySearchScore(
+  row: MemorySearchRow,
+  now: number,
+  query: string,
+  ranking: "default" | "semantic",
+): number {
   const ftsScore = Number.isFinite(Number(row.rank)) ? Math.max(0, 80 - Math.abs(Number(row.rank)) * 10) : 0;
   const usageScore = Math.min(30, Math.max(0, Number(row.retrieval_count ?? 0)) * 3);
+  const semanticScore = ranking === "semantic" ? semanticQueryScore(row, query) : 0;
   return (
     layerPriority(row.memory_layer) * 1000 +
     clampNumber(row.strength, 0.5, 0, 1) * 120 +
     clampNumber(row.confidence, 0.7, 0, 1) * 80 +
     memoryRecencyScore(row, now) +
     usageScore +
-    ftsScore
+    ftsScore +
+    semanticScore
   );
 }
 
-function rankMemoryRows(rows: MemorySearchRow[], limit: number, now: number): MemorySearchRow[] {
+function rankMemoryRows(
+  rows: MemorySearchRow[],
+  limit: number,
+  now: number,
+  query: string,
+  ranking: "default" | "semantic",
+): MemorySearchRow[] {
   const deduped = [...new Map(rows.map((row) => [`${row.source_table}:${row.id}`, row])).values()];
   return deduped
-    .map((row) => ({ row, score: memorySearchScore(row, now) }))
+    .map((row) => ({ row, score: memorySearchScore(row, now, query, ranking) }))
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       return Number(b.row.updated_at ?? 0) - Number(a.row.updated_at ?? 0);
@@ -528,6 +566,7 @@ export function searchMemories(
     updatedTo?: number | null;
     promotionStatus?: MemoryPromotionStatus | "all" | string | null;
     sourceType?: string | null;
+    ranking?: "default" | "semantic" | string | null;
     limit?: number | null;
     now?: number | null;
   },
@@ -543,6 +582,7 @@ export function searchMemories(
   const updatedTo = normalizeSearchTimestamp(input.updatedTo);
   const promotionStatus = normalizeText(input.promotionStatus);
   const sourceType = normalizeText(input.sourceType);
+  const ranking = normalizeText(input.ranking) === "semantic" ? "semantic" : "default";
   const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
   const params: SQLInputValue[] = [];
   const clauses = ["m.status = 'active'"];
@@ -677,7 +717,7 @@ export function searchMemories(
     }
   }
 
-  const ranked = rankMemoryRows(rows, limit, now);
+  const ranked = rankMemoryRows(rows, limit, now, query, ranking);
   updateRetrievalStats(db, ranked, now);
   return ranked;
 }

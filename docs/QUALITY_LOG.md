@@ -225,3 +225,33 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: `gemini-3.1-pro-preview` and full workspace `gemini-3-pro-preview` runs hit capacity 429; `gemini-2.5-pro` quota was exhausted; the final report was generated successfully with `gemini-3-pro-preview` using tracked non-secret evidence and UTF-8 Korean rendering was checked.
 - Risk: The final report is evidence-based because full workspace Pro analysis was capacity constrained; it should be treated as a software-completeness review, not a line-by-line security audit.
 - Follow-up: Use the report's recommended next slice, domain collection extraction from `App.tsx`, as the next P0 implementation candidate.
+
+## 2026-05-07 22:43 KST - App Domain State P0 Slice
+
+- Request: Finish the committed Gemini review work, identify the remaining work toward 100-point completeness, and continue according to current progress.
+- Change: Added a software-completeness roadmap to `tasks/todo.md`, extracted App domain collections and realtime refs into `useAppDomainState`, and moved office workflow pack save/hydration/rollback behavior into `useOfficeWorkflowPackChange`.
+- Changed files: `src/App.tsx`, `src/app/useAppDomainState.ts`, `src/app/useAppDomainState.test.tsx`, `src/app/useOfficeWorkflowPackChange.ts`, `src/app/useOfficeWorkflowPackChange.test.tsx`, `tasks/todo.md`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:web -- useAppDomainState useOfficeWorkflowPackChange useAppOverlayState AppHeaderBar`, `corepack pnpm build`.
+- Validation: Targeted web tests passed with 4 files and 7 tests; production build passed.
+- Risk: This slice creates hook boundaries and tests for state/action separation, but does not yet add Planner JSON quality telemetry or provider capacity dashboards.
+- Follow-up: Continue P0 with Planner decision JSON quality metrics, persistence, and operator visibility.
+
+## 2026-05-07 22:50 KST - Planner JSON Quality P0 Slice
+
+- Request: Continue the software-completeness roadmap instead of stopping at the Gemini report.
+- Change: Added Planner decision analysis quality metrics for complete, partial, missing, invalid, and not-applicable states; exposed the quality payload through decision inbox API items; mapped it into the frontend decision model; and displayed Planner JSON quality coverage in the Decision Inbox modal.
+- Changed files: `server/modules/routes/ops/messages/decision-inbox/planner-option-analysis.ts`, `server/modules/routes/ops/messages/decision-inbox/planner-option-analysis.test.ts`, `server/modules/routes/ops/messages/decision-inbox/types.ts`, `server/modules/routes/ops/messages/decision-inbox/project-timeout-items.ts`, `server/modules/routes/ops/messages/decision-inbox/review-round-items.ts`, `src/api/messaging-runtime-oauth.ts`, `src/components/chat/decision-inbox.ts`, `src/app/decision-inbox.ts`, `src/components/DecisionInboxModal.tsx`, `src/components/DecisionInboxModal.test.tsx`, `tasks/todo.md`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:api -- planner-option-analysis`, `corepack pnpm test:web -- DecisionInboxModal`, `corepack pnpm build`.
+- Validation: Planner option analysis API tests passed with 3 tests; DecisionInboxModal web test passed; production build passed.
+- Risk: The quality metric is computed from stored planner summaries and exposed in the pending decision surface; long-term historical trend storage is still a future operations hardening item.
+- Follow-up: Continue P1 with LLM provider capacity 429 fallback/retry visibility in the operator UI.
+
+## 2026-05-07 23:16 KST - Provider Capacity, ISO Evidence, Memory Ranking, and FK Regression Slice
+
+- Request: Complete the next P1/P2 roadmap items after P0: provider 429/fallback/retry visibility, task report ISO evidence links, memory semantic/vector ranking plus saved/recent searches, and project delete/task/memory FK edge-case regression coverage.
+- Change: Added API provider runtime status metadata for capacity 429, retryable failures, retry-after, and fallback model candidates; rendered that status in the API settings UI; added task report ISO evidence fields for change request, implementation, verification, approval, smoke screenshot, commit hash, CI URL, and traceability notes; added lightweight semantic ranking mode to memory search; added memory saved/recent searches in local storage; and added project deletion FK regression tests.
+- Changed files: `server/modules/routes/ops/api-providers.ts`, `server/modules/routes/ops/api-providers.test.ts`, `src/components/settings/ApiSettingsTab.tsx`, `src/components/settings/ApiSettingsTab.test.tsx`, `src/components/settings/types.ts`, `src/components/settings/useApiProvidersState.ts`, `src/api/providers-reports-github.ts`, `server/modules/routes/ops/task-reports/helpers.ts`, `server/modules/routes/ops/task-reports/helpers.test.ts`, `server/modules/routes/ops/task-reports/routes.ts`, `src/components/TaskReportPopup.tsx`, `src/components/TaskReportPopup.test.tsx`, `server/modules/memory/store.ts`, `server/modules/routes/core/memory.ts`, `server/modules/routes/core/memory.test.ts`, `src/api/memory.ts`, `src/components/skills-library/MemorySearchPanel.tsx`, `src/components/skills-library/MemorySearchPanel.test.tsx`, `server/modules/routes/core/projects.delete.test.ts`, `tasks/todo.md`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:web -- ApiSettingsTab MemorySearchPanel TaskReportPopup`, `corepack pnpm test:api -- api-providers task-reports memory projects.delete`, `corepack pnpm build`, `git diff --check`, `corepack pnpm test:web -- useAppDomainState useOfficeWorkflowPackChange DecisionInboxModal ApiSettingsTab MemorySearchPanel TaskReportPopup`, `corepack pnpm test:api -- planner-option-analysis api-providers task-reports memory projects.delete`.
+- Validation: Initial targeted web tests passed with 3 files and 13 tests; initial targeted API tests passed with 5 files and 29 tests; production build passed; diff whitespace check passed; final combined P0/P1/P2 web regression passed with 6 files and 17 tests; final combined API regression passed with 6 files and 32 tests.
+- Risk: Memory semantic ranking is a local lexical relevance scorer layered onto existing FTS/SQL, not an embedding/vector database yet. Saved/recent searches are browser-local and not synchronized across devices.
+- Follow-up: If higher recall is required, add an embedding/vector index with migration/backfill and an auditable saved-search server table.

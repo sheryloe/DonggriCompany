@@ -59,7 +59,7 @@ export function useApiProvidersState({ tab, t }: { tab: SettingsTab; t: TFunctio
   const [apiSaving, setApiSaving] = useState(false);
   const [apiSaveError, setApiSaveError] = useState<string | null>(null);
   const [apiTesting, setApiTesting] = useState<string | null>(null);
-  const [apiTestResult, setApiTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const [apiTestResult, setApiTestResult] = useState<ApiStateBundle["apiTestResult"]>({});
   const [apiModelsExpanded, setApiModelsExpanded] = useState<Record<string, boolean>>({});
   const [apiAssignTarget, setApiAssignTarget] = useState<ApiAssignTarget | null>(null);
   const [apiAssignAgents, setApiAssignAgents] = useState<Agent[]>([]);
@@ -169,8 +169,14 @@ export function useApiProvidersState({ tab, t }: { tab: SettingsTab; t: TFunctio
                   ja: "個のモデルを確認",
                   zh: "个模型已确认",
                 })}`,
+                runtime_status: result.runtime_status,
               }
-            : { ok: false, msg: result.error?.slice(0, 200) || `HTTP ${result.status}` },
+            : {
+                ok: false,
+                msg: result.error?.slice(0, 200) || `HTTP ${result.status}`,
+                status: result.status,
+                runtime_status: result.runtime_status,
+              },
         }));
         if (result.ok) await loadApiProviders();
       } catch (error) {

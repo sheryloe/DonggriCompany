@@ -28,6 +28,14 @@ describe("planner option analysis helpers", () => {
       source: "planner",
       expected_result: "Only selected blockers become work.",
     });
+    expect(extractPlannerDecisionAnalysis(raw, [1, 2]).quality).toMatchObject({
+      status: "partial",
+      expected_option_count: 2,
+      planner_option_count: 1,
+      covered_option_count: 1,
+      coverage_ratio: 0.5,
+      missing_option_numbers: [1],
+    });
   });
 
   it("serializes marked analysis and applies planner entries over template analysis", () => {
@@ -62,6 +70,19 @@ describe("planner option analysis helpers", () => {
     expect(options[0]?.analysis).toMatchObject({
       source: "planner",
       rationale: "Start immediately.",
+    });
+  });
+
+  it("reports invalid planner JSON quality without breaking summary fallback", () => {
+    const parsed = extractPlannerDecisionAnalysis("Summary first\n{bad-json}", [1, 2]);
+
+    expect(parsed.summary).toContain("Summary first");
+    expect(parsed.options).toEqual([]);
+    expect(parsed.quality).toMatchObject({
+      status: "invalid",
+      expected_option_count: 2,
+      planner_option_count: 0,
+      invalid_json: true,
     });
   });
 });

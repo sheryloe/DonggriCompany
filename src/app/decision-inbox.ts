@@ -29,6 +29,22 @@ function mapOptionAnalysis(
   };
 }
 
+function mapPlannerAnalysisQuality(
+  quality: DecisionInboxRouteItem["planner_analysis_quality"],
+): DecisionInboxItem["plannerAnalysisQuality"] {
+  if (!quality) return undefined;
+  return {
+    status: quality.status,
+    expectedOptionCount: quality.expected_option_count,
+    plannerOptionCount: quality.planner_option_count,
+    coveredOptionCount: quality.covered_option_count,
+    coverageRatio: quality.coverage_ratio,
+    missingOptionNumbers: quality.missing_option_numbers,
+    hasJsonBlock: quality.has_json_block,
+    invalidJson: quality.invalid_json,
+  };
+}
+
 function mapWorkflowOption(
   option: DecisionInboxRouteItem["options"][number],
   label: string,
@@ -82,6 +98,7 @@ function baseWorkflowDecisionItem(item: DecisionInboxRouteItem): Omit<DecisionIn
     optionNotes: Array.isArray(item.option_notes)
       ? item.option_notes.map((entry) => String(entry ?? "").trim()).filter(Boolean)
       : [],
+    plannerAnalysisQuality: mapPlannerAnalysisQuality(item.planner_analysis_quality),
   };
 }
 

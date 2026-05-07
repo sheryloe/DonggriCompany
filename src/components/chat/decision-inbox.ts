@@ -2,6 +2,17 @@ import type { Agent, Message } from "../../types";
 import { parseDecisionRequest } from "./decision-request";
 import type { DecisionOption } from "./decision-request";
 
+export type PlannerDecisionAnalysisQuality = {
+  status: "complete" | "partial" | "missing" | "invalid" | "not_applicable";
+  expectedOptionCount: number;
+  plannerOptionCount: number;
+  coveredOptionCount: number;
+  coverageRatio: number;
+  missingOptionNumbers: number[];
+  hasJsonBlock: boolean;
+  invalidJson: boolean;
+};
+
 export interface DecisionInboxItem {
   id: string;
   kind: "agent_request" | "project_review_ready" | "task_timeout_resume" | "review_round_pick";
@@ -28,6 +39,7 @@ export interface DecisionInboxItem {
   blockerDelta?: number | null;
   julesApplied?: boolean | null;
   optionNotes?: string[];
+  plannerAnalysisQuality?: PlannerDecisionAnalysisQuality;
 }
 
 const DECISION_REPLY_RE = /\[의사결정\s*회신\]|\[Decision Reply\]|\[意思決定返信\]|\[决策回复\]/i;

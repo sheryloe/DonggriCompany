@@ -1,4 +1,4 @@
-import type { DecisionOption, DecisionOptionAnalysis } from "./types.ts";
+import type { DecisionOption, DecisionOptionAnalysis, PlannerDecisionAnalysisQuality } from "./types.ts";
 
 const OPTION_ANALYSIS_START = "[DECISION_OPTION_ANALYSIS_JSON]";
 const OPTION_ANALYSIS_END = "[/DECISION_OPTION_ANALYSIS_JSON]";
@@ -12,6 +12,7 @@ export type ParsedPlannerDecisionAnalysis = {
   summary: string;
   options: PlannerOptionAnalysis[];
   optionsByNumber: Map<number, PlannerOptionAnalysis>;
+  quality: PlannerDecisionAnalysisQuality;
 };
 
 function normalizeText(value: unknown, max = 480): string {
@@ -103,7 +104,50 @@ function parseOptionAnalyses(parsed: unknown): PlannerOptionAnalysis[] {
   return out;
 }
 
-export function extractPlannerDecisionAnalysis(raw: string | null | undefined): ParsedPlannerDecisionAnalysis {
+function uniqueOptionNumbers(values: number[]): number[] {
+  return [...new Set(values.filter((number) => Number.isFinite(number) && number > 0))].sort((a, b) => a - b);
+}
+
+function buildPlannerAnalysisQuality(input: {
+  hasJsonBlock: boolean;
+  invalidJson: boolean;
+  expectedOptionNumbers: number[];
+  options: PlannerOptionAnalysis[];
+}): PlannerDecisionAnalysisQuality {
+  const expectedOptionNumbers = uniqueOptionNumbers(input.expectedOptionNumbers);
+  const plannerOptionNumbers = uniqueOptionNumbers(input.options.map((option) => option.number));
+  const expectedOptionCount = expectedOptionNumbers.length;
+  const coveredOptionNumbers = expectedOptionNumbers.filter((number) => plannerOptionNumbers.includes(number));
+  const missingOptionNumbers = expectedOptionNumbers.filter((number) => !plannerOptionNumbers.includes(number));
+  const coverageRatio =
+    expectedOptionCount > 0 ? Math.round((coveredOptionNumbers.length / expectedOptionCount) * 100) / 100 : 0;
+  const status: PlannerDecisionAnalysisQuality["status"] =
+    expectedOptionCount <= 0
+      ? "not_applicable"
+      : input.invalidJson
+        ? "invalid"
+        : plannerOptionNumbers.length <= 0
+          ? "missing"
+          : missingOptionNumbers.length > 0
+            ? "partial"
+            : "complete";
+
+  return {
+    status,
+    expected_option_count: expectedOptionCount,
+    planner_option_count: plannerOptionNumbers.length,
+    covered_option_count: coveredOptionNumbers.length,
+    coverage_ratio: coverageRatio,
+    missing_option_numbers: missingOptionNumbers,
+    has_json_block: input.hasJsonBlock,
+    invalid_json: input.invalidJson,
+  };
+}
+
+export function extractPlannerDecisionAnalysis(
+  raw: string | null | undefined,
+  expectedOptionNumbers: number[] = [],
+): ParsedPlannerDecisionAnalysis {
   const input = normalizeSummary(raw ?? "");
   const markedJson = extractMarkedJson(input);
   const objectJson = markedJson ?? extractObjectJson(input);
@@ -116,6 +160,12 @@ export function extractPlannerDecisionAnalysis(raw: string | null | undefined): 
     summary,
     options,
     optionsByNumber: new Map(options.map((option) => [option.number, option])),
+    quality: buildPlannerAnalysisQuality({
+      hasJsonBlock: Boolean(objectJson),
+      invalidJson: Boolean(objectJson && !parsed),
+      expectedOptionNumbers,
+      options,
+    }),
   };
 }
 
@@ -138,7 +188,10 @@ export function applyPlannerOptionAnalysis<T extends DecisionOption>(
   options: T[],
   rawPlannerSummary: string | null | undefined,
 ): T[] {
-  const { optionsByNumber } = extractPlannerDecisionAnalysis(rawPlannerSummary);
+  const { optionsByNumber } = extractPlannerDecisionAnalysis(
+    rawPlannerSummary,
+    options.map((option) => option.number),
+  );
   if (optionsByNumber.size <= 0) return options;
   return options.map((option) => {
     const plannerAnalysis = optionsByNumber.get(option.number);

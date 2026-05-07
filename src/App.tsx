@@ -1,26 +1,8 @@
 import { useState, useRef, useMemo, useCallback } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
-import type {
-  Department,
-  Agent,
-  Task,
-  Message,
-  CompanyStats,
-  CompanySettings,
-  CliStatusMap,
-  SubTask,
-  MeetingPresence,
-  SubAgent,
-  CrossDeptDelivery,
-  CeoOfficeCall,
-  OfficePackProfile,
-  RoomTheme,
-  WorkflowPackKey,
-} from "./types";
-import type { TaskReportDetail } from "./api";
+import type { Department, RoomTheme } from "./types";
 import * as api from "./api";
-import { createPresetAgentProfile } from "./agent-profile";
-import { detectBrowserLanguage, normalizeLanguage } from "./i18n";
+import { normalizeLanguage } from "./i18n";
 import { useTheme } from "./ThemeContext";
 import { ROOM_THEMES_STORAGE_KEY, UPDATE_BANNER_DISMISS_STORAGE_KEY } from "./app/constants";
 import {
@@ -29,7 +11,7 @@ import {
   mergeSettingsWithDefaults,
   readStoredRoomThemes,
 } from "./app/utils";
-import type { OAuthCallbackResult, RuntimeOs, RoomThemeMap, View } from "./app/types";
+import type { RuntimeOs, RoomThemeMap } from "./app/types";
 import { useRealtimeSync } from "./app/useRealtimeSync";
 import { useAppLabels } from "./app/useAppLabels";
 import AppLoadingScreen from "./app/AppLoadingScreen";
@@ -42,6 +24,8 @@ import { useAppViewEffects } from "./app/useAppViewEffects";
 import { useAppBootstrapData } from "./app/useAppBootstrapData";
 import { useLiveSyncScheduler } from "./app/useLiveSyncScheduler";
 import { useAppOverlayState } from "./app/useAppOverlayState";
+import { useAppDomainState } from "./app/useAppDomainState";
+import { useOfficeWorkflowPackChange } from "./app/useOfficeWorkflowPackChange";
 import { resolvePackAgentViews, resolvePackDepartmentsForDisplay } from "./app/office-pack-display";
 import { normalizeOfficeWorkflowPack } from "./app/office-workflow-pack";
 
@@ -52,27 +36,54 @@ export default function App() {
   const initialRoomThemes = useMemo(() => readStoredRoomThemes(), []);
   const hasLocalRoomThemesRef = useRef<boolean>(initialRoomThemes.hasStored);
 
-  const [view, setView] = useState<View>("manual");
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [stats, setStats] = useState<CompanyStats | null>(null);
-  const [settings, setSettings] = useState<CompanySettings>(() =>
-    mergeSettingsWithDefaults({ language: detectBrowserLanguage() }),
-  );
-  const [cliStatus, setCliStatus] = useState<CliStatusMap | null>(null);
-  const [subAgents, setSubAgents] = useState<SubAgent[]>([]);
-  const [subtasks, setSubtasks] = useState<SubTask[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [unreadAgentIds, setUnreadAgentIds] = useState<Set<string>>(new Set());
-  const [crossDeptDeliveries, setCrossDeptDeliveries] = useState<CrossDeptDelivery[]>([]);
-  const [ceoOfficeCalls, setCeoOfficeCalls] = useState<CeoOfficeCall[]>([]);
-  const [meetingPresence, setMeetingPresence] = useState<MeetingPresence[]>([]);
-  const [oauthResult, setOauthResult] = useState<OAuthCallbackResult | null>(null);
-  const [taskReport, setTaskReport] = useState<TaskReportDetail | null>(null);
-  const [customRoomThemes, setCustomRoomThemes] = useState<RoomThemeMap>(() => initialRoomThemes.themes);
+  const {
+    view,
+    setView,
+    departments,
+    setDepartments,
+    agents,
+    setAgents,
+    tasks,
+    setTasks,
+    messages,
+    setMessages,
+    stats,
+    setStats,
+    settings,
+    setSettings,
+    cliStatus,
+    setCliStatus,
+    subAgents,
+    setSubAgents,
+    subtasks,
+    setSubtasks,
+    loading,
+    setLoading,
+    unreadAgentIds,
+    setUnreadAgentIds,
+    crossDeptDeliveries,
+    setCrossDeptDeliveries,
+    ceoOfficeCalls,
+    setCeoOfficeCalls,
+    meetingPresence,
+    setMeetingPresence,
+    oauthResult,
+    setOauthResult,
+    taskReport,
+    setTaskReport,
+    customRoomThemes,
+    setCustomRoomThemes,
+    updateStatus,
+    setUpdateStatus,
+    dismissedUpdateVersion,
+    setDismissedUpdateVersion,
+    streamingMessage,
+    setStreamingMessage,
+    viewRef,
+    agentsRef,
+    tasksRef,
+    subAgentsRef,
+  } = useAppDomainState({ initialRoomThemes });
   const {
     selectedAgent,
     setSelectedAgent,
@@ -105,78 +116,19 @@ export default function App() {
     mobileHeaderMenuOpen,
     setMobileHeaderMenuOpen,
   } = useAppOverlayState();
-  const [officePackBootstrappingLabel, setOfficePackBootstrappingLabel] = useState<string | null>(null);
   const [runtimeOs] = useState<RuntimeOs>(() => detectRuntimeOs());
   const [forceUpdateBanner] = useState<boolean>(() => isForceUpdateBannerEnabled());
-  const [updateStatus, setUpdateStatus] = useState<api.UpdateStatus | null>(null);
-  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    return window.localStorage.getItem(UPDATE_BANNER_DISMISS_STORAGE_KEY) ?? "";
-  });
-  const [streamingMessage, setStreamingMessage] = useState<{
-    message_id: string;
-    agent_id: string;
-    agent_name: string;
-    agent_avatar: string;
-    content: string;
-  } | null>(null);
-
-  const viewRef = useRef<View>("manual");
-  viewRef.current = view;
-  const agentsRef = useRef<Agent[]>(agents);
-  agentsRef.current = agents;
-  const tasksRef = useRef<Task[]>(tasks);
-  tasksRef.current = tasks;
-  const subAgentsRef = useRef<SubAgent[]>(subAgents);
-  subAgentsRef.current = subAgents;
   const codexThreadToSubAgentIdRef = useRef<Map<string, string>>(new Map());
   const codexThreadBindingTsRef = useRef<Map<string, number>>(new Map());
   const subAgentStreamTailRef = useRef<Map<string, string>>(new Map());
   const activeChatRef = useRef<{ showChat: boolean; agentId: string | null }>({ showChat: false, agentId: null });
   activeChatRef.current = { showChat, agentId: chatAgent?.id ?? null };
-  const officePackBootstrapReqRef = useRef(0);
-
-  const handleOfficeWorkflowPackChange = (packKey: WorkflowPackKey) => {
-    const previousPack = settings.officeWorkflowPack ?? "development";
-    const patchPayload: Record<string, unknown> = { officeWorkflowPack: packKey };
-    const reqId = ++officePackBootstrapReqRef.current;
-    setOfficePackBootstrappingLabel(null);
-    setSettings((prev) => ({
-      ...prev,
-      officeWorkflowPack: packKey,
-    }));
-    api
-      .saveSettingsPatch(patchPayload)
-      .then(async () => {
-        const [nextDepartments, nextAgents, nextSettingsRaw] = await Promise.all([
-          api.getDepartments({ workflowPackKey: packKey }),
-          api.getAgents(),
-          api.getSettings(),
-        ]);
-        setDepartments(nextDepartments);
-        setAgents(nextAgents);
-        setSettings(mergeSettingsWithDefaults(nextSettingsRaw));
-        const clearNotice = () => {
-          if (officePackBootstrapReqRef.current !== reqId) return;
-          setOfficePackBootstrappingLabel(null);
-        };
-        clearNotice();
-      })
-      .catch((error) => {
-        console.error("Save office workflow pack failed:", error);
-        if (officePackBootstrapReqRef.current === reqId) {
-          setOfficePackBootstrappingLabel(null);
-        }
-        setSettings((prev) =>
-          prev.officeWorkflowPack === packKey
-            ? {
-                ...prev,
-                officeWorkflowPack: previousPack,
-              }
-            : prev,
-        );
-      });
-  };
+  const { officePackBootstrappingLabel, handleOfficeWorkflowPackChange } = useOfficeWorkflowPackChange({
+    settings,
+    setSettings,
+    setDepartments,
+    setAgents,
+  });
 
   const { connected, on } = useWebSocket();
   const shouldIncludeSeedAgents = useCallback(() => false, []);

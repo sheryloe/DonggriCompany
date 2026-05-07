@@ -65,6 +65,13 @@ function decisionAnalysisSourceLabel(
   return null;
 }
 
+function plannerQualityClass(status: NonNullable<DecisionInboxItem["plannerAnalysisQuality"]>["status"]): string {
+  if (status === "complete") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  if (status === "partial") return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+  if (status === "invalid" || status === "missing") return "border-rose-500/40 bg-rose-500/10 text-rose-200";
+  return "border-slate-600 bg-slate-900/50 text-slate-300";
+}
+
 function DecisionOptionAnalysisPanel({
   option,
   uiLanguage,
@@ -359,6 +366,7 @@ export default function DecisionInboxModal({
                 const selectedDraft = selectedFeedbackDraftByItem[item.id] ?? "";
                 const selectedFeedbackNumbers = selectedFeedbackNumbersByItem[item.id] ?? [];
                 const optionNotes = Array.isArray(item.optionNotes) ? item.optionNotes : [];
+                const plannerQuality = item.plannerAnalysisQuality;
                 const isItemBusy = Boolean(busyKey?.startsWith(`${item.id}:`));
 
                 return (
@@ -394,6 +402,31 @@ export default function DecisionInboxModal({
                         </button>
                       ) : null}
                     </div>
+
+                    {plannerQuality && plannerQuality.status !== "not_applicable" ? (
+                      <div
+                        className={`mb-2 flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11px] ${plannerQualityClass(plannerQuality.status)}`}
+                      >
+                        <span className="font-semibold">
+                          {t({
+                            ko: "Planner JSON 품질",
+                            en: "Planner JSON quality",
+                            ja: "Planner JSON quality",
+                            zh: "Planner JSON quality",
+                          })}
+                        </span>
+                        <span>{plannerQuality.status}</span>
+                        <span>
+                          {plannerQuality.coveredOptionCount}/{plannerQuality.expectedOptionCount}
+                        </span>
+                        {plannerQuality.missingOptionNumbers.length > 0 ? (
+                          <span>
+                            {t({ ko: "누락", en: "Missing", ja: "Missing", zh: "Missing" })}:{" "}
+                            {plannerQuality.missingOptionNumbers.join(", ")}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
 
                     {item.kind === "review_round_pick" ? (
                       <div className="mb-2 rounded-md border border-slate-700/70 bg-slate-900/50 px-2.5 py-2 text-[11px] text-slate-300">

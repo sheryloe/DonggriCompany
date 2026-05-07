@@ -70,6 +70,7 @@ const TEST_PROJECT: Project = {
 
 describe("MemorySearchPanel", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     getProjectsMock.mockReset();
     getProjectsMock.mockResolvedValue({
       projects: [TEST_PROJECT],
@@ -97,6 +98,7 @@ describe("MemorySearchPanel", () => {
     fireEvent.change(screen.getByTestId("memory-search-scope"), { target: { value: "all" } });
     fireEvent.change(screen.getByTestId("memory-search-promotion"), { target: { value: "promoted" } });
     fireEvent.change(screen.getByTestId("memory-search-source"), { target: { value: "task_run" } });
+    fireEvent.change(screen.getByTestId("memory-search-ranking"), { target: { value: "semantic" } });
     fireEvent.change(screen.getByTestId("memory-search-agent"), { target: { value: "agent-1" } });
 
     fireEvent.click(screen.getByRole("button", { name: "검색" }));
@@ -112,6 +114,7 @@ describe("MemorySearchPanel", () => {
         scope: "all",
         promotion_status: "promoted",
         source_type: "task_run",
+        ranking: "semantic",
         agent_id: "agent-1",
         project_id: "project-1",
         created_from: expect.any(Number),
@@ -154,5 +157,26 @@ describe("MemorySearchPanel", () => {
         scope: "all",
       }),
     );
+  });
+
+  it("stores recent searches and can save a reusable search", async () => {
+    render(<MemorySearchPanel agents={[TEST_AGENT]} />);
+
+    fireEvent.change(screen.getByTestId("memory-search-query"), { target: { value: "routing" } });
+    fireEvent.change(screen.getByTestId("memory-search-ranking"), { target: { value: "semantic" } });
+    fireEvent.click(screen.getByRole("button", { name: "검색" }));
+
+    await waitFor(() => {
+      expect(searchMemoryMock).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByTestId("memory-recent-searches")).toHaveTextContent("routing");
+
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    expect(screen.getByTestId("memory-saved-searches")).toHaveTextContent("routing");
+
+    fireEvent.click(screen.getByRole("button", { name: "초기화" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "routing" })[0]);
+    expect(screen.getByTestId("memory-search-query")).toHaveValue("routing");
+    expect(screen.getByTestId("memory-search-ranking")).toHaveValue("semantic");
   });
 });

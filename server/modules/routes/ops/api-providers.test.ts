@@ -378,12 +378,55 @@ describe("api provider routes", () => {
         ok: true,
         model_count: 3,
         models: ["glm-5", "kimi-k2.5", "deepseek-v3"],
+        runtime_status: {
+          status: "ok",
+          capacity_429: false,
+          retryable: false,
+          fallback_models: ["glm-5", "kimi-k2.5"],
+        },
       });
 
       const row = db.prepare("SELECT models_cache FROM api_providers WHERE id = ?").get(createResponse.body.id) as {
         models_cache: string | null;
       };
       expect(JSON.parse(String(row.models_cache))).toEqual(["glm-5", "kimi-k2.5", "deepseek-v3"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("classifies upstream 429 capacity errors with retry and fallback metadata", async () => {
+    const { app, db } = await createHarness();
+
+    try {
+      const createResponse = await request(app).post("/api/api-providers").send({
+        name: "Bailian Coding Plan",
+        type: "openai",
+        base_url: "https://ignored.example",
+        preset_key: "alibaba-coding-plan-openai",
+      });
+
+      const fetchMock = vi.fn().mockResolvedValueOnce(
+        new Response("resource exhausted: capacity temporarily unavailable", {
+          status: 429,
+          headers: { "retry-after": "90" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+      const response = await request(app).post(`/api/api-providers/${createResponse.body.id}/test`).expect(200);
+
+      expect(response.body).toMatchObject({
+        ok: false,
+        status: 429,
+        runtime_status: {
+          status: "capacity_limited",
+          capacity_429: true,
+          retryable: true,
+          retry_after_seconds: 90,
+          fallback_models: expect.arrayContaining(["qwen3.5-plus", "glm-5"]),
+        },
+      });
     } finally {
       db.close();
     }

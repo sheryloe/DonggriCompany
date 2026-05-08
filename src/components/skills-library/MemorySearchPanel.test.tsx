@@ -1,17 +1,32 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getProjects, searchMemory } from "../../api";
+import {
+  deleteMemorySearchProfile,
+  getMemorySearchProfiles,
+  getProjects,
+  getQualityMetricSummary,
+  saveMemorySearchProfile,
+  searchMemory,
+} from "../../api";
 import type { Agent, NativeMemory, Project } from "../../types";
 import MemorySearchPanel from "./MemorySearchPanel";
 
 vi.mock("../../api", () => ({
+  deleteMemorySearchProfile: vi.fn(),
+  getMemorySearchProfiles: vi.fn(),
   getProjects: vi.fn(),
+  getQualityMetricSummary: vi.fn(),
   isApiRequestError: vi.fn(() => false),
+  saveMemorySearchProfile: vi.fn(),
   searchMemory: vi.fn(),
 }));
 
+const deleteMemorySearchProfileMock = vi.mocked(deleteMemorySearchProfile);
+const getMemorySearchProfilesMock = vi.mocked(getMemorySearchProfiles);
 const getProjectsMock = vi.mocked(getProjects);
+const getQualityMetricSummaryMock = vi.mocked(getQualityMetricSummary);
+const saveMemorySearchProfileMock = vi.mocked(saveMemorySearchProfile);
 const searchMemoryMock = vi.mocked(searchMemory);
 
 const TEST_AGENT: Agent = {
@@ -79,11 +94,54 @@ describe("MemorySearchPanel", () => {
       total: 1,
       total_pages: 1,
     });
+    getMemorySearchProfilesMock.mockReset();
+    getMemorySearchProfilesMock.mockResolvedValue([]);
+    getQualityMetricSummaryMock.mockReset();
+    getQualityMetricSummaryMock.mockResolvedValue([
+      {
+        metric_key: "memory.embedding.coverage",
+        metric_family: "memory",
+        bucket: "total",
+        count: 1,
+        sum_value: 0.82,
+        avg_value: 0.82,
+        latest_value: 0.82,
+        latest_status: "recorded",
+        latest_recorded_at: 1_700_000_000_000,
+      },
+      {
+        metric_key: "provider.capacity_429",
+        metric_family: "provider",
+        bucket: "total",
+        count: 2,
+        sum_value: 2,
+        avg_value: 1,
+        latest_value: 1,
+        latest_status: "capacity_limited",
+        latest_recorded_at: 1_700_000_000_000,
+      },
+    ]);
+    saveMemorySearchProfileMock.mockReset();
+    saveMemorySearchProfileMock.mockImplementation(async (input) => ({
+      id: input.id || `server-${input.kind}`,
+      kind: input.kind,
+      owner_key: "local",
+      project_id: input.project_id ?? null,
+      label: input.label || input.query || "검색",
+      query: input.query || "",
+      filters_json: JSON.stringify(input.filters ?? {}),
+      last_used_at: 1,
+      use_count: input.kind === "recent" ? 1 : 0,
+      created_at: 1,
+      updated_at: 1,
+    }));
+    deleteMemorySearchProfileMock.mockReset();
+    deleteMemorySearchProfileMock.mockResolvedValue(undefined);
     searchMemoryMock.mockReset();
     searchMemoryMock.mockResolvedValue([TEST_MEMORY]);
   });
 
-  it("searches memories with selected project, advanced filters, tags, dates, layer, scope, and agent filter", async () => {
+  it("searches memories with selected project, advanced filters, tags, dates, layer, scope, agent, and provider ranking", async () => {
     render(<MemorySearchPanel agents={[TEST_AGENT]} />);
 
     fireEvent.change(screen.getByTestId("memory-project-query"), { target: { value: "Empire" } });
@@ -98,7 +156,7 @@ describe("MemorySearchPanel", () => {
     fireEvent.change(screen.getByTestId("memory-search-scope"), { target: { value: "all" } });
     fireEvent.change(screen.getByTestId("memory-search-promotion"), { target: { value: "promoted" } });
     fireEvent.change(screen.getByTestId("memory-search-source"), { target: { value: "task_run" } });
-    fireEvent.change(screen.getByTestId("memory-search-ranking"), { target: { value: "vector" } });
+    fireEvent.change(screen.getByTestId("memory-search-ranking"), { target: { value: "semantic_provider" } });
     fireEvent.change(screen.getByTestId("memory-search-agent"), { target: { value: "agent-1" } });
 
     fireEvent.click(screen.getByRole("button", { name: "검색" }));
@@ -114,7 +172,7 @@ describe("MemorySearchPanel", () => {
         scope: "all",
         promotion_status: "promoted",
         source_type: "task_run",
-        ranking: "vector",
+        ranking: "semantic_provider",
         agent_id: "agent-1",
         project_id: "project-1",
         created_from: expect.any(Number),
@@ -124,9 +182,17 @@ describe("MemorySearchPanel", () => {
         limit: 20,
       }),
     );
+    expect(saveMemorySearchProfileMock).toHaveBeenCalledWith(expect.objectContaining({ kind: "recent" }));
     expect(await screen.findByText("Design routing decision")).toBeInTheDocument();
     expect(screen.getByText("디자인 부서 이벤트를 컴포넌트 워크벤치로 연결했습니다.")).toBeInTheDocument();
     expect(screen.getByText("project Empire")).toBeInTheDocument();
+  });
+
+  it("shows quality metric summary", async () => {
+    render(<MemorySearchPanel agents={[TEST_AGENT]} />);
+
+    expect(await screen.findByTestId("memory-quality-summary")).toHaveTextContent("82%");
+    expect(screen.getByTestId("memory-quality-summary")).toHaveTextContent("2");
   });
 
   it("shows an empty search state after a successful search with no results", async () => {
@@ -159,7 +225,7 @@ describe("MemorySearchPanel", () => {
     );
   });
 
-  it("stores recent searches and can save a reusable search", async () => {
+  it("stores saved/recent searches on the server and can delete saved searches", async () => {
     render(<MemorySearchPanel agents={[TEST_AGENT]} />);
 
     fireEvent.change(screen.getByTestId("memory-search-query"), { target: { value: "routing" } });
@@ -172,11 +238,26 @@ describe("MemorySearchPanel", () => {
     expect(await screen.findByTestId("memory-recent-searches")).toHaveTextContent("routing");
 
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    await waitFor(() => {
+      expect(saveMemorySearchProfileMock).toHaveBeenCalledWith(expect.objectContaining({ kind: "saved" }));
+    });
     expect(screen.getByTestId("memory-saved-searches")).toHaveTextContent("routing");
 
     fireEvent.click(screen.getByRole("button", { name: "초기화" }));
     fireEvent.click(screen.getAllByRole("button", { name: "routing" })[0]);
     expect(screen.getByTestId("memory-search-query")).toHaveValue("routing");
     expect(screen.getByTestId("memory-search-ranking")).toHaveValue("vector");
+
+    fireEvent.click(screen.getByRole("button", { name: "routing 삭제" }));
+    await waitFor(() => {
+      expect(deleteMemorySearchProfileMock).toHaveBeenCalledWith("server-saved");
+    });
+  });
+
+  it("falls back to localStorage when server saved/recent search API fails", async () => {
+    getMemorySearchProfilesMock.mockRejectedValueOnce(new Error("down")).mockRejectedValueOnce(new Error("down"));
+    render(<MemorySearchPanel agents={[TEST_AGENT]} />);
+
+    expect(await screen.findByText("서버 저장 검색을 사용할 수 없어 브라우저 로컬 캐시로 동작 중입니다.")).toBeInTheDocument();
   });
 });

@@ -1,20 +1,26 @@
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import {
+  backfillMemoryEmbeddings,
   buildMemoryContextBlock,
   approveMemoryPromotionCandidate,
   createAgentMemory,
   createProjectMemory,
+  deleteMemorySearchProfile,
   extractAndStoreTaskMemory,
+  getMemoryEmbeddingStatus,
   listAgentGrowthEvents,
   listAgentMemories,
   listMemoryOutbox,
   listMemoryPromotionCandidates,
   listMemoryQualityEvents,
+  listMemorySearchProfiles,
   listProjectMemories,
   listSkillUsageSummary,
   recordMemoryQualityEvent,
   scanMemoryPromotionCandidates,
   searchMemories,
+  searchMemoriesWithProviderRanking,
+  upsertMemorySearchProfile,
 } from "../../memory/store.ts";
 import {
   drainBeadsOutbox,
@@ -60,6 +66,11 @@ function parseTimestamp(value: unknown): number | null {
 
 function normalizeBodyText(ctx: Pick<RuntimeContext, "normalizeTextField">, value: unknown): string | null {
   return ctx.normalizeTextField(value);
+}
+
+function parseObjectBody(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
 }
 
 function ensureProjectExists(db: RuntimeContext["db"], projectId: string): boolean {
@@ -204,12 +215,92 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
     return res.json({ ok: true, status: getBeadsStatus(db, projectId) });
   });
 
-  app.get("/api/memory/search", (req, res) => {
+  app.get("/api/memory/searches", (req, res) => {
+    const projectId = typeof req.query.project_id === "string" ? req.query.project_id.trim() : "";
+    if (projectId && !ensureProjectExists(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    const kind = typeof req.query.kind === "string" ? req.query.kind : "all";
+    const limit = Number(req.query.limit ?? 20);
+    return res.json({
+      ok: true,
+      searches: listMemorySearchProfiles(db, {
+        kind,
+        projectId: projectId || null,
+        limit,
+      }),
+    });
+  });
+
+  app.post("/api/memory/searches", (req, res) => {
+    const body = parseObjectBody(req.body);
+    const projectId = normalizeBodyText(ctx, body.project_id);
+    if (projectId && !ensureProjectExists(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    const profile = upsertMemorySearchProfile(db, {
+      kind: normalizeBodyText(ctx, body.kind) ?? "saved",
+      projectId,
+      label: normalizeBodyText(ctx, body.label),
+      query: normalizeBodyText(ctx, body.query),
+      filters: parseObjectBody(body.filters),
+      now: nowMs(),
+    });
+    return res.status(201).json({ ok: true, search: profile });
+  });
+
+  app.patch("/api/memory/searches/:id", (req, res) => {
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "search_id_required" });
+    const body = parseObjectBody(req.body);
+    const projectId = normalizeBodyText(ctx, body.project_id);
+    if (projectId && !ensureProjectExists(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    const profile = upsertMemorySearchProfile(db, {
+      id,
+      kind: normalizeBodyText(ctx, body.kind) ?? "saved",
+      projectId,
+      label: normalizeBodyText(ctx, body.label),
+      query: normalizeBodyText(ctx, body.query),
+      filters: parseObjectBody(body.filters),
+      now: nowMs(),
+    });
+    return res.json({ ok: true, search: profile });
+  });
+
+  app.delete("/api/memory/searches/:id", (req, res) => {
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "search_id_required" });
+    const deleted = deleteMemorySearchProfile(db, { id });
+    if (!deleted) return res.status(404).json({ error: "search_not_found" });
+    return res.json({ ok: true });
+  });
+
+  app.get("/api/memory/embeddings/status", (req, res) => {
+    const projectId = typeof req.query.project_id === "string" ? req.query.project_id.trim() : "";
+    if (projectId && !ensureProjectExists(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    return res.json(getMemoryEmbeddingStatus(db, { projectId: projectId || null }));
+  });
+
+  app.post("/api/memory/embeddings/backfill", async (req, res) => {
+    const body = parseObjectBody(req.body);
+    const projectId = normalizeBodyText(ctx, body.project_id);
+    const agentId = normalizeBodyText(ctx, body.agent_id);
+    if (projectId && !ensureProjectExists(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    if (agentId && !ensureAgentExists(db, agentId)) return res.status(404).json({ error: "agent_not_found" });
+    const result = await backfillMemoryEmbeddings(db, {
+      projectId,
+      agentId,
+      providerId: normalizeBodyText(ctx, body.provider_id),
+      model: normalizeBodyText(ctx, body.model),
+      limit: Number(body.limit ?? 50),
+      force: body.force === true,
+      now: nowMs(),
+    });
+    return res.json(result);
+  });
+
+  app.get("/api/memory/search", async (req, res) => {
     const projectId = typeof req.query.project_id === "string" ? req.query.project_id.trim() : "";
     const agentId = typeof req.query.agent_id === "string" ? req.query.agent_id.trim() : "";
     if (projectId && !ensureProjectExists(db, projectId)) return res.status(404).json({ error: "project_not_found" });
     if (agentId && !ensureAgentExists(db, agentId)) return res.status(404).json({ error: "agent_not_found" });
-    const rows = searchMemories(db, {
+    const input = {
       query: typeof req.query.q === "string" ? req.query.q : "",
       projectId: projectId || null,
       agentId: agentId || null,
@@ -224,9 +315,15 @@ export function registerMemoryRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
       promotionStatus: typeof req.query.promotion_status === "string" ? req.query.promotion_status : null,
       sourceType: typeof req.query.source_type === "string" ? req.query.source_type : null,
       ranking: typeof req.query.ranking === "string" ? req.query.ranking : null,
+      providerId: typeof req.query.provider_id === "string" ? req.query.provider_id : null,
+      model: typeof req.query.model === "string" ? req.query.model : null,
       limit: Number(req.query.limit ?? 10),
       now: nowMs(),
-    });
+    };
+    const rows =
+      typeof req.query.ranking === "string" && req.query.ranking === "semantic_provider"
+        ? await searchMemoriesWithProviderRanking(db, input)
+        : searchMemories(db, input);
     return res.json({ ok: true, memories: rows });
   });
 

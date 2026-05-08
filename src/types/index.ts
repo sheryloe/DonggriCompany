@@ -243,6 +243,71 @@ export interface MemoryQualityEvent {
   created_at: number;
 }
 
+export interface MemoryEmbeddingStatus {
+  ok: boolean;
+  total_memories: number;
+  ready_embeddings: number;
+  failed_embeddings: number;
+  indexed_embeddings: number;
+  coverage_ratio: number;
+  active_model: string | null;
+  active_provider_id: string | null;
+}
+
+export interface MemoryEmbeddingBackfillResult {
+  ok: boolean;
+  processed: number;
+  embedded: number;
+  indexed: number;
+  skipped: number;
+  failed: number;
+  fallback_used: boolean;
+}
+
+export interface MemorySearchProfile {
+  id: string;
+  kind: "saved" | "recent";
+  owner_key: string;
+  project_id: string | null;
+  label: string;
+  query: string;
+  filters_json: string;
+  last_used_at: number | null;
+  use_count: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface QualityMetricEvent {
+  id: string;
+  metric_key: string;
+  metric_family: string;
+  project_id: string | null;
+  subject_type: string | null;
+  subject_id: string | null;
+  value: number;
+  unit: string | null;
+  status: string;
+  dimensions_json: string;
+  evidence_json: string;
+  source_type: string;
+  source_id: string;
+  recorded_at: number;
+  created_at: number;
+}
+
+export interface QualityMetricSummary {
+  metric_key: string;
+  metric_family: string;
+  bucket: string;
+  count: number;
+  sum_value: number;
+  avg_value: number;
+  latest_value: number;
+  latest_status: string;
+  latest_recorded_at: number;
+}
+
 export interface BeadsStatus {
   installed: boolean;
   initialized: boolean;

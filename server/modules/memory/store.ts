@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import { decryptSecret } from "../../oauth/helpers.ts";
 
 export type NativeMemoryRow = {
   id: string;
@@ -36,7 +37,7 @@ export type MemorySearchRow = NativeMemoryRow & {
   rank: number;
 };
 
-type MemoryRankingMode = "default" | "semantic" | "vector";
+type MemoryRankingMode = "default" | "semantic" | "vector" | "semantic_provider";
 
 type MemoryEmbeddingRow = {
   source_table: "agent_memories" | "project_memories";
@@ -45,12 +46,87 @@ type MemoryEmbeddingRow = {
   dims: number;
   vector_json: string;
   content_hash: string;
+  provider_id: string | null;
+  provider_type: string | null;
+  embedding_status: "ready" | "failed" | "fallback";
+  last_error: string | null;
+  source_text_chars: number;
+  indexed_at: number | null;
   created_at: number;
   updated_at: number;
 };
 
 const LOCAL_MEMORY_EMBEDDING_MODEL = "local-hash-v3";
 const LOCAL_MEMORY_EMBEDDING_DIMS = 128;
+const DEFAULT_EMBEDDING_OWNER_KEY = "local";
+const PROVIDER_EMBEDDING_DIMS_FALLBACK = 1536;
+
+type ApiProviderType = "openai" | "anthropic" | "google" | "ollama" | "openrouter" | "together" | "groq" | "cerebras" | "custom";
+
+type ApiProviderRow = {
+  id: string;
+  name: string;
+  type: ApiProviderType;
+  base_url: string;
+  api_key_enc: string | null;
+  enabled: number;
+  models_cache: string | null;
+  models_cached_at: number | null;
+};
+
+type EmbeddingProviderContext = {
+  providerId: string;
+  providerType: ApiProviderType;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+};
+
+type MemorySearchProfileKind = "saved" | "recent";
+
+export type MemorySearchProfileRow = {
+  id: string;
+  kind: MemorySearchProfileKind;
+  owner_key: string;
+  project_id: string | null;
+  label: string;
+  query: string;
+  filters_json: string;
+  last_used_at: number | null;
+  use_count: number;
+  created_at: number;
+  updated_at: number;
+};
+
+export type QualityMetricEventRow = {
+  id: string;
+  metric_key: string;
+  metric_family: string;
+  project_id: string | null;
+  subject_type: string | null;
+  subject_id: string | null;
+  value: number;
+  unit: string | null;
+  status: string;
+  dimensions_json: string;
+  evidence_json: string;
+  source_type: string;
+  source_id: string;
+  recorded_at: number;
+  created_at: number;
+};
+
+export type QualityMetricSummaryRow = {
+  metric_key: string;
+  metric_family: string;
+  bucket: string;
+  count: number;
+  sum_value: number;
+  avg_value: number;
+  latest_value: number;
+  latest_status: string;
+  latest_recorded_at: number;
+};
 
 export type SkillUsageSummaryRow = {
   skill_id: string;
@@ -136,6 +212,27 @@ export type MemoryCreateInput = {
   promotionStatus?: MemoryPromotionStatus | string | null;
   episode?: Record<string, unknown> | string | null;
   status?: string | null;
+  now?: number | null;
+};
+
+export type MemorySearchInput = {
+  query?: string | null;
+  projectId?: string | null;
+  agentId?: string | null;
+  threadId?: string | null;
+  layer?: string | null;
+  scope?: "local" | "global" | "all" | string | null;
+  tags?: string[] | null;
+  createdFrom?: number | null;
+  createdTo?: number | null;
+  updatedFrom?: number | null;
+  updatedTo?: number | null;
+  promotionStatus?: MemoryPromotionStatus | "all" | string | null;
+  sourceType?: string | null;
+  ranking?: MemoryRankingMode | string | null;
+  providerId?: string | null;
+  model?: string | null;
+  limit?: number | null;
   now?: number | null;
 };
 
@@ -533,6 +630,11 @@ function memoryEmbeddingHash(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+function normalizeEmbeddingModel(value: unknown, fallback = LOCAL_MEMORY_EMBEDDING_MODEL): string {
+  const normalized = normalizeText(value);
+  return normalized || fallback;
+}
+
 function buildLocalMemoryEmbedding(text: string, dims = LOCAL_MEMORY_EMBEDDING_DIMS): number[] {
   const vector = Array.from({ length: dims }, () => 0);
   const tokens = tokenizeVectorText(text);
@@ -544,6 +646,15 @@ function buildLocalMemoryEmbedding(text: string, dims = LOCAL_MEMORY_EMBEDDING_D
   const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
   if (norm === 0) return vector;
   return vector.map((value) => Number((value / norm).toFixed(6)));
+}
+
+function embeddingBucketKeys(vector: number[], maxBuckets = 8): string[] {
+  return vector
+    .map((value, index) => ({ index, value, weight: Math.abs(value) }))
+    .filter((item) => item.weight > 0)
+    .sort((a, b) => b.weight - a.weight || a.index - b.index)
+    .slice(0, maxBuckets)
+    .map((item) => `${item.index}:${item.value >= 0 ? "p" : "n"}`);
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -570,19 +681,90 @@ CREATE TABLE IF NOT EXISTS memory_embeddings (
   dims INTEGER NOT NULL,
   vector_json TEXT NOT NULL,
   content_hash TEXT NOT NULL,
+  provider_id TEXT,
+  provider_type TEXT,
+  embedding_status TEXT NOT NULL DEFAULT 'ready' CHECK(embedding_status IN ('ready','failed','fallback')),
+  last_error TEXT,
+  source_text_chars INTEGER NOT NULL DEFAULT 0,
+  indexed_at INTEGER,
   created_at INTEGER DEFAULT (unixepoch()*1000),
   updated_at INTEGER DEFAULT (unixepoch()*1000),
   PRIMARY KEY(source_table, memory_id, embedding_model)
 );
+CREATE TABLE IF NOT EXISTS memory_embedding_index (
+  embedding_model TEXT NOT NULL,
+  bucket_key TEXT NOT NULL,
+  source_table TEXT NOT NULL CHECK(source_table IN ('agent_memories','project_memories')),
+  memory_id TEXT NOT NULL,
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  PRIMARY KEY(embedding_model, bucket_key, source_table, memory_id)
+);
+CREATE TABLE IF NOT EXISTS memory_search_profiles (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK(kind IN ('saved','recent')),
+  owner_key TEXT NOT NULL DEFAULT 'local',
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  query TEXT NOT NULL DEFAULT '',
+  filters_json TEXT NOT NULL DEFAULT '{}',
+  last_used_at INTEGER,
+  use_count INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000)
+);
+CREATE TABLE IF NOT EXISTS quality_metric_events (
+  id TEXT PRIMARY KEY,
+  metric_key TEXT NOT NULL,
+  metric_family TEXT NOT NULL,
+  project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  subject_type TEXT,
+  subject_id TEXT,
+  value REAL NOT NULL DEFAULT 0,
+  unit TEXT,
+  status TEXT NOT NULL DEFAULT 'recorded',
+  dimensions_json TEXT NOT NULL DEFAULT '{}',
+  evidence_json TEXT NOT NULL DEFAULT '{}',
+  source_type TEXT NOT NULL DEFAULT 'manual',
+  source_id TEXT NOT NULL DEFAULT '',
+  recorded_at INTEGER DEFAULT (unixepoch()*1000),
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  UNIQUE(metric_key, source_type, source_id)
+);
 CREATE INDEX IF NOT EXISTS idx_memory_embeddings_model
   ON memory_embeddings(embedding_model, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_embeddings_status
+  ON memory_embeddings(embedding_model, embedding_status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_embedding_index_bucket
+  ON memory_embedding_index(embedding_model, bucket_key, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_search_profiles_owner
+  ON memory_search_profiles(owner_key, kind, project_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quality_metric_events_key
+  ON quality_metric_events(metric_key, project_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quality_metric_events_family
+  ON quality_metric_events(metric_family, project_id, recorded_at DESC);
 CREATE TRIGGER IF NOT EXISTS trg_agent_memories_embeddings_delete AFTER DELETE ON agent_memories BEGIN
   DELETE FROM memory_embeddings WHERE source_table = 'agent_memories' AND memory_id = old.id;
+  DELETE FROM memory_embedding_index WHERE source_table = 'agent_memories' AND memory_id = old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS trg_project_memories_embeddings_delete AFTER DELETE ON project_memories BEGIN
   DELETE FROM memory_embeddings WHERE source_table = 'project_memories' AND memory_id = old.id;
+  DELETE FROM memory_embedding_index WHERE source_table = 'project_memories' AND memory_id = old.id;
 END;
 `);
+  for (const statement of [
+    "ALTER TABLE memory_embeddings ADD COLUMN provider_id TEXT",
+    "ALTER TABLE memory_embeddings ADD COLUMN provider_type TEXT",
+    "ALTER TABLE memory_embeddings ADD COLUMN embedding_status TEXT NOT NULL DEFAULT 'ready'",
+    "ALTER TABLE memory_embeddings ADD COLUMN last_error TEXT",
+    "ALTER TABLE memory_embeddings ADD COLUMN source_text_chars INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE memory_embeddings ADD COLUMN indexed_at INTEGER",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch {
+      // compatibility column already exists
+    }
+  }
 }
 
 function readVectorJson(value: string): number[] | null {
@@ -594,6 +776,34 @@ function readVectorJson(value: string): number[] | null {
   }
 }
 
+function upsertMemoryEmbeddingIndex(
+  db: DatabaseSync,
+  input: {
+    sourceTable: "agent_memories" | "project_memories";
+    memoryId: string;
+    embeddingModel: string;
+    vector: number[];
+    now: number;
+  },
+): void {
+  const bucketKeys = embeddingBucketKeys(input.vector);
+  db.prepare("DELETE FROM memory_embedding_index WHERE source_table = ? AND memory_id = ? AND embedding_model = ?").run(
+    input.sourceTable,
+    input.memoryId,
+    input.embeddingModel,
+  );
+  const stmt = db.prepare(
+    `
+    INSERT OR REPLACE INTO memory_embedding_index (
+      embedding_model, bucket_key, source_table, memory_id, updated_at
+    ) VALUES (?, ?, ?, ?, ?)
+  `,
+  );
+  for (const bucketKey of bucketKeys) {
+    stmt.run(input.embeddingModel, bucketKey, input.sourceTable, input.memoryId, input.now);
+  }
+}
+
 function ensureMemoryEmbedding(db: DatabaseSync, row: MemorySearchRow, now: number): number[] {
   ensureMemoryEmbeddingSchema(db);
   const text = memoryEmbeddingText(row);
@@ -601,7 +811,7 @@ function ensureMemoryEmbedding(db: DatabaseSync, row: MemorySearchRow, now: numb
   const existing = db
     .prepare(
       `
-      SELECT source_table, memory_id, embedding_model, dims, vector_json, content_hash, created_at, updated_at
+      SELECT source_table, memory_id, embedding_model, dims, vector_json, content_hash, indexed_at, created_at, updated_at
       FROM memory_embeddings
       WHERE source_table = ? AND memory_id = ? AND embedding_model = ?
     `,
@@ -611,18 +821,39 @@ function ensureMemoryEmbedding(db: DatabaseSync, row: MemorySearchRow, now: numb
     existing && existing.content_hash === contentHash && existing.dims === LOCAL_MEMORY_EMBEDDING_DIMS
       ? readVectorJson(existing.vector_json)
       : null;
-  if (existingVector) return existingVector;
+  if (existingVector) {
+    if (existing && !existing.indexed_at) {
+      upsertMemoryEmbeddingIndex(db, {
+        sourceTable: row.source_table,
+        memoryId: row.id,
+        embeddingModel: LOCAL_MEMORY_EMBEDDING_MODEL,
+        vector: existingVector,
+        now,
+      });
+      db.prepare(
+        "UPDATE memory_embeddings SET indexed_at = ?, source_text_chars = ? WHERE source_table = ? AND memory_id = ? AND embedding_model = ?",
+      ).run(now, text.length, row.source_table, row.id, LOCAL_MEMORY_EMBEDDING_MODEL);
+    }
+    return existingVector;
+  }
 
   const vector = buildLocalMemoryEmbedding(text);
   db.prepare(
     `
     INSERT INTO memory_embeddings (
-      source_table, memory_id, embedding_model, dims, vector_json, content_hash, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      source_table, memory_id, embedding_model, dims, vector_json, content_hash,
+      provider_id, provider_type, embedding_status, last_error, source_text_chars, indexed_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, 'ready', NULL, ?, ?, ?, ?)
     ON CONFLICT(source_table, memory_id, embedding_model) DO UPDATE SET
       dims = excluded.dims,
       vector_json = excluded.vector_json,
       content_hash = excluded.content_hash,
+      provider_id = excluded.provider_id,
+      provider_type = excluded.provider_type,
+      embedding_status = excluded.embedding_status,
+      last_error = excluded.last_error,
+      source_text_chars = excluded.source_text_chars,
+      indexed_at = excluded.indexed_at,
       updated_at = excluded.updated_at
   `,
   ).run(
@@ -632,9 +863,18 @@ function ensureMemoryEmbedding(db: DatabaseSync, row: MemorySearchRow, now: numb
     LOCAL_MEMORY_EMBEDDING_DIMS,
     JSON.stringify(vector),
     contentHash,
+    text.length,
+    now,
     existing?.created_at ?? now,
     now,
   );
+  upsertMemoryEmbeddingIndex(db, {
+    sourceTable: row.source_table,
+    memoryId: row.id,
+    embeddingModel: LOCAL_MEMORY_EMBEDDING_MODEL,
+    vector,
+    now,
+  });
   return vector;
 }
 
@@ -643,6 +883,218 @@ function vectorQueryScore(db: DatabaseSync, row: MemorySearchRow, query: string,
   const memoryVector = ensureMemoryEmbedding(db, row, now);
   const similarity = cosineSimilarity(queryVector, memoryVector);
   return Math.max(0, similarity) * 420;
+}
+
+function parseJsonArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function defaultEmbeddingModelForProvider(type: ApiProviderType): string {
+  if (type === "google") return "text-embedding-004";
+  if (type === "ollama") return "nomic-embed-text";
+  return "text-embedding-3-small";
+}
+
+function readEmbeddingProvider(
+  db: DatabaseSync,
+  input: { providerId?: string | null; model?: string | null },
+): EmbeddingProviderContext | null {
+  const providerId = normalizeText(input.providerId);
+  const row = providerId
+    ? (db.prepare("SELECT * FROM api_providers WHERE id = ? AND enabled = 1").get(providerId) as ApiProviderRow | undefined)
+    : (db
+        .prepare(
+          `
+          SELECT *
+          FROM api_providers
+          WHERE enabled = 1
+            AND type IN ('openai','google','ollama','openrouter','together','groq','cerebras','custom')
+          ORDER BY updated_at DESC, created_at DESC
+          LIMIT 1
+        `,
+        )
+        .get() as ApiProviderRow | undefined);
+  if (!row) return null;
+  let apiKey = "";
+  if (row.api_key_enc) {
+    try {
+      apiKey = decryptSecret(row.api_key_enc);
+    } catch {
+      apiKey = "";
+    }
+  }
+  const cachedModels = parseJsonArray(row.models_cache);
+  const embeddingModel =
+    normalizeText(input.model) ||
+    cachedModels.find((model) => /embed|embedding/i.test(model)) ||
+    defaultEmbeddingModelForProvider(row.type);
+  return {
+    providerId: row.id,
+    providerType: row.type,
+    baseUrl: row.base_url.replace(/\/+$/, ""),
+    apiKey,
+    model: embeddingModel,
+  };
+}
+
+function openAiCompatibleEmbeddingUrl(baseUrl: string): string {
+  const normalized = baseUrl
+    .replace(/\/+$/, "")
+    .replace(/\/v1\/(chat\/completions|models|messages|embeddings)$/i, "/v1");
+  return `${normalized}/embeddings`;
+}
+
+function googleEmbeddingUrl(provider: EmbeddingProviderContext): string {
+  const base = provider.baseUrl.replace(/\/models\/.+$/i, "");
+  const url = `${base}/models/${encodeURIComponent(provider.model)}:embedContent`;
+  return provider.apiKey ? `${url}?key=${encodeURIComponent(provider.apiKey)}` : url;
+}
+
+function ollamaEmbeddingUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/v1(?:beta)?$/i, "").replace(/\/+$/, "")}/api/embeddings`;
+}
+
+function providerEmbeddingHeaders(provider: EmbeddingProviderContext): Record<string, string> {
+  const headers: Record<string, string> = { Accept: "application/json", "content-type": "application/json" };
+  if (!provider.apiKey || provider.providerType === "google" || provider.providerType === "ollama") return headers;
+  headers.Authorization = `Bearer ${provider.apiKey}`;
+  return headers;
+}
+
+function providerEmbeddingRequest(provider: EmbeddingProviderContext, text: string): { url: string; body: unknown } {
+  if (provider.providerType === "google") {
+    return {
+      url: googleEmbeddingUrl(provider),
+      body: { content: { parts: [{ text }] } },
+    };
+  }
+  if (provider.providerType === "ollama") {
+    return {
+      url: ollamaEmbeddingUrl(provider.baseUrl),
+      body: { model: provider.model, prompt: text },
+    };
+  }
+  return {
+    url: openAiCompatibleEmbeddingUrl(provider.baseUrl),
+    body: { model: provider.model, input: text },
+  };
+}
+
+function parseProviderEmbeddingVector(providerType: ApiProviderType, payload: unknown): number[] {
+  const data = payload as {
+    data?: Array<{ embedding?: unknown }>;
+    embedding?: unknown;
+    embeddings?: unknown;
+  };
+  const raw =
+    providerType === "google"
+      ? (data.embedding as { values?: unknown } | undefined)?.values
+      : Array.isArray(data.data)
+        ? data.data[0]?.embedding
+        : (data.embedding ?? data.embeddings);
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => Number(item)).filter((item) => Number.isFinite(item));
+}
+
+async function createProviderEmbedding(
+  provider: EmbeddingProviderContext,
+  text: string,
+): Promise<{ ok: true; vector: number[] } | { ok: false; status: number; error: string; capacity429: boolean }> {
+  try {
+    const request = providerEmbeddingRequest(provider, text);
+    const resp = await fetch(request.url, {
+      method: "POST",
+      headers: providerEmbeddingHeaders(provider),
+      body: JSON.stringify(request.body),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      return {
+        ok: false,
+        status: resp.status,
+        error: body.slice(0, 300) || `provider returned ${resp.status}`,
+        capacity429: resp.status === 429 || /capacity|quota|rate.?limit|resource exhausted/i.test(body),
+      };
+    }
+    const payload = await resp.json();
+    const vector = parseProviderEmbeddingVector(provider.providerType, payload);
+    if (vector.length === 0) return { ok: false, status: 502, error: "empty_embedding_vector", capacity429: false };
+    return { ok: true, vector };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 502,
+      error: error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300),
+      capacity429: false,
+    };
+  }
+}
+
+function upsertProviderMemoryEmbedding(
+  db: DatabaseSync,
+  input: {
+    row: MemorySearchRow;
+    provider: EmbeddingProviderContext;
+    vector: number[];
+    status: "ready" | "failed" | "fallback";
+    error?: string | null;
+    now: number;
+  },
+): void {
+  ensureMemoryEmbeddingSchema(db);
+  const text = memoryEmbeddingText(input.row);
+  const dims = input.vector.length || PROVIDER_EMBEDDING_DIMS_FALLBACK;
+  const vectorJson = JSON.stringify(input.vector);
+  db.prepare(
+    `
+    INSERT INTO memory_embeddings (
+      source_table, memory_id, embedding_model, dims, vector_json, content_hash,
+      provider_id, provider_type, embedding_status, last_error, source_text_chars, indexed_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(source_table, memory_id, embedding_model) DO UPDATE SET
+      dims = excluded.dims,
+      vector_json = excluded.vector_json,
+      content_hash = excluded.content_hash,
+      provider_id = excluded.provider_id,
+      provider_type = excluded.provider_type,
+      embedding_status = excluded.embedding_status,
+      last_error = excluded.last_error,
+      source_text_chars = excluded.source_text_chars,
+      indexed_at = excluded.indexed_at,
+      updated_at = excluded.updated_at
+  `,
+  ).run(
+    input.row.source_table,
+    input.row.id,
+    input.provider.model,
+    dims,
+    vectorJson,
+    memoryEmbeddingHash(text),
+    input.provider.providerId,
+    input.provider.providerType,
+    input.status,
+    normalizeText(input.error) || null,
+    text.length,
+    input.status === "ready" ? input.now : null,
+    input.now,
+    input.now,
+  );
+  if (input.status === "ready" && input.vector.length > 0) {
+    upsertMemoryEmbeddingIndex(db, {
+      sourceTable: input.row.source_table,
+      memoryId: input.row.id,
+      embeddingModel: input.provider.model,
+      vector: input.vector,
+      now: input.now,
+    });
+  }
 }
 
 function semanticQueryScore(row: MemorySearchRow, query: string): number {
@@ -670,7 +1122,7 @@ function memorySearchScore(
   const ftsScore = Number.isFinite(Number(row.rank)) ? Math.max(0, 80 - Math.abs(Number(row.rank)) * 10) : 0;
   const usageScore = Math.min(30, Math.max(0, Number(row.retrieval_count ?? 0)) * 3);
   const semanticScore = ranking === "semantic" ? semanticQueryScore(row, query) : 0;
-  const vectorScore = ranking === "vector" ? vectorQueryScore(db, row, query, now) : 0;
+  const vectorScore = ranking === "vector" || ranking === "semantic_provider" ? vectorQueryScore(db, row, query, now) : 0;
   return (
     layerPriority(row.memory_layer) * 1000 +
     clampNumber(row.strength, 0.5, 0, 1) * 120 +
@@ -704,24 +1156,7 @@ function rankMemoryRows(
 
 export function searchMemories(
   db: DatabaseSync,
-  input: {
-    query?: string | null;
-    projectId?: string | null;
-    agentId?: string | null;
-    threadId?: string | null;
-    layer?: string | null;
-    scope?: "local" | "global" | "all" | string | null;
-    tags?: string[] | null;
-    createdFrom?: number | null;
-    createdTo?: number | null;
-    updatedFrom?: number | null;
-    updatedTo?: number | null;
-    promotionStatus?: MemoryPromotionStatus | "all" | string | null;
-    sourceType?: string | null;
-    ranking?: MemoryRankingMode | string | null;
-    limit?: number | null;
-    now?: number | null;
-  },
+  input: MemorySearchInput,
 ): MemorySearchRow[] {
   const query = normalizeText(input.query);
   const limit = Math.max(1, Math.min(50, Math.trunc(Number(input.limit ?? 10))));
@@ -736,7 +1171,11 @@ export function searchMemories(
   const sourceType = normalizeText(input.sourceType);
   const rankingInput = normalizeText(input.ranking);
   const ranking: MemoryRankingMode =
-    rankingInput === "vector" ? "vector" : rankingInput === "semantic" ? "semantic" : "default";
+    rankingInput === "vector" || rankingInput === "semantic_provider"
+      ? rankingInput
+      : rankingInput === "semantic"
+        ? "semantic"
+        : "default";
   const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
   const params: SQLInputValue[] = [];
   const clauses = ["m.status = 'active'"];
@@ -871,7 +1310,7 @@ export function searchMemories(
     }
   }
 
-  if (ranking === "vector" && query) {
+  if ((ranking === "vector" || ranking === "semantic_provider") && query) {
     const candidateLimit = Math.max(100, limit * 10);
     if (searchProjectMemories) {
       rows.push(
@@ -910,6 +1349,317 @@ export function searchMemories(
   return ranked;
 }
 
+function loadMemorySearchRow(
+  db: DatabaseSync,
+  sourceTable: "agent_memories" | "project_memories",
+  memoryId: string,
+): MemorySearchRow | null {
+  const row = db
+    .prepare(`SELECT m.*, ? AS source_table, 0 AS rank FROM ${sourceTable} m WHERE m.id = ? AND m.status = 'active'`)
+    .get(sourceTable, memoryId) as MemorySearchRow | undefined;
+  return row ?? null;
+}
+
+function rowMatchesSearchInput(row: MemorySearchRow, input: MemorySearchInput): boolean {
+  const projectId = normalizeText(input.projectId);
+  const scope = normalizeText(input.scope) || "local";
+  const includeGlobal = scope === "global" || scope === "all";
+  if (projectId && !includeGlobal && row.project_id !== projectId) return false;
+  if (projectId && includeGlobal && row.project_id !== projectId && row.promotion_status !== "promoted") return false;
+  if (!projectId && includeGlobal && row.promotion_status !== "promoted") return false;
+  const agentId = normalizeText(input.agentId);
+  if (agentId && row.agent_id !== agentId && row.agent_id !== null) return false;
+  const threadId = normalizeText(input.threadId);
+  if (threadId && row.thread_id !== threadId) return false;
+  const layer = normalizeText(input.layer);
+  if (layer && layer !== "all" && row.memory_layer !== normalizeMemoryLayer(layer)) return false;
+  const promotionStatus = normalizeText(input.promotionStatus);
+  if (promotionStatus && promotionStatus !== "all" && row.promotion_status !== promotionStatus) return false;
+  const sourceType = normalizeText(input.sourceType);
+  if (sourceType && sourceType !== "all" && row.source_type !== sourceType) return false;
+  for (const tag of normalizeSearchTags(input.tags)) {
+    if (!row.tags_json.toLowerCase().includes(`"${tag}"`)) return false;
+  }
+  const createdFrom = normalizeSearchTimestamp(input.createdFrom);
+  const createdTo = normalizeSearchTimestamp(input.createdTo);
+  const updatedFrom = normalizeSearchTimestamp(input.updatedFrom);
+  const updatedTo = normalizeSearchTimestamp(input.updatedTo);
+  if (createdFrom !== null && Number(row.created_at) < createdFrom) return false;
+  if (createdTo !== null && Number(row.created_at) > createdTo) return false;
+  if (updatedFrom !== null && Number(row.updated_at) < updatedFrom) return false;
+  if (updatedTo !== null && Number(row.updated_at) > updatedTo) return false;
+  return true;
+}
+
+async function providerQueryVector(
+  db: DatabaseSync,
+  input: MemorySearchInput,
+): Promise<{ provider: EmbeddingProviderContext; vector: number[] } | { error: string; capacity429: boolean }> {
+  const provider = readEmbeddingProvider(db, { providerId: input.providerId, model: input.model });
+  if (!provider) return { error: "embedding_provider_not_configured", capacity429: false };
+  const result = await createProviderEmbedding(provider, normalizeText(input.query));
+  if (!result.ok) return { error: result.error, capacity429: result.capacity429 };
+  return { provider, vector: result.vector };
+}
+
+export async function searchMemoriesWithProviderRanking(
+  db: DatabaseSync,
+  input: MemorySearchInput,
+): Promise<MemorySearchRow[]> {
+  const rankingInput = normalizeText(input.ranking);
+  if (rankingInput !== "semantic_provider") return searchMemories(db, input);
+  const query = normalizeText(input.query);
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const limit = Math.max(1, Math.min(50, Math.trunc(Number(input.limit ?? 10))));
+  if (!query) return searchMemories(db, { ...input, ranking: "vector" });
+
+  ensureMemoryEmbeddingSchema(db);
+  const queryEmbedding = await providerQueryVector(db, input);
+  if ("error" in queryEmbedding) {
+    recordQualityMetricEvent(db, {
+      metricKey: "memory.search.provider_fallback",
+      metricFamily: "memory",
+      projectId: input.projectId,
+      value: 1,
+      unit: "count",
+      status: queryEmbedding.capacity429 ? "capacity_limited" : "fallback",
+      sourceType: "memory_search",
+      sourceId: `${normalizeText(input.projectId) || "global"}:${memoryEmbeddingHash(query).slice(0, 16)}:${now}`,
+      dimensions: { reason: queryEmbedding.error },
+      now,
+    });
+    return searchMemories(db, { ...input, ranking: "vector", now });
+  }
+
+  const bucketKeys = embeddingBucketKeys(queryEmbedding.vector);
+  const indexedRows =
+    bucketKeys.length > 0
+      ? (db
+          .prepare(
+            `
+            SELECT DISTINCT source_table, memory_id
+            FROM memory_embedding_index
+            WHERE embedding_model = ?
+              AND bucket_key IN (${bucketKeys.map(() => "?").join(",")})
+            LIMIT 400
+          `,
+          )
+          .all(queryEmbedding.provider.model, ...bucketKeys) as Array<{
+          source_table: "agent_memories" | "project_memories";
+          memory_id: string;
+        }>)
+      : [];
+  const scored = indexedRows
+    .map((candidate) => {
+      const row = loadMemorySearchRow(db, candidate.source_table, candidate.memory_id);
+      if (!row || !rowMatchesSearchInput(row, input)) return null;
+      const embedding = db
+        .prepare(
+          `
+          SELECT vector_json
+          FROM memory_embeddings
+          WHERE source_table = ? AND memory_id = ? AND embedding_model = ? AND embedding_status = 'ready'
+        `,
+        )
+        .get(candidate.source_table, candidate.memory_id, queryEmbedding.provider.model) as
+        | { vector_json: string }
+        | undefined;
+      const vector = embedding ? readVectorJson(embedding.vector_json) : null;
+      if (!vector || vector.length === 0) return null;
+      const score =
+        Math.max(0, cosineSimilarity(queryEmbedding.vector, vector)) * 900 +
+        semanticQueryScore(row, query) +
+        layerPriority(row.memory_layer) * 50;
+      return { row, score };
+    })
+    .filter((item): item is { row: MemorySearchRow; score: number } => Boolean(item));
+
+  if (scored.length === 0) {
+    recordQualityMetricEvent(db, {
+      metricKey: "memory.search.provider_fallback",
+      metricFamily: "memory",
+      projectId: input.projectId,
+      value: 1,
+      unit: "count",
+      status: "fallback",
+      sourceType: "memory_search",
+      sourceId: `${normalizeText(input.projectId) || "global"}:${memoryEmbeddingHash(query).slice(0, 16)}:${now}`,
+      dimensions: { reason: "ann_candidate_miss", model: queryEmbedding.provider.model },
+      now,
+    });
+    return searchMemories(db, { ...input, ranking: "vector", now });
+  }
+
+  const ranked = scored
+    .sort((a, b) => b.score - a.score || Number(b.row.updated_at ?? 0) - Number(a.row.updated_at ?? 0))
+    .slice(0, limit)
+    .map(({ row, score }) => ({ ...row, rank: score }));
+  updateRetrievalStats(db, ranked, now);
+  return ranked;
+}
+
+export async function backfillMemoryEmbeddings(
+  db: DatabaseSync,
+  input: {
+    projectId?: string | null;
+    agentId?: string | null;
+    providerId?: string | null;
+    model?: string | null;
+    limit?: number | null;
+    force?: boolean | null;
+    now?: number | null;
+  },
+): Promise<{ ok: true; processed: number; embedded: number; indexed: number; skipped: number; failed: number; fallback_used: boolean }> {
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const provider = readEmbeddingProvider(db, { providerId: input.providerId, model: input.model });
+  const limit = Math.max(1, Math.min(200, Math.trunc(Number(input.limit ?? 50))));
+  const projectId = normalizeText(input.projectId);
+  const agentId = normalizeText(input.agentId);
+  const clauses = ["m.status = 'active'"];
+  const params: SQLInputValue[] = [];
+  if (projectId) {
+    clauses.push("m.project_id = ?");
+    params.push(projectId);
+  }
+  if (agentId) {
+    clauses.push("(m.agent_id = ? OR m.agent_id IS NULL)");
+    params.push(agentId);
+  }
+  const sourceRows: MemorySearchRow[] = [];
+  sourceRows.push(
+    ...(db
+      .prepare(
+        `
+        SELECT m.*, 'project_memories' AS source_table, 0 AS rank
+        FROM project_memories m
+        WHERE ${clauses.join(" AND ")}
+        ORDER BY m.updated_at DESC
+        LIMIT ?
+      `,
+      )
+      .all(...params, limit) as MemorySearchRow[]),
+  );
+  sourceRows.push(
+    ...(db
+      .prepare(
+        `
+        SELECT m.*, 'agent_memories' AS source_table, 0 AS rank
+        FROM agent_memories m
+        WHERE ${clauses.join(" AND ")}
+        ORDER BY m.updated_at DESC
+        LIMIT ?
+      `,
+      )
+      .all(...params, limit) as MemorySearchRow[]),
+  );
+
+  let embedded = 0;
+  let indexed = 0;
+  let skipped = 0;
+  let failed = 0;
+  let fallbackUsed = false;
+  const rows = [...new Map(sourceRows.slice(0, limit).map((row) => [`${row.source_table}:${row.id}`, row])).values()];
+  for (const row of rows) {
+    if (!provider) {
+      ensureMemoryEmbedding(db, row, now);
+      fallbackUsed = true;
+      skipped += 1;
+      continue;
+    }
+    if (!input.force) {
+      const existing = db
+        .prepare(
+          `
+          SELECT memory_id
+          FROM memory_embeddings
+          WHERE source_table = ? AND memory_id = ? AND embedding_model = ? AND embedding_status = 'ready'
+        `,
+        )
+        .get(row.source_table, row.id, provider.model);
+      if (existing) {
+        skipped += 1;
+        continue;
+      }
+    }
+    const result = await createProviderEmbedding(provider, memoryEmbeddingText(row));
+    if (result.ok) {
+      upsertProviderMemoryEmbedding(db, { row, provider, vector: result.vector, status: "ready", now });
+      embedded += 1;
+      indexed += embeddingBucketKeys(result.vector).length > 0 ? 1 : 0;
+    } else {
+      upsertProviderMemoryEmbedding(db, { row, provider, vector: [], status: "failed", error: result.error, now });
+      ensureMemoryEmbedding(db, row, now);
+      fallbackUsed = true;
+      failed += 1;
+      recordQualityMetricEvent(db, {
+        metricKey: result.capacity429 ? "provider.capacity_429" : "memory.embedding.backfill_failed",
+        metricFamily: result.capacity429 ? "provider" : "memory",
+        projectId: row.project_id,
+        value: 1,
+        unit: "count",
+        status: result.capacity429 ? "capacity_limited" : "failed",
+        sourceType: "memory_embedding",
+        sourceId: `${row.source_table}:${row.id}:${provider.model}`,
+        dimensions: { provider_id: provider.providerId, provider_type: provider.providerType, model: provider.model },
+        evidence: { error: result.error },
+        now,
+      });
+    }
+  }
+  const total = Math.max(1, rows.length);
+  recordQualityMetricEvent(db, {
+    metricKey: "memory.embedding.coverage",
+    metricFamily: "memory",
+    projectId: projectId || null,
+    value: embedded / total,
+    unit: "ratio",
+    status: failed > 0 ? "partial" : "recorded",
+    sourceType: "memory_embedding_backfill",
+    sourceId: `${projectId || "all"}:${agentId || "all"}:${now}`,
+    dimensions: { embedded, failed, skipped, model: provider?.model ?? LOCAL_MEMORY_EMBEDDING_MODEL },
+    now,
+  });
+  return { ok: true, processed: rows.length, embedded, indexed, skipped, failed, fallback_used: fallbackUsed };
+}
+
+export function getMemoryEmbeddingStatus(
+  db: DatabaseSync,
+  input: { projectId?: string | null } = {},
+): {
+  ok: true;
+  total_memories: number;
+  ready_embeddings: number;
+  failed_embeddings: number;
+  indexed_embeddings: number;
+  coverage_ratio: number;
+  active_model: string | null;
+  active_provider_id: string | null;
+} {
+  ensureMemoryEmbeddingSchema(db);
+  const projectId = normalizeText(input.projectId);
+  const projectClause = projectId ? "WHERE project_id = ?" : "";
+  const params: SQLInputValue[] = projectId ? [projectId] : [];
+  const projectCount = (db.prepare(`SELECT COUNT(*) AS cnt FROM project_memories ${projectClause}`).get(...params) as { cnt: number }).cnt;
+  const agentCount = (db.prepare(`SELECT COUNT(*) AS cnt FROM agent_memories ${projectClause}`).get(...params) as { cnt: number }).cnt;
+  const total = projectCount + agentCount;
+  const ready = (db.prepare("SELECT COUNT(*) AS cnt FROM memory_embeddings WHERE embedding_status = 'ready'").get() as { cnt: number }).cnt;
+  const failed = (db.prepare("SELECT COUNT(*) AS cnt FROM memory_embeddings WHERE embedding_status = 'failed'").get() as { cnt: number }).cnt;
+  const indexed = (db.prepare("SELECT COUNT(DISTINCT source_table || ':' || memory_id || ':' || embedding_model) AS cnt FROM memory_embedding_index").get() as { cnt: number }).cnt;
+  const latest = db
+    .prepare("SELECT embedding_model, provider_id FROM memory_embeddings WHERE provider_id IS NOT NULL ORDER BY updated_at DESC LIMIT 1")
+    .get() as { embedding_model: string; provider_id: string | null } | undefined;
+  return {
+    ok: true,
+    total_memories: total,
+    ready_embeddings: ready,
+    failed_embeddings: failed,
+    indexed_embeddings: indexed,
+    coverage_ratio: total > 0 ? Math.min(1, ready / total) : 0,
+    active_model: latest?.embedding_model ?? null,
+    active_provider_id: latest?.provider_id ?? null,
+  };
+}
+
 export function buildSearchArchivalMemoryToolBlock(input: {
   projectId?: string | null;
   agentId?: string | null;
@@ -933,7 +1683,7 @@ export function buildSearchArchivalMemoryToolBlock(input: {
     "- updated_from/updated_to: optional epoch-millisecond updated_at range.",
     "- promotion_status: optional local, candidate, promoted, rejected, or all.",
     "- source_type: optional manual, task_run, beads, or all.",
-    "- ranking: optional default, semantic, or vector. Use vector when exact keywords are insufficient and project memory volume is manageable.",
+    "- ranking: optional default, semantic, vector, or semantic_provider. Use semantic_provider when provider-backed embeddings are indexed; it falls back to vector when unavailable.",
     "- limit: 1-20 for prompt use.",
     input.projectId ? `Default project_id=${input.projectId}` : "",
     input.agentId ? `Default agent_id=${input.agentId}` : "",
@@ -1003,6 +1753,317 @@ export function recordMemoryQualityEvent(
     now,
   );
   return db.prepare("SELECT * FROM memory_quality_events WHERE id = ?").get(id) as MemoryQualityEventRow;
+}
+
+function encodePlainJson(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "{}";
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "{}";
+  }
+}
+
+export function listMemorySearchProfiles(
+  db: DatabaseSync,
+  input: {
+    kind?: MemorySearchProfileKind | "all" | string | null;
+    ownerKey?: string | null;
+    projectId?: string | null;
+    limit?: number | null;
+  } = {},
+): MemorySearchProfileRow[] {
+  ensureMemoryEmbeddingSchema(db);
+  const kind = normalizeText(input.kind);
+  const ownerKey = normalizeText(input.ownerKey) || DEFAULT_EMBEDDING_OWNER_KEY;
+  const projectId = normalizeText(input.projectId);
+  const limit = Math.max(1, Math.min(100, Math.trunc(Number(input.limit ?? 20))));
+  const clauses = ["owner_key = ?"];
+  const params: SQLInputValue[] = [ownerKey];
+  if (kind === "saved" || kind === "recent") {
+    clauses.push("kind = ?");
+    params.push(kind);
+  }
+  if (projectId) {
+    clauses.push("(project_id = ? OR project_id IS NULL)");
+    params.push(projectId);
+  }
+  params.push(limit);
+  return db
+    .prepare(
+      `
+      SELECT *
+      FROM memory_search_profiles
+      WHERE ${clauses.join(" AND ")}
+      ORDER BY last_used_at DESC, updated_at DESC
+      LIMIT ?
+    `,
+    )
+    .all(...params) as MemorySearchProfileRow[];
+}
+
+export function upsertMemorySearchProfile(
+  db: DatabaseSync,
+  input: {
+    id?: string | null;
+    kind: MemorySearchProfileKind | string;
+    ownerKey?: string | null;
+    projectId?: string | null;
+    label?: string | null;
+    query?: string | null;
+    filters?: Record<string, unknown> | null;
+    now?: number | null;
+  },
+): MemorySearchProfileRow {
+  ensureMemoryEmbeddingSchema(db);
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const kind = normalizeText(input.kind) === "recent" ? "recent" : "saved";
+  const ownerKey = normalizeText(input.ownerKey) || DEFAULT_EMBEDDING_OWNER_KEY;
+  const projectId = normalizeText(input.projectId) || null;
+  const query = normalizeText(input.query);
+  const filtersJson = encodePlainJson(input.filters ?? {});
+  const label = normalizeText(input.label) || (query ? query.slice(0, 80) : kind === "recent" ? "Recent search" : "Saved search");
+  const existing =
+    normalizeText(input.id)
+      ? (db
+          .prepare("SELECT * FROM memory_search_profiles WHERE id = ? AND owner_key = ?")
+          .get(normalizeText(input.id), ownerKey) as MemorySearchProfileRow | undefined)
+      : kind === "recent"
+        ? (db
+            .prepare(
+              `
+              SELECT *
+              FROM memory_search_profiles
+              WHERE kind = 'recent'
+                AND owner_key = ?
+                AND COALESCE(project_id, '') = COALESCE(?, '')
+                AND query = ?
+                AND filters_json = ?
+              ORDER BY updated_at DESC
+              LIMIT 1
+            `,
+            )
+            .get(ownerKey, projectId, query, filtersJson) as MemorySearchProfileRow | undefined)
+        : undefined;
+  const requestedId = normalizeText(input.id);
+  const id = existing?.id ?? (requestedId || randomUUID());
+  const useCount = kind === "recent" ? Number(existing?.use_count ?? 0) + 1 : Number(existing?.use_count ?? 0);
+  db.prepare(
+    `
+    INSERT INTO memory_search_profiles (
+      id, kind, owner_key, project_id, label, query, filters_json,
+      last_used_at, use_count, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      kind = excluded.kind,
+      owner_key = excluded.owner_key,
+      project_id = excluded.project_id,
+      label = excluded.label,
+      query = excluded.query,
+      filters_json = excluded.filters_json,
+      last_used_at = excluded.last_used_at,
+      use_count = excluded.use_count,
+      updated_at = excluded.updated_at
+  `,
+  ).run(
+    id,
+    kind,
+    ownerKey,
+    projectId,
+    label,
+    query,
+    filtersJson,
+    now,
+    useCount,
+    existing?.created_at ?? now,
+    now,
+  );
+  return db.prepare("SELECT * FROM memory_search_profiles WHERE id = ?").get(id) as MemorySearchProfileRow;
+}
+
+export function deleteMemorySearchProfile(
+  db: DatabaseSync,
+  input: { id: string; ownerKey?: string | null },
+): boolean {
+  ensureMemoryEmbeddingSchema(db);
+  const ownerKey = normalizeText(input.ownerKey) || DEFAULT_EMBEDDING_OWNER_KEY;
+  const result = db
+    .prepare("DELETE FROM memory_search_profiles WHERE id = ? AND owner_key = ?")
+    .run(normalizeText(input.id), ownerKey);
+  return result.changes > 0;
+}
+
+export function recordQualityMetricEvent(
+  db: DatabaseSync,
+  input: {
+    metricKey: string;
+    metricFamily: string;
+    projectId?: string | null;
+    subjectType?: string | null;
+    subjectId?: string | null;
+    value?: number | null;
+    unit?: string | null;
+    status?: string | null;
+    dimensions?: Record<string, unknown> | null;
+    evidence?: Record<string, unknown> | null;
+    sourceType?: string | null;
+    sourceId?: string | null;
+    recordedAt?: number | null;
+    now?: number | null;
+  },
+): QualityMetricEventRow {
+  ensureMemoryEmbeddingSchema(db);
+  const now = Number.isFinite(Number(input.now)) ? Number(input.now) : Date.now();
+  const recordedAt = Number.isFinite(Number(input.recordedAt)) ? Number(input.recordedAt) : now;
+  const metricKey = normalizeText(input.metricKey) || "quality.metric";
+  const sourceType = normalizeText(input.sourceType) || "manual";
+  const sourceId = normalizeText(input.sourceId) || randomUUID();
+  const id = randomUUID();
+  db.prepare(
+    `
+    INSERT INTO quality_metric_events (
+      id, metric_key, metric_family, project_id, subject_type, subject_id,
+      value, unit, status, dimensions_json, evidence_json, source_type,
+      source_id, recorded_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(metric_key, source_type, source_id) DO UPDATE SET
+      metric_family = excluded.metric_family,
+      project_id = excluded.project_id,
+      subject_type = excluded.subject_type,
+      subject_id = excluded.subject_id,
+      value = excluded.value,
+      unit = excluded.unit,
+      status = excluded.status,
+      dimensions_json = excluded.dimensions_json,
+      evidence_json = excluded.evidence_json,
+      recorded_at = excluded.recorded_at
+  `,
+  ).run(
+    id,
+    metricKey,
+    normalizeText(input.metricFamily) || "general",
+    normalizeText(input.projectId) || null,
+    normalizeText(input.subjectType) || null,
+    normalizeText(input.subjectId) || null,
+    clampNumber(input.value, 0, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY),
+    normalizeText(input.unit) || null,
+    normalizeText(input.status) || "recorded",
+    encodePlainJson(input.dimensions),
+    encodePlainJson(input.evidence),
+    sourceType,
+    sourceId,
+    recordedAt,
+    now,
+  );
+  return db
+    .prepare("SELECT * FROM quality_metric_events WHERE metric_key = ? AND source_type = ? AND source_id = ?")
+    .get(metricKey, sourceType, sourceId) as QualityMetricEventRow;
+}
+
+export function listQualityMetricEvents(
+  db: DatabaseSync,
+  input: {
+    metricKey?: string | null;
+    metricFamily?: string | null;
+    projectId?: string | null;
+    from?: number | null;
+    to?: number | null;
+    limit?: number | null;
+  } = {},
+): QualityMetricEventRow[] {
+  ensureMemoryEmbeddingSchema(db);
+  const clauses: string[] = [];
+  const params: SQLInputValue[] = [];
+  const metricKey = normalizeText(input.metricKey);
+  const metricFamily = normalizeText(input.metricFamily);
+  const projectId = normalizeText(input.projectId);
+  const from = normalizeSearchTimestamp(input.from);
+  const to = normalizeSearchTimestamp(input.to);
+  if (metricKey) {
+    clauses.push("metric_key = ?");
+    params.push(metricKey);
+  }
+  if (metricFamily) {
+    clauses.push("metric_family = ?");
+    params.push(metricFamily);
+  }
+  if (projectId) {
+    clauses.push("project_id = ?");
+    params.push(projectId);
+  }
+  if (from !== null) {
+    clauses.push("recorded_at >= ?");
+    params.push(from);
+  }
+  if (to !== null) {
+    clauses.push("recorded_at <= ?");
+    params.push(to);
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const limit = Math.max(1, Math.min(500, Math.trunc(Number(input.limit ?? 100))));
+  return db
+    .prepare(
+      `
+      SELECT *
+      FROM quality_metric_events
+      ${where}
+      ORDER BY recorded_at DESC, created_at DESC
+      LIMIT ?
+    `,
+    )
+    .all(...params, limit) as QualityMetricEventRow[];
+}
+
+export function summarizeQualityMetricEvents(
+  db: DatabaseSync,
+  input: {
+    metricFamily?: string | null;
+    projectId?: string | null;
+    from?: number | null;
+    to?: number | null;
+    bucket?: "day" | "hour" | "total" | string | null;
+    limit?: number | null;
+  } = {},
+): QualityMetricSummaryRow[] {
+  const bucketMode = normalizeText(input.bucket) || "day";
+  const rows = listQualityMetricEvents(db, { ...input, limit: input.limit ?? 500 });
+  const groups = new Map<string, QualityMetricSummaryRow>();
+  for (const row of rows) {
+    const date = new Date(Number(row.recorded_at ?? 0));
+    const bucket =
+      bucketMode === "hour"
+        ? date.toISOString().slice(0, 13)
+        : bucketMode === "total"
+          ? "total"
+          : date.toISOString().slice(0, 10);
+    const key = `${row.metric_key}:${bucket}`;
+    const current = groups.get(key);
+    if (!current) {
+      groups.set(key, {
+        metric_key: row.metric_key,
+        metric_family: row.metric_family,
+        bucket,
+        count: 1,
+        sum_value: Number(row.value ?? 0),
+        avg_value: Number(row.value ?? 0),
+        latest_value: Number(row.value ?? 0),
+        latest_status: row.status,
+        latest_recorded_at: row.recorded_at,
+      });
+      continue;
+    }
+    current.count += 1;
+    current.sum_value += Number(row.value ?? 0);
+    current.avg_value = current.sum_value / current.count;
+    if (Number(row.recorded_at) > current.latest_recorded_at) {
+      current.latest_value = Number(row.value ?? 0);
+      current.latest_status = row.status;
+      current.latest_recorded_at = row.recorded_at;
+    }
+  }
+  return [...groups.values()]
+    .sort((a, b) => b.latest_recorded_at - a.latest_recorded_at || a.metric_key.localeCompare(b.metric_key))
+    .slice(0, Math.max(1, Math.min(200, Math.trunc(Number(input.limit ?? 100)))));
 }
 
 export function listDueMemoryOutbox(

@@ -1,12 +1,17 @@
-import { post, request } from "./core";
+import { del, patch, post, request } from "./core";
 
 import type {
   AgentMemoryResponse,
   BeadsStatus,
   MemoryOutboxItem,
   MemoryPromotionCandidate,
+  MemoryEmbeddingBackfillResult,
+  MemoryEmbeddingStatus,
+  MemorySearchProfile,
   NativeMemory,
   ProjectMemoryResponse,
+  QualityMetricEvent,
+  QualityMetricSummary,
   SkillUsageSummary,
 } from "../types";
 
@@ -85,7 +90,9 @@ export async function searchMemory(input: {
   updated_to?: number | string | null;
   promotion_status?: "local" | "candidate" | "promoted" | "rejected" | "all" | string | null;
   source_type?: "manual" | "task_run" | "beads" | "all" | string | null;
-  ranking?: "default" | "semantic" | "vector" | string | null;
+  ranking?: "default" | "semantic" | "vector" | "semantic_provider" | string | null;
+  provider_id?: string | null;
+  model?: string | null;
   limit?: number;
 }): Promise<NativeMemory[]> {
   const params = new URLSearchParams();
@@ -95,6 +102,94 @@ export async function searchMemory(input: {
   }
   const payload = await request<{ ok: boolean; memories: NativeMemory[] }>(`/api/memory/search?${params.toString()}`);
   return payload.memories;
+}
+
+export async function backfillMemoryEmbeddings(input: {
+  project_id?: string | null;
+  agent_id?: string | null;
+  provider_id?: string | null;
+  model?: string | null;
+  limit?: number;
+  force?: boolean;
+}): Promise<MemoryEmbeddingBackfillResult> {
+  return post<MemoryEmbeddingBackfillResult>("/api/memory/embeddings/backfill", input);
+}
+
+export async function getMemoryEmbeddingStatus(projectId?: string | null): Promise<MemoryEmbeddingStatus> {
+  const params = new URLSearchParams();
+  if (projectId) params.set("project_id", projectId);
+  return request<MemoryEmbeddingStatus>(`/api/memory/embeddings/status?${params.toString()}`);
+}
+
+export async function getMemorySearchProfiles(input: {
+  kind?: "saved" | "recent" | "all";
+  project_id?: string | null;
+  limit?: number;
+} = {}): Promise<MemorySearchProfile[]> {
+  const params = new URLSearchParams();
+  if (input.kind) params.set("kind", input.kind);
+  if (input.project_id) params.set("project_id", input.project_id);
+  if (input.limit) params.set("limit", String(input.limit));
+  const payload = await request<{ ok: boolean; searches: MemorySearchProfile[] }>(
+    `/api/memory/searches?${params.toString()}`,
+  );
+  return payload.searches;
+}
+
+export async function saveMemorySearchProfile(input: {
+  id?: string | null;
+  kind: "saved" | "recent";
+  project_id?: string | null;
+  label?: string | null;
+  query?: string | null;
+  filters?: Record<string, unknown>;
+}): Promise<MemorySearchProfile> {
+  const payload = input.id
+    ? await patch<{ ok: boolean; search: MemorySearchProfile }>(`/api/memory/searches/${encodeURIComponent(input.id)}`, input)
+    : await post<{ ok: boolean; search: MemorySearchProfile }>("/api/memory/searches", input);
+  return payload.search;
+}
+
+export async function deleteMemorySearchProfile(id: string): Promise<void> {
+  await del<{ ok: boolean }>(`/api/memory/searches/${encodeURIComponent(id)}`);
+}
+
+export async function getQualityMetrics(input: {
+  metric_key?: string | null;
+  metric_family?: string | null;
+  project_id?: string | null;
+  from?: number | string | null;
+  to?: number | string | null;
+  limit?: number;
+} = {}): Promise<QualityMetricEvent[]> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const payload = await request<{ ok: boolean; metrics: QualityMetricEvent[] }>(
+    `/api/quality/metrics?${params.toString()}`,
+  );
+  return payload.metrics;
+}
+
+export async function getQualityMetricSummary(input: {
+  metric_family?: string | null;
+  project_id?: string | null;
+  from?: number | string | null;
+  to?: number | string | null;
+  bucket?: "day" | "hour" | "total";
+  limit?: number;
+} = {}): Promise<QualityMetricSummary[]> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const payload = await request<{ ok: boolean; summary: QualityMetricSummary[] }>(
+    `/api/quality/metrics/summary?${params.toString()}`,
+  );
+  return payload.summary;
 }
 
 export async function scanMemoryPromotions(): Promise<MemoryPromotionCandidate[]> {

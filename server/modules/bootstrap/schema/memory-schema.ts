@@ -30,6 +30,12 @@ function applyMemoryCompatibilityColumns(db: DbLike): void {
   }
   ensureColumn(db, "agent_growth_events", "episode_json", "TEXT");
   ensureColumn(db, "agent_growth_events", "source_memory_id", "TEXT");
+  ensureColumn(db, "memory_embeddings", "provider_id", "TEXT");
+  ensureColumn(db, "memory_embeddings", "provider_type", "TEXT");
+  ensureColumn(db, "memory_embeddings", "embedding_status", "TEXT NOT NULL DEFAULT 'ready'");
+  ensureColumn(db, "memory_embeddings", "last_error", "TEXT");
+  ensureColumn(db, "memory_embeddings", "source_text_chars", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "memory_embeddings", "indexed_at", "INTEGER");
 }
 
 function applyMemoryFtsSchema(db: DbLike): void {
@@ -225,9 +231,57 @@ CREATE TABLE IF NOT EXISTS memory_embeddings (
   dims INTEGER NOT NULL,
   vector_json TEXT NOT NULL,
   content_hash TEXT NOT NULL,
+  provider_id TEXT,
+  provider_type TEXT,
+  embedding_status TEXT NOT NULL DEFAULT 'ready' CHECK(embedding_status IN ('ready','failed','fallback')),
+  last_error TEXT,
+  source_text_chars INTEGER NOT NULL DEFAULT 0,
+  indexed_at INTEGER,
   created_at INTEGER DEFAULT (unixepoch()*1000),
   updated_at INTEGER DEFAULT (unixepoch()*1000),
   PRIMARY KEY(source_table, memory_id, embedding_model)
+);
+
+CREATE TABLE IF NOT EXISTS memory_embedding_index (
+  embedding_model TEXT NOT NULL,
+  bucket_key TEXT NOT NULL,
+  source_table TEXT NOT NULL CHECK(source_table IN ('agent_memories','project_memories')),
+  memory_id TEXT NOT NULL,
+  updated_at INTEGER DEFAULT (unixepoch()*1000),
+  PRIMARY KEY(embedding_model, bucket_key, source_table, memory_id)
+);
+
+CREATE TABLE IF NOT EXISTS memory_search_profiles (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK(kind IN ('saved','recent')),
+  owner_key TEXT NOT NULL DEFAULT 'local',
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  query TEXT NOT NULL DEFAULT '',
+  filters_json TEXT NOT NULL DEFAULT '{}',
+  last_used_at INTEGER,
+  use_count INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000)
+);
+
+CREATE TABLE IF NOT EXISTS quality_metric_events (
+  id TEXT PRIMARY KEY,
+  metric_key TEXT NOT NULL,
+  metric_family TEXT NOT NULL,
+  project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  subject_type TEXT,
+  subject_id TEXT,
+  value REAL NOT NULL DEFAULT 0,
+  unit TEXT,
+  status TEXT NOT NULL DEFAULT 'recorded',
+  dimensions_json TEXT NOT NULL DEFAULT '{}',
+  evidence_json TEXT NOT NULL DEFAULT '{}',
+  source_type TEXT NOT NULL DEFAULT 'manual',
+  source_id TEXT NOT NULL DEFAULT '',
+  recorded_at INTEGER DEFAULT (unixepoch()*1000),
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  UNIQUE(metric_key, source_type, source_id)
 );
 
 CREATE TABLE IF NOT EXISTS memory_outbox (
@@ -314,11 +368,23 @@ CREATE INDEX IF NOT EXISTS idx_memory_promotion_evidence_status
   ON memory_promotion_evidence(status, project_count DESC, evidence_count DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_embeddings_model
   ON memory_embeddings(embedding_model, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_embeddings_status
+  ON memory_embeddings(embedding_model, embedding_status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_embedding_index_bucket
+  ON memory_embedding_index(embedding_model, bucket_key, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_search_profiles_owner
+  ON memory_search_profiles(owner_key, kind, project_id, last_used_at DESC, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quality_metric_events_key
+  ON quality_metric_events(metric_key, project_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_quality_metric_events_family
+  ON quality_metric_events(metric_family, project_id, recorded_at DESC);
 CREATE TRIGGER IF NOT EXISTS trg_agent_memories_embeddings_delete AFTER DELETE ON agent_memories BEGIN
   DELETE FROM memory_embeddings WHERE source_table = 'agent_memories' AND memory_id = old.id;
+  DELETE FROM memory_embedding_index WHERE source_table = 'agent_memories' AND memory_id = old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS trg_project_memories_embeddings_delete AFTER DELETE ON project_memories BEGIN
   DELETE FROM memory_embeddings WHERE source_table = 'project_memories' AND memory_id = old.id;
+  DELETE FROM memory_embedding_index WHERE source_table = 'project_memories' AND memory_id = old.id;
 END;
 CREATE INDEX IF NOT EXISTS idx_memory_outbox_project
   ON memory_outbox(project_id, target, status, updated_at DESC);

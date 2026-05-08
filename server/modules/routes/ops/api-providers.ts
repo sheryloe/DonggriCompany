@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { decryptSecret, encryptSecret } from "../../../oauth/helpers.ts";
+import { recordQualityMetricEvent } from "../../memory/store.ts";
 
 type ApiProviderPreset = {
   base_url: string;
@@ -617,11 +618,26 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
     }
 
     if (!resolved.ok) {
+      const runtimeStatus = buildProviderRuntimeStatus(resolved, fallbackModels);
+      if (runtimeStatus.capacity_429) {
+        recordQualityMetricEvent(db, {
+          metricKey: "provider.capacity_429",
+          metricFamily: "provider",
+          value: 1,
+          unit: "count",
+          status: "capacity_limited",
+          sourceType: "api_provider_test",
+          sourceId: `${id}:${nowMs()}`,
+          dimensions: { provider_id: id, provider_type: row.type },
+          evidence: { status: resolved.status, retry_after_seconds: resolved.retry_after_seconds },
+          now: nowMs(),
+        });
+      }
       return res.json({
         ok: false,
         status: resolved.status,
         error: resolved.error,
-        runtime_status: buildProviderRuntimeStatus(resolved, fallbackModels),
+        runtime_status: runtimeStatus,
       });
     }
 

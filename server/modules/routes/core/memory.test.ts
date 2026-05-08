@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyBaseSchema } from "../../bootstrap/schema/base-schema.ts";
 import { applyMemorySchema } from "../../bootstrap/schema/memory-schema.ts";
 import {
@@ -39,6 +39,14 @@ function createHarness() {
     },
     post(path: string, handler: RouteHandler) {
       routes.set(`POST ${path}`, handler);
+      return this;
+    },
+    patch(path: string, handler: RouteHandler) {
+      routes.set(`PATCH ${path}`, handler);
+      return this;
+    },
+    delete(path: string, handler: RouteHandler) {
+      routes.set(`DELETE ${path}`, handler);
       return this;
     },
   };
@@ -84,6 +92,7 @@ describe("memory routes", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     db?.close();
     db = null;
   });
@@ -472,6 +481,218 @@ describe("memory routes", () => {
     expect(payload.memories[0].rank).toBeGreaterThan(payload.memories[1].rank);
     const embeddingCount = db!.prepare("SELECT COUNT(*) AS cnt FROM memory_embeddings").get() as { cnt: number };
     expect(embeddingCount.cnt).toBeGreaterThanOrEqual(2);
+  });
+
+  it("backfills provider embeddings, writes ANN buckets, and uses semantic_provider ranking", async () => {
+    db!.prepare(
+      `
+      INSERT INTO api_providers (id, name, type, base_url, enabled, models_cache, models_cached_at, created_at, updated_at)
+      VALUES ('provider-1', 'Embedding Provider', 'openai', 'https://example.test/v1', 1, ?, 1, 1, 1)
+    `,
+    ).run(JSON.stringify(["text-embedding-3-small"]));
+    for (const memory of [
+      {
+        id: "provider-memory-1",
+        title: "Provider fallback retry runbook",
+        body: "Use provider fallback when capacity returns 429.",
+      },
+      {
+        id: "provider-memory-2",
+        title: "General provider note",
+        body: "Record provider configuration changes.",
+      },
+    ]) {
+      db!.prepare(
+        `
+        INSERT INTO project_memories (
+          id, project_id, agent_id, memory_type, scope_type, title, body,
+          tags_json, source_type, memory_layer, status, created_at, updated_at
+        ) VALUES (?, 'project-1', 'agent-1', 'lesson', 'project', ?, ?,
+          '[]', 'manual', 'archival', 'active', 3000, 3000
+        )
+      `,
+      ).run(memory.id, memory.title, memory.body);
+    }
+    const fetchMock = vi.fn(async (_url: string, init?: { body?: string }) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { input?: string; prompt?: string };
+      const text = String(body.input ?? body.prompt ?? "");
+      const vector = /fallback|capacity/i.test(text) ? [1, 0, 0] : [0, 1, 0];
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ embedding: vector }] }),
+        text: async () => "",
+        headers: { get: () => null },
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const backfillHandler = routes.get("POST /api/memory/embeddings/backfill");
+    const backfillRes = createFakeResponse();
+    await backfillHandler?.(
+      {
+        body: {
+          project_id: "project-1",
+          provider_id: "provider-1",
+          model: "text-embedding-3-small",
+          force: true,
+        },
+      },
+      backfillRes,
+    );
+
+    expect(backfillRes.statusCode).toBe(200);
+    expect(backfillRes.payload).toMatchObject({ ok: true, processed: 2, embedded: 2, indexed: 2, failed: 0 });
+    const indexCount = db!.prepare("SELECT COUNT(*) AS cnt FROM memory_embedding_index").get() as { cnt: number };
+    expect(indexCount.cnt).toBeGreaterThan(0);
+
+    const searchHandler = routes.get("GET /api/memory/search");
+    const searchRes = createFakeResponse();
+    await searchHandler?.(
+      {
+        query: {
+          q: "capacity fallback",
+          project_id: "project-1",
+          ranking: "semantic_provider",
+          provider_id: "provider-1",
+          model: "text-embedding-3-small",
+        },
+      },
+      searchRes,
+    );
+
+    expect(searchRes.statusCode).toBe(200);
+    const payload = searchRes.payload as { memories: Array<{ id: string; title: string }> };
+    expect(payload.memories[0]?.id).toBe("provider-memory-1");
+  });
+
+  it("falls back to local hash embeddings and records quality metrics when provider returns 429", async () => {
+    db!.prepare(
+      `
+      INSERT INTO api_providers (id, name, type, base_url, enabled, models_cache, models_cached_at, created_at, updated_at)
+      VALUES ('provider-429', 'Capacity Provider', 'openai', 'https://example.test/v1', 1, ?, 1, 1, 1)
+    `,
+    ).run(JSON.stringify(["text-embedding-3-small"]));
+    db!.prepare(
+      `
+      INSERT INTO project_memories (
+        id, project_id, agent_id, memory_type, scope_type, title, body,
+        tags_json, source_type, memory_layer, status, created_at, updated_at
+      ) VALUES ('provider-failed-memory', 'project-1', 'agent-1', 'lesson', 'project',
+        'Capacity fallback failed', 'Provider returned capacity 429.',
+        '[]', 'manual', 'archival', 'active', 3000, 3000
+      )
+    `,
+    ).run();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 429,
+        json: async () => ({}),
+        text: async () => "rate limit capacity",
+        headers: { get: () => null },
+      })),
+    );
+
+    const backfillHandler = routes.get("POST /api/memory/embeddings/backfill");
+    const res = createFakeResponse();
+    await backfillHandler?.(
+      {
+        body: {
+          project_id: "project-1",
+          provider_id: "provider-429",
+          model: "text-embedding-3-small",
+          force: true,
+        },
+      },
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toMatchObject({ ok: true, processed: 1, embedded: 0, failed: 1, fallback_used: true });
+    const failed = db!
+      .prepare("SELECT embedding_status, last_error FROM memory_embeddings WHERE embedding_model = ?")
+      .get("text-embedding-3-small") as { embedding_status: string; last_error: string };
+    expect(failed.embedding_status).toBe("failed");
+    expect(failed.last_error).toContain("capacity");
+    const localFallback = db!
+      .prepare("SELECT COUNT(*) AS cnt FROM memory_embeddings WHERE embedding_model = 'local-hash-v3'")
+      .get() as { cnt: number };
+    expect(localFallback.cnt).toBe(1);
+    const metric = db!
+      .prepare("SELECT metric_key, status FROM quality_metric_events WHERE metric_key = 'provider.capacity_429'")
+      .get() as { metric_key: string; status: string };
+    expect(metric).toMatchObject({ metric_key: "provider.capacity_429", status: "capacity_limited" });
+  });
+
+  it("supports server-side saved and recent memory search profiles", () => {
+    const postHandler = routes.get("POST /api/memory/searches");
+    const getHandler = routes.get("GET /api/memory/searches");
+    const patchHandler = routes.get("PATCH /api/memory/searches/:id");
+    const deleteHandler = routes.get("DELETE /api/memory/searches/:id");
+
+    const savedRes = createFakeResponse();
+    postHandler?.(
+      {
+        body: {
+          kind: "saved",
+          project_id: "project-1",
+          label: "fallback runbook",
+          query: "fallback",
+          filters: { rankingMode: "semantic_provider", layer: "archival" },
+        },
+      },
+      savedRes,
+    );
+    expect(savedRes.statusCode).toBe(201);
+    const saved = (savedRes.payload as { search: { id: string; label: string } }).search;
+    expect(saved.label).toBe("fallback runbook");
+
+    const recentRes1 = createFakeResponse();
+    postHandler?.(
+      {
+        body: {
+          kind: "recent",
+          project_id: "project-1",
+          label: "fallback",
+          query: "fallback",
+          filters: { rankingMode: "vector" },
+        },
+      },
+      recentRes1,
+    );
+    const recentRes2 = createFakeResponse();
+    postHandler?.(
+      {
+        body: {
+          kind: "recent",
+          project_id: "project-1",
+          label: "fallback",
+          query: "fallback",
+          filters: { rankingMode: "vector" },
+        },
+      },
+      recentRes2,
+    );
+    const recent = (recentRes2.payload as { search: { id: string; use_count: number } }).search;
+    expect(recent.use_count).toBe(2);
+
+    const listRes = createFakeResponse();
+    getHandler?.({ query: { kind: "saved", project_id: "project-1" } }, listRes);
+    const listPayload = listRes.payload as { searches: Array<{ id: string; label: string }> };
+    expect(listPayload.searches.map((item) => item.label)).toContain("fallback runbook");
+
+    const patchRes = createFakeResponse();
+    patchHandler?.(
+      { params: { id: saved.id }, body: { kind: "saved", project_id: "project-1", label: "renamed", query: "fallback" } },
+      patchRes,
+    );
+    expect((patchRes.payload as { search: { label: string } }).search.label).toBe("renamed");
+
+    const deleteRes = createFakeResponse();
+    deleteHandler?.({ params: { id: saved.id } }, deleteRes);
+    expect(deleteRes.statusCode).toBe(200);
   });
 
   it("creates and approves global skill promotion candidates from cross-project success evidence", () => {

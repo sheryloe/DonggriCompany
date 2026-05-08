@@ -520,4 +520,60 @@ describe("run complete handler - video preprod review transition", () => {
       db.close();
     }
   });
+
+  it("stores the final agent message as task result instead of Codex CLI noise", () => {
+    const db = createDb();
+    const logsDir = fs.mkdtempSync(path.join(os.tmpdir(), "climpire-run-result-"));
+    try {
+      const taskId = "task-result-clean";
+      db.prepare(
+        `
+          INSERT INTO tasks (
+            id, title, description, status, workflow_pack_key, source_task_id, assigned_agent_id, department_id, project_id, project_path, updated_at
+          )
+          VALUES (?, ?, ?, 'in_progress', 'general', NULL, NULL, 'dev', 'project-1', ?, 1)
+        `,
+      ).run(taskId, "Clean result", "Result should not include provider catalog noise", "/tmp/project");
+      fs.writeFileSync(
+        path.join(logsDir, `${taskId}.log`),
+        [
+          "===== task run start 2026-05-08T03:39:00.000Z | provider=codex =====",
+          "[Claw-Empire] CLI account env: provider=codex kind=cli_stream pool=codex-main selected_by=explicit home=C:\\Users\\worker",
+          "2026-05-08T03:39:13.984650Z WARN codex_core_skills::loader: ignoring interface.icon_large: icon path must not contain '..'",
+          '2026-05-08T03:39:16.390076Z ERROR codex_models_manager::manager: failed to refresh available models: body: {"models":[{"slug":"gpt-5-5"}],"model_picker_version":2}',
+          JSON.stringify({
+            type: "item.completed",
+            item: {
+              type: "agent_message",
+              text: "완료했습니다.\n\n변경 사항:\n- DevSecOps 게이트 문서와 검증 스크립트 추가",
+            },
+          }),
+        ].join("\n"),
+        "utf8",
+      );
+
+      const deps = createDeps(db, logsDir);
+      deps.activeProcesses.set(taskId, { pid: 107 });
+      const { handleTaskRunComplete } = createRunCompleteHandler(deps);
+
+      handleTaskRunComplete(taskId, 0);
+
+      const updated = db.prepare("SELECT status, result FROM tasks WHERE id = ?").get(taskId) as {
+        status: string;
+        result: string | null;
+      };
+      expect(updated.status).toBe("review");
+      expect(updated.result).toContain("완료했습니다.");
+      expect(updated.result).toContain("DevSecOps 게이트 문서");
+      expect(updated.result).not.toContain("codex_models_manager::manager");
+      expect(updated.result).not.toContain("model_picker_version");
+    } finally {
+      try {
+        fs.rmSync(logsDir, { recursive: true, force: true });
+      } catch {
+        // best effort cleanup
+      }
+      db.close();
+    }
+  });
 });

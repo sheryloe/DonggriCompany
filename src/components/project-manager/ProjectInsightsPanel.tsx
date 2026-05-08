@@ -5,6 +5,7 @@ import { getProjectModuleBindingStatusLabel, getProjectModuleTitle } from "../..
 import { approveMemoryPromotion, drainBeadsOutbox, scanMemoryPromotions } from "../../api/memory";
 import type { Agent, NativeMemory, Project, ProjectMemoryResponse, ProjectModuleBinding } from "../../types";
 import MemorySearchPanel from "../skills-library/MemorySearchPanel";
+import ProjectHealthPanel from "./ProjectHealthPanel";
 import type { GroupedProjectTaskCard, ProjectDetailView, ProjectI18nTranslate } from "./types";
 import { fmtTime } from "./utils";
 
@@ -82,6 +83,7 @@ interface ProjectInsightsPanelProps {
   projectMemory?: ProjectMemoryResponse | null;
   projectMemoryLoading?: boolean;
   agents: Agent[];
+  onProjectHealthChanged?: () => void | Promise<void>;
 }
 
 export default function ProjectInsightsPanel({
@@ -97,6 +99,7 @@ export default function ProjectInsightsPanel({
   projectMemory,
   projectMemoryLoading,
   agents,
+  onProjectHealthChanged,
 }: ProjectInsightsPanelProps) {
   const [activeView, setActiveView] = useState<ProjectDetailView>("overview");
   const [projectModules, setProjectModules] = useState<ProjectModuleBinding[]>([]);
@@ -244,6 +247,7 @@ export default function ProjectInsightsPanel({
 
   const tabs: Array<{ key: ProjectDetailView; label: string }> = [
     { key: "overview", label: t({ ko: "개요", en: "Overview", ja: "Overview", zh: "Overview" }) },
+    { key: "health", label: "Health" },
     { key: "board", label: t({ ko: "이슈 보드", en: "Issue Board", ja: "Issue Board", zh: "Issue Board" }) },
     { key: "gantt", label: t({ ko: "간트", en: "Gantt", ja: "Gantt", zh: "Gantt" }) },
     {
@@ -421,6 +425,14 @@ export default function ProjectInsightsPanel({
             )}
           </div>
         </div>
+      )}
+
+      {activeView === "health" && (
+        <ProjectHealthPanel
+          selectedProject={selectedProject}
+          onOpenTaskDetail={handleOpenTaskDetail}
+          onRecovered={onProjectHealthChanged}
+        />
       )}
 
       {activeView === "board" && (

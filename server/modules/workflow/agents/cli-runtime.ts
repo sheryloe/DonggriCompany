@@ -24,6 +24,62 @@ type CliRuntimeDeps = {
 
 type JsonRecord = Record<string, unknown>;
 
+type CliRunSignals = {
+  finalSignal: string | null;
+  continuationSignal: string | null;
+};
+
+function isSuccessfulAgentMessage(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  if (/^완료했습니다(?:[.!。]|$|\s)/.test(normalized)) return true;
+  if (/^작업\s*완료(?:[.!。]|$|\s)/.test(normalized)) return true;
+  return /^(done|completed)(?:[.!:]|$|\s)/.test(normalized);
+}
+
+function readFinalOutputGraceMs(): number {
+  const raw = (process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS ?? process.env.CLIMPIRE_CLI_FINAL_OUTPUT_GRACE_MS ?? "").trim();
+  if (!raw) return 12_000;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 12_000;
+  return Math.max(0, Math.trunc(parsed));
+}
+
+function detectCliRunSignals(data: string): CliRunSignals {
+  const result: CliRunSignals = { finalSignal: null, continuationSignal: null };
+  const lines = data.split("\n").filter(Boolean);
+  for (const line of lines) {
+    let j: JsonRecord;
+    try {
+      j = JSON.parse(line) as JsonRecord;
+    } catch {
+      continue;
+    }
+
+    if (j.type === "turn.completed") {
+      result.finalSignal = result.finalSignal ?? "turn.completed";
+      continue;
+    }
+
+    if (j.type === "item.started") {
+      const item = j.item as JsonRecord | undefined;
+      const itemType = String(item?.type ?? "");
+      if (itemType && itemType !== "agent_message") {
+        result.continuationSignal = result.continuationSignal ?? `item.started:${itemType}`;
+      }
+      continue;
+    }
+
+    if (j.type === "item.completed") {
+      const item = j.item as JsonRecord | undefined;
+      if (item?.type === "agent_message" && typeof item.text === "string" && isSuccessfulAgentMessage(item.text)) {
+        result.finalSignal = result.finalSignal ?? "item.completed:agent_message";
+      }
+    }
+  }
+  return result;
+}
+
 export function createCliRuntimeTools(deps: CliRuntimeDeps) {
   const {
     db,
@@ -641,6 +697,7 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
     let hardTimer: ReturnType<typeof setTimeout> | null = null;
     let stdoutListener: ((chunk: Buffer) => void) | null = null;
     let stderrListener: ((chunk: Buffer) => void) | null = null;
+    let finalOutputTimer: ReturnType<typeof setTimeout> | null = null;
     const detachOutputListeners = () => {
       if (stdoutListener) {
         child.stdout?.off("data", stdoutListener);
@@ -660,6 +717,39 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
         clearTimeout(hardTimer);
         hardTimer = null;
       }
+      if (finalOutputTimer) {
+        clearTimeout(finalOutputTimer);
+        finalOutputTimer = null;
+      }
+    };
+    const cancelFinalOutputTimer = () => {
+      if (!finalOutputTimer) return;
+      clearTimeout(finalOutputTimer);
+      finalOutputTimer = null;
+    };
+    const scheduleFinalOutputCleanup = (signal: string) => {
+      if (finished || finalOutputTimer) return;
+      const graceMs = readFinalOutputGraceMs();
+      if (graceMs <= 0) return;
+      (child as any).__clawFinalOutputObserved = true;
+      (child as any).__clawFinalOutputReason = signal;
+      finalOutputTimer = setTimeout(() => {
+        finalOutputTimer = null;
+        if (finished) return;
+        (child as any).__clawForcedAfterFinalOutput = true;
+        const msg = `[Claw-Empire] RUN FINAL OUTPUT OBSERVED (${signal}); terminating lingering CLI after ${graceMs}ms`;
+        safeWrite(`\n${msg}\n`);
+        appendTaskLog(taskId, "system", msg);
+        try {
+          if (child.pid && child.pid > 0) {
+            killPidTree(child.pid);
+          } else {
+            child.kill("SIGTERM");
+          }
+        } catch {
+          // ignore kill race
+        }
+      }, graceMs);
     };
     const triggerTimeout = (kind: "idle" | "hard") => {
       if (finished) return;
@@ -717,19 +807,24 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
 
     // Pipe agent output to log file AND broadcast via WebSocket
     stdoutListener = (chunk: Buffer) => {
-      touchIdleTimer();
       const text = normalizeStreamChunk(chunk, { dropCliNoise: true });
       if (!text) return;
       if (shouldSkipDuplicateCliOutput(taskId, "stdout", text)) return;
+      touchIdleTimer();
       safeWrite(text);
       broadcast("cli_output", { task_id: taskId, stream: "stdout", data: text });
       parseAndCreateSubtasks(taskId, text);
+      if (provider === "codex" && runtimeKind === "cli_stream") {
+        const signals = detectCliRunSignals(text);
+        if (signals.continuationSignal) cancelFinalOutputTimer();
+        if (signals.finalSignal) scheduleFinalOutputCleanup(signals.finalSignal);
+      }
     };
     stderrListener = (chunk: Buffer) => {
-      touchIdleTimer();
       const text = normalizeStreamChunk(chunk, { dropCliNoise: true });
       if (!text) return;
       if (shouldSkipDuplicateCliOutput(taskId, "stderr", text)) return;
+      touchIdleTimer();
       safeWrite(text);
       broadcast("cli_output", { task_id: taskId, stream: "stderr", data: text });
     };

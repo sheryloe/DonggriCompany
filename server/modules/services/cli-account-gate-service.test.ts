@@ -47,7 +47,7 @@ describe("CliAccountGateService", () => {
 
     expect(pool.provider).toBe("codex");
     expect(pool.accountPoolId).toBe("codex-main");
-    expect(pool.profileHome).toBe(path.posix.join(profileRoot, "codex", "codex-main"));
+    expect(pool.profileHome).toBe(path.join(profileRoot, "codex", "codex-main"));
     expect(pool.status).toBe("auth_required");
   });
 
@@ -159,6 +159,38 @@ describe("CliAccountGateService", () => {
     expect(result.accounts[0]?.expiresAt).toBe(1711000000000);
     expect(JSON.stringify(result.accounts)).not.toContain("refreshToken");
     expect(result.pools.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("repairs legacy /app profile paths during codex sync", () => {
+    db.prepare(
+      `INSERT INTO cli_account_pools (
+         id, provider, account_pool_id, label, profile_home, status, created_at, updated_at
+       ) VALUES (?, 'codex', 'codex-main', 'Legacy Main', '/app/.office-accounts/codex/codex-main', 'auth_required', 1, 1)`,
+    ).run("legacy-pool");
+
+    mockedExecFileSync.mockImplementation((command: string, args?: readonly string[]) => {
+      const commandName = String(command);
+      const argv = Array.isArray(args) ? args.map(String) : [];
+      if ((commandName === "which" || commandName === "where") && argv[0] === "codex") {
+        return Buffer.from("");
+      }
+      if (commandName === "codex-multi-auth" && argv[0] === "auth" && argv[1] === "report") {
+        return JSON.stringify({
+          accounts: [{ enabled: true, accountLabel: "Account 1" }],
+          activeIndex: 0,
+          forecast: { accounts: [{ index: 0, label: "Account 1", isCurrent: true }] },
+        });
+      }
+      return Buffer.from("");
+    });
+
+    const service = createService();
+    service.syncCodexPoolsFromMultiAuth({ live: true });
+
+    const row = db
+      .prepare("SELECT profile_home FROM cli_account_pools WHERE provider = 'codex' AND account_pool_id = 'codex-main'")
+      .get() as { profile_home: string };
+    expect(row.profile_home).toBe(path.join(profileRoot, "codex", "codex-main"));
   });
 
   it("falls back to local storage snapshot when auth report is unavailable", () => {

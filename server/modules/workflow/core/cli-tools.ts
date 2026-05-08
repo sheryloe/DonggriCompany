@@ -162,6 +162,16 @@ export function createCliTools(deps: CreateCliToolsDeps) {
     }
   }
 
+  function isIgnorableCliNoiseLine(trimmed: string): boolean {
+    if (/^\d{4}-\d{2}-\d{2}T.+\s+(WARN|ERROR)\s+codex_core_plugins::/i.test(trimmed)) return true;
+    if (/^\d{4}-\d{2}-\d{2}T.+\s+(WARN|ERROR)\s+codex_core_skills::loader:/i.test(trimmed)) return true;
+    if (/^\d{4}-\d{2}-\d{2}T.+\s+ERROR\s+codex_models_manager::manager:/i.test(trimmed)) return true;
+    if (/^\d{4}-\d{2}-\d{2}T.+\s+ERROR\s+codex_core::session:\s+failed to load skill/i.test(trimmed)) return true;
+    if (/^<\/?(html|head|body|script|style|svg|path|meta|div|span|noscript)\b/i.test(trimmed)) return true;
+    if (/cloudflare|challenge-platform|window\._cf_chl_opt|enable javascript and cookies/i.test(trimmed)) return true;
+    return false;
+  }
+
   function normalizeStreamChunk(raw: Buffer | string, opts: { dropCliNoise?: boolean } = {}): string {
     const { dropCliNoise = false } = opts;
     const input = typeof raw === "string" ? raw : decodeBufferChunk(raw);
@@ -176,6 +186,7 @@ export function createCliTools(deps: CreateCliToolsDeps) {
         if (!trimmed) return true;
         if (/^reading prompt from stdin\.{0,3}$/i.test(trimmed)) return false;
         if (CLI_SPINNER_LINE_REGEX.test(trimmed)) return false;
+        if (isIgnorableCliNoiseLine(trimmed)) return false;
         return true;
       })
       .join("\n")

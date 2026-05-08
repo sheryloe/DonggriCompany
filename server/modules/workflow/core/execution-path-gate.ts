@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { execFileSync } from "node:child_process";
@@ -69,7 +70,32 @@ function parseAllowedRootsEnv(raw: string | undefined): string[] {
 function getAllowedRoots(): string[] {
   const parsed = parseAllowedRootsEnv(process.env.PROJECT_PATH_ALLOWED_ROOTS);
   if (parsed.length > 0) return parsed;
-  return [path.resolve(process.cwd())];
+  return getDefaultAllowedRoots();
+}
+
+function getDefaultAllowedRoots(): string[] {
+  const seen = new Set<string>();
+  const roots: string[] = [];
+
+  const pushRoot = (candidate: string) => {
+    const normalized = normalizeProjectPathInput(candidate);
+    if (!normalized) return;
+    const key = normalizeForCompare(normalized);
+    if (seen.has(key)) return;
+    if (roots.length > 0 && !fs.existsSync(normalized)) return;
+    seen.add(key);
+    roots.push(normalized);
+  };
+
+  const projectRoot = path.resolve(process.cwd());
+  pushRoot(projectRoot);
+
+  // Donggri Dev Drive keeps validation projects under a sibling runtime root.
+  const reposRoot = path.dirname(projectRoot);
+  pushRoot(path.join(reposRoot, "runtime"));
+  pushRoot(path.join(reposRoot, "runtime", path.basename(projectRoot)));
+
+  return roots;
 }
 
 function isPathInsideRoot(candidatePath: string, rootPath: string): boolean {

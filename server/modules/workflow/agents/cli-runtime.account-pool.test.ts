@@ -2,10 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createCliRuntimeTools } from "./cli-runtime.ts";
+import { createCliTools } from "../core/cli-tools.ts";
 
 type RuntimeHarness = {
   db: DatabaseSync;
@@ -41,10 +43,18 @@ function createHarness(): RuntimeHarness {
   };
 }
 
-async function waitForClose(child: { on: (event: "close", listener: (code: number | null) => void) => void }) {
-  await new Promise<number | null>((resolve) => {
-    child.on("close", (code) => resolve(code));
-  });
+async function waitForClose(
+  child: { on: (event: "close", listener: (code: number | null) => void) => void },
+  timeoutMs = 5_000,
+) {
+  await Promise.race([
+    new Promise<number | null>((resolve) => {
+      child.on("close", (code) => resolve(code));
+    }),
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(() => reject(new Error(`child did not close within ${timeoutMs}ms`)), timeoutMs);
+    }),
+  ]);
 }
 
 describe("spawnCliAgent codex cli account pool", () => {
@@ -92,7 +102,11 @@ describe("spawnCliAgent codex cli account pool", () => {
       TASK_RUN_HARD_TIMEOUT_MS: 0,
       killPidTree: (pid: number) => {
         try {
-          process.kill(pid);
+          if (process.platform === "win32") {
+            execFileSync("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore" });
+          } else {
+            process.kill(pid);
+          }
         } catch {
           // ignore
         }
@@ -154,7 +168,11 @@ describe("spawnCliAgent codex cli account pool", () => {
       TASK_RUN_HARD_TIMEOUT_MS: 0,
       killPidTree: (pid: number) => {
         try {
-          process.kill(pid);
+          if (process.platform === "win32") {
+            execFileSync("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore" });
+          } else {
+            process.kill(pid);
+          }
         } catch {
           // ignore
         }
@@ -324,5 +342,189 @@ describe("spawnCliAgent codex cli account pool", () => {
     expect(logText).toContain("RUN FAILED (cli account pool)");
     expect(logText).toContain("explicit_pool_selection_required");
     expect(taskLogs.some((entry) => entry.includes("explicit_pool_selection_required"))).toBe(true);
+  });
+
+  it("terminates a lingering codex process after final agent output", async () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+
+    const previousGrace = process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS;
+    process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS = "50";
+    cleanups.push(() => {
+      if (typeof previousGrace === "string") process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS = previousGrace;
+      else delete process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS;
+    });
+
+    const scriptPath = path.join(harness.logsDir, "linger-after-final.js");
+    fs.writeFileSync(
+      scriptPath,
+      [
+        "const final = { type: 'item.completed', item: { type: 'agent_message', text: 'Done.' } };",
+        "process.stdout.write(`${JSON.stringify(final)}\\n`);",
+        "setInterval(() => {}, 1000);",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const taskLogs: string[] = [];
+    const runtime = createCliRuntimeTools({
+      db: harness.db as any,
+      logsDir: harness.logsDir,
+      buildAgentArgs: () => ["node", scriptPath],
+      clearCliOutputDedup: () => {},
+      normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
+      shouldSkipDuplicateCliOutput: () => false,
+      broadcast: () => {},
+      TASK_RUN_IDLE_TIMEOUT_MS: 0,
+      TASK_RUN_HARD_TIMEOUT_MS: 0,
+      killPidTree: (pid: number) => {
+        try {
+          if (process.platform === "win32") {
+            execFileSync("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore" });
+          } else {
+            process.kill(pid);
+          }
+        } catch {
+          // ignore
+        }
+      },
+      appendTaskLog: (_taskId, _kind, message) => {
+        taskLogs.push(message);
+      },
+      activeProcesses: new Map(),
+      createSubtaskFromCli: () => {},
+      completeSubtaskFromCli: () => {},
+    });
+
+    const logPath = path.join(harness.logsDir, "task-linger.log");
+    const child = runtime.spawnCliAgent("task-linger", "codex", "test prompt", harness.logsDir, logPath);
+    await waitForClose(child, 2_000);
+    const logText = fs.readFileSync(logPath, "utf8");
+
+    expect((child as any).__clawForcedAfterFinalOutput).toBe(true);
+    expect(logText).toContain("RUN FINAL OUTPUT OBSERVED");
+    expect(taskLogs.some((entry) => entry.includes("RUN FINAL OUTPUT OBSERVED"))).toBe(true);
+  });
+
+  it("does not treat a non-completion agent message as successful final output", async () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+
+    const previousGrace = process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS;
+    process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS = "40";
+    cleanups.push(() => {
+      if (typeof previousGrace === "string") process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS = previousGrace;
+      else delete process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS;
+    });
+
+    const scriptPath = path.join(harness.logsDir, "linger-after-non-final-message.js");
+    fs.writeFileSync(
+      scriptPath,
+      [
+        "const msg = { type: 'item.completed', item: { type: 'agent_message', text: 'I found corrupted docs and will apply a follow-up patch.' } };",
+        "process.stdout.write(`${JSON.stringify(msg)}\\n`);",
+        "setInterval(() => {}, 1000);",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const taskLogs: string[] = [];
+    const runtime = createCliRuntimeTools({
+      db: harness.db as any,
+      logsDir: harness.logsDir,
+      buildAgentArgs: () => ["node", scriptPath],
+      clearCliOutputDedup: () => {},
+      normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
+      shouldSkipDuplicateCliOutput: () => false,
+      broadcast: () => {},
+      TASK_RUN_IDLE_TIMEOUT_MS: 120,
+      TASK_RUN_HARD_TIMEOUT_MS: 0,
+      killPidTree: (pid: number) => {
+        try {
+          if (process.platform === "win32") {
+            execFileSync("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore" });
+          } else {
+            process.kill(pid);
+          }
+        } catch {
+          // ignore
+        }
+      },
+      appendTaskLog: (_taskId, _kind, message) => {
+        taskLogs.push(message);
+      },
+      activeProcesses: new Map(),
+      createSubtaskFromCli: () => {},
+      completeSubtaskFromCli: () => {},
+    });
+
+    const logPath = path.join(harness.logsDir, "task-linger-non-final.log");
+    const child = runtime.spawnCliAgent("task-linger-non-final", "codex", "test prompt", harness.logsDir, logPath);
+    await waitForClose(child, 2_000);
+    const logText = fs.readFileSync(logPath, "utf8");
+
+    expect((child as any).__clawForcedAfterFinalOutput).not.toBe(true);
+    expect(logText).not.toContain("RUN FINAL OUTPUT OBSERVED");
+    expect(taskLogs.some((entry) => entry.includes("RUN FINAL OUTPUT OBSERVED"))).toBe(false);
+    expect(taskLogs.some((entry) => entry.includes("RUN TIMEOUT"))).toBe(true);
+  });
+
+  it("does not reset idle timeout for ignorable Codex CLI noise", async () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+
+    const scriptPath = path.join(harness.logsDir, "codex-noise-only.js");
+    fs.writeFileSync(
+      scriptPath,
+      [
+        "setInterval(() => {",
+        "  process.stderr.write('2026-05-08T03:34:43.000000Z ERROR codex_models_manager::manager: failed to refresh model catalog\\n');",
+        "}, 20);",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const cliTools = createCliTools({
+      nowMs: () => Date.now(),
+      cliOutputDedupWindowMs: 0,
+    });
+    const taskLogs: string[] = [];
+    const runtime = createCliRuntimeTools({
+      db: harness.db as any,
+      logsDir: harness.logsDir,
+      buildAgentArgs: () => ["node", scriptPath],
+      clearCliOutputDedup: cliTools.clearCliOutputDedup,
+      normalizeStreamChunk: cliTools.normalizeStreamChunk,
+      shouldSkipDuplicateCliOutput: cliTools.shouldSkipDuplicateCliOutput,
+      broadcast: () => {},
+      TASK_RUN_IDLE_TIMEOUT_MS: 140,
+      TASK_RUN_HARD_TIMEOUT_MS: 0,
+      killPidTree: (pid: number) => {
+        try {
+          if (process.platform === "win32") {
+            execFileSync("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore" });
+          } else {
+            process.kill(pid);
+          }
+        } catch {
+          // ignore
+        }
+      },
+      appendTaskLog: (_taskId, _kind, message) => {
+        taskLogs.push(message);
+      },
+      activeProcesses: new Map(),
+      createSubtaskFromCli: () => {},
+      completeSubtaskFromCli: () => {},
+    });
+
+    const logPath = path.join(harness.logsDir, "task-codex-noise-only.log");
+    const child = runtime.spawnCliAgent("task-codex-noise-only", "codex", "test prompt", harness.logsDir, logPath);
+    await waitForClose(child, 2_000);
+    const logText = fs.readFileSync(logPath, "utf8");
+
+    expect(logText).not.toContain("codex_models_manager::manager");
+    expect(taskLogs.some((entry) => entry.includes("RUN TIMEOUT"))).toBe(true);
+    expect((child as any).__clawForcedAfterFinalOutput).not.toBe(true);
   });
 });

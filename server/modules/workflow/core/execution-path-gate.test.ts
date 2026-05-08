@@ -12,6 +12,7 @@ type FakeDb = Pick<DatabaseSync, "prepare">;
 
 const originalAllowedRoots = process.env.PROJECT_PATH_ALLOWED_ROOTS;
 const originalBootstrap = process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP;
+const originalCwd = process.cwd();
 const tempDirs: string[] = [];
 
 function createFakeDb(projects: Record<string, string>): FakeDb {
@@ -53,6 +54,7 @@ afterEach(() => {
   } else {
     process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP = originalBootstrap;
   }
+  process.chdir(originalCwd);
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (!dir) continue;
@@ -140,6 +142,34 @@ describe("evaluateExecutionPathGate", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(path.normalize(result.projectPath)).toBe(path.normalize(gitProject));
+    }
+  });
+
+  it("allows Donggri sibling runtime projects when env roots are unset", () => {
+    delete process.env.PROJECT_PATH_ALLOWED_ROOTS;
+    process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP = "1";
+
+    const workspaceRoot = createTempDir("path-gate-donggri-");
+    const projectRoot = path.join(workspaceRoot, "DonggriCompany");
+    const runtimeProject = path.join(workspaceRoot, "runtime", "DonggriCompany", "workflow-sample");
+    fs.mkdirSync(projectRoot, { recursive: true });
+    fs.mkdirSync(runtimeProject, { recursive: true });
+    process.chdir(projectRoot);
+
+    const result = evaluateExecutionPathGate({
+      db: createFakeDb({ project1: runtimeProject }) as DatabaseSync,
+      task: {
+        project_id: "project1",
+        project_path: null,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(path.normalize(result.projectPath)).toBe(path.normalize(runtimeProject));
+      expect(result.allowedRoots.map((root) => path.normalize(root))).toContain(
+        path.normalize(path.join(workspaceRoot, "runtime")),
+      );
     }
   });
 });

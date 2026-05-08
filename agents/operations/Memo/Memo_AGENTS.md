@@ -24,8 +24,8 @@
 - Stage Rule: stage1(<100 XP), stage2(100~299 XP), stage3(>=300 XP)
 
 ## Growth
-- Tasks Done: 1
-- XP: 10
+- Tasks Done: 3
+- XP: 30
 - Level: 1
 
 ## Promotion Policy
@@ -45,7 +45,7 @@
 - Preferred Subagent: sre-engineer
 
 ## Latest Snapshot
-- 2026-05-06T07:19:36.065Z | tasks_done=1 | xp=10 | role=senior
+- 2026-05-08T03:47:38.660Z | tasks_done=3 | xp=30 | role=senior
 
 ## Workflow Profile
 - Raw: {"role":"reviewer","review_lenses":["documentation","traceability","governance"],"two_pass_required":true,"max_review_rounds":null}

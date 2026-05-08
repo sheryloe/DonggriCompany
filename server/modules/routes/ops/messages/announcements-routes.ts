@@ -1,4 +1,5 @@
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
+import type { DelegationOptions } from "../../collab/project-resolution.ts";
 import type { AgentRow, StoredMessage } from "../../shared/types.ts";
 
 type AnnouncementRouteCtx = Pick<RuntimeContext, "app" | "db" | "broadcast">;
@@ -50,6 +51,16 @@ export function registerAnnouncementRoutes(ctx: AnnouncementRouteCtx, deps: Anno
         return;
       return res.status(400).json({ error: "content_required" });
     }
+    const projectId = normalizeOptionalText(body.project_id);
+    const projectPath = normalizeOptionalText(body.project_path);
+    const projectContext = normalizeOptionalText(body.project_context);
+    const delegationOptions: DelegationOptions = {
+      skipPlannedMeeting: body.skipPlannedMeeting === true,
+      skipPlanSubtasks: body.skipPlanSubtasks === true,
+      projectId,
+      projectPath,
+      projectContext,
+    };
 
     let storedMessage: StoredMessage;
     let created: boolean;
@@ -61,6 +72,7 @@ export function registerAnnouncementRoutes(ctx: AnnouncementRouteCtx, deps: Anno
         receiverId: null,
         content,
         messageType: "announcement",
+        projectId,
         idempotencyKey,
       }));
     } catch (err) {
@@ -150,7 +162,7 @@ export function registerAnnouncementRoutes(ctx: AnnouncementRouteCtx, deps: Anno
           processedDepts.add(deptId);
           const leader = findTeamLeader(deptId);
           if (leader) {
-            handleTaskDelegation(leader, content, "");
+            handleTaskDelegation(leader, content, "", delegationOptions);
           }
         }
 
@@ -160,7 +172,7 @@ export function registerAnnouncementRoutes(ctx: AnnouncementRouteCtx, deps: Anno
             processedDepts.add(mentioned.department_id);
             const leader = findTeamLeader(mentioned.department_id);
             if (leader) {
-              handleTaskDelegation(leader, content, "");
+              handleTaskDelegation(leader, content, "", delegationOptions);
             }
           }
         }
@@ -169,4 +181,10 @@ export function registerAnnouncementRoutes(ctx: AnnouncementRouteCtx, deps: Anno
 
     res.json({ ok: true, message: msg });
   });
+}
+
+function normalizeOptionalText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }

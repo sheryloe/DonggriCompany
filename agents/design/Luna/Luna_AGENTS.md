@@ -24,8 +24,8 @@
 - Stage Rule: stage1(<100 XP), stage2(100~299 XP), stage3(>=300 XP)
 
 ## Growth
-- Tasks Done: 0
-- XP: 0
+- Tasks Done: 1
+- XP: 10
 - Level: 1
 
 ## Promotion Policy
@@ -45,7 +45,7 @@
 - Preferred Subagent: accessibility-tester
 
 ## Latest Snapshot
-- 2026-05-06T07:19:35.974Z | tasks_done=0 | xp=0 | role=senior
+- 2026-05-08T03:47:38.594Z | tasks_done=1 | xp=10 | role=senior
 
 ## Workflow Profile
 - Raw: {"role":"reviewer","review_lenses":["ux","clarity","a11y"],"two_pass_required":true,"max_review_rounds":null}

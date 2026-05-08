@@ -344,6 +344,26 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
     }
   }, []);
 
+  const refreshSelectedProjectDetail = useCallback(async () => {
+    if (!selectedProjectId) return;
+    try {
+      const res = await getProjectDetail(selectedProjectId);
+      setDetail(res);
+      if (!editingProjectId && !isCreating) {
+        setName(res.project.name);
+        setProjectPath(res.project.project_path);
+        setCoreGoal(res.project.core_goal);
+        setAssignmentMode(res.project.assignment_mode || "auto");
+        setSelectedAgentIds(new Set(res.project.assigned_agent_ids || []));
+        setStaffingPolicyJson(
+          res.project.staffing_policy_json ? JSON.stringify(res.project.staffing_policy_json, null, 2) : "",
+        );
+      }
+    } catch (err) {
+      console.error("Failed to refresh project detail:", err);
+    }
+  }, [editingProjectId, isCreating, selectedProjectId]);
+
   const headerTitle = t({
     ko: "프로젝트 관리",
     en: "Project Management",
@@ -543,6 +563,7 @@ export default function ProjectManagerModal({ agents, departments = [], onClose 
                   projectMemory={projectMemory}
                   projectMemoryLoading={projectMemoryLoading}
                   agents={agents}
+                  onProjectHealthChanged={refreshSelectedProjectDetail}
                 />
               </div>
             </>

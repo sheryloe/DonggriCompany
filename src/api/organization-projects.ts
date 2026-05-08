@@ -393,6 +393,49 @@ export interface ProjectDetailResponse {
   decision_events: ProjectDecisionEventItem[];
 }
 
+export type ProjectHealthLevel = "empty" | "good" | "warning" | "critical";
+
+export interface ProjectHealthTaskItem {
+  id: string;
+  title: string;
+  status: string;
+  task_type: string;
+  priority: number;
+  department_id: string | null;
+  department_name: string;
+  department_name_ko: string;
+  assigned_agent_id: string | null;
+  assigned_agent_name: string;
+  assigned_agent_name_ko: string;
+  source_task_id: string | null;
+  latest_log: string | null;
+  result_excerpt: string | null;
+  evidence_reason: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ProjectHealthResponse {
+  ok: boolean;
+  project: Pick<Project, "id" | "name" | "project_path" | "core_goal">;
+  health: ProjectHealthLevel;
+  summary: {
+    total_tasks: number;
+    open_tasks: number;
+    done_tasks: number;
+    cancelled_tasks: number;
+    orphan_candidates: number;
+    qa_hold_items: number;
+    review_waiting: number;
+    active_running: number;
+  };
+  status_counts: Record<string, number>;
+  department_counts: Record<string, number>;
+  blockers: ProjectHealthTaskItem[];
+  orphan_candidates: ProjectHealthTaskItem[];
+  generated_at: number;
+}
+
 export async function getProjects(params?: { page?: number; page_size?: number; search?: string }): Promise<{
   projects: Project[];
   page: number;
@@ -515,4 +558,21 @@ export async function deleteProject(id: string): Promise<void> {
 
 export async function getProjectDetail(id: string): Promise<ProjectDetailResponse> {
   return request(`/api/projects/${id}`);
+}
+
+export async function getProjectHealth(id: string): Promise<ProjectHealthResponse> {
+  return request(`/api/projects/${id}/health`);
+}
+
+export async function recoverProjectOrphanTask(
+  projectId: string,
+  taskId: string,
+): Promise<{
+  ok: boolean;
+  task: ProjectHealthTaskItem;
+  previous_status: string;
+  status: string;
+}> {
+  await bootstrapSession({ promptOnUnauthorized: false });
+  return post(`/api/projects/${projectId}/orphan-tasks/${taskId}/recover`, {});
 }

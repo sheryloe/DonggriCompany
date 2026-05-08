@@ -37,6 +37,37 @@ export function buildWatchdogRecoveryMessage(taskTitle: string, lang: string): s
   return `[WATCHDOG] '${taskTitle}' was in progress but had no active process. Recovered to inbox.`;
 }
 
+function isSuccessfulCliAgentMessage(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+  if (/^완료했습니다(?:[.!。]|$|\s)/.test(normalized)) return true;
+  if (/^작업\s*완료(?:[.!。]|$|\s)/.test(normalized)) return true;
+  return /^(done|completed)(?:[.!:]|$|\s)/.test(normalized);
+}
+
+export function terminalLogHasCliFinalOutput(logText: string): boolean {
+  for (const line of logText.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
+    let record: Record<string, unknown>;
+    try {
+      record = JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+
+    if (record.type === "turn.completed") return true;
+
+    if (record.type === "item.completed") {
+      const item = record.item as Record<string, unknown> | undefined;
+      if (item?.type === "agent_message" && typeof item.text === "string" && isSuccessfulCliAgentMessage(item.text)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function startLifecycle(ctx: RuntimeContext): void {
   const {
     IN_PROGRESS_ORPHAN_GRACE_MS,
@@ -282,6 +313,24 @@ export function startLifecycle(ctx: RuntimeContext): void {
         return false;
       }
     };
+    const taskTerminalLogHasFinalOutput = (taskId: string): boolean => {
+      try {
+        const logPath = path.join(logsDir, `${taskId}.log`);
+        const stat = fs.statSync(logPath);
+        const maxBytes = 512 * 1024;
+        const length = Math.min(maxBytes, stat.size);
+        const fd = fs.openSync(logPath, "r");
+        try {
+          const buffer = Buffer.alloc(length);
+          fs.readSync(fd, buffer, 0, length, Math.max(0, stat.size - length));
+          return terminalLogHasCliFinalOutput(buffer.toString("utf8"));
+        } finally {
+          fs.closeSync(fd);
+        }
+      } catch {
+        return false;
+      }
+    };
 
     for (const task of inProgressTasks) {
       const active = activeProcesses.get(task.id);
@@ -299,6 +348,16 @@ export function startLifecycle(ctx: RuntimeContext): void {
       const ageMs = lastTouchedAt > 0 ? Math.max(0, now - lastTouchedAt) : IN_PROGRESS_ORPHAN_GRACE_MS + 1;
       if (ageMs < IN_PROGRESS_ORPHAN_GRACE_MS) continue;
       const reportRelaySucceeded = hasSuccessfulReportRelay(task.id);
+      const terminalFinalOutput = taskTerminalLogHasFinalOutput(task.id);
+      if (terminalFinalOutput) {
+        appendTaskLog(
+          task.id,
+          "system",
+          `Recovery (${reason}): orphan in_progress detected with final CLI output (age_ms=${ageMs}) -> replaying successful completion`,
+        );
+        handleTaskRunComplete(task.id, 0);
+        continue;
+      }
 
       // Safety 1: recent task log activity usually means the task is still active.
       // Exception: a task that already emitted a report but has no process should recover instead of looping reports.

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
@@ -150,7 +151,7 @@ export class CliAccountGateService {
   constructor(deps: CliAccountGateServiceDeps) {
     this.db = deps.db;
     this.nowMs = deps.nowMs;
-    this.profileRoot = (deps.profileRoot ?? process.env.OFFICE_CLI_PROFILE_ROOT ?? "/app/.office-accounts").trim();
+    this.profileRoot = (deps.profileRoot ?? resolveDefaultOfficeCliProfileRoot()).trim();
     this.containerName = (deps.containerName ?? process.env.OFFICE_APP_CONTAINER_NAME ?? "donggricompany").trim();
   }
 
@@ -341,8 +342,11 @@ export class CliAccountGateService {
 
   private ensureCodexPoolExists(accountPoolId: string, label: string, now: number): void {
     const existing = this.getPoolRow("codex", accountPoolId);
-    if (existing) return;
     const profileHome = this.buildProfileHome("codex", accountPoolId);
+    if (existing) {
+      this.repairLegacyGeneratedProfileHome(existing, profileHome, now);
+      return;
+    }
     this.db
       .prepare(
         `INSERT INTO cli_account_pools (
@@ -350,6 +354,18 @@ export class CliAccountGateService {
          ) VALUES (?, ?, ?, ?, ?, 'auth_required', NULL, NULL, ?, ?)`,
       )
       .run(randomUUID(), "codex", accountPoolId, label, profileHome, now, now);
+  }
+
+  private repairLegacyGeneratedProfileHome(row: CliAccountPoolRow, nextProfileHome: string, now: number): void {
+    if (!isLegacyGeneratedOfficeProfileHome(row.profile_home)) return;
+    if (path.normalize(row.profile_home) === path.normalize(nextProfileHome)) return;
+    this.db
+      .prepare(
+        `UPDATE cli_account_pools
+         SET profile_home = ?, updated_at = ?
+         WHERE provider = ? AND account_pool_id = ?`,
+      )
+      .run(nextProfileHome, now, row.provider, row.account_pool_id);
   }
 
   createPool(provider: string, accountPoolId: string, label?: string): CliAccountPoolView {
@@ -599,7 +615,7 @@ export class CliAccountGateService {
   private buildProfileHome(provider: string, accountPoolId: string): string {
     const safeProvider = sanitizeToken(provider) || "provider";
     const safePool = sanitizeToken(accountPoolId) || "pool";
-    return path.posix.join(this.profileRoot, safeProvider, safePool);
+    return path.join(this.profileRoot, safeProvider, safePool);
   }
 
   private toView(row: CliAccountPoolRow): CliAccountPoolView {
@@ -635,6 +651,27 @@ function sanitizeToken(value: string): string {
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
+}
+
+function resolveDefaultOfficeCliProfileRoot(): string {
+  const fromEnv = String(process.env.OFFICE_CLI_PROFILE_ROOT ?? "").trim();
+  if (fromEnv) return fromEnv;
+
+  if (process.platform === "win32") {
+    return path.join(process.cwd(), "data", "office-accounts");
+  }
+
+  const localDataRoot = path.join(process.cwd(), "data", "office-accounts");
+  if (fs.existsSync(localDataRoot)) return localDataRoot;
+  return "/app/.office-accounts";
+}
+
+function isLegacyGeneratedOfficeProfileHome(raw: string): boolean {
+  const normalized = String(raw ?? "")
+    .trim()
+    .replace(/\\/g, "/")
+    .toLowerCase();
+  return normalized.startsWith("/app/.office-accounts/") || /^[a-z]:\/app\/\.office-accounts\//.test(normalized);
 }
 
 function isBinaryInstalled(provider: string): boolean {
@@ -722,6 +759,9 @@ function normalizeCodexJsonText(raw: string): string {
 function resolveCodexMultiAuthStoragePath(): string {
   const fromEnv = String(process.env.CODEX_MULTI_AUTH_STORAGE_PATH ?? "").trim();
   if (fromEnv) return fromEnv;
+  if (process.platform === "win32") {
+    return path.join(os.homedir(), ".codex", "multi-auth", "openai-codex-accounts.json");
+  }
   return "/home/app/.codex/multi-auth/openai-codex-accounts.json";
 }
 
@@ -830,7 +870,7 @@ function hasAuthArtifact(provider: string, profileHome: string): boolean {
   };
   const markerList = markers[provider as ExecutionProvider];
   if (!Array.isArray(markerList) || markerList.length === 0) return false;
-  return markerList.some((relativePath) => fileExistsNonEmpty(path.posix.join(profileHome, relativePath)));
+  return markerList.some((relativePath) => fileExistsNonEmpty(path.join(profileHome, relativePath)));
 }
 
 function fileExistsNonEmpty(filePath: string): boolean {

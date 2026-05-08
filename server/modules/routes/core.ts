@@ -371,6 +371,7 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
     normalizeTextField,
     runInTransaction,
     nowMs,
+    activeProcesses,
   });
 
   // ---------------------------------------------------------------------------

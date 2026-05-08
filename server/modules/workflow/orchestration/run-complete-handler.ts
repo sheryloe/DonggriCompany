@@ -66,6 +66,54 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
     }
   }
 
+  function parseJsonRecord(line: string): Record<string, unknown> | null {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) return null;
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function isIgnorableCliResultLine(line: string): boolean {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    if (/^===== task run start\b/i.test(trimmed)) return true;
+    if (/^\[Claw-Empire\] CLI account env:/i.test(trimmed)) return true;
+    if (/^reading prompt from stdin\.{0,3}$/i.test(trimmed)) return true;
+    if (/^\d{4}-\d{2}-\d{2}T.+\s+(WARN|ERROR)\s+codex_core_(plugins|skills)::/i.test(trimmed)) return true;
+    if (/^\d{4}-\d{2}-\d{2}T.+\s+ERROR\s+codex_models_manager::manager:/i.test(trimmed)) return true;
+    if (/^<\/?(html|head|body|script|style|svg|path|meta|div|span|noscript)\b/i.test(trimmed)) return true;
+    if (/cloudflare|challenge-platform|window\._cf_chl_opt|enable javascript and cookies/i.test(trimmed)) return true;
+    if (/"models"\s*:\s*\[|"model_picker_version"\s*:|"product_features"\s*:/i.test(trimmed)) return true;
+    return false;
+  }
+
+  function extractTaskResultFromLog(raw: string): string | null {
+    let lastAgentMessage: string | null = null;
+    for (const line of raw.split(/\r?\n/)) {
+      const record = parseJsonRecord(line);
+      if (!record) continue;
+      const item = record.item as Record<string, unknown> | undefined;
+      if (record.type === "item.completed" && item?.type === "agent_message" && typeof item.text === "string") {
+        lastAgentMessage = item.text.trim();
+      } else if (record.type === "message" && typeof record.content === "string") {
+        lastAgentMessage = record.content.trim();
+      }
+    }
+    if (lastAgentMessage) return lastAgentMessage.slice(-4000);
+
+    const cleaned = raw
+      .split(/\r?\n/)
+      .filter((line) => !isIgnorableCliResultLine(line))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    return cleaned ? cleaned.slice(-2000) : null;
+  }
+
   function mergeWorkflowMeta(taskId: string, mutate: (meta: Record<string, unknown>) => void): void {
     const row = db.prepare("SELECT workflow_meta_json FROM tasks WHERE id = ?").get(taskId) as
       | { workflow_meta_json: string | null }
@@ -151,7 +199,7 @@ export function createRunCompleteHandler(deps: CreateRunCompleteHandlerDeps) {
     try {
       if (fs.existsSync(logPath)) {
         const raw = fs.readFileSync(logPath, "utf8");
-        result = raw.slice(-2000);
+        result = extractTaskResultFromLog(raw);
       }
     } catch {
       /* ignore */

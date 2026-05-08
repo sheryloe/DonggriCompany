@@ -1,6 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getProjectModules, type ProjectDecisionEventItem, type ProjectTaskHistoryItem } from "../../api";
+import {
+  getProjectHealth,
+  getProjectModules,
+  recoverProjectOrphanTask,
+  type ProjectDecisionEventItem,
+  type ProjectTaskHistoryItem,
+} from "../../api";
 import { approveMemoryPromotion, drainBeadsOutbox, scanMemoryPromotions } from "../../api/memory";
 import type { Agent, Project, ProjectMemoryResponse } from "../../types";
 import type { GroupedProjectTaskCard } from "./types";
@@ -11,10 +17,137 @@ vi.mock("../../api", async (importOriginal) => {
   return {
     ...actual,
     getProjectModules: vi.fn(async () => ({ bindings: [] })),
+    getProjectHealth: vi.fn(async () => ({
+      ok: true,
+      project: {
+        id: "project-1",
+        name: "Empire",
+        project_path: "D:\\Projects\\Empire",
+        core_goal: "Stabilize rollout",
+      },
+      health: "critical",
+      summary: {
+        total_tasks: 2,
+        open_tasks: 2,
+        done_tasks: 0,
+        cancelled_tasks: 0,
+        orphan_candidates: 1,
+        qa_hold_items: 1,
+        review_waiting: 1,
+        active_running: 0,
+      },
+      status_counts: { inbox: 1, review: 1 },
+      department_counts: { dev: 1, qa: 1 },
+      blockers: [
+        {
+          id: "orphan-1",
+          title: "Delegated implementation stalled",
+          status: "inbox",
+          task_type: "development",
+          priority: 1,
+          department_id: "dev",
+          department_name: "Development",
+          department_name_ko: "개발",
+          assigned_agent_id: "agent-1",
+          assigned_agent_name: "Planner",
+          assigned_agent_name_ko: "기획 리더",
+          source_task_id: "task-1",
+          latest_log: "Recovery watchdog moved orphan task to inbox.",
+          result_excerpt: null,
+          evidence_reason: "orphan_candidate",
+          created_at: 1,
+          updated_at: 2,
+        },
+        {
+          id: "qa-1",
+          title: "QA GO/NO-GO Hold",
+          status: "review",
+          task_type: "general",
+          priority: 1,
+          department_id: "qa",
+          department_name: "QA",
+          department_name_ko: "QA",
+          assigned_agent_id: "agent-1",
+          assigned_agent_name: "Planner",
+          assigned_agent_name_ko: "기획 리더",
+          source_task_id: null,
+          latest_log: "QA Hold: empty state and 430px screenshot missing.",
+          result_excerpt: null,
+          evidence_reason: "qa_hold_evidence",
+          created_at: 1,
+          updated_at: 2,
+        },
+      ],
+      orphan_candidates: [
+        {
+          id: "orphan-1",
+          title: "Delegated implementation stalled",
+          status: "inbox",
+          task_type: "development",
+          priority: 1,
+          department_id: "dev",
+          department_name: "Development",
+          department_name_ko: "개발",
+          assigned_agent_id: "agent-1",
+          assigned_agent_name: "Planner",
+          assigned_agent_name_ko: "기획 리더",
+          source_task_id: "task-1",
+          latest_log: "Recovery watchdog moved orphan task to inbox.",
+          result_excerpt: null,
+          evidence_reason: "orphan_candidate",
+          created_at: 1,
+          updated_at: 2,
+        },
+      ],
+      generated_at: 3,
+    })),
+    recoverProjectOrphanTask: vi.fn(async () => ({
+      ok: true,
+      task: {
+        id: "orphan-1",
+        title: "Delegated implementation stalled",
+        status: "planned",
+        task_type: "development",
+        priority: 1,
+        department_id: "dev",
+        department_name: "Development",
+        department_name_ko: "개발",
+        assigned_agent_id: "agent-1",
+        assigned_agent_name: "Planner",
+        assigned_agent_name_ko: "기획 리더",
+        source_task_id: "task-1",
+        latest_log: "ORPHAN_RECOVERY queued by project health panel",
+        result_excerpt: null,
+        evidence_reason: "orphan_recovered",
+        created_at: 1,
+        updated_at: 3,
+      },
+      previous_status: "inbox",
+      status: "planned",
+    })),
+    getMemorySearchProfiles: vi.fn(async () => []),
+    saveMemorySearchProfile: vi.fn(async (input: any) => ({
+      id: "profile-1",
+      kind: input.kind,
+      owner_key: "local",
+      project_id: input.project_id ?? null,
+      label: input.label ?? input.query ?? "",
+      query: input.query ?? "",
+      filters_json: JSON.stringify(input.filters ?? {}),
+      last_used_at: 1,
+      use_count: 1,
+      created_at: 1,
+      updated_at: 1,
+    })),
+    deleteMemorySearchProfile: vi.fn(async () => undefined),
+    getQualityMetricSummary: vi.fn(async () => []),
+    searchMemory: vi.fn(async () => ({ ok: true, memories: [], quality_metrics: [] })),
   };
 });
 
 const getProjectModulesMock = vi.mocked(getProjectModules);
+const getProjectHealthMock = vi.mocked(getProjectHealth);
+const recoverProjectOrphanTaskMock = vi.mocked(recoverProjectOrphanTask);
 
 vi.mock("../../api/memory", () => ({
   approveMemoryPromotion: vi.fn(async (id: string) => ({ id, status: "approved" })),
@@ -89,6 +222,8 @@ describe("ProjectInsightsPanel rollout20", () => {
     approveMemoryPromotionMock.mockClear();
     drainBeadsOutboxMock.mockClear();
     scanMemoryPromotionsMock.mockClear();
+    getProjectHealthMock.mockClear();
+    recoverProjectOrphanTaskMock.mockClear();
   });
 
   it("renders rollout20 sample badge and progress timeline", async () => {
@@ -246,5 +381,36 @@ describe("ProjectInsightsPanel rollout20", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "후보 재스캔" }));
     await waitFor(() => expect(scanMemoryPromotionsMock).toHaveBeenCalled());
+  });
+
+  it("renders project health panel and queues orphan recovery", async () => {
+    const onProjectHealthChanged = vi.fn(async () => undefined);
+    render(
+      <ProjectInsightsPanel
+        t={(messages) => messages.ko}
+        selectedProject={buildProject()}
+        loadingDetail={false}
+        isCreating={false}
+        groupedTaskCards={[]}
+        sortedReports={[]}
+        sortedDecisionEvents={[]}
+        getDecisionEventLabel={(eventType) => eventType}
+        handleOpenTaskDetail={vi.fn(async () => undefined)}
+        agents={[buildAgent()]}
+        onProjectHealthChanged={onProjectHealthChanged}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Health" }));
+    await waitFor(() => expect(getProjectHealthMock).toHaveBeenCalledWith("project-1"));
+
+    expect(screen.getByTestId("project-health-panel")).toBeInTheDocument();
+    expect(screen.getByText("프로젝트 Health Panel")).toBeInTheDocument();
+    expect(screen.getByText("고아 복구 액션")).toBeInTheDocument();
+    expect(screen.getByText("QA Hold 증거 부족")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "대기열 복구" }));
+    await waitFor(() => expect(recoverProjectOrphanTaskMock).toHaveBeenCalledWith("project-1", "orphan-1"));
+    await waitFor(() => expect(onProjectHealthChanged).toHaveBeenCalled());
   });
 });

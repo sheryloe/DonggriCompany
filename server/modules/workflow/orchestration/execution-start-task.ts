@@ -465,8 +465,17 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         executionPolicy.reasoningLevel,
         execAgent.cli_account_pool_id ?? null,
       );
-      child.on("close", (code: number | null) => {
-        handleTaskRunComplete(taskId, code ?? 1);
+      child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+        const forcedAfterFinalOutput = Boolean((child as any).__clawForcedAfterFinalOutput);
+        const normalizedCode = forcedAfterFinalOutput ? 0 : (code ?? 1);
+        if (forcedAfterFinalOutput) {
+          appendTaskLog(
+            taskId,
+            "system",
+            `RUN close normalized to success after final output (signal=${signal ?? "none"})`,
+          );
+        }
+        handleTaskRunComplete(taskId, normalizedCode);
       });
     }
 

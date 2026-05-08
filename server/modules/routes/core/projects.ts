@@ -27,6 +27,7 @@ interface RegisterProjectRoutesOptions {
   normalizeTextField: NormalizeTextField;
   runInTransaction: RunInTransaction;
   nowMs: () => number;
+  activeProcesses?: Map<string, unknown>;
 }
 
 export function registerProjectRoutes({
@@ -36,6 +37,7 @@ export function registerProjectRoutes({
   normalizeTextField,
   runInTransaction,
   nowMs,
+  activeProcesses,
 }: RegisterProjectRoutesOptions): void {
   const {
     PROJECT_PATH_ALLOWED_ROOTS,
@@ -57,6 +59,117 @@ export function registerProjectRoutes({
   const runIfTableExists = (tableName: string, sql: string, ...params: SQLInputValue[]): void => {
     if (!tableExists(tableName)) return;
     db.prepare(sql).run(...params);
+  };
+
+  type ProjectHealthTaskRow = {
+    id: string;
+    title: string;
+    status: string;
+    task_type: string | null;
+    priority: number | null;
+    department_id: string | null;
+    department_name: string | null;
+    department_name_ko: string | null;
+    assigned_agent_id: string | null;
+    assigned_agent_name: string | null;
+    assigned_agent_name_ko: string | null;
+    source_task_id: string | null;
+    result: string | null;
+    latest_log: string | null;
+    created_at: number | null;
+    updated_at: number | null;
+  };
+
+  const trimExcerpt = (value: unknown, max = 240): string | null => {
+    if (typeof value !== "string") return null;
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (!normalized) return null;
+    return normalized.length > max ? `${normalized.slice(0, max - 1)}…` : normalized;
+  };
+
+  const serializeHealthTask = (
+    row: ProjectHealthTaskRow,
+    evidenceReason: string,
+  ): Record<string, unknown> => ({
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    task_type: row.task_type ?? "general",
+    priority: Number(row.priority ?? 0),
+    department_id: row.department_id ?? null,
+    department_name: row.department_name ?? "",
+    department_name_ko: row.department_name_ko ?? "",
+    assigned_agent_id: row.assigned_agent_id ?? null,
+    assigned_agent_name: row.assigned_agent_name ?? "",
+    assigned_agent_name_ko: row.assigned_agent_name_ko ?? "",
+    source_task_id: row.source_task_id ?? null,
+    latest_log: trimExcerpt(row.latest_log),
+    result_excerpt: trimExcerpt(row.result),
+    evidence_reason: evidenceReason,
+    created_at: Number(row.created_at ?? 0),
+    updated_at: Number(row.updated_at ?? row.created_at ?? 0),
+  });
+
+  const isActiveTaskProcess = (taskId: string): boolean => Boolean(activeProcesses?.has(taskId));
+
+  const getProjectHealthTaskRows = (projectId: string): ProjectHealthTaskRow[] =>
+    db
+      .prepare(
+        `
+    SELECT
+      t.id,
+      t.title,
+      t.status,
+      t.task_type,
+      t.priority,
+      t.department_id,
+      COALESCE(d.name, '') AS department_name,
+      COALESCE(d.name_ko, '') AS department_name_ko,
+      t.assigned_agent_id,
+      COALESCE(a.name, '') AS assigned_agent_name,
+      COALESCE(a.name_ko, '') AS assigned_agent_name_ko,
+      t.source_task_id,
+      t.result,
+      (
+        SELECT tl.message
+        FROM task_logs tl
+        WHERE tl.task_id = t.id
+        ORDER BY tl.created_at DESC, tl.id DESC
+        LIMIT 1
+      ) AS latest_log,
+      t.created_at,
+      t.updated_at
+    FROM tasks t
+    LEFT JOIN departments d ON d.id = t.department_id
+    LEFT JOIN agents a ON a.id = t.assigned_agent_id
+    WHERE t.project_id = ?
+    ORDER BY COALESCE(t.updated_at, t.created_at) DESC, t.created_at DESC
+    LIMIT 500
+  `,
+      )
+      .all(projectId) as ProjectHealthTaskRow[];
+
+  const hasQaHoldEvidenceGap = (row: ProjectHealthTaskRow): boolean => {
+    const haystack = `${row.title}\n${row.result ?? ""}\n${row.latest_log ?? ""}`;
+    return /qa\s*hold|go\/no-go\s*hold|hold\b|보류|empty state|error state|430px|screenshot missing|evidence missing|증거 부족/i.test(
+      haystack,
+    );
+  };
+
+  const isOrphanCandidate = (row: ProjectHealthTaskRow): boolean => {
+    const hasSourceTask = typeof row.source_task_id === "string" && row.source_task_id.trim().length > 0;
+    if (row.status === "in_progress" && !isActiveTaskProcess(row.id)) return true;
+    if (row.status === "inbox" && hasSourceTask && row.assigned_agent_id) return true;
+    return false;
+  };
+
+  const getBlockerReason = (row: ProjectHealthTaskRow): string | null => {
+    if (isOrphanCandidate(row)) return "orphan_candidate";
+    if (hasQaHoldEvidenceGap(row)) return "qa_hold_evidence";
+    if (row.status === "review") return "review_waiting";
+    if (row.status === "pending") return "paused_or_pending";
+    if (row.status === "blocked") return "blocked";
+    return null;
   };
 
   app.get("/api/projects", (req, res) => {
@@ -638,6 +751,162 @@ export function registerProjectRoutes({
       tasks,
       reports,
       decision_events: decisionEvents,
+    });
+  });
+
+  app.get("/api/projects/:id/health", (req, res) => {
+    const id = String(req.params.id);
+    const project = db
+      .prepare("SELECT id, name, project_path, core_goal FROM projects WHERE id = ?")
+      .get(id) as
+      | {
+          id: string;
+          name: string;
+          project_path: string;
+          core_goal: string;
+        }
+      | undefined;
+    if (!project) return res.status(404).json({ error: "not_found" });
+
+    const rows = getProjectHealthTaskRows(id);
+    const statusCounts: Record<string, number> = {};
+    const departmentCounts: Record<string, number> = {};
+    let doneTasks = 0;
+    let cancelledTasks = 0;
+    let openTasks = 0;
+    let reviewWaiting = 0;
+    let activeRunning = 0;
+    let qaHoldItems = 0;
+
+    const orphanRows: ProjectHealthTaskRow[] = [];
+    const blockerRows: Array<{ row: ProjectHealthTaskRow; reason: string }> = [];
+
+    for (const row of rows) {
+      statusCounts[row.status] = (statusCounts[row.status] ?? 0) + 1;
+      const departmentKey = row.department_id?.trim() || "unassigned";
+      departmentCounts[departmentKey] = (departmentCounts[departmentKey] ?? 0) + 1;
+      if (row.status === "done") doneTasks += 1;
+      if (row.status === "cancelled") cancelledTasks += 1;
+      if (row.status !== "done" && row.status !== "cancelled") openTasks += 1;
+      if (row.status === "review") reviewWaiting += 1;
+      if (isActiveTaskProcess(row.id)) activeRunning += 1;
+      if (hasQaHoldEvidenceGap(row)) qaHoldItems += 1;
+      if (isOrphanCandidate(row)) orphanRows.push(row);
+      const reason = getBlockerReason(row);
+      if (reason) blockerRows.push({ row, reason });
+    }
+
+    const health =
+      rows.length === 0
+        ? "empty"
+        : orphanRows.length > 0 || qaHoldItems > 0
+          ? "critical"
+          : openTasks > 0
+            ? "warning"
+            : "good";
+
+    res.json({
+      ok: true,
+      project,
+      health,
+      summary: {
+        total_tasks: rows.length,
+        open_tasks: openTasks,
+        done_tasks: doneTasks,
+        cancelled_tasks: cancelledTasks,
+        orphan_candidates: orphanRows.length,
+        qa_hold_items: qaHoldItems,
+        review_waiting: reviewWaiting,
+        active_running: activeRunning,
+      },
+      status_counts: statusCounts,
+      department_counts: departmentCounts,
+      blockers: blockerRows.slice(0, 30).map((item) => serializeHealthTask(item.row, item.reason)),
+      orphan_candidates: orphanRows.slice(0, 30).map((row) => serializeHealthTask(row, "orphan_candidate")),
+      generated_at: nowMs(),
+    });
+  });
+
+  app.post("/api/projects/:id/orphan-tasks/:taskId/recover", (req, res) => {
+    const projectId = String(req.params.id);
+    const taskId = String(req.params.taskId);
+    const project = db.prepare("SELECT id FROM projects WHERE id = ?").get(projectId);
+    if (!project) return res.status(404).json({ error: "project_not_found" });
+
+    const row = db
+      .prepare(
+        `
+    SELECT
+      t.id,
+      t.title,
+      t.status,
+      t.task_type,
+      t.priority,
+      t.department_id,
+      COALESCE(d.name, '') AS department_name,
+      COALESCE(d.name_ko, '') AS department_name_ko,
+      t.assigned_agent_id,
+      COALESCE(a.name, '') AS assigned_agent_name,
+      COALESCE(a.name_ko, '') AS assigned_agent_name_ko,
+      t.source_task_id,
+      t.result,
+      (
+        SELECT tl.message
+        FROM task_logs tl
+        WHERE tl.task_id = t.id
+        ORDER BY tl.created_at DESC, tl.id DESC
+        LIMIT 1
+      ) AS latest_log,
+      t.created_at,
+      t.updated_at
+    FROM tasks t
+    LEFT JOIN departments d ON d.id = t.department_id
+    LEFT JOIN agents a ON a.id = t.assigned_agent_id
+    WHERE t.project_id = ? AND t.id = ?
+  `,
+      )
+      .get(projectId, taskId) as ProjectHealthTaskRow | undefined;
+    if (!row) return res.status(404).json({ error: "task_not_found" });
+    if (isActiveTaskProcess(taskId)) {
+      return res.status(409).json({ error: "task_process_active", message: "Task process is still active." });
+    }
+    if (row.status === "done" || row.status === "review") {
+      return res.status(400).json({ error: "invalid_status", status: row.status });
+    }
+
+    const previousStatus = row.status;
+    const targetStatus = row.assigned_agent_id ? "planned" : "inbox";
+    const t = nowMs();
+    runInTransaction(() => {
+      db.prepare("UPDATE tasks SET status = ?, started_at = NULL, updated_at = ? WHERE id = ?").run(
+        targetStatus,
+        t,
+        taskId,
+      );
+      if (row.assigned_agent_id) {
+        db.prepare(
+          "UPDATE agents SET status = 'idle', current_task_id = NULL WHERE id = ? AND current_task_id = ?",
+        ).run(row.assigned_agent_id, taskId);
+      }
+      db.prepare("INSERT INTO task_logs (task_id, kind, message, created_at) VALUES (?, 'system', ?, ?)").run(
+        taskId,
+        `ORPHAN_RECOVERY queued by project health panel (${previousStatus} -> ${targetStatus})`,
+        t,
+      );
+    });
+
+    const updated = getProjectHealthTaskRows(projectId).find((item) => item.id === taskId) ?? {
+      ...row,
+      status: targetStatus,
+      updated_at: t,
+      latest_log: `ORPHAN_RECOVERY queued by project health panel (${previousStatus} -> ${targetStatus})`,
+    };
+
+    res.json({
+      ok: true,
+      task: serializeHealthTask(updated, "orphan_recovered"),
+      previous_status: previousStatus,
+      status: targetStatus,
     });
   });
 

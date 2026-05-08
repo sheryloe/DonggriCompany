@@ -1,5 +1,9 @@
 ﻿import { describe, expect, it } from "vitest";
-import { buildWatchdogRecoveryMessage, resolveStartupAuthenticatedProviders } from "./lifecycle.ts";
+import {
+  buildWatchdogRecoveryMessage,
+  resolveStartupAuthenticatedProviders,
+  terminalLogHasCliFinalOutput,
+} from "./lifecycle.ts";
 
 describe("lifecycle startup helpers", () => {
   it("uses connected CLI account pools as startup authenticated provider evidence", () => {
@@ -26,5 +30,28 @@ describe("lifecycle startup helpers", () => {
     expect(buildWatchdogRecoveryMessage("Task", "zh")).toBe(
       "[WATCHDOG] 'Task' was in progress but had no active process. Recovered to inbox.",
     );
+  });
+
+  it("detects successful final Codex output in terminal logs for orphan recovery", () => {
+    expect(
+      terminalLogHasCliFinalOutput(
+        [
+          "noise",
+          JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "Done." } }),
+        ].join("\n"),
+      ),
+    ).toBe(true);
+    expect(terminalLogHasCliFinalOutput(JSON.stringify({ type: "turn.completed", usage: {} }))).toBe(true);
+    expect(
+      terminalLogHasCliFinalOutput(JSON.stringify({ type: "item.completed", item: { type: "command_execution" } })),
+    ).toBe(false);
+    expect(
+      terminalLogHasCliFinalOutput(
+        JSON.stringify({
+          type: "item.completed",
+          item: { type: "agent_message", text: "I found corrupted docs and will apply a follow-up patch." },
+        }),
+      ),
+    ).toBe(false);
   });
 });

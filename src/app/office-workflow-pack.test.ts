@@ -65,6 +65,27 @@ describe("buildOfficePackStarterAgents", () => {
     expect(starters.length).toBeGreaterThanOrEqual(12);
   });
 
+  it("assigns codex-main to Codex starter agents and leaves non-Codex agents unlocked", () => {
+    const starters = buildOfficePackStarterAgents({
+      packKey: "donggri",
+      departments: [
+        makeDepartment("planning"),
+        makeDepartment("dev"),
+        makeDepartment("design"),
+        makeDepartment("qa"),
+        makeDepartment("operations"),
+        makeDepartment("devsecops"),
+      ],
+    });
+    expect(starters.some((agent) => agent.cli_provider === "codex")).toBe(true);
+    expect(
+      starters.filter((agent) => agent.cli_provider === "codex").every((agent) => agent.cli_account_pool_id === "codex-main"),
+    ).toBe(true);
+    expect(
+      starters.filter((agent) => agent.cli_provider !== "codex").every((agent) => agent.cli_account_pool_id === null),
+    ).toBe(true);
+  });
+
   it("generates locale-aware personality text", () => {
     const startersEn = buildOfficePackStarterAgents({
       packKey: "report",

@@ -394,6 +394,8 @@ export function resolveOfficePackSeedProvider(params: {
   return "codex";
 }
 
+const DONGGRI_DEFAULT_CODEX_ACCOUNT_POOL_ID = "codex-main";
+
 export function buildOfficePackStarterAgents(params: {
   packKey: WorkflowPackKey;
   departments: Department[];
@@ -444,7 +446,7 @@ export function buildOfficePackStarterAgents(params: {
       cli_model: null,
       cli_reasoning_level: null,
       run_mode: "standard",
-      cli_account_pool_id: null,
+      cli_account_pool_id: cliProvider === "codex" ? DONGGRI_DEFAULT_CODEX_ACCOUNT_POOL_ID : null,
       workflow_profile: null,
       family:
         department.id === "planning"

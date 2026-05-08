@@ -285,3 +285,13 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Memory API tests passed with 16 tests; quality metrics API tests passed with 2 tests; combined API regression passed with 5 files and 34 tests; MemorySearchPanel web tests passed with 6 tests; combined web regression passed with 3 files and 13 tests; production build passed; diff whitespace check passed.
 - Risk: ANN is SQLite bucket prefilter plus cosine rerank, not a native vector extension or external vector database. Provider calls are disabled/mocked in tests and depend on existing `api_providers` configuration at runtime; failures are recorded and fall back to `local-hash-v3`.
 - Follow-up: Add operator controls for scheduled embedding backfill and retention/rollup policy for `quality_metric_events` once real production volume is observed.
+
+## 2026-05-08 11:15 KST - Toss In-App Viral Map Internal Workflow Validation
+
+- Request: Use Codex multi-auth account 1 first and create a Toss in-app trend validation project inside DonggriCompany to verify planning through operations workflow.
+- Change: Switched `codex-multi-auth` selection to account 1, synced Donggri CLI pools, assigned all Codex staff to `codex-main`, created Donggri project `88c06b5f-f678-46b1-9e17-0fcc72594898`, generated runtime project `G:\Donggri_DevDrive\repos\runtime\DonggriCompany\toss-inapp-viral-map-20260508-110049`, and registered six completed department tasks with evidence results.
+- Changed files: `docs/quality-reports/toss-inapp-viral-map-validation-2026-05-08.md`, `docs/QUALITY_LOG.md`, `src/app/office-workflow-pack.ts`, `src/app/office-workflow-pack.test.ts`.
+- Runtime artifact: Runtime project Git commit `3296290 Create Toss in-app viral map validation MVP`.
+- Commands: `corepack pnpm install`, `corepack pnpm test`, `corepack pnpm build`, `corepack pnpm screenshots`, runtime `git diff --cached --check`.
+- Validation: Runtime unit test passed with 1 test; production build passed; Playwright screenshots generated for mobile home, mobile detail, mobile complete, and desktop workbench; project-specific Vite process was cleaned after capture.
+- Risk: `codex-main` is execution-ready, but `codex-main-2` through `codex-main-4` are fallback candidates only after auth artifact connection; real Toss console, mTLS, login, payment, and location integrations remain out of scope.

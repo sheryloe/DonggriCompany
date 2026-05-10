@@ -95,6 +95,14 @@ function getDefaultAllowedRoots(): string[] {
   pushRoot(path.join(reposRoot, "runtime"));
   pushRoot(path.join(reposRoot, "runtime", path.basename(projectRoot)));
 
+  // Desktop/server launchers may run from a bundled app directory instead of
+  // the repository root. Keep the canonical Dev Drive roots available when
+  // they exist so runtime validation projects do not get stranded.
+  const devDriveReposRoot = path.normalize("G:\\Donggri_DevDrive\\repos");
+  pushRoot(devDriveReposRoot);
+  pushRoot(path.join(devDriveReposRoot, "runtime"));
+  pushRoot(path.join(devDriveReposRoot, "runtime", "DonggriCompany"));
+
   return roots;
 }
 

@@ -316,3 +316,97 @@ ISO 9001-style work records for traceability, verification, and risk follow-up.
 - Validation: Project health API tests passed with 2 tests; project detail UI tests passed with 4 tests; runtime unit tests passed with 2 tests; runtime and root production builds passed; DevSecOps gate passed; screenshot evidence generated for `mobile-home-390.png`, `mobile-detail-390.png`, `mobile-complete-390.png`, `desktop-workbench-1440.png`, `mobile-empty-430.png`, and `mobile-error-430.png`.
 - Risk: The recovery action deliberately queues recovered work instead of automatically launching CLI execution to avoid unintended reruns. Existing live server must be restarted to expose the new route in the running UI.
 - Follow-up: Use the Health tab to recover/triage current project blockers, then rerun the department workflow if QA wants a fresh GO/NO-GO review.
+
+## 2026-05-08 22:50 KST - Donggri Workflow State Reconciliation
+
+- Request: Recover the mismatch between the Toss in-app runtime commit evidence and the DonggriCompany board state without adding new task statuses.
+- Change: Added Dev Drive runtime roots to the execution path gate, normalized legacy Codex account pool profile paths to repo-scoped office accounts, expanded project health with path/account/stale-assignment blockers, added supersede evidence mode for orphan recovery, added review approval and stale-assignment cleanup APIs, refreshed the Project Health UI actions, and excluded completed/cancelled tasks from active QA Hold blocker counting.
+- Changed files: `server/modules/workflow/core/execution-path-gate.ts`, `server/modules/workflow/agents/cli-account-pool-env.ts`, `server/modules/lifecycle.ts`, `server/modules/routes/core/projects.ts`, `server/modules/routes/core/projects.health.test.ts`, `server/modules/workflow/agents/cli-runtime.account-pool.test.ts`, `src/api/organization-projects.ts`, `src/components/project-manager/ProjectHealthPanel.tsx`, `src/components/project-manager/ProjectInsightsPanel.tsx`, `src/components/project-manager/ProjectInsightsPanel.test.tsx`, `docs/QUALITY_LOG.md`.
+- Runtime reconciliation: Using authenticated project APIs against local port 8791, cancelled `4f86dccc-cc4d-44d5-acab-74ed6d56c09b` and `ffecfd8c-faa5-4561-bc5a-9adabec1586d` as superseded by runtime commit `557b3ec`, approved reviews `447f0cef-2944-4d30-8618-c6f4dcff40d5` and `e5661b06-5e32-42fc-8190-d66e985bdc2f`, and ran stale-assignment cleanup.
+- Commands: `corepack pnpm test:api -- projects.health execution-path-gate cli-runtime.account-pool`, `corepack pnpm test:web -- ProjectInsightsPanel`, `corepack pnpm build`, `git diff --check`.
+- Validation: API regression passed with 3 files and 21 tests; ProjectInsightsPanel web tests passed with 4 tests; production build passed; diff whitespace check passed. Final project health for `88c06b5f-f678-46b1-9e17-0fcc72594898` returned `health=good`, `open_tasks=0`, `orphan_candidates=0`, `review_waiting=0`, `qa_hold_items=0`, and `stale_assignments=0`.
+- Risk: The live 8900 server still needs restart/reload to pick up the new code if it was already running before this patch. Runtime reconciliation was applied to the local SQLite DB through the new API on a temporary 8791 server.
+- Follow-up: Restart the active DonggriCompany server/UI and verify the Health tab visually reflects the reconciled state.
+
+## 2026-05-10 14:09 KST - Project Health Hardening Priority Fixes
+
+- Request: Identify the priority order among the four remaining workflow-health issues and resolve them one by one.
+- Priority: P0 account-pool auth artifact validation, P0 stale-assignment cleanup race guard, P1 QA Hold evidence-gap precision, and P2 operator evidence input UX.
+- Change: Added provider-specific auth artifact checks for Codex/Gemini/Jules account pools, reused legacy profile-home normalization in project health checks, made stale-assignment cleanup report only rows actually cleared, narrowed QA Hold detection to require both a hold signal and an evidence-gap signal, and added operator-supplied commit/note evidence fields to Project Health actions.
+- Changed files: `server/modules/workflow/agents/cli-account-pool-env.ts`, `server/modules/routes/core/projects.ts`, `server/modules/routes/core/projects.health.test.ts`, `server/modules/workflow/agents/cli-runtime.account-pool.test.ts`, `src/components/project-manager/ProjectHealthPanel.tsx`, `src/components/project-manager/ProjectInsightsPanel.test.tsx`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:api -- projects.health execution-path-gate cli-runtime.account-pool`, `corepack pnpm test:web -- ProjectInsightsPanel`, `corepack pnpm build`, `git diff --check`.
+- Validation: API regression passed with 3 files and 24 tests; ProjectInsightsPanel web tests passed with 4 tests; production build passed; diff whitespace check passed with only the existing CRLF normalization warning for `server/modules/routes/core/projects.ts`.
+- Risk: Auth artifact markers are conservative and provider-specific. If a future provider stores OAuth material under a different canonical path, the marker list must be extended before marking the pool executable.
+- Follow-up: Restart the active DonggriCompany server/UI before validating the Health tab in the running app.
+
+## 2026-05-10 14:43 KST - Gemini Pro Remaining Project Health Review Follow-up
+
+- Request: Use Gemini CLI Pro to perform a full remaining-issue review, create an analysis report, and fix the actionable findings.
+- Gemini: Ran `gemini-3.1-pro-preview` through `scripts/run-gemini-pro-analysis.ps1`; fallback to `gemini-2.5-pro` was not needed. Gemini scored the patch at 85/100 before follow-up fixes and identified P0/P1/P2 action items.
+- Change: Generated a transient Gemini review prompt/report for local analysis and removed those files from the commit scope, tightened orphan recovery so `requeue` only accepts true orphan candidates while `supersede` can close path-blocked pending tasks with evidence, rejected already closed tasks in the recovery route, broadcasted task/agent updates after Project Health recovery/approval/stale-cleanup actions, and collapsed workflow metadata writes into the main task status update.
+- Changed files: `server/modules/routes/core.ts`, `server/modules/routes/core/projects.ts`, `server/modules/routes/core/projects.health.test.ts`, `docs/QUALITY_LOG.md`.
+- Commands: `gemini --version`, `.\scripts\run-gemini-pro-analysis.ps1 -PromptFile '.\docs\analysis\GEMINI_PRO_PROJECT_HEALTH_REMAINING_REVIEW_PROMPT_2026-05-10.md' -OutputPath '.\docs\analysis\GEMINI_PRO_PROJECT_HEALTH_REMAINING_REVIEW_2026-05-10.md' -PrimaryModel 'gemini-3.1-pro-preview' -FallbackModel 'gemini-2.5-pro' -TimeoutSeconds 1200`, `corepack pnpm test:api -- projects.health execution-path-gate cli-runtime.account-pool`, `corepack pnpm test:web -- ProjectInsightsPanel`, `corepack pnpm build`, `git diff --check`.
+- Validation: Gemini CLI version `0.41.2` was available; Gemini Pro report generation completed with `PrimaryCapacity429=False` and `FallbackUsed=False`; API regression passed with 3 files and 26 tests; ProjectInsightsPanel web regression passed with 4 tests; production build passed; diff whitespace check passed with only the existing CRLF normalization warning for `server/modules/routes/core/projects.ts`.
+- Risk: The generated Gemini report was produced through the CLI and may render Korean poorly in some PowerShell consoles, but the actionable findings were interpreted and cross-checked against the code before implementation.
+- Follow-up: Per-task evidence input scoping in the Project Health panel remains a UX refinement candidate, not a commit blocker.
+
+## 2026-05-10 14:52 KST - DORO Noise Cleanup and Project Health Evidence UX
+
+- Request: Resolve the remaining dirty `agents/qa/DORO/*` files and handle the remaining follow-up improvement.
+- Change: Reverted DORO timestamp-only noise in `.DORO_settings.json` and `DORO_AGENTS.md`; moved Project Health evidence commit/note inputs from global panel state to per-task card state so review approval and supersede actions cannot accidentally share evidence across different tasks; fixed a `src/api/memory.ts` import-order lint warning found during final completeness checks.
+- Changed files: `agents/qa/DORO/.DORO_settings.json`, `agents/qa/DORO/DORO_AGENTS.md`, `src/components/project-manager/ProjectHealthPanel.tsx`, `src/components/project-manager/ProjectInsightsPanel.test.tsx`, `src/api/memory.ts`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:web -- ProjectInsightsPanel`, `corepack pnpm test:api -- projects.health execution-path-gate cli-runtime.account-pool`, `corepack pnpm lint`, `corepack pnpm build`, `git diff --check`.
+- Validation: DORO files no longer appear in `git status --short`; ProjectInsightsPanel web tests passed with 4 tests; API regression passed with 3 files and 26 tests; lint passed with 0 errors and 0 warnings after import-order cleanup; production build passed; diff whitespace check passed with only the existing CRLF normalization warning for `server/modules/routes/core/projects.ts`.
+- Risk: Evidence inputs now appear on every actionable health card, which is safer for operations but slightly denser visually.
+- Follow-up: Restart the active server/UI before browser smoke testing the Health tab.
+
+## 2026-05-10 18:49 KST - Project Health 98-Point Hardening Gate
+
+- Request: Raise the completion score from 94 to 98 by removing commit-time quality risks without adding new product scope.
+- Change: Normalized `server/modules/routes/core/projects.ts` to LF, documented Project Health endpoints in `docs/openapi.json`, added a health-log priority ordering so later policy snapshot logs do not hide `project_path_not_allowed` evidence, and verified the Project Health tab through a real e2e UI smoke. Transient Gemini/report files and smoke screenshots were kept out of commit scope.
+- Changed files: `server/modules/routes/core/projects.ts`, `server/modules/routes/core/projects.health.test.ts`, `docs/openapi.json`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm openapi:sync`, `corepack pnpm openapi:check`, manual Playwright smoke against `corepack pnpm dev:e2e`, `corepack pnpm lint`, `corepack pnpm test:api -- projects.health execution-path-gate cli-runtime.account-pool`, `corepack pnpm test:web -- ProjectInsightsPanel`, `corepack pnpm test:e2e -- smoke.spec.ts`, `corepack pnpm build`, `git diff --check`.
+- Validation: OpenAPI check passed with 115 operations; manual Project Health UI smoke rendered the Health panel, separate per-task commit/note inputs, supersede/review/stale cleanup buttons, and path-blocked evidence card with no horizontal overflow and no browser console/page errors; API regression passed with 3 files and 26 tests; ProjectInsightsPanel web tests passed with 4 tests; e2e smoke passed; lint passed; production build passed; `git diff --check` passed with no CRLF/whitespace warnings.
+- Risk: The visual smoke used an isolated `.tmp/e2e-runtime` database and did not mutate the production 8900 server. Runtime screenshot `.tmp/project-health-smoke.png` is intentionally untracked.
+- Follow-up: After commit/deploy, restart the active DonggriCompany server and run the same Health tab smoke against the live operator UI.
+
+## 2026-05-10 19:40 KST - Project Health E2E Action Automation
+
+- Request: Start the remaining 100-point gap with item 1, converting the Project Health manual smoke into an automated e2e spec.
+- Change: Added `tests/e2e/project-health.spec.ts` to seed an isolated Project Health fixture, navigate through TaskBoard to Project Manager Health, verify per-task evidence inputs and operator buttons, detect horizontal overflow/console errors, and execute stale cleanup, review approval, path-blocked supersede, and orphan requeue actions through the actual UI.
+- Changed files: `tests/e2e/project-health.spec.ts`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:e2e -- project-health.spec.ts`, `corepack pnpm test:api -- projects.health`, `corepack pnpm test:web -- ProjectInsightsPanel`, `git diff --check`.
+- Validation: Project Health e2e passed with 1 browser test; API health tests passed with 11 tests; ProjectInsightsPanel web tests passed with 4 tests; `git diff --check` passed. Agent guide file rewrites generated by the e2e dev server were restored and are not in the commit scope.
+- Risk: This closes the automated e2e evidence gap for isolated runtime. The remaining 1 point is live operator server validation after restarting the active 8900 server.
+- Follow-up: Run the same Health tab smoke against the live DonggriCompany server and record the live result.
+
+## 2026-05-10 19:51 KST - Live 8900 Project Health Operator Smoke
+
+- Request: Complete the last 1-point gap by validating the Project Health UI on the active 8900 operator server.
+- Change: Rebuilt and restarted the `donggricompany` Docker service with the current workspace code, then ran a read-only Playwright smoke against `http://127.0.0.1:8900` without mutating live project state.
+- Changed files: `docs/QUALITY_LOG.md`.
+- Commands: `docker compose up -d --build donggricompany`, `Invoke-WebRequest http://127.0.0.1:8900/api/health`, live Playwright smoke against TaskBoard -> Project Manager -> Health, `docker compose ps`, `git diff --check`.
+- Validation: Docker image build completed, container restarted and reported `healthy`; `/api/health` returned HTTP 200; live UI loaded with no browser console/page errors; selected live project `PMO Calculation E2E 1776946257` rendered the Project Health panel on 8900; panel showed `total_tasks=8`, `open_tasks=7`, `review_waiting=4`, `orphan_candidates=0`, `stale_assignments=0`, evidence inputs and review approval buttons rendered, and both panel/page horizontal overflow checks passed. Screenshot `.tmp/live-8900-health.png` is intentionally untracked.
+- Risk: The live smoke is read-only, so it verifies rendering and operator action availability but does not approve/cancel real production tasks.
+- Follow-up: Commit and push the verified change set after final staged diff review.
+
+## 2026-05-10 20:26 KST - Project Health Telegram Action Notices
+
+- Request: Resolve why Telegram messages did not arrive while Project Health appeared to be working.
+- Root cause: Telegram session delivery was available, but Project Health repair/approval/cleanup actions only updated DB/UI state and did not publish a messenger notification after successful actions. The previous live smoke was also intentionally read-only, so no action notification could be produced.
+- Change: Added a Project Health action notification contract and wired orphan requeue, supersede, review approval, and stale-assignment cleanup success paths to `telegram:global` through the existing messenger session sender. Notification failures are isolated: the action still succeeds and a warning task log is written for audit.
+- Changed files: `server/modules/routes/core.ts`, `server/modules/routes/core/projects.ts`, `server/modules/routes/core/projects.health.test.ts`, `docs/QUALITY_LOG.md`.
+- Commands: `corepack pnpm test:api -- projects.health`, `corepack pnpm test:web -- ProjectInsightsPanel`, `corepack pnpm build`, `git diff --check`.
+- Validation: Project Health API tests passed with 11 tests and now assert notification callback payloads for requeue, supersede, review approval, and stale cleanup; ProjectInsightsPanel web tests passed with 4 tests; production build passed; whitespace diff check passed.
+- Risk: The implementation sends to the global Telegram session, not department-specific bot sessions. Department-level routing remains a separate follow-up if the desired behavior is per-department Telegram fan-out.
+- Follow-up: Restart the active DonggriCompany server before expecting live Project Health action notices from the operator UI.
+
+## 2026-05-10 20:42 KST - Live 8900 Restart and Telegram Verification
+
+- Request: Restart the active server, commit, push, and reflect the latest Project Health notification changes.
+- Change: Rebuilt and restarted the `donggricompany` Docker service from the current workspace and verified the live messenger path from inside the running container.
+- Changed files: `docs/QUALITY_LOG.md`.
+- Commands: `docker compose up -d --build donggricompany`, `docker compose ps donggricompany`, `Invoke-WebRequest http://127.0.0.1:8900/api/health`, container `sendMessengerSessionMessage('telegram:global', ...)`, `git diff --check`.
+- Validation: Docker rebuild completed; container restarted and reached `healthy`; `/api/health` returned HTTP 200; live container Telegram send returned `telegram_send_ok`.
+- Risk: This verification confirms global Telegram session delivery. Actual Project Health action notices are produced when an operator performs a repair/approval/cleanup action.
+- Follow-up: Commit and push the verified change set.

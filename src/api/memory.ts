@@ -3,10 +3,10 @@ import { del, patch, post, request } from "./core";
 import type {
   AgentMemoryResponse,
   BeadsStatus,
-  MemoryOutboxItem,
-  MemoryPromotionCandidate,
   MemoryEmbeddingBackfillResult,
   MemoryEmbeddingStatus,
+  MemoryOutboxItem,
+  MemoryPromotionCandidate,
   MemorySearchProfile,
   NativeMemory,
   ProjectMemoryResponse,

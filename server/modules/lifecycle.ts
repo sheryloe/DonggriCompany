@@ -273,6 +273,47 @@ export function startLifecycle(ctx: RuntimeContext): void {
     }
   }
 
+  function recoverStaleCompletedAssignments(reason: InProgressRecoveryReason): void {
+    const staleAssignments = db
+      .prepare(
+        `
+    SELECT
+      a.id AS agent_id,
+      a.name AS agent_name,
+      a.current_task_id,
+      t.status AS task_status
+    FROM agents a
+    INNER JOIN tasks t ON t.id = a.current_task_id
+    WHERE a.current_task_id IS NOT NULL
+      AND TRIM(a.current_task_id) != ''
+      AND t.status IN ('done', 'cancelled')
+    ORDER BY a.name ASC
+  `,
+      )
+      .all() as Array<{
+      agent_id: string;
+      agent_name: string | null;
+      current_task_id: string;
+      task_status: string;
+    }>;
+
+    for (const row of staleAssignments) {
+      const cleared = db
+        .prepare("UPDATE agents SET status = 'idle', current_task_id = NULL WHERE id = ? AND current_task_id = ?")
+        .run(row.agent_id, row.current_task_id) as { changes?: number };
+      if ((cleared.changes ?? 0) === 0) continue;
+      appendTaskLog(
+        row.current_task_id,
+        "system",
+        `STALE_ASSIGNMENT_CLEANUP startup cleared agent=${row.agent_id} (${reason}, task_status=${row.task_status})`,
+      );
+      broadcast("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(row.agent_id));
+      console.warn(
+        `[Claw-Empire] Recovery (${reason}): cleared stale completed assignment ${row.agent_id} (${row.agent_name || "unknown"}) -> ${row.current_task_id} (${row.task_status})`,
+      );
+    }
+  }
+
   function recoverOrphanInProgressTasks(reason: InProgressRecoveryReason): void {
     const inProgressTasks = db
       .prepare(
@@ -465,6 +506,7 @@ export function startLifecycle(ctx: RuntimeContext): void {
 
     recoverOrphanInProgressTasks("startup");
     recoverOrphanWorkingAgents("startup");
+    recoverStaleCompletedAssignments("startup");
 
     const reviewTasks = db
       .prepare(

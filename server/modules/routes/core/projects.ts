@@ -15,14 +15,33 @@ import {
   syncProjectArtifactProjection,
 } from "../../company/project-artifacts.ts";
 import { isValidGitHubRepoFullName, normalizeGitHubRepoFullName } from "./github-validation.ts";
+import { hasCliAccountAuthArtifact, resolveCliAccountProfileHome } from "../../workflow/agents/cli-account-pool-env.ts";
 
 type FirstQueryValue = (value: unknown) => string | undefined;
 type NormalizeTextField = (value: unknown) => string | null;
 type RunInTransaction = (fn: () => void) => void;
 
+export type ProjectHealthActionNotice = {
+  action: "orphan_requeued" | "task_superseded" | "review_approved" | "stale_assignments_cleaned";
+  project_id: string;
+  project_name?: string | null;
+  task_id?: string | null;
+  task_title?: string | null;
+  previous_status?: string | null;
+  status?: string | null;
+  mode?: string | null;
+  evidence_commit?: string | null;
+  evidence_note?: string | null;
+  cleared_count?: number;
+  agent_ids?: string[];
+  at: number;
+};
+
 interface RegisterProjectRoutesOptions {
   app: Express;
   db: DatabaseSync;
+  broadcast?: (event: string, payload: unknown) => void;
+  notifyProjectHealthAction?: (notice: ProjectHealthActionNotice) => void | Promise<void>;
   firstQueryValue: FirstQueryValue;
   normalizeTextField: NormalizeTextField;
   runInTransaction: RunInTransaction;
@@ -33,6 +52,8 @@ interface RegisterProjectRoutesOptions {
 export function registerProjectRoutes({
   app,
   db,
+  broadcast,
+  notifyProjectHealthAction,
   firstQueryValue,
   normalizeTextField,
   runInTransaction,
@@ -73,19 +94,75 @@ export function registerProjectRoutes({
     assigned_agent_id: string | null;
     assigned_agent_name: string | null;
     assigned_agent_name_ko: string | null;
+    agent_cli_provider: string | null;
+    agent_cli_account_pool_id: string | null;
     source_task_id: string | null;
     result: string | null;
     latest_log: string | null;
+    workflow_meta_json: string | null;
     created_at: number | null;
     updated_at: number | null;
+  };
+
+  type StaleAssignmentRow = {
+    agent_id: string;
+    agent_name: string;
+    agent_name_ko: string;
+    agent_status: string;
+    task_id: string;
+    task_title: string;
+    task_status: string;
   };
 
   const trimExcerpt = (value: unknown, max = 240): string | null => {
     if (typeof value !== "string") return null;
     const normalized = value.replace(/\s+/g, " ").trim();
     if (!normalized) return null;
-    return normalized.length > max ? `${normalized.slice(0, max - 1)}…` : normalized;
+    return normalized.length > max ? `${normalized.slice(0, max - 1)}...` : normalized;
   };
+
+  const parseWorkflowMeta = (raw: unknown): Record<string, unknown> => {
+    if (typeof raw !== "string" || !raw.trim()) return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const buildTaskWorkflowMetaJson = (taskId: string, mutate: (meta: Record<string, unknown>) => void): string => {
+    const row = db.prepare("SELECT workflow_meta_json FROM tasks WHERE id = ?").get(taskId) as
+      | { workflow_meta_json: string | null }
+      | undefined;
+    const next = parseWorkflowMeta(row?.workflow_meta_json);
+    mutate(next);
+    return JSON.stringify(next);
+  };
+
+  async function notifyProjectHealthActionSafe(notice: ProjectHealthActionNotice, taskId?: string | null) {
+    if (!notifyProjectHealthAction) return;
+    try {
+      await notifyProjectHealthAction(notice);
+      if (taskId) {
+        db.prepare("INSERT INTO task_logs (task_id, kind, message, created_at) VALUES (?, 'system', ?, ?)").run(
+          taskId,
+          `PROJECT_HEALTH_TELEGRAM_NOTICE sent action=${notice.action}`,
+          notice.at,
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[Project Health] Telegram notice failed action=${notice.action}: ${message}`);
+      if (taskId) {
+        db.prepare("INSERT INTO task_logs (task_id, kind, message, created_at) VALUES (?, 'warning', ?, ?)").run(
+          taskId,
+          `PROJECT_HEALTH_TELEGRAM_NOTICE failed action=${notice.action} error=${trimExcerpt(message, 160) ?? "unknown"}`,
+          notice.at,
+        );
+      }
+    }
+  }
 
   const serializeHealthTask = (
     row: ProjectHealthTaskRow,
@@ -128,13 +205,26 @@ export function registerProjectRoutes({
       t.assigned_agent_id,
       COALESCE(a.name, '') AS assigned_agent_name,
       COALESCE(a.name_ko, '') AS assigned_agent_name_ko,
+      COALESCE(a.cli_provider, '') AS agent_cli_provider,
+      COALESCE(a.cli_account_pool_id, '') AS agent_cli_account_pool_id,
       t.source_task_id,
       t.result,
+      t.workflow_meta_json,
       (
         SELECT tl.message
         FROM task_logs tl
         WHERE tl.task_id = t.id
-        ORDER BY tl.created_at DESC, tl.id DESC
+        ORDER BY
+          CASE
+            WHEN lower(tl.message) LIKE '%project_path_not_allowed%' THEN 0
+            WHEN lower(tl.message) LIKE '%outside allowed roots%' THEN 0
+            WHEN lower(tl.message) LIKE '%orphan%' THEN 0
+            WHEN lower(tl.message) LIKE '%review gate%' THEN 0
+            WHEN lower(tl.message) LIKE '%qa hold%' THEN 0
+            ELSE 1
+          END,
+          tl.created_at DESC,
+          tl.id DESC
         LIMIT 1
       ) AS latest_log,
       t.created_at,
@@ -149,11 +239,73 @@ export function registerProjectRoutes({
       )
       .all(projectId) as ProjectHealthTaskRow[];
 
+  const getProviderAccountBlockerReason = (row: ProjectHealthTaskRow): string | null => {
+    if (row.status === "done" || row.status === "cancelled") return null;
+    const provider = String(row.agent_cli_provider ?? "").trim().toLowerCase();
+    const poolId = String(row.agent_cli_account_pool_id ?? "").trim();
+    if (!provider || !poolId) return null;
+    if (!tableExists("cli_account_pools")) return "provider_account_unavailable";
+    const pool = db
+      .prepare(
+        `
+          SELECT profile_home, status
+          FROM cli_account_pools
+          WHERE provider = ? AND account_pool_id = ?
+          LIMIT 1
+        `,
+      )
+      .get(provider, poolId) as { profile_home: string | null; status: string | null } | undefined;
+    if (!pool || pool.status !== "connected") return "provider_account_unavailable";
+    const profileHomeRaw = String(pool.profile_home ?? "").trim();
+    if (!profileHomeRaw) return "provider_account_unavailable";
+    const profileHome = resolveCliAccountProfileHome(provider, poolId, profileHomeRaw);
+    try {
+      if (!fs.statSync(profileHome).isDirectory()) return "provider_account_unavailable";
+    } catch {
+      return "provider_account_unavailable";
+    }
+    if (!hasCliAccountAuthArtifact(provider, profileHome)) return "provider_account_unavailable";
+    return null;
+  };
+
+  const getStaleAssignments = (projectId: string): StaleAssignmentRow[] =>
+    db
+      .prepare(
+        `
+          SELECT
+            a.id AS agent_id,
+            a.name AS agent_name,
+            COALESCE(a.name_ko, '') AS agent_name_ko,
+            a.status AS agent_status,
+            t.id AS task_id,
+            t.title AS task_title,
+            t.status AS task_status
+          FROM agents a
+          INNER JOIN tasks t ON t.id = a.current_task_id
+          WHERE t.project_id = ?
+            AND t.status IN ('done', 'cancelled')
+          ORDER BY a.department_id, a.id
+        `,
+      )
+      .all(projectId) as StaleAssignmentRow[];
+
+  const isClosedTaskStatus = (status: string): boolean => status === "done" || status === "cancelled";
+
   const hasQaHoldEvidenceGap = (row: ProjectHealthTaskRow): boolean => {
-    const haystack = `${row.title}\n${row.result ?? ""}\n${row.latest_log ?? ""}`;
-    return /qa\s*hold|go\/no-go\s*hold|hold\b|보류|empty state|error state|430px|screenshot missing|evidence missing|증거 부족/i.test(
-      haystack,
-    );
+    if (isClosedTaskStatus(row.status)) return false;
+    const haystack = `${row.title}\n${row.result ?? ""}\n${row.latest_log ?? ""}`.toLowerCase();
+    const hasHoldSignal =
+      haystack.includes("qa hold") ||
+      haystack.includes("go/no-go hold") ||
+      (haystack.includes("qa") && haystack.includes("hold"));
+    const hasEvidenceGapSignal =
+      haystack.includes("screenshot missing") ||
+      haystack.includes("evidence missing") ||
+      haystack.includes("missing evidence") ||
+      haystack.includes("증거 부족") ||
+      (haystack.includes("missing") &&
+        (haystack.includes("empty state") || haystack.includes("error state") || haystack.includes("430px")));
+    return hasHoldSignal && hasEvidenceGapSignal;
   };
 
   const isOrphanCandidate = (row: ProjectHealthTaskRow): boolean => {
@@ -164,7 +316,13 @@ export function registerProjectRoutes({
   };
 
   const getBlockerReason = (row: ProjectHealthTaskRow): string | null => {
+    if (isClosedTaskStatus(row.status)) return null;
     if (isOrphanCandidate(row)) return "orphan_candidate";
+    const providerReason = getProviderAccountBlockerReason(row);
+    if (providerReason) return providerReason;
+    if (/project_path_not_allowed|outside allowed roots/i.test(`${row.latest_log ?? ""}\n${row.result ?? ""}`)) {
+      return "project_path_not_allowed";
+    }
     if (hasQaHoldEvidenceGap(row)) return "qa_hold_evidence";
     if (row.status === "review") return "review_waiting";
     if (row.status === "pending") return "paused_or_pending";
@@ -777,9 +935,11 @@ export function registerProjectRoutes({
     let reviewWaiting = 0;
     let activeRunning = 0;
     let qaHoldItems = 0;
+    let providerAccountUnavailable = 0;
 
     const orphanRows: ProjectHealthTaskRow[] = [];
     const blockerRows: Array<{ row: ProjectHealthTaskRow; reason: string }> = [];
+    const staleAssignments = getStaleAssignments(id);
 
     for (const row of rows) {
       statusCounts[row.status] = (statusCounts[row.status] ?? 0) + 1;
@@ -787,19 +947,20 @@ export function registerProjectRoutes({
       departmentCounts[departmentKey] = (departmentCounts[departmentKey] ?? 0) + 1;
       if (row.status === "done") doneTasks += 1;
       if (row.status === "cancelled") cancelledTasks += 1;
-      if (row.status !== "done" && row.status !== "cancelled") openTasks += 1;
+      if (!isClosedTaskStatus(row.status)) openTasks += 1;
       if (row.status === "review") reviewWaiting += 1;
       if (isActiveTaskProcess(row.id)) activeRunning += 1;
       if (hasQaHoldEvidenceGap(row)) qaHoldItems += 1;
       if (isOrphanCandidate(row)) orphanRows.push(row);
       const reason = getBlockerReason(row);
+      if (reason === "provider_account_unavailable") providerAccountUnavailable += 1;
       if (reason) blockerRows.push({ row, reason });
     }
 
     const health =
       rows.length === 0
         ? "empty"
-        : orphanRows.length > 0 || qaHoldItems > 0
+        : orphanRows.length > 0 || qaHoldItems > 0 || providerAccountUnavailable > 0 || staleAssignments.length > 0
           ? "critical"
           : openTasks > 0
             ? "warning"
@@ -816,6 +977,8 @@ export function registerProjectRoutes({
         cancelled_tasks: cancelledTasks,
         orphan_candidates: orphanRows.length,
         qa_hold_items: qaHoldItems,
+        provider_account_unavailable: providerAccountUnavailable,
+        stale_assignments: staleAssignments.length,
         review_waiting: reviewWaiting,
         active_running: activeRunning,
       },
@@ -823,14 +986,21 @@ export function registerProjectRoutes({
       department_counts: departmentCounts,
       blockers: blockerRows.slice(0, 30).map((item) => serializeHealthTask(item.row, item.reason)),
       orphan_candidates: orphanRows.slice(0, 30).map((row) => serializeHealthTask(row, "orphan_candidate")),
+      stale_assignments: staleAssignments.slice(0, 30),
+      path_gate: {
+        project_path_allowed: isPathInsideAllowedRoots(project.project_path),
+        allowed_roots: PROJECT_PATH_ALLOWED_ROOTS,
+      },
       generated_at: nowMs(),
     });
   });
 
-  app.post("/api/projects/:id/orphan-tasks/:taskId/recover", (req, res) => {
+  app.post("/api/projects/:id/orphan-tasks/:taskId/recover", async (req, res) => {
     const projectId = String(req.params.id);
     const taskId = String(req.params.taskId);
-    const project = db.prepare("SELECT id FROM projects WHERE id = ?").get(projectId);
+    const project = db.prepare("SELECT id, name FROM projects WHERE id = ?").get(projectId) as
+      | { id: string; name: string | null }
+      | undefined;
     if (!project) return res.status(404).json({ error: "project_not_found" });
 
     const row = db
@@ -848,8 +1018,11 @@ export function registerProjectRoutes({
       t.assigned_agent_id,
       COALESCE(a.name, '') AS assigned_agent_name,
       COALESCE(a.name_ko, '') AS assigned_agent_name_ko,
+      COALESCE(a.cli_provider, '') AS agent_cli_provider,
+      COALESCE(a.cli_account_pool_id, '') AS agent_cli_account_pool_id,
       t.source_task_id,
       t.result,
+      t.workflow_meta_json,
       (
         SELECT tl.message
         FROM task_logs tl
@@ -870,27 +1043,53 @@ export function registerProjectRoutes({
     if (isActiveTaskProcess(taskId)) {
       return res.status(409).json({ error: "task_process_active", message: "Task process is still active." });
     }
-    if (row.status === "done" || row.status === "review") {
+    if (isClosedTaskStatus(row.status) || row.status === "review") {
       return res.status(400).json({ error: "invalid_status", status: row.status });
     }
 
+    const body = req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {};
+    const mode = body.mode === "supersede" ? "supersede" : "requeue";
+    if (mode !== "supersede" && !isOrphanCandidate(row)) {
+      return res.status(400).json({ error: "not_orphan_candidate", status: row.status });
+    }
+    const evidenceRaw = body.evidence && typeof body.evidence === "object" ? (body.evidence as Record<string, unknown>) : {};
+    const evidenceCommit = normalizeTextField(evidenceRaw.commit);
+    const evidenceNote = normalizeTextField(evidenceRaw.note);
+    if (mode === "supersede" && !evidenceCommit && !evidenceNote) {
+      return res.status(400).json({ error: "evidence_required" });
+    }
+
     const previousStatus = row.status;
-    const targetStatus = row.assigned_agent_id ? "planned" : "inbox";
+    const targetStatus = mode === "supersede" ? "cancelled" : row.assigned_agent_id ? "planned" : "inbox";
     const t = nowMs();
     runInTransaction(() => {
-      db.prepare("UPDATE tasks SET status = ?, started_at = NULL, updated_at = ? WHERE id = ?").run(
-        targetStatus,
-        t,
-        taskId,
-      );
+      const workflowMetaJson =
+        mode === "supersede"
+          ? buildTaskWorkflowMetaJson(taskId, (meta) => {
+              meta.superseded_by = {
+                source: "project_health",
+                commit: evidenceCommit,
+                note: evidenceNote,
+                at: t,
+              };
+            })
+          : null;
+      db.prepare(
+        "UPDATE tasks SET status = ?, started_at = NULL, completed_at = CASE WHEN ? = 'cancelled' THEN ? ELSE completed_at END, workflow_meta_json = COALESCE(?, workflow_meta_json), updated_at = ? WHERE id = ?",
+      ).run(targetStatus, targetStatus, t, workflowMetaJson, t, taskId);
       if (row.assigned_agent_id) {
         db.prepare(
           "UPDATE agents SET status = 'idle', current_task_id = NULL WHERE id = ? AND current_task_id = ?",
         ).run(row.assigned_agent_id, taskId);
       }
+      const action = mode === "supersede" ? "superseded" : "queued";
+      const suffix =
+        mode === "supersede"
+          ? ` evidence_commit=${evidenceCommit ?? "none"} evidence_note=${evidenceNote ?? "none"}`
+          : "";
       db.prepare("INSERT INTO task_logs (task_id, kind, message, created_at) VALUES (?, 'system', ?, ?)").run(
         taskId,
-        `ORPHAN_RECOVERY queued by project health panel (${previousStatus} -> ${targetStatus})`,
+        `ORPHAN_RECOVERY ${action} by project health panel (${previousStatus} -> ${targetStatus})${suffix}`,
         t,
       );
     });
@@ -899,14 +1098,176 @@ export function registerProjectRoutes({
       ...row,
       status: targetStatus,
       updated_at: t,
-      latest_log: `ORPHAN_RECOVERY queued by project health panel (${previousStatus} -> ${targetStatus})`,
+      latest_log: `ORPHAN_RECOVERY ${mode === "supersede" ? "superseded" : "queued"} by project health panel (${previousStatus} -> ${targetStatus})`,
     };
+    broadcast?.("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId));
+    if (row.assigned_agent_id) {
+      broadcast?.("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(row.assigned_agent_id));
+    }
+    await notifyProjectHealthActionSafe(
+      {
+        action: mode === "supersede" ? "task_superseded" : "orphan_requeued",
+        project_id: projectId,
+        project_name: project.name,
+        task_id: taskId,
+        task_title: row.title,
+        previous_status: previousStatus,
+        status: targetStatus,
+        mode,
+        evidence_commit: evidenceCommit,
+        evidence_note: evidenceNote,
+        at: t,
+      },
+      taskId,
+    );
 
     res.json({
       ok: true,
-      task: serializeHealthTask(updated, "orphan_recovered"),
+      task: serializeHealthTask(updated, mode === "supersede" ? "superseded_by_evidence" : "orphan_recovered"),
       previous_status: previousStatus,
       status: targetStatus,
+      mode,
+    });
+  });
+
+  app.post("/api/projects/:id/review-tasks/:taskId/approve", async (req, res) => {
+    const projectId = String(req.params.id);
+    const taskId = String(req.params.taskId);
+    const project = db.prepare("SELECT id, name FROM projects WHERE id = ?").get(projectId) as
+      | { id: string; name: string | null }
+      | undefined;
+    if (!project) return res.status(404).json({ error: "project_not_found" });
+    const row = getProjectHealthTaskRows(projectId).find((item) => item.id === taskId);
+    if (!row) return res.status(404).json({ error: "task_not_found" });
+    if (isActiveTaskProcess(taskId)) {
+      return res.status(409).json({ error: "task_process_active", message: "Task process is still active." });
+    }
+    if (row.status !== "review") {
+      return res.status(400).json({ error: "invalid_status", status: row.status });
+    }
+    const reason = getBlockerReason(row);
+    if (reason && reason !== "review_waiting") {
+      return res.status(409).json({ error: "task_blocked", reason });
+    }
+
+    const body = req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>) : {};
+    const evidenceRaw = body.evidence && typeof body.evidence === "object" ? (body.evidence as Record<string, unknown>) : {};
+    const evidenceCommit = normalizeTextField(evidenceRaw.commit);
+    const evidenceNote = normalizeTextField(evidenceRaw.note);
+    const previousStatus = row.status;
+    const t = nowMs();
+
+    runInTransaction(() => {
+      const workflowMetaJson = buildTaskWorkflowMetaJson(taskId, (meta) => {
+        const existing = meta.review_consent;
+        const base = existing && typeof existing === "object" ? (existing as Record<string, unknown>) : {};
+        meta.review_consent = {
+          ...base,
+          stage: "project_health_approved",
+          state: "approved",
+          blocked: false,
+          blocked_by: [],
+          approved_at: t,
+          approved_by: "project_health",
+          evidence: {
+            commit: evidenceCommit,
+            note: evidenceNote,
+          },
+        };
+      });
+      db.prepare(
+        "UPDATE tasks SET status = 'done', completed_at = ?, workflow_meta_json = ?, updated_at = ? WHERE id = ?",
+      ).run(t, workflowMetaJson, t, taskId);
+      if (row.assigned_agent_id) {
+        db.prepare(
+          "UPDATE agents SET status = 'idle', current_task_id = NULL WHERE id = ? AND current_task_id = ?",
+        ).run(row.assigned_agent_id, taskId);
+      }
+      db.prepare("INSERT INTO task_logs (task_id, kind, message, created_at) VALUES (?, 'system', ?, ?)").run(
+        taskId,
+        `REVIEW_APPROVED by project health panel (${previousStatus} -> done) evidence_commit=${evidenceCommit ?? "none"} evidence_note=${evidenceNote ?? "none"}`,
+        t,
+      );
+    });
+
+    const updated = getProjectHealthTaskRows(projectId).find((item) => item.id === taskId) ?? {
+      ...row,
+      status: "done",
+      updated_at: t,
+    };
+    broadcast?.("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId));
+    if (row.assigned_agent_id) {
+      broadcast?.("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(row.assigned_agent_id));
+    }
+    await notifyProjectHealthActionSafe(
+      {
+        action: "review_approved",
+        project_id: projectId,
+        project_name: project.name,
+        task_id: taskId,
+        task_title: row.title,
+        previous_status: previousStatus,
+        status: "done",
+        evidence_commit: evidenceCommit,
+        evidence_note: evidenceNote,
+        at: t,
+      },
+      taskId,
+    );
+
+    res.json({
+      ok: true,
+      task: serializeHealthTask(updated, "review_approved"),
+      previous_status: previousStatus,
+      status: "done",
+    });
+  });
+
+  app.post("/api/projects/:id/stale-assignments/cleanup", async (req, res) => {
+    const projectId = String(req.params.id);
+    const project = db.prepare("SELECT id, name FROM projects WHERE id = ?").get(projectId) as
+      | { id: string; name: string | null }
+      | undefined;
+    if (!project) return res.status(404).json({ error: "project_not_found" });
+    const staleRows = getStaleAssignments(projectId);
+    const t = nowMs();
+    const clearedRows: StaleAssignmentRow[] = [];
+    runInTransaction(() => {
+      for (const row of staleRows) {
+        const cleared = db
+          .prepare("UPDATE agents SET status = 'idle', current_task_id = NULL WHERE id = ? AND current_task_id = ?")
+          .run(row.agent_id, row.task_id) as { changes?: number };
+        if ((cleared.changes ?? 0) === 0) continue;
+        clearedRows.push(row);
+        db.prepare("INSERT INTO task_logs (task_id, kind, message, created_at) VALUES (?, 'system', ?, ?)").run(
+          row.task_id,
+          `STALE_ASSIGNMENT_CLEANUP cleared agent=${row.agent_id} (${row.agent_status}, task_status=${row.task_status})`,
+          t,
+        );
+      }
+    });
+    for (const row of clearedRows) {
+      broadcast?.("agent_status", db.prepare("SELECT * FROM agents WHERE id = ?").get(row.agent_id));
+    }
+    if (clearedRows.length > 0) {
+      await notifyProjectHealthActionSafe(
+        {
+          action: "stale_assignments_cleaned",
+          project_id: projectId,
+          project_name: project.name,
+          cleared_count: clearedRows.length,
+          agent_ids: clearedRows.map((row) => row.agent_id),
+          at: t,
+        },
+        clearedRows[0]?.task_id ?? null,
+      );
+    }
+
+    res.json({
+      ok: true,
+      cleared_count: clearedRows.length,
+      agent_ids: clearedRows.map((row) => row.agent_id),
+      stale_assignments: staleRows,
     });
   });
 

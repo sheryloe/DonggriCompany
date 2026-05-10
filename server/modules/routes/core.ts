@@ -34,7 +34,7 @@ import { registerAgentRoutes } from "./core/agents/index.ts";
 import { registerDepartmentRoutes } from "./core/departments.ts";
 import { registerGitHubRoutes } from "./core/github-routes.ts";
 import { registerMemoryRoutes } from "./core/memory.ts";
-import { registerProjectRoutes } from "./core/projects.ts";
+import { registerProjectRoutes, type ProjectHealthActionNotice } from "./core/projects.ts";
 import { registerTaskCrudRoutes } from "./core/tasks/crud.ts";
 import { registerTaskExecutionRoutes } from "./core/tasks/execution.ts";
 import { registerTaskSubtaskRoutes } from "./core/tasks/subtasks.ts";
@@ -364,9 +364,32 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
   // ---------------------------------------------------------------------------
   // Projects
   // ---------------------------------------------------------------------------
+  const projectHealthActionLabels: Record<ProjectHealthActionNotice["action"], string> = {
+    orphan_requeued: "Orphan 대기열 복구",
+    task_superseded: "대체 증거로 종료",
+    review_approved: "리뷰 승인",
+    stale_assignments_cleaned: "stale 담당 정리",
+  };
+  const formatProjectHealthActionNotice = (notice: ProjectHealthActionNotice): string => {
+    const lines = [
+      `[Project Health] ${projectHealthActionLabels[notice.action]}`,
+      `프로젝트: ${notice.project_name || notice.project_id}`,
+    ];
+    if (notice.task_title) lines.push(`태스크: ${notice.task_title}`);
+    if (notice.previous_status || notice.status) lines.push(`상태: ${notice.previous_status ?? "-"} -> ${notice.status ?? "-"}`);
+    if (typeof notice.cleared_count === "number") lines.push(`정리 인원: ${notice.cleared_count}`);
+    if (notice.evidence_commit) lines.push(`증거 commit: ${notice.evidence_commit}`);
+    if (notice.evidence_note) lines.push(`근거: ${notice.evidence_note}`);
+    return lines.join("\n");
+  };
+
   registerProjectRoutes({
     app,
     db,
+    broadcast,
+    notifyProjectHealthAction: async (notice) => {
+      await sendMessengerSessionMessage("telegram:global", formatProjectHealthActionNotice(notice));
+    },
     firstQueryValue,
     normalizeTextField,
     runInTransaction,

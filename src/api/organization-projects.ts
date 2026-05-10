@@ -415,6 +415,16 @@ export interface ProjectHealthTaskItem {
   updated_at: number;
 }
 
+export interface ProjectHealthStaleAssignmentItem {
+  agent_id: string;
+  agent_name: string;
+  agent_name_ko: string;
+  agent_status: string;
+  task_id: string;
+  task_title: string;
+  task_status: string;
+}
+
 export interface ProjectHealthResponse {
   ok: boolean;
   project: Pick<Project, "id" | "name" | "project_path" | "core_goal">;
@@ -426,6 +436,8 @@ export interface ProjectHealthResponse {
     cancelled_tasks: number;
     orphan_candidates: number;
     qa_hold_items: number;
+    provider_account_unavailable: number;
+    stale_assignments: number;
     review_waiting: number;
     active_running: number;
   };
@@ -433,6 +445,11 @@ export interface ProjectHealthResponse {
   department_counts: Record<string, number>;
   blockers: ProjectHealthTaskItem[];
   orphan_candidates: ProjectHealthTaskItem[];
+  stale_assignments: ProjectHealthStaleAssignmentItem[];
+  path_gate: {
+    project_path_allowed: boolean;
+    allowed_roots: string[];
+  };
   generated_at: number;
 }
 
@@ -567,6 +584,33 @@ export async function getProjectHealth(id: string): Promise<ProjectHealthRespons
 export async function recoverProjectOrphanTask(
   projectId: string,
   taskId: string,
+  input?: {
+    mode?: "requeue" | "supersede";
+    evidence?: {
+      commit?: string;
+      note?: string;
+    };
+  },
+): Promise<{
+  ok: boolean;
+  task: ProjectHealthTaskItem;
+  previous_status: string;
+  status: string;
+  mode?: "requeue" | "supersede";
+}> {
+  await bootstrapSession({ promptOnUnauthorized: false });
+  return post(`/api/projects/${projectId}/orphan-tasks/${taskId}/recover`, input ?? {});
+}
+
+export async function approveProjectReviewTask(
+  projectId: string,
+  taskId: string,
+  input?: {
+    evidence?: {
+      commit?: string;
+      note?: string;
+    };
+  },
 ): Promise<{
   ok: boolean;
   task: ProjectHealthTaskItem;
@@ -574,5 +618,15 @@ export async function recoverProjectOrphanTask(
   status: string;
 }> {
   await bootstrapSession({ promptOnUnauthorized: false });
-  return post(`/api/projects/${projectId}/orphan-tasks/${taskId}/recover`, {});
+  return post(`/api/projects/${projectId}/review-tasks/${taskId}/approve`, input ?? {});
+}
+
+export async function cleanupProjectStaleAssignments(projectId: string): Promise<{
+  ok: boolean;
+  cleared_count: number;
+  agent_ids: string[];
+  stale_assignments: ProjectHealthStaleAssignmentItem[];
+}> {
+  await bootstrapSession({ promptOnUnauthorized: false });
+  return post(`/api/projects/${projectId}/stale-assignments/cleanup`, {});
 }

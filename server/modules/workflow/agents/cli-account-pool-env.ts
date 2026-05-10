@@ -42,6 +42,40 @@ type ResolveCliAccountPoolEnvInput = {
 };
 
 const POOL_CAPABLE_PROVIDERS = new Set(["codex", "gemini", "jules"]);
+const AUTH_ARTIFACT_MARKERS: Record<string, string[]> = {
+  codex: [".codex/auth.json"],
+  gemini: [".gemini/oauth_creds.json", ".config/gcloud/application_default_credentials.json"],
+  jules: [".jules/auth.json", ".jules/credentials.json", ".jules/cache/oauth_creds.json"],
+};
+
+function fileExistsNonEmpty(filePath: string): boolean {
+  try {
+    const stat = fs.statSync(filePath);
+    return stat.isFile() && stat.size > 0;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveCliAccountProfileHome(provider: string, poolId: string, rawProfileHome: string): string {
+  const profileHome = path.resolve(rawProfileHome);
+  if (fs.existsSync(profileHome)) return profileHome;
+
+  const normalizedRaw = rawProfileHome.replace(/[\\/]+/g, "/").toLowerCase();
+  const legacySuffix = `/.office-accounts/${provider}/${poolId}`.toLowerCase();
+  if (normalizedRaw.endsWith(legacySuffix)) {
+    const repoScoped = path.resolve(process.cwd(), "data", "office-accounts", provider, poolId);
+    if (fs.existsSync(repoScoped)) return repoScoped;
+  }
+
+  return profileHome;
+}
+
+export function hasCliAccountAuthArtifact(provider: string, profileHome: string): boolean {
+  const markers = AUTH_ARTIFACT_MARKERS[provider];
+  if (!markers) return true;
+  return markers.some((relativePath) => fileExistsNonEmpty(path.join(profileHome, relativePath)));
+}
 
 function validateProfileHome(params: {
   provider: string;
@@ -57,7 +91,7 @@ function validateProfileHome(params: {
     };
   }
 
-  const profileHome = path.resolve(rawProfileHome);
+  const profileHome = resolveCliAccountProfileHome(provider, poolId, rawProfileHome);
   try {
     const stat = fs.statSync(profileHome);
     if (!stat.isDirectory()) {
@@ -71,6 +105,13 @@ function validateProfileHome(params: {
     return {
       ok: false,
       reason: `profile_home is invalid: ${profileHome} (${message})`,
+    };
+  }
+
+  if (!hasCliAccountAuthArtifact(provider, profileHome)) {
+    return {
+      ok: false,
+      reason: `auth_artifact_missing: provider=${provider} account_pool_id=${poolId} profile_home=${profileHome}`,
     };
   }
 

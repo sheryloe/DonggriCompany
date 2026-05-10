@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createCliRuntimeTools } from "./cli-runtime.ts";
 import { createCliTools } from "../core/cli-tools.ts";
+import { resolveCliAccountPoolEnv } from "./cli-account-pool-env.ts";
 
 type RuntimeHarness = {
   db: DatabaseSync;
@@ -41,6 +42,14 @@ function createHarness(): RuntimeHarness {
       fs.rmSync(logsDir, { recursive: true, force: true });
     },
   };
+}
+
+function writeAuthArtifact(profileHome: string, provider: "codex" | "gemini" | "jules" = "codex"): void {
+  const relativePath =
+    provider === "gemini" ? path.join(".gemini", "oauth_creds.json") : path.join(`.${provider}`, "auth.json");
+  const authPath = path.join(profileHome, relativePath);
+  fs.mkdirSync(path.dirname(authPath), { recursive: true });
+  fs.writeFileSync(authPath, JSON.stringify({ token: "test" }), "utf8");
 }
 
 async function waitForClose(
@@ -82,6 +91,7 @@ describe("spawnCliAgent codex cli account pool", () => {
     );
     const profileHome = path.join(harness.logsDir, "codex-main-home");
     fs.mkdirSync(profileHome, { recursive: true });
+    writeAuthArtifact(profileHome, "codex");
     harness.db
       .prepare(
         `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
@@ -138,6 +148,39 @@ describe("spawnCliAgent codex cli account pool", () => {
       expect(logText).toContain(`ENV_USERPROFILE=${profileHome}`);
     }
     expect(logs.some((entry) => entry.includes("RUN FAILED"))).toBe(false);
+  });
+
+  it("normalizes legacy app-scoped profile_home to repo-scoped office account directory", () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+
+    const originalCwd = process.cwd();
+    const repoRoot = path.join(harness.logsDir, "repo-root");
+    const repoProfileHome = path.join(repoRoot, "data", "office-accounts", "codex", "codex-main");
+    fs.mkdirSync(repoProfileHome, { recursive: true });
+    writeAuthArtifact(repoProfileHome, "codex");
+    process.chdir(repoRoot);
+    cleanups.push(() => process.chdir(originalCwd));
+
+    harness.db
+      .prepare(
+        `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
+         VALUES (?, 'codex', 'codex-main', 'Main Codex', ?, 'connected', 1, 1)`,
+      )
+      .run(randomUUID(), "G:\\app\\.office-accounts\\codex\\codex-main");
+
+    const resolved = resolveCliAccountPoolEnv({
+      db: harness.db as any,
+      provider: "codex",
+      cliAccountPoolId: "codex-main",
+      platform: "win32",
+    });
+
+    expect(resolved.ok).toBe(true);
+    if (resolved.ok) {
+      expect(path.normalize(resolved.profileHome ?? "")).toBe(path.normalize(repoProfileHome));
+      expect(path.normalize(resolved.envPatch.HOME ?? "")).toBe(path.normalize(repoProfileHome));
+    }
   });
 
   it("keeps existing HOME when cli account pool is not specified", async () => {
@@ -199,6 +242,7 @@ describe("spawnCliAgent codex cli account pool", () => {
     fs.writeFileSync(scriptPath, "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);", "utf8");
     const profileHome = path.join(harness.logsDir, "gemini-main-home");
     fs.mkdirSync(profileHome, { recursive: true });
+    writeAuthArtifact(profileHome, "gemini");
     harness.db
       .prepare(
         `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
@@ -247,6 +291,8 @@ describe("spawnCliAgent codex cli account pool", () => {
     const profileB = path.join(harness.logsDir, "codex-home-b");
     fs.mkdirSync(profileA, { recursive: true });
     fs.mkdirSync(profileB, { recursive: true });
+    writeAuthArtifact(profileA, "codex");
+    writeAuthArtifact(profileB, "codex");
     const insertPool = harness.db.prepare(
       `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
        VALUES (?, 'codex', ?, ?, ?, 'connected', 1, 1)`,
@@ -301,6 +347,7 @@ describe("spawnCliAgent codex cli account pool", () => {
 
     const profileHome = path.join(harness.logsDir, "jules-home-main");
     fs.mkdirSync(profileHome, { recursive: true });
+    writeAuthArtifact(profileHome, "jules");
     harness.db
       .prepare(
         `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
@@ -342,6 +389,32 @@ describe("spawnCliAgent codex cli account pool", () => {
     expect(logText).toContain("RUN FAILED (cli account pool)");
     expect(logText).toContain("explicit_pool_selection_required");
     expect(taskLogs.some((entry) => entry.includes("explicit_pool_selection_required"))).toBe(true);
+  });
+
+  it("fails before execution when selected pool has no auth artifact", () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+
+    const profileHome = path.join(harness.logsDir, "codex-no-auth-home");
+    fs.mkdirSync(profileHome, { recursive: true });
+    harness.db
+      .prepare(
+        `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
+         VALUES (?, 'codex', 'codex-main', 'Main Codex', ?, 'connected', 1, 1)`,
+      )
+      .run(randomUUID(), profileHome);
+
+    const resolved = resolveCliAccountPoolEnv({
+      db: harness.db as any,
+      provider: "codex",
+      cliAccountPoolId: "codex-main",
+      platform: "win32",
+    });
+
+    expect(resolved.ok).toBe(false);
+    if (!resolved.ok) {
+      expect(resolved.reason).toContain("auth_artifact_missing");
+    }
   });
 
   it("terminates a lingering codex process after final agent output", async () => {

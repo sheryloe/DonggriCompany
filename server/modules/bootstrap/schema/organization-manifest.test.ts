@@ -9,8 +9,8 @@ import {
   mapLegacyDepartmentId,
 } from "./organization-manifest.ts";
 
-describe("organization manifest v4", () => {
-  it("uses exactly seven canonical departments with PMO one-person command and three staff elsewhere", () => {
+describe("organization manifest v5", () => {
+  it("uses exactly eight canonical departments with PMO one-person command and three staff elsewhere", () => {
     expect(ORGANIZATION_DEPARTMENTS.map((department) => department.id)).toEqual([
       "pmo",
       "planning",
@@ -19,8 +19,9 @@ describe("organization manifest v4", () => {
       "qa",
       "devsecops",
       "operations",
+      "strategic_maintenance",
     ]);
-    expect(ORGANIZATION_AGENT_SEEDS).toHaveLength(19);
+    expect(ORGANIZATION_AGENT_SEEDS).toHaveLength(22);
 
     const counts = new Map<string, number>();
     for (const seed of ORGANIZATION_AGENT_SEEDS) {
@@ -38,6 +39,7 @@ describe("organization manifest v4", () => {
       planning: 3,
       pmo: 1,
       qa: 3,
+      strategic_maintenance: 3,
     });
   });
 
@@ -49,12 +51,12 @@ describe("organization manifest v4", () => {
 
   it("defines visual profiles and stores subagent supervision in canonical profile data", () => {
     expect(AGENT_VISUAL_PROFILE_SEEDS).toHaveLength(35);
-    expect(AGENT_VISUAL_PROFILE_SEEDS.filter((profile) => profile.status === "active")).toHaveLength(19);
-    expect(AGENT_VISUAL_PROFILE_SEEDS.filter((profile) => profile.status === "reserve")).toHaveLength(16);
+    expect(AGENT_VISUAL_PROFILE_SEEDS.filter((profile) => profile.status === "active")).toHaveLength(22);
+    expect(AGENT_VISUAL_PROFILE_SEEDS.filter((profile) => profile.status === "reserve")).toHaveLength(13);
     expect(RESERVE_VISUAL_PROFILE_POLICY).toMatchObject({
       status: "reserve_until_approved",
       approval_gate: "ceo_or_pmo",
-      active_staff_profile_limit: 19,
+      active_staff_profile_limit: 22,
     });
 
     const devLead = ORGANIZATION_AGENT_SEEDS.find((seed) => seed.id === "seed-dev-lead");

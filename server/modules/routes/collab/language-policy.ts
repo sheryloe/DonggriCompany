@@ -62,6 +62,7 @@ const DEPT_KEYWORDS: Record<string, string[]> = {
   design: ["디자인", "ui", "ux", "layout", "mockup", "screen", "visual"],
   planning: ["기획", "plan", "planning", "spec", "requirement", "roadmap", "report", "pre-production", "프리프로덕션"],
   operations: ["운영", "deploy", "deployment", "infra", "monitor", "runtime", "ops"],
+  strategic_maintenance: ["전략보수", "maintenance", "system review", "audit", "improvement", "report"],
   devsecops: ["security", "devsecops", "auth", "permission", "vulnerability", "compliance", "보안"],
 };
 

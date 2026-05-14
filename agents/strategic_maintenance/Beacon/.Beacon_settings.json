@@ -1,0 +1,31 @@
+{
+  "agent_id": "seed-strategic-maintenance-lead",
+  "agent_name": "Beacon",
+  "role": "team_leader",
+  "department_id": "strategic_maintenance",
+  "workflow_profile": "{\"role\":\"primary_author\",\"review_lenses\":[\"system_health\",\"priority\",\"risk\",\"maintainability\",\"traceability\"],\"two_pass_required\":true,\"max_review_rounds\":2}",
+  "agent_profile_json": "{\"role_template\":\"team_leader\",\"growth_tier\":5,\"capabilities\":{\"execution\":5,\"architecture\":5,\"review\":5,\"research\":3,\"communication\":5,\"leadership\":5},\"prompt_style\":{\"tone\":4,\"autonomy\":4,\"strictness\":5,\"collaboration\":5},\"specialties\":[\"strategic-maintenance.lead\",\"architect-reviewer\",\"security-auditor\",\"sre-engineer\",\"documentation-engineer\"],\"custom_prompt_override\":null,\"class_path\":{\"class_stage_1\":\"strategic_maintenance\",\"class_stage_2\":\"orchestrator\",\"class_stage_3\":\"strategic-maintenance.lead\"},\"promotion_policy\":{\"mode\":\"manual\",\"from_role\":\"senior\",\"to_role\":\"team_leader\",\"notes\":\"team_leader manual only\"},\"visual_profile_key\":\"agent-visual-02\",\"sprite_number\":2,\"preferred_subagents\":[\"architect-reviewer\",\"security-auditor\",\"sre-engineer\",\"documentation-engineer\"],\"subagent_supervision_rule\":\"Active staff members supervise specialized subagents instead of owning every specialty directly.\"}",
+  "goal_command_policy": {
+    "version": "donggri_goal_commands_v1",
+    "native_commands_only": true,
+    "octopus_aliases_enabled": false,
+    "bottleneck_rule": "Use required_departments first; add extra departments only when a verification gate requires them.",
+    "parallelism_rule": "Split independent work up to max_parallel_workstreams with one owner per workstream."
+  },
+  "class_path": "strategic_maintenance > orchestrator > strategic-maintenance.lead",
+  "promotion_policy": "{\"mode\":\"manual\",\"from_role\":\"senior\",\"to_role\":\"team_leader\",\"notes\":\"team_leader manual only\"}",
+  "visual_profile_key": "agent-visual-02",
+  "preferred_subagents": [
+    "architect-reviewer",
+    "security-auditor",
+    "sre-engineer",
+    "documentation-engineer"
+  ],
+  "stats_tasks_done": 0,
+  "stats_xp": 0,
+  "memory_snapshot": [],
+  "skill_growth_snapshot": [],
+  "recent_lessons": [],
+  "project_experience": [],
+  "updated_at": "2026-05-13T04:23:30.495Z"
+}

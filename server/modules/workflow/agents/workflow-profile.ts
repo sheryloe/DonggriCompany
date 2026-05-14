@@ -31,6 +31,7 @@ const DEFAULT_REVIEW_LENSES_BY_DEPARTMENT: Record<string, string[]> = {
   design: ["ux", "consistency", "a11y"],
   devsecops: ["security", "compliance", "operability"],
   operations: ["deployability", "monitoring", "incident_readiness"],
+  strategic_maintenance: ["system_health", "risk", "maintainability", "traceability"],
 };
 
 function normalizeText(value: unknown): string {

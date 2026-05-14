@@ -1,7 +1,15 @@
-export type OrganizationSeedVersion = "org-v4";
-export const ORGANIZATION_SEED_VERSION: OrganizationSeedVersion = "org-v4";
+export type OrganizationSeedVersion = "org-v5";
+export const ORGANIZATION_SEED_VERSION: OrganizationSeedVersion = "org-v5";
 
-export type OrganizationDepartmentId = "pmo" | "planning" | "dev" | "design" | "qa" | "devsecops" | "operations";
+export type OrganizationDepartmentId =
+  | "pmo"
+  | "planning"
+  | "dev"
+  | "design"
+  | "qa"
+  | "devsecops"
+  | "operations"
+  | "strategic_maintenance";
 
 export type OrganizationDepartmentLegacyId =
   | "development"
@@ -93,6 +101,7 @@ export const LEGACY_DEPARTMENT_ID_MAP: Record<string, OrganizationDepartmentId> 
   qa: "qa",
   devsecops: "devsecops",
   operations: "operations",
+  strategic_maintenance: "strategic_maintenance",
   development: "dev",
   "planning-architecture": "planning",
   "ui-ux": "design",
@@ -175,6 +184,16 @@ export const ORGANIZATION_DEPARTMENTS: OrganizationDepartmentManifest[] = [
     color: "#10b981",
     sort_order: 7,
   },
+  {
+    id: "strategic_maintenance",
+    name: "Strategic Maintenance",
+    name_ko: "전략보수팀",
+    name_ja: "Strategic Maintenance",
+    name_zh: "Strategic Maintenance",
+    icon: "SM",
+    color: "#14b8a6",
+    sort_order: 8,
+  },
 ];
 
 export const DEPARTMENT_SUBAGENT_RECOMMENDATIONS: Record<OrganizationDepartmentId, string[]> = {
@@ -185,6 +204,7 @@ export const DEPARTMENT_SUBAGENT_RECOMMENDATIONS: Record<OrganizationDepartmentI
   qa: ["test-automator", "reviewer", "performance-monitor"],
   devsecops: ["security-auditor", "devops-engineer", "github:gh-fix-ci"],
   operations: ["documentation-engineer", "customer-success-manager", "sre-engineer"],
+  strategic_maintenance: ["architect-reviewer", "security-auditor", "sre-engineer", "documentation-engineer"],
 };
 
 function makeProfile(
@@ -209,7 +229,9 @@ function seed(
   };
 }
 
-const ACTIVE_VISUAL_PROFILE_NUMBERS = new Set([1, 6, 7, 8, 11, 12, 13, 16, 17, 18, 21, 22, 23, 26, 27, 28, 31, 32, 33]);
+const ACTIVE_VISUAL_PROFILE_NUMBERS = new Set([
+  1, 2, 3, 4, 6, 7, 8, 11, 12, 13, 16, 17, 18, 21, 22, 23, 26, 27, 28, 31, 32, 33,
+]);
 
 function visualProfile(index: number): AgentVisualProfileSeed {
   const key = `agent-visual-${String(index).padStart(2, "0")}`;
@@ -239,7 +261,7 @@ export const RESERVE_VISUAL_PROFILE_POLICY = {
   activation_sources: ["new_hire", "project_pack", "staff_replacement"],
   approval_gate: "ceo_or_pmo",
   required_actions: ["update_seed_profile", "regenerate_agent_guides", "verify_sprite_manifest"],
-  active_staff_profile_limit: 19,
+  active_staff_profile_limit: 22,
 } as const;
 
 export const DEFAULT_DEPARTMENT_SKILL_BUNDLES: Record<OrganizationDepartmentId, string[]> = {
@@ -278,6 +300,15 @@ export const DEFAULT_DEPARTMENT_SKILL_BUNDLES: Record<OrganizationDepartmentId, 
     "decisions",
     "docs-research",
     "citation",
+  ],
+  strategic_maintenance: [
+    "system-review",
+    "architecture-review",
+    "security-review",
+    "monitoring",
+    "status-log",
+    "release-checklist",
+    "docs-research",
   ],
 };
 
@@ -662,6 +693,66 @@ export const ORGANIZATION_AGENT_SEEDS: OrganizationAgentSeed[] = [
     review_lenses: ["operations", "monitoring", "traceability"],
     max_review_rounds: null,
   }),
+  seed({
+    id: "seed-strategic-maintenance-lead",
+    name: "Beacon",
+    name_ko: "비컨",
+    department_id: "strategic_maintenance",
+    role: "team_leader",
+    cli_provider: "codex",
+    avatar_emoji: "SM",
+    personality: "Strategic maintenance lead for recurring system review, improvement triage, and executive reporting",
+    family: "orchestrator",
+    career_stage: "team-lead",
+    specialization_key: "strategic-maintenance.lead",
+    authority_level: 7,
+    execution_capability_profile: "primary_author",
+    sprite_number: 2,
+    visual_profile_key: "agent-visual-02",
+    recommended_subagents: DEPARTMENT_SUBAGENT_RECOMMENDATIONS.strategic_maintenance,
+    review_lenses: ["system_health", "priority", "risk", "maintainability", "traceability"],
+    max_review_rounds: 2,
+  }),
+  seed({
+    id: "seed-strategic-maintenance-system-senior",
+    name: "Kairo",
+    name_ko: "카이로",
+    department_id: "strategic_maintenance",
+    role: "senior",
+    cli_provider: "codex",
+    avatar_emoji: "REV",
+    personality: "System review senior for architecture drift, reliability gaps, and maintenance backlog analysis",
+    family: "reviewer",
+    career_stage: "senior",
+    specialization_key: "strategic-maintenance.system-review",
+    authority_level: 4,
+    execution_capability_profile: "reviewer",
+    sprite_number: 3,
+    visual_profile_key: "agent-visual-03",
+    recommended_subagents: DEPARTMENT_SUBAGENT_RECOMMENDATIONS.strategic_maintenance,
+    review_lenses: ["architecture", "reliability", "security", "maintainability"],
+    max_review_rounds: null,
+  }),
+  seed({
+    id: "seed-strategic-maintenance-automation-senior",
+    name: "Orbit",
+    name_ko: "오빗",
+    department_id: "strategic_maintenance",
+    role: "senior",
+    cli_provider: "codex",
+    avatar_emoji: "AUTO",
+    personality: "Automation and reporting senior for scheduled reviews, task creation, and Gmail status reporting",
+    family: "documenter",
+    career_stage: "senior",
+    specialization_key: "strategic-maintenance.automation",
+    authority_level: 4,
+    execution_capability_profile: "reviewer",
+    sprite_number: 4,
+    visual_profile_key: "agent-visual-04",
+    recommended_subagents: DEPARTMENT_SUBAGENT_RECOMMENDATIONS.strategic_maintenance,
+    review_lenses: ["automation", "documentation", "traceability", "operations"],
+    max_review_rounds: null,
+  }),
 ];
 
 export const LEGACY_BUILTIN_AGENT_SIGNATURES: LegacyBuiltinAgentSignature[] = [
@@ -780,6 +871,7 @@ export const DEFAULT_ROOM_THEMES: Record<string, { accent: number; floor1: numbe
   qa: { accent: 0xd46a6a, floor1: 0xf0cbcb, floor2: 0xedc0c0, wall: 0xae7979 },
   devsecops: { accent: 0xc94a4a, floor1: 0xf2d0d0, floor2: 0xefc4c4, wall: 0x9f5b5 },
   operations: { accent: 0x5ac48a, floor1: 0xd0eede, floor2: 0xc4ead5, wall: 0x6eaa89 },
+  strategic_maintenance: { accent: 0x45b9aa, floor1: 0xd3f0ec, floor2: 0xc6ebe6, wall: 0x629e96 },
   development: { accent: 0x5a9fd4, floor1: 0xd8e8f5, floor2: 0xcce1f2, wall: 0x6c96b7 },
   "planning-architecture": { accent: 0xd4a85a, floor1: 0xf0e1c5, floor2: 0xeddaba, wall: 0xae9871 },
   "ui-ux": { accent: 0x9a6fc4, floor1: 0xe8def2, floor2: 0xe1d4ee, wall: 0x9378ad },
@@ -839,6 +931,8 @@ export function deriveCanonicalFamilyFromDepartment(
       return specialization.startsWith("platform.") ? "backend" : "reviewer";
     case "operations":
       return specialization.includes("runtime") ? "memory-manager" : "documenter";
+    case "strategic_maintenance":
+      return specialization.includes("automation") ? "documenter" : "reviewer";
     default:
       return "backend";
   }
@@ -861,6 +955,8 @@ export function getDefaultReviewLensesForDepartment(departmentId: string | null 
       return ["security", "compliance", "approval"];
     case "operations":
       return ["documentation", "traceability", "governance"];
+    case "strategic_maintenance":
+      return ["system_health", "risk", "maintainability", "traceability"];
     default:
       return ["general_quality"];
   }
@@ -883,6 +979,8 @@ export function getDepartmentResponsibilityText(departmentId: string | null | un
       return "security gate, compliance, approval checks for auth/release/billing/production";
     case "operations":
       return "program operations, settings control, monitoring, documentation governance, weekly skill and module reports";
+    case "strategic_maintenance":
+      return "recurring system review, strategic maintenance planning, improvement task creation, and Gmail status reports";
     default:
       return "department-specific work within assigned capability";
   }

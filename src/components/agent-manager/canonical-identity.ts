@@ -68,6 +68,8 @@ function deriveFamily(departmentId: string, specializationKey: string): Canonica
       return "reviewer";
     case "operations":
       return "memory-manager";
+    case "strategic_maintenance":
+      return "reviewer";
     default:
       return "backend";
   }

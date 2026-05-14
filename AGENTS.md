@@ -145,12 +145,12 @@ These rules are additive and do NOT delete existing orchestration rules below.
 
 ## Donggri Organization Runtime
 
-`DONGGRI_ORG_V4_19_STAFF`
+`DONGGRI_ORG_V5_22_STAFF`
 
-- Active staff is fixed to 19 people: PMO has 1 direct command owner, and the other 6 departments have 3 people each.
-- Canonical departments are exactly `pmo`, `planning`, `dev`, `design`, `qa`, `devsecops`, `operations`.
+- Active staff is fixed to 22 people: PMO has 1 direct command owner, and the other 7 departments have 3 people each.
+- Canonical departments are exactly `pmo`, `planning`, `dev`, `design`, `qa`, `devsecops`, `operations`, `strategic_maintenance`.
 - Legacy department ids are read-only aliases and must not be used for new seed agents, new MD bundles, or new API payloads.
-- PMO keeps only one `team_leader`; `planning`, `dev`, `design`, `qa`, `devsecops`, and `operations` each keep one `team_leader` and two `senior` staff members. `junior` remains available only for growth/legacy compatibility, not default seeds.
+- PMO keeps only one `team_leader`; `planning`, `dev`, `design`, `qa`, `devsecops`, `operations`, and `strategic_maintenance` each keep one `team_leader` and two `senior` staff members. `junior` remains available only for growth/legacy compatibility, not default seeds.
 - Staff members are internal owners/orchestrators. They supervise specialized Codex subagents instead of directly owning every specialty.
 - Use the subagent catalog by task type:
   - `pmo`: `task-distributor`, `project-manager`, `risk-manager`
@@ -160,7 +160,9 @@ These rules are additive and do NOT delete existing orchestration rules below.
   - `qa`: `test-automator`, `reviewer`, `performance-monitor`
   - `devsecops`: `security-auditor`, `devops-engineer`, GitHub workflow specialists
   - `operations`: `documentation-engineer`, `customer-success-manager`, `sre-engineer`
-- Agent visual profiles are a tracked reserve pool. Profiles mapped to the 19 active staff are active; all other profiles are reserve candidates.
+  - `strategic_maintenance`: `architect-reviewer`, `security-auditor`, `sre-engineer`, `documentation-engineer`
+- Strategic Maintenance owns recurring system review, improvement backlog creation, and Gmail status reporting. It creates traceable tasks but does not auto-run code changes, commits, or pushes.
+- Agent visual profiles are a tracked reserve pool. Profiles mapped to the 22 active staff are active; all other profiles are reserve candidates.
 - Reserve visual profiles must stay inactive until a new hire, project pack, or staff replacement explicitly activates them. Activation requires a tracked seed/profile update and guide bundle regeneration.
 - Office UI should present the company as floors: `1F shared`, `2F strategy`, `3F production`, `4F quality/operations`.
 - Runtime character sprites must be generated through the tracked sprite normalization pipeline. Do not hand-edit individual runtime sprite PNG files unless the generator is also updated.
@@ -590,5 +592,4 @@ When processing `$` or `#` commands, the response to the user must be **minimal 
 ---
 
 <!-- END claw-empire orchestration rules -->
-
 

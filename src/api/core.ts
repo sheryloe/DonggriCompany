@@ -54,15 +54,7 @@ function normalizeCsrfToken(raw: string | null | undefined): string {
 
 function readStoredApiAuthToken(): string {
   if (runtimeApiAuthToken !== undefined) return runtimeApiAuthToken;
-  if (typeof window === "undefined") {
-    runtimeApiAuthToken = "";
-    return runtimeApiAuthToken;
-  }
-  try {
-    runtimeApiAuthToken = normalizeApiAuthToken(window.sessionStorage.getItem(API_AUTH_TOKEN_SESSION_KEY));
-  } catch {
-    runtimeApiAuthToken = "";
-  }
+  runtimeApiAuthToken = "";
   return runtimeApiAuthToken;
 }
 
@@ -70,11 +62,7 @@ function writeStoredApiAuthToken(token: string): void {
   runtimeApiAuthToken = token;
   if (typeof window === "undefined") return;
   try {
-    if (token) {
-      window.sessionStorage.setItem(API_AUTH_TOKEN_SESSION_KEY, token);
-    } else {
-      window.sessionStorage.removeItem(API_AUTH_TOKEN_SESSION_KEY);
-    }
+    window.sessionStorage.removeItem(API_AUTH_TOKEN_SESSION_KEY);
   } catch {
     // ignore storage write errors
   }
@@ -82,15 +70,7 @@ function writeStoredApiAuthToken(token: string): void {
 
 function readStoredCsrfToken(): string {
   if (runtimeCsrfToken !== undefined) return runtimeCsrfToken;
-  if (typeof window === "undefined") {
-    runtimeCsrfToken = "";
-    return runtimeCsrfToken;
-  }
-  try {
-    runtimeCsrfToken = normalizeCsrfToken(window.sessionStorage.getItem(API_CSRF_TOKEN_SESSION_KEY));
-  } catch {
-    runtimeCsrfToken = "";
-  }
+  runtimeCsrfToken = "";
   return runtimeCsrfToken;
 }
 
@@ -98,11 +78,7 @@ function writeStoredCsrfToken(token: string): void {
   runtimeCsrfToken = token;
   if (typeof window === "undefined") return;
   try {
-    if (token) {
-      window.sessionStorage.setItem(API_CSRF_TOKEN_SESSION_KEY, token);
-    } else {
-      window.sessionStorage.removeItem(API_CSRF_TOKEN_SESSION_KEY);
-    }
+    window.sessionStorage.removeItem(API_CSRF_TOKEN_SESSION_KEY);
   } catch {
     // ignore storage write errors
   }

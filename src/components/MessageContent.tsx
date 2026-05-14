@@ -10,6 +10,20 @@ interface MessageContentProps {
   className?: string;
 }
 
+export function sanitizeMarkdownLinkHref(rawHref: string): string | null {
+  const href = rawHref.trim();
+  if (!href) return null;
+  if (href.startsWith("#")) return href;
+  if (href.startsWith("/") && !href.startsWith("//")) return href;
+  try {
+    const url = new URL(href);
+    if (url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:") return href;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /** Parse a markdown table string into header + rows */
 function parseTable(block: string): { headers: string[]; rows: string[][] } | null {
   const lines = block
@@ -70,17 +84,22 @@ function renderInline(text: string): (string | JSX.Element)[] {
       );
     } else if (match[7]) {
       // [text](url)
-      parts.push(
-        <a
-          key={key++}
-          href={match[9]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-400 underline hover:text-blue-300"
-        >
-          {match[8]}
-        </a>,
-      );
+      const safeHref = sanitizeMarkdownLinkHref(match[9] ?? "");
+      if (safeHref) {
+        parts.push(
+          <a
+            key={key++}
+            href={safeHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 underline hover:text-blue-300"
+          >
+            {match[8]}
+          </a>,
+        );
+      } else {
+        parts.push(match[8] ?? match[0]);
+      }
     } else if (match[10]) {
       // @mention
       parts.push(

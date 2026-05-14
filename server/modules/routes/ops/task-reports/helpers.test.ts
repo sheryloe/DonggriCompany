@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
-import { createTaskReportHelpers } from "./helpers.ts";
+import { createTaskReportHelpers, resolveReportDocumentPath } from "./helpers.ts";
 
 function setupDb(): DatabaseSync {
   const db = new DatabaseSync(":memory:");
@@ -176,6 +176,60 @@ describe("task report helpers document extraction", () => {
         }),
       ]),
     );
+  });
+
+  it("ignores absolute report document paths outside the task project", () => {
+    const db = setupDb();
+    dbs.push(db);
+    const tmpProject = fs.mkdtempSync(path.join(os.tmpdir(), "claw-report-safe-project-"));
+    const outsideProject = fs.mkdtempSync(path.join(os.tmpdir(), "claw-report-outside-project-"));
+    tempDirs.push(tmpProject, outsideProject);
+    const outsideDoc = path.join(outsideProject, "outside.md");
+    fs.writeFileSync(outsideDoc, "# outside", "utf8");
+
+    const { buildTaskSection } = createTaskReportHelpers({
+      db: db as unknown as any,
+      nowMs: () => 1_700_000_000_000,
+    });
+
+    const section = buildTaskSection(
+      {
+        id: "task-outside-doc",
+        title: "Outside doc",
+        description: `Review report ${outsideDoc}`,
+        project_path: tmpProject,
+        result: "",
+        source_task_id: null,
+        status: "done",
+        department_id: "qa",
+        created_at: 1,
+        started_at: 2,
+        completed_at: 3,
+        agent_name: "Quality",
+        agent_name_ko: "Quality",
+        agent_role: "team_leader",
+        dept_name: "QA",
+        dept_name_ko: "QA",
+      },
+      [],
+    );
+
+    const docs = (section.documents ?? []) as Array<Record<string, unknown>>;
+    expect(docs.some((doc) => String(doc.title ?? "") === "outside.md")).toBe(false);
+  });
+
+  it("blocks sensitive report document candidates even inside the task project", () => {
+    const tmpProject = fs.mkdtempSync(path.join(os.tmpdir(), "claw-report-sensitive-"));
+    tempDirs.push(tmpProject);
+    const envPath = path.join(tmpProject, ".env");
+    const tokenPath = path.join(tmpProject, "docs", "github-token.md");
+    fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+    fs.writeFileSync(envPath, "placeholder=value", "utf8");
+    fs.writeFileSync(tokenPath, "token", "utf8");
+
+    expect(resolveReportDocumentPath(".env", tmpProject)).toBeNull();
+    expect(resolveReportDocumentPath("docs/github-token.md", tmpProject)).toBeNull();
+    expect(resolveReportDocumentPath("../outside.md", tmpProject)).toBeNull();
   });
 
   it("links ISO evidence fields from logs, images, commit hashes, and CI URLs", () => {

@@ -56,7 +56,7 @@ describe("api client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/departments");
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/session");
-    expect(window.sessionStorage.getItem("claw_api_csrf_token")).toBe("csrf-new");
+    expect(window.sessionStorage.getItem("claw_api_csrf_token")).toBeNull();
   });
 
   it("createDepartment가 JSON body로 POST 요청을 보낸다", async () => {
@@ -200,7 +200,7 @@ describe("api client", () => {
 
     expect(ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(window.sessionStorage.getItem("claw_api_auth_token")).toBe("refreshed-token");
+    expect(window.sessionStorage.getItem("claw_api_auth_token")).toBeNull();
   });
 
   it("세션 부트스트랩 csrf 토큰을 저장하고 mutation 요청에 헤더를 붙인다", async () => {
@@ -234,6 +234,6 @@ describe("api client", () => {
     expect(ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/session");
-    expect(window.sessionStorage.getItem("claw_api_csrf_token")).toBe("csrf-fresh");
+    expect(window.sessionStorage.getItem("claw_api_csrf_token")).toBeNull();
   });
 });

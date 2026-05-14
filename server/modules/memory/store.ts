@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { decryptSecret } from "../../oauth/helpers.ts";
+import { normalizeApiProviderBaseUrl, validateApiProviderBaseUrl } from "../shared/api-provider-url-policy.ts";
 
 export type NativeMemoryRow = {
   id: string;
@@ -921,6 +922,7 @@ function readEmbeddingProvider(
         )
         .get() as ApiProviderRow | undefined);
   if (!row) return null;
+  if (validateApiProviderBaseUrl(row.type, row.base_url)) return null;
   let apiKey = "";
   if (row.api_key_enc) {
     try {
@@ -937,7 +939,7 @@ function readEmbeddingProvider(
   return {
     providerId: row.id,
     providerType: row.type,
-    baseUrl: row.base_url.replace(/\/+$/, ""),
+    baseUrl: normalizeApiProviderBaseUrl(row.base_url),
     apiKey,
     model: embeddingModel,
   };

@@ -119,6 +119,57 @@ describe("api provider routes", () => {
     }
   });
 
+  it("rejects custom provider URLs that target private network endpoints", async () => {
+    const { app, db } = await createHarness();
+
+    try {
+      const response = await request(app).post("/api/api-providers").send({
+        name: "Metadata Endpoint",
+        type: "custom",
+        base_url: "https://169.254.169.254/latest/meta-data",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("base_url_private_network_not_allowed");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("requires non-local providers to use HTTPS", async () => {
+    const { app, db } = await createHarness();
+
+    try {
+      const response = await request(app).post("/api/api-providers").send({
+        name: "Plain HTTP",
+        type: "openai",
+        base_url: "http://api.example.com/v1",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("base_url_must_use_https");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("allows Ollama only on loopback URLs", async () => {
+    const { app, db } = await createHarness();
+
+    try {
+      const response = await request(app).post("/api/api-providers").send({
+        name: "Remote Ollama",
+        type: "ollama",
+        base_url: "http://192.168.1.10:11434/v1",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("ollama_base_url_must_be_loopback");
+    } finally {
+      db.close();
+    }
+  });
+
   it("rejects invalid Bailian Coding Plan API keys on update", async () => {
     const { app, db } = await createHarness();
 

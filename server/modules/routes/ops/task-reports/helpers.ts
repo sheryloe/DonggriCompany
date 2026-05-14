@@ -24,11 +24,72 @@ const TEXT_DOC_EXTENSIONS = new Set([
   ".sql",
 ]);
 const BINARY_DOC_EXTENSIONS = new Set([".pdf", ".ppt", ".pptx", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".webp"]);
+const BLOCKED_REPORT_DOC_EXTENSIONS = new Set([
+  ".env",
+  ".db",
+  ".sqlite",
+  ".sqlite3",
+  ".pem",
+  ".key",
+  ".p12",
+  ".pfx",
+  ".crt",
+  ".cer",
+  ".der",
+  ".log",
+]);
+const BLOCKED_REPORT_DOC_SEGMENTS = new Set([
+  ".git",
+  ".ssh",
+  ".gnupg",
+  "node_modules",
+  ".pnpm-store",
+  ".cache",
+  "auth",
+  "tokens",
+  "credentials",
+  "secrets",
+]);
+const BLOCKED_REPORT_DOC_BASENAME = /(?:^\.env(?:\.|$)|secret|token|credential|password|private[-_]?key|api[-_]?key)/i;
 
 type HelperDeps = {
   db: RuntimeContext["db"];
   nowMs: RuntimeContext["nowMs"];
 };
+
+function normalizePathForCompare(value: string): string {
+  const normalized = path.normalize(path.resolve(value));
+  return process.platform === "win32" || process.platform === "darwin" ? normalized.toLowerCase() : normalized;
+}
+
+function isPathInsideRoot(candidatePath: string, rootPath: string): boolean {
+  const rel = path.relative(normalizePathForCompare(rootPath), normalizePathForCompare(candidatePath));
+  if (!rel) return true;
+  return !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+export function isSafeReportDocumentPath(absPath: string): boolean {
+  const ext = path.extname(absPath).toLowerCase();
+  if (BLOCKED_REPORT_DOC_EXTENSIONS.has(ext)) return false;
+
+  const parts = path
+    .normalize(absPath)
+    .split(path.sep)
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  if (parts.some((part) => BLOCKED_REPORT_DOC_SEGMENTS.has(part))) return false;
+  return !BLOCKED_REPORT_DOC_BASENAME.test(path.basename(absPath));
+}
+
+export function resolveReportDocumentPath(candidate: string, projectPath: string | null): string | null {
+  const raw = typeof candidate === "string" ? candidate.trim() : "";
+  if (!raw) return null;
+  const root = path.resolve(projectPath || process.cwd());
+  const absPath = path.isAbsolute(raw) ? path.resolve(raw) : path.resolve(root, raw);
+  if (!isPathInsideRoot(absPath, root)) return null;
+  if (!isSafeReportDocumentPath(absPath)) return null;
+  return absPath;
+}
 
 export function createTaskReportHelpers(deps: HelperDeps) {
   const { db } = deps;
@@ -78,15 +139,10 @@ export function createTaskReportHelpers(deps: HelperDeps) {
     return [...out];
   }
 
-  function resolveDocumentPath(candidate: string, projectPath: string | null): string {
-    if (path.isAbsolute(candidate)) return candidate;
-    if (projectPath) return path.resolve(projectPath, candidate);
-    return path.resolve(process.cwd(), candidate);
-  }
-
   function readReportDocument(pathCandidate: string, projectPath: string | null): Record<string, unknown> | null {
     try {
-      const absPath = resolveDocumentPath(pathCandidate, projectPath);
+      const absPath = resolveReportDocumentPath(pathCandidate, projectPath);
+      if (!absPath) return null;
       if (!fs.existsSync(absPath)) return null;
       const stat = fs.statSync(absPath);
       if (!stat.isFile()) return null;

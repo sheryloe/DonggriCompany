@@ -1,6 +1,6 @@
 import cors from "cors";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 
 import {
@@ -10,7 +10,7 @@ import {
   SESSION_COOKIE_NAME,
 } from "../config/runtime.ts";
 
-const CSRF_TOKEN = createHash("sha256").update(`csrf:${SESSION_AUTH_TOKEN}`, "utf8").digest("hex");
+const CSRF_TOKEN = randomBytes(32).toString("hex");
 const TASK_INTERRUPT_TOKEN_SCOPE = "task_interrupt_v1";
 
 export function isLoopbackHostname(hostname: string): boolean {
@@ -65,26 +65,9 @@ export function isTrustedHostHeader(hostHeader: string | undefined): boolean {
 }
 
 export function isTrustedSessionBootstrapRequest(req: Request): boolean {
-  if (isLoopbackRequest(req)) return true;
-  const origin = req.header("origin");
-  if (origin && isTrustedOrigin(origin)) return true;
-
-  const referer = req.header("referer");
-  if (referer) {
-    try {
-      if (isTrustedOrigin(new URL(referer).origin)) return true;
-    } catch {
-      // ignore invalid referer
-    }
-  }
-
-  if (isTrustedHostHeader(req.header("x-forwarded-host"))) return true;
-  if (isTrustedHostHeader(req.header("host"))) return true;
-
-  const hostname = typeof req.hostname === "string" ? req.hostname.trim().toLowerCase() : "";
-  if (!hostname) return false;
-  if (isLoopbackHostname(hostname)) return true;
-  return isTrustedOrigin(`http://${hostname}`) || isTrustedOrigin(`https://${hostname}`);
+  // Session bootstrap issues the browser cookie and CSRF token. Header-derived
+  // hosts/origins are spoofable before auth, so only the actual socket source is trusted.
+  return isLoopbackRequest(req);
 }
 
 export function parseCookies(headerValue: string | undefined): Record<string, string> {

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { decryptSecret } from "../../../../oauth/helpers.ts";
+import { buildGitHubHttpsUrl, createGitHubAskPassEnv } from "../../../shared/github-askpass.ts";
 import type { WorktreeInfo } from "./lifecycle.ts";
 import {
   autoCommitWorktreePendingChanges,
@@ -266,18 +267,24 @@ export function createWorktreeMergeTools(deps: CreateWorktreeMergeToolsDeps) {
 
       const token = getGitHubToken();
       if (token) {
-        const remoteUrl = `https://x-access-token:${token}@github.com/${githubRepo}.git`;
-        execFileSync("git", ["remote", "set-url", "origin", remoteUrl], {
+        const askPass = createGitHubAskPassEnv(token);
+        try {
+          execFileSync("git", ["push", buildGitHubHttpsUrl(githubRepo), "dev:dev"], {
+            cwd: projectPath,
+            stdio: "pipe",
+            timeout: 60000,
+            env: askPass.env,
+          });
+        } finally {
+          askPass.cleanup();
+        }
+      } else {
+        execFileSync("git", ["push", "origin", "dev"], {
           cwd: projectPath,
           stdio: "pipe",
-          timeout: 5000,
+          timeout: 60000,
         });
       }
-      execFileSync("git", ["push", "origin", "dev"], {
-        cwd: projectPath,
-        stdio: "pipe",
-        timeout: 60000,
-      });
 
       if (token) {
         const [owner, repo] = githubRepo.split("/");

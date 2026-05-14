@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ChildProcess } from "node:child_process";
 import { decryptSecret } from "../../../../oauth/helpers.ts";
+import { normalizeApiProviderBaseUrl, validateApiProviderBaseUrl } from "../../../shared/api-provider-url-policy.ts";
 import type { ApiProviderRow } from "./types.ts";
 
 type DbLike = {
@@ -109,12 +110,7 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
     );
   }
 
-  function normalizeApiBaseUrl(rawUrl: string): string {
-    let url = rawUrl.replace(/\/+$/, "");
-    url = url.replace(/\/(v\d+)\/(chat\/completions|models|messages)$/i, "/$1");
-    url = url.replace(/\/v1beta\/models\/.+$/i, "/v1beta");
-    return url;
-  }
+  const normalizeApiBaseUrl = normalizeApiProviderBaseUrl;
 
   function isGoogleImageModel(model: string): boolean {
     return /(?:^|[-.])(image|imagen)(?:[-.]|$)/i.test(model);
@@ -241,6 +237,10 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
     prompt: string,
     projectPath: string,
   ): { url: string; headers: Record<string, string>; body: string; mode: "stream" | "google-image" } {
+    const baseUrlError = validateApiProviderBaseUrl(provider.type, provider.base_url);
+    if (baseUrlError) {
+      throw new Error(`API provider '${provider.name}' has blocked base_url: ${baseUrlError}`);
+    }
     const apiKey = provider.api_key_enc ? decryptSecret(provider.api_key_enc) : "";
     const baseUrl = normalizeApiBaseUrl(provider.base_url);
 

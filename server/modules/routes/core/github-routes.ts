@@ -5,6 +5,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { decryptSecret } from "../../../oauth/helpers.ts";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
+import { buildGitHubHttpsUrl, createGitHubAskPassEnv } from "../../shared/github-askpass.ts";
 import { isValidGitHubRepoName, normalizeGitHubRepoName } from "./github-validation.ts";
 
 export type GitHubRouteDeps = Pick<RuntimeContext, "app" | "db" | "broadcast">;
@@ -92,6 +93,10 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
   function isTargetPathInsideAllowedRoots(targetPath: string): boolean {
     if (PROJECT_PATH_ALLOWED_ROOTS.length === 0) return true;
     return PROJECT_PATH_ALLOWED_ROOTS.some((root) => pathInsideRoot(targetPath, root));
+  }
+
+  function hasConfiguredTargetPathAllowedRoots(): boolean {
+    return PROJECT_PATH_ALLOWED_ROOTS.length > 0;
   }
 
   function sendTargetPathOutsideAllowedRoots(res: { status: (code: number) => { json: (body: unknown) => unknown } }) {
@@ -425,14 +430,15 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     const cloneId = randomUUID();
     activeClones.set(cloneId, { status: "cloning", progress: 0, targetPath, repoFullName });
 
-    const cloneUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+    const askPass = createGitHubAskPassEnv(token);
+    const cloneUrl = buildGitHubHttpsUrl(`${owner}/${repo}`);
     const args = ["clone", "--progress"];
     if (branch) {
       args.push("--branch", branch, "--single-branch");
     }
     args.push(cloneUrl, targetPath);
 
-    const child = spawn("git", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("git", args, { stdio: ["ignore", "pipe", "pipe"], env: askPass.env });
     let stderrBuf = "";
 
     child.stderr?.on("data", (chunk: Buffer) => {
@@ -450,6 +456,7 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     });
 
     child.on("close", (code) => {
+      askPass.cleanup();
       const entry = activeClones.get(cloneId);
       if (entry) {
         if (code === 0) {
@@ -470,6 +477,7 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     });
 
     child.on("error", (err) => {
+      askPass.cleanup();
       const entry = activeClones.get(cloneId);
       if (entry) {
         entry.status = "error";
@@ -489,6 +497,12 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     const targetPath = normalizeTargetPath(rawTargetPath);
     if (!path.isAbsolute(targetPath)) {
       return res.status(400).json({ error: "absolute_path_required" });
+    }
+    if (!hasConfiguredTargetPathAllowedRoots()) {
+      return res.status(403).json({
+        error: "target_path_allowed_roots_required",
+        allowed_roots: PROJECT_PATH_ALLOWED_ROOTS,
+      });
     }
     if (!isTargetPathInsideAllowedRoots(targetPath)) {
       return sendTargetPathOutsideAllowedRoots(res);

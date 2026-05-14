@@ -108,14 +108,26 @@ describe("auth helpers", () => {
     } as Request;
     expect(shouldUseSecureCookie(secureReq)).toBe(true);
 
-    const trustedBootstrapReq = {
+    const loopbackBootstrapReq = {
+      ...mockRequest({
+        host: "evil.example:8790",
+      }),
+      socket: { remoteAddress: "127.0.0.1" },
+      hostname: "evil.example",
+    } as unknown as Request;
+    expect(isTrustedSessionBootstrapRequest(loopbackBootstrapReq)).toBe(true);
+
+    const spoofedBootstrapReq = {
       ...mockRequest({
         host: "localhost:8790",
+        origin: "https://dev.ts.net",
+        referer: "https://dev.ts.net/app",
+        "x-forwarded-host": "localhost:8790",
       }),
       socket: { remoteAddress: "172.20.0.10" },
       hostname: "localhost",
     } as unknown as Request;
-    expect(isTrustedSessionBootstrapRequest(trustedBootstrapReq)).toBe(true);
+    expect(isTrustedSessionBootstrapRequest(spoofedBootstrapReq)).toBe(false);
 
     const untrustedBootstrapReq = {
       ...mockRequest({

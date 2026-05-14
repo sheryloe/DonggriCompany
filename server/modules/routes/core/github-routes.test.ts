@@ -268,13 +268,15 @@ describe("github routes", () => {
   });
 
   it("creates missing parent directories before cloning", async () => {
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "github-clone-route-"));
+    tempDirs.push(rootDir);
+    process.env.PROJECT_PATH_ALLOWED_ROOTS = rootDir;
+
     const { app, db } = await createHarness();
     try {
       insertActiveGitHubAccount(db);
       childProcessMocks.spawn.mockImplementation(() => createMockSpawnChild(0));
 
-      const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "github-clone-route-"));
-      tempDirs.push(rootDir);
       const targetPath = path.join(rootDir, "nested", "demo-repo");
       const parentPath = path.dirname(targetPath);
 
@@ -297,11 +299,17 @@ describe("github routes", () => {
           "--branch",
           "main",
           "--single-branch",
-          "https://x-access-token:encrypted-token@github.com/octocat/demo-repo.git",
+          "https://github.com/octocat/demo-repo.git",
           targetPath,
         ]),
-        expect.any(Object),
+        expect.objectContaining({
+          env: expect.objectContaining({
+            GIT_ASKPASS: expect.any(String),
+            GIT_TERMINAL_PROMPT: "0",
+          }),
+        }),
       );
+      expect(JSON.stringify(childProcessMocks.spawn.mock.calls[0])).not.toContain("encrypted-token@github.com");
     } finally {
       db.close();
     }
@@ -337,11 +345,13 @@ describe("github routes", () => {
   });
 
   it("removes a cloned local path only when it is a git directory", async () => {
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "github-local-cleanup-"));
+    tempDirs.push(rootDir);
+    process.env.PROJECT_PATH_ALLOWED_ROOTS = rootDir;
+
     const { app, db } = await createHarness();
     try {
       insertActiveGitHubAccount(db);
-      const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "github-local-cleanup-"));
-      tempDirs.push(rootDir);
       const cloneDir = path.join(rootDir, "demo-repo");
       fs.mkdirSync(path.join(cloneDir, ".git"), { recursive: true });
 
@@ -356,6 +366,29 @@ describe("github routes", () => {
         target_path: cloneDir,
       });
       expect(fs.existsSync(cloneDir)).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("requires configured allowed roots before deleting a local clone", async () => {
+    delete process.env.PROJECT_PATH_ALLOWED_ROOTS;
+
+    const { app, db } = await createHarness();
+    try {
+      insertActiveGitHubAccount(db);
+      const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "github-local-cleanup-no-root-"));
+      tempDirs.push(rootDir);
+      const cloneDir = path.join(rootDir, "demo-repo");
+      fs.mkdirSync(path.join(cloneDir, ".git"), { recursive: true });
+
+      const response = await request(app).delete("/api/github/local-path").send({
+        target_path: cloneDir,
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe("target_path_allowed_roots_required");
+      expect(fs.existsSync(cloneDir)).toBe(true);
     } finally {
       db.close();
     }

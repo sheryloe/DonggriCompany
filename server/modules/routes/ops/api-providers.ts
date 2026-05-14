@@ -3,6 +3,7 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { decryptSecret, encryptSecret } from "../../../oauth/helpers.ts";
 import { recordQualityMetricEvent } from "../../memory/store.ts";
+import { normalizeApiProviderBaseUrl, validateApiProviderBaseUrl } from "../../shared/api-provider-url-policy.ts";
 
 type ApiProviderPreset = {
   base_url: string;
@@ -200,12 +201,7 @@ function buildApiProviderHeaders(type: ApiProviderType, apiKey: string): Record<
   return headers;
 }
 
-function normalizeApiBaseUrl(rawUrl: string): string {
-  let url = rawUrl.replace(/\/+$/, "");
-  url = url.replace(/\/v1\/(chat\/completions|models|messages)$/i, "/v1");
-  url = url.replace(/\/v1beta\/models\/.+$/i, "/v1beta");
-  return url;
-}
+const normalizeApiBaseUrl = normalizeApiProviderBaseUrl;
 
 function buildModelsUrl(type: ApiProviderType, baseUrl: string, apiKey: string): string {
   const preset = API_PROVIDER_PRESETS[type] || API_PROVIDER_PRESETS.custom;
@@ -438,10 +434,16 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const baseUrl = officialPreset?.base_url ?? (typeof body.base_url === "string" ? body.base_url.trim() : "");
     const type: ApiProviderType = officialPreset?.type ?? (isApiProviderType(body.type) ? body.type : "openai");
+    const normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
     const apiKey = typeof body.api_key === "string" ? body.api_key.trim() : "";
 
     if (!name || !baseUrl) {
       return res.status(400).json({ error: "name and base_url are required" });
+    }
+
+    const baseUrlError = validateApiProviderBaseUrl(type, normalizedBaseUrl);
+    if (baseUrlError) {
+      return res.status(400).json({ error: baseUrlError });
     }
 
     const apiKeyError = validateOfficialPresetApiKey(officialPreset, apiKey);
@@ -463,7 +465,7 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
       id,
       name,
       type,
-      baseUrl.replace(/\/+$/, ""),
+      normalizedBaseUrl,
       apiKey ? encryptSecret(apiKey) : null,
       presetKeyInput.presetKey,
       seededModels.length ? JSON.stringify(seededModels) : null,
@@ -501,10 +503,15 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
         : row.base_url;
     const nextType = officialPreset?.type ?? nextManualType;
     const nextBaseUrl = officialPreset?.base_url ?? nextManualBaseUrl;
+    const normalizedNextBaseUrl = normalizeApiBaseUrl(nextBaseUrl);
+    const baseUrlError = validateApiProviderBaseUrl(nextType, normalizedNextBaseUrl);
+    if (baseUrlError) {
+      return res.status(400).json({ error: baseUrlError });
+    }
     const shouldInvalidateModelCache =
       nextPresetKey !== existingPresetKey ||
       nextType !== row.type ||
-      normalizeApiBaseUrl(nextBaseUrl) !== normalizeApiBaseUrl(row.base_url);
+      normalizedNextBaseUrl !== normalizeApiBaseUrl(row.base_url);
 
     if ("name" in body && typeof body.name === "string" && body.name.trim()) {
       updates.push("name = ?");
@@ -536,7 +543,7 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
       updates.push("type = ?");
       params.push(officialPreset.type);
       updates.push("base_url = ?");
-      params.push(officialPreset.base_url);
+      params.push(normalizedNextBaseUrl);
 
       const mergedModels = shouldInvalidateModelCache
         ? mergeModelLists(officialPreset.fallback_models)
@@ -561,7 +568,7 @@ export function registerApiProviderRoutes({ app, db, nowMs }: RegisterApiProvide
       }
       if ("base_url" in body && typeof body.base_url === "string" && body.base_url.trim()) {
         updates.push("base_url = ?");
-        params.push(body.base_url.trim().replace(/\/+$/, ""));
+        params.push(normalizedNextBaseUrl);
       }
       if (shouldInvalidateModelCache) {
         updates.push("models_cache = ?");

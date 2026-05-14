@@ -20,6 +20,7 @@ import { registerWorkflowPackRoutes } from "./ops/workflow-packs.ts";
 import { registerCompanyRoutes } from "./ops/company-routes.ts";
 import { registerGoalCommandRoutes } from "./ops/goal-commands.ts";
 import { registerQualityMetricRoutes } from "./ops/quality-metrics.ts";
+import { registerStrategicMaintenanceRoutes } from "./ops/strategic-maintenance.ts";
 
 export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   const __ctx: RuntimeContext = ctx;
@@ -221,6 +222,7 @@ export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   registerCompanyRoutes(__ctx);
   registerGoalCommandRoutes(__ctx);
   registerQualityMetricRoutes({ app, db });
+  registerStrategicMaintenanceRoutes(__ctx);
 
   const { normalizeSkillLearnProviders } = registerSkillRoutes(__ctx);
   registerModuleRoutes(__ctx);

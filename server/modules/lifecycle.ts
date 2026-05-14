@@ -10,6 +10,7 @@ import { startDiscordReceiver } from "../messenger/discord-receiver.ts";
 import { startGmailIntakeReceiver } from "../messenger/gmail-intake-receiver.ts";
 import { startTelegramReceiver } from "../messenger/telegram-receiver.ts";
 import { registerGracefulShutdownHandlers } from "./lifecycle/register-graceful-shutdown.ts";
+import { startStrategicMaintenanceScheduler } from "./strategic-maintenance/service.ts";
 
 type StartupCliStatus = Record<string, { installed?: boolean; authenticated?: boolean }>;
 
@@ -627,6 +628,7 @@ export function startLifecycle(ctx: RuntimeContext): void {
   const discordReceiver = startDiscordReceiver({ db });
   const gmailIntakeReceiver = startGmailIntakeReceiver({ db });
   const calendarIntakeReceiver = startCalendarIntakeReceiver({ db });
+  const strategicMaintenanceScheduler = startStrategicMaintenanceScheduler(ctx);
 
   // ---------------------------------------------------------------------------
   // Start HTTP server + WebSocket
@@ -707,6 +709,9 @@ export function startLifecycle(ctx: RuntimeContext): void {
     onBeforeClose: () => {
       telegramReceiver.stop();
       discordReceiver.stop();
+      gmailIntakeReceiver.stop();
+      calendarIntakeReceiver.stop();
+      strategicMaintenanceScheduler.stop();
     },
   });
 }

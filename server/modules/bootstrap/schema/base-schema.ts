@@ -405,6 +405,23 @@ CREATE TABLE IF NOT EXISTS gmail_intake_messages (
   updated_at INTEGER DEFAULT (unixepoch()*1000)
 );
 
+CREATE TABLE IF NOT EXISTS strategic_maintenance_runs (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running','completed','failed')),
+  trigger TEXT NOT NULL DEFAULT 'manual' CHECK(trigger IN ('manual','scheduler','test')),
+  started_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  report_path TEXT,
+  report_json TEXT,
+  email_status TEXT NOT NULL DEFAULT 'skipped' CHECK(email_status IN ('skipped','sent','blocked','failed')),
+  email_error TEXT,
+  email_recipient_count INTEGER NOT NULL DEFAULT 0,
+  created_task_ids_json TEXT NOT NULL DEFAULT '[]',
+  error TEXT,
+  created_at INTEGER DEFAULT (unixepoch()*1000),
+  updated_at INTEGER DEFAULT (unixepoch()*1000)
+);
+
 CREATE TABLE IF NOT EXISTS calendar_intake_events (
   id TEXT PRIMARY KEY,
   google_event_id TEXT NOT NULL UNIQUE,
@@ -465,6 +482,10 @@ CREATE INDEX IF NOT EXISTS idx_gmail_intake_status_updated
   ON gmail_intake_messages(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_gmail_intake_project
   ON gmail_intake_messages(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_strategic_maintenance_runs_created
+  ON strategic_maintenance_runs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_strategic_maintenance_runs_status
+  ON strategic_maintenance_runs(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_calendar_intake_status_updated
   ON calendar_intake_events(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_calendar_intake_project
@@ -506,6 +527,10 @@ function ensureCanonicalCompatibilityColumns(db: DbLike): void {
   execIgnoreDuplicateColumn(db, "ALTER TABLE projects ADD COLUMN staffing_policy_json TEXT;");
   execIgnoreDuplicateColumn(db, "ALTER TABLE projects ADD COLUMN artifact_projection_version TEXT;");
   execIgnoreDuplicateColumn(db, "ALTER TABLE messages ADD COLUMN project_id TEXT;");
+  execIgnoreDuplicateColumn(
+    db,
+    "ALTER TABLE strategic_maintenance_runs ADD COLUMN email_recipient_count INTEGER NOT NULL DEFAULT 0;",
+  );
 }
 
 function ensureCanonicalCompatibilityIndexes(db: DbLike): void {

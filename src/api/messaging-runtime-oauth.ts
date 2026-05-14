@@ -10,6 +10,8 @@ import type {
   MessageType,
   ReceiverType,
   RoomTheme,
+  StrategicMaintenanceRun,
+  StrategicMaintenanceStatus,
 } from "../types";
 
 // Messages
@@ -318,6 +320,30 @@ export async function saveSettingsPatch(patch: Record<string, unknown>): Promise
 
 export async function saveRoomThemes(roomThemes: Record<string, RoomTheme>): Promise<void> {
   await put("/api/settings", { roomThemes });
+}
+
+export async function getStrategicMaintenanceStatus(): Promise<StrategicMaintenanceStatus> {
+  const response = await request<{ ok: boolean; status: StrategicMaintenanceStatus }>(
+    "/api/strategic-maintenance/status",
+  );
+  return response.status;
+}
+
+export async function getStrategicMaintenanceRuns(limit = 20): Promise<StrategicMaintenanceRun[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const response = await request<{ ok: boolean; runs: StrategicMaintenanceRun[] }>(
+    `/api/strategic-maintenance/runs?${params.toString()}`,
+  );
+  return response.runs ?? [];
+}
+
+export async function runStrategicMaintenance(): Promise<StrategicMaintenanceRun> {
+  const response = await post<{ ok: boolean; run: StrategicMaintenanceRun }>("/api/strategic-maintenance/run");
+  return response.run;
+}
+
+export async function sendStrategicMaintenanceTestEmail(): Promise<{ ok: true; recipientCount: number }> {
+  return post("/api/strategic-maintenance/test-email") as Promise<{ ok: true; recipientCount: number }>;
 }
 
 export interface UpdateStatus {

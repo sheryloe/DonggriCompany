@@ -885,6 +885,53 @@ export interface RoomTheme {
   accent: number;
 }
 
+export interface StrategicMaintenanceSettings {
+  enabled: boolean;
+  cadence: "weekly";
+  dayOfWeek: number;
+  hour: number;
+  timezone: "Asia/Seoul";
+  createTasks: boolean;
+  maxTasksPerRun: number;
+  emailEnabled: boolean;
+  emailTo: string[];
+  emailCc: string[];
+}
+
+export interface StrategicMaintenanceRun {
+  id: string;
+  status: "running" | "completed" | "failed";
+  trigger: "manual" | "scheduler" | "test";
+  started_at: number;
+  completed_at: number | null;
+  report_path: string | null;
+  report_json: string | null;
+  email_status: "skipped" | "sent" | "blocked" | "failed";
+  email_error: string | null;
+  email_recipient_count: number;
+  created_task_ids_json: string;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface GmailSendStatusView {
+  configured: boolean;
+  authorized: boolean;
+  sendScopeGranted: boolean;
+  email: string | null;
+  expiresAt: number | null;
+  missingReason: string | null;
+}
+
+export interface StrategicMaintenanceStatus {
+  settings: StrategicMaintenanceSettings;
+  latestRun: StrategicMaintenanceRun | null;
+  nextRunAt: number | null;
+  inFlight: boolean;
+  gmail: GmailSendStatusView;
+}
+
 export const MESSENGER_CHANNELS = [
   "telegram",
   "whatsapp",
@@ -948,6 +995,7 @@ export interface CompanySettings {
   officeWorkflowPack?: WorkflowPackKey;
   providerModelConfig?: Record<string, ProviderModelConfig>;
   roomThemes?: Record<string, RoomTheme>;
+  strategicMaintenance?: StrategicMaintenanceSettings;
   messengerChannels?: MessengerChannelsConfig;
   officePackProfiles?: OfficePackProfiles;
   officePackHydratedPacks?: string[];
@@ -969,6 +1017,18 @@ export const DEFAULT_SETTINGS: CompanySettings = {
   beadsWriteEnabled: false,
   defaultProvider: "codex",
   officeWorkflowPack: "development",
+  strategicMaintenance: {
+    enabled: false,
+    cadence: "weekly",
+    dayOfWeek: 1,
+    hour: 9,
+    timezone: "Asia/Seoul",
+    createTasks: true,
+    maxTasksPerRun: 5,
+    emailEnabled: false,
+    emailTo: [],
+    emailCc: [],
+  },
   providerModelConfig: {
     claude: { model: "claude-opus-4-6", subModel: "claude-sonnet-4-6" },
     codex: {

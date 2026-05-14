@@ -40,6 +40,9 @@
     },
     {
       "name": "docs"
+    },
+    {
+      "name": "strategic-maintenance"
     }
   ],
   "components": {
@@ -152,6 +155,353 @@
         },
         "required": ["id", "name"],
         "additionalProperties": true
+      },
+      "StrategicMaintenanceSettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "cadence": {
+            "type": "string",
+            "enum": ["weekly"]
+          },
+          "dayOfWeek": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6
+          },
+          "hour": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23
+          },
+          "timezone": {
+            "type": "string",
+            "enum": ["Asia/Seoul"]
+          },
+          "createTasks": {
+            "type": "boolean"
+          },
+          "maxTasksPerRun": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "emailEnabled": {
+            "type": "boolean"
+          },
+          "emailTo": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            }
+          },
+          "emailCc": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            }
+          }
+        },
+        "required": [
+          "enabled",
+          "cadence",
+          "dayOfWeek",
+          "hour",
+          "timezone",
+          "createTasks",
+          "maxTasksPerRun",
+          "emailEnabled",
+          "emailTo",
+          "emailCc"
+        ],
+        "additionalProperties": false
+      },
+      "GmailSendStatusView": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "authorized": {
+            "type": "boolean"
+          },
+          "sendScopeGranted": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "integer",
+            "nullable": true
+          },
+          "missingReason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["configured", "authorized", "sendScopeGranted", "email", "expiresAt", "missingReason"],
+        "additionalProperties": false
+      },
+      "StrategicMaintenanceRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "completed", "failed"]
+          },
+          "trigger": {
+            "type": "string",
+            "enum": ["manual", "scheduler", "test"]
+          },
+          "started_at": {
+            "type": "integer"
+          },
+          "completed_at": {
+            "type": "integer",
+            "nullable": true
+          },
+          "report_path": {
+            "type": "string",
+            "nullable": true
+          },
+          "report_json": {
+            "type": "string",
+            "nullable": true
+          },
+          "email_status": {
+            "type": "string",
+            "enum": ["skipped", "sent", "blocked", "failed"]
+          },
+          "email_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "email_recipient_count": {
+            "type": "integer"
+          },
+          "created_task_ids_json": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "trigger",
+          "started_at",
+          "completed_at",
+          "report_path",
+          "report_json",
+          "email_status",
+          "email_error",
+          "email_recipient_count",
+          "created_task_ids_json",
+          "error",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "StrategicMaintenanceStatus": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "cadence": {
+                "type": "string",
+                "enum": ["weekly"]
+              },
+              "dayOfWeek": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6
+              },
+              "hour": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 23
+              },
+              "timezone": {
+                "type": "string",
+                "enum": ["Asia/Seoul"]
+              },
+              "createTasks": {
+                "type": "boolean"
+              },
+              "maxTasksPerRun": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 20
+              },
+              "emailEnabled": {
+                "type": "boolean"
+              },
+              "emailTo": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "email"
+                }
+              },
+              "emailCc": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "email"
+                }
+              }
+            },
+            "required": [
+              "enabled",
+              "cadence",
+              "dayOfWeek",
+              "hour",
+              "timezone",
+              "createTasks",
+              "maxTasksPerRun",
+              "emailEnabled",
+              "emailTo",
+              "emailCc"
+            ],
+            "additionalProperties": false
+          },
+          "latestRun": {
+            "allOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["running", "completed", "failed"]
+                  },
+                  "trigger": {
+                    "type": "string",
+                    "enum": ["manual", "scheduler", "test"]
+                  },
+                  "started_at": {
+                    "type": "integer"
+                  },
+                  "completed_at": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "report_path": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "report_json": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "email_status": {
+                    "type": "string",
+                    "enum": ["skipped", "sent", "blocked", "failed"]
+                  },
+                  "email_error": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "email_recipient_count": {
+                    "type": "integer"
+                  },
+                  "created_task_ids_json": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "created_at": {
+                    "type": "integer"
+                  },
+                  "updated_at": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "trigger",
+                  "started_at",
+                  "completed_at",
+                  "report_path",
+                  "report_json",
+                  "email_status",
+                  "email_error",
+                  "email_recipient_count",
+                  "created_task_ids_json",
+                  "error",
+                  "created_at",
+                  "updated_at"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "nullable": true
+          },
+          "nextRunAt": {
+            "type": "integer",
+            "nullable": true
+          },
+          "inFlight": {
+            "type": "boolean"
+          },
+          "gmail": {
+            "type": "object",
+            "properties": {
+              "configured": {
+                "type": "boolean"
+              },
+              "authorized": {
+                "type": "boolean"
+              },
+              "sendScopeGranted": {
+                "type": "boolean"
+              },
+              "email": {
+                "type": "string",
+                "nullable": true
+              },
+              "expiresAt": {
+                "type": "integer",
+                "nullable": true
+              },
+              "missingReason": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": ["configured", "authorized", "sendScopeGranted", "email", "expiresAt", "missingReason"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["settings", "latestRun", "nextRunAt", "inFlight", "gmail"],
+        "additionalProperties": false
       }
     },
     "responses": {
@@ -18671,6 +19021,981 @@
             }
           }
         }
+      }
+    },
+    "/api/strategic-maintenance/status": {
+      "get": {
+        "tags": ["strategic-maintenance"],
+        "summary": "Get strategic maintenance status",
+        "operationId": "getStrategicMaintenanceStatus",
+        "responses": {
+          "200": {
+            "description": "Strategic maintenance status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "object",
+                      "properties": {
+                        "settings": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "cadence": {
+                              "type": "string",
+                              "enum": ["weekly"]
+                            },
+                            "dayOfWeek": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 6
+                            },
+                            "hour": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 23
+                            },
+                            "timezone": {
+                              "type": "string",
+                              "enum": ["Asia/Seoul"]
+                            },
+                            "createTasks": {
+                              "type": "boolean"
+                            },
+                            "maxTasksPerRun": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 20
+                            },
+                            "emailEnabled": {
+                              "type": "boolean"
+                            },
+                            "emailTo": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "format": "email"
+                              }
+                            },
+                            "emailCc": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "format": "email"
+                              }
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "cadence",
+                            "dayOfWeek",
+                            "hour",
+                            "timezone",
+                            "createTasks",
+                            "maxTasksPerRun",
+                            "emailEnabled",
+                            "emailTo",
+                            "emailCc"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "latestRun": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": ["running", "completed", "failed"]
+                                },
+                                "trigger": {
+                                  "type": "string",
+                                  "enum": ["manual", "scheduler", "test"]
+                                },
+                                "started_at": {
+                                  "type": "integer"
+                                },
+                                "completed_at": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "report_path": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "report_json": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "email_status": {
+                                  "type": "string",
+                                  "enum": ["skipped", "sent", "blocked", "failed"]
+                                },
+                                "email_error": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "email_recipient_count": {
+                                  "type": "integer"
+                                },
+                                "created_task_ids_json": {
+                                  "type": "string"
+                                },
+                                "error": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "created_at": {
+                                  "type": "integer"
+                                },
+                                "updated_at": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "status",
+                                "trigger",
+                                "started_at",
+                                "completed_at",
+                                "report_path",
+                                "report_json",
+                                "email_status",
+                                "email_error",
+                                "email_recipient_count",
+                                "created_task_ids_json",
+                                "error",
+                                "created_at",
+                                "updated_at"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ],
+                          "nullable": true
+                        },
+                        "nextRunAt": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "inFlight": {
+                          "type": "boolean"
+                        },
+                        "gmail": {
+                          "type": "object",
+                          "properties": {
+                            "configured": {
+                              "type": "boolean"
+                            },
+                            "authorized": {
+                              "type": "boolean"
+                            },
+                            "sendScopeGranted": {
+                              "type": "boolean"
+                            },
+                            "email": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "expiresAt": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "missingReason": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "configured",
+                            "authorized",
+                            "sendScopeGranted",
+                            "email",
+                            "expiresAt",
+                            "missingReason"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": ["settings", "latestRun", "nextRunAt", "inFlight", "gmail"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["ok", "status"]
+                },
+                "example": {
+                  "ok": true,
+                  "status": {
+                    "settings": {
+                      "enabled": true,
+                      "cadence": "weekly",
+                      "dayOfWeek": 1,
+                      "hour": 1,
+                      "timezone": "Asia/Seoul",
+                      "createTasks": true,
+                      "maxTasksPerRun": 1,
+                      "emailEnabled": true,
+                      "emailTo": [],
+                      "emailCc": []
+                    },
+                    "nextRunAt": 1,
+                    "inFlight": true,
+                    "gmail": {
+                      "configured": true,
+                      "authorized": true,
+                      "sendScopeGranted": true,
+                      "email": "string",
+                      "expiresAt": 1,
+                      "missingReason": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/strategic-maintenance/runs": {
+      "get": {
+        "tags": ["strategic-maintenance"],
+        "summary": "List strategic maintenance runs",
+        "operationId": "listStrategicMaintenanceRuns",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Strategic maintenance runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": ["running", "completed", "failed"]
+                          },
+                          "trigger": {
+                            "type": "string",
+                            "enum": ["manual", "scheduler", "test"]
+                          },
+                          "started_at": {
+                            "type": "integer"
+                          },
+                          "completed_at": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "report_path": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "report_json": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "email_status": {
+                            "type": "string",
+                            "enum": ["skipped", "sent", "blocked", "failed"]
+                          },
+                          "email_error": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "email_recipient_count": {
+                            "type": "integer"
+                          },
+                          "created_task_ids_json": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "created_at": {
+                            "type": "integer"
+                          },
+                          "updated_at": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status",
+                          "trigger",
+                          "started_at",
+                          "completed_at",
+                          "report_path",
+                          "report_json",
+                          "email_status",
+                          "email_error",
+                          "email_recipient_count",
+                          "created_task_ids_json",
+                          "error",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["ok", "runs"]
+                },
+                "example": {
+                  "ok": true,
+                  "runs": [
+                    {
+                      "id": "string_id",
+                      "status": "running",
+                      "trigger": "manual",
+                      "started_at": 1,
+                      "completed_at": 1,
+                      "report_path": "/workspace/project",
+                      "report_json": "string",
+                      "email_status": "skipped",
+                      "email_error": "string",
+                      "email_recipient_count": 1,
+                      "created_task_ids_json": "2026-02-26T00:00:00.000Z",
+                      "error": "string",
+                      "created_at": 1,
+                      "updated_at": 1
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/strategic-maintenance/run": {
+      "post": {
+        "tags": ["strategic-maintenance"],
+        "summary": "Run strategic maintenance manually",
+        "operationId": "runStrategicMaintenance",
+        "responses": {
+          "200": {
+            "description": "Strategic maintenance run response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "run": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": ["running", "completed", "failed"]
+                        },
+                        "trigger": {
+                          "type": "string",
+                          "enum": ["manual", "scheduler", "test"]
+                        },
+                        "started_at": {
+                          "type": "integer"
+                        },
+                        "completed_at": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "report_path": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "report_json": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "email_status": {
+                          "type": "string",
+                          "enum": ["skipped", "sent", "blocked", "failed"]
+                        },
+                        "email_error": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "email_recipient_count": {
+                          "type": "integer"
+                        },
+                        "created_task_ids_json": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "integer"
+                        },
+                        "updated_at": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "trigger",
+                        "started_at",
+                        "completed_at",
+                        "report_path",
+                        "report_json",
+                        "email_status",
+                        "email_error",
+                        "email_recipient_count",
+                        "created_task_ids_json",
+                        "error",
+                        "created_at",
+                        "updated_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["ok", "run"]
+                },
+                "example": {
+                  "ok": true,
+                  "run": {
+                    "id": "string_id",
+                    "status": "running",
+                    "trigger": "manual",
+                    "started_at": 1,
+                    "completed_at": 1,
+                    "report_path": "/workspace/project",
+                    "report_json": "string",
+                    "email_status": "skipped",
+                    "email_error": "string",
+                    "email_recipient_count": 1,
+                    "created_task_ids_json": "2026-02-26T00:00:00.000Z",
+                    "error": "string",
+                    "created_at": 1,
+                    "updated_at": 1
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/strategic-maintenance/test-email": {
+      "post": {
+        "tags": ["strategic-maintenance"],
+        "summary": "Send strategic maintenance test email",
+        "operationId": "sendStrategicMaintenanceTestEmail",
+        "responses": {
+          "200": {
+            "description": "Strategic maintenance test email result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "recipientCount": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": ["ok", "recipientCount"]
+                },
+                "example": {
+                  "ok": true,
+                  "recipientCount": 1
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     }
   }

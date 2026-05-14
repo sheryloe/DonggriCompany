@@ -9,8 +9,9 @@ import { DatabaseSync } from "node:sqlite";
 
 const ROOT = process.cwd();
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
-const GOOGLE_INTAKE_SCOPES = [GMAIL_SCOPE, CALENDAR_SCOPE];
+const GOOGLE_INTAKE_SCOPES = [GMAIL_SCOPE, GMAIL_SEND_SCOPE, CALENDAR_SCOPE];
 const SETTING_KEY = "gmailIntakeOAuth";
 
 function loadEnvFile(filePath, override = false) {

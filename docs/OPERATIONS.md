@@ -41,6 +41,14 @@ docker compose logs --tail 100
 - Compose variable: `DONGGRI_RUNTIME_ROOT` defaults to `../runtime/DonggriCompany`.
 - App variable: `WORKTREE_BASE_DIR` defaults to `/runtime/worktrees/DonggriCompany`.
 
+## Strategic Maintenance
+
+- The `strategic_maintenance` department is an official org-v5 department for weekly system review and improvement task planning.
+- Reports are written under `data/reports/strategic-maintenance/`.
+- Gmail report delivery reuses the Gmail intake OAuth connection and requires the `gmail.send` scope.
+- Configure and run it from the Settings `전략보수` tab.
+- Operational details are documented in `docs/strategic-maintenance.md`.
+
 ## Forbidden Without Explicit Approval
 
 ```powershell

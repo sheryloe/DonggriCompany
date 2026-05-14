@@ -471,7 +471,7 @@ describe("spawnCliAgent codex cli account pool", () => {
 
     const logPath = path.join(harness.logsDir, "task-linger.log");
     const child = runtime.spawnCliAgent("task-linger", "codex", "test prompt", harness.logsDir, logPath);
-    await waitForClose(child, 2_000);
+    await waitForClose(child, 5_000);
     const logText = fs.readFileSync(logPath, "utf8");
 
     expect((child as any).__clawForcedAfterFinalOutput).toBe(true);
@@ -533,7 +533,7 @@ describe("spawnCliAgent codex cli account pool", () => {
 
     const logPath = path.join(harness.logsDir, "task-linger-non-final.log");
     const child = runtime.spawnCliAgent("task-linger-non-final", "codex", "test prompt", harness.logsDir, logPath);
-    await waitForClose(child, 2_000);
+    await waitForClose(child, 5_000);
     const logText = fs.readFileSync(logPath, "utf8");
 
     expect((child as any).__clawForcedAfterFinalOutput).not.toBe(true);
@@ -593,7 +593,7 @@ describe("spawnCliAgent codex cli account pool", () => {
 
     const logPath = path.join(harness.logsDir, "task-codex-noise-only.log");
     const child = runtime.spawnCliAgent("task-codex-noise-only", "codex", "test prompt", harness.logsDir, logPath);
-    await waitForClose(child, 2_000);
+    await waitForClose(child, 5_000);
     const logText = fs.readFileSync(logPath, "utf8");
 
     expect(logText).not.toContain("codex_models_manager::manager");

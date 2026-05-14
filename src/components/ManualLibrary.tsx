@@ -28,14 +28,14 @@ const manualSections: ManualSection[] = [
     id: "departments",
     mark: "DP",
     title: "부서/직원",
-    summary: "Donggri 조직은 7부서 체계로 고정하고 직원 성장은 기억과 Skill 사용 이력으로 관리합니다.",
+    summary: "Donggri 조직은 8부서 체계로 고정하고 직원 성장은 기억과 Skill 사용 이력으로 관리합니다.",
     steps: [
-      "부서는 PMO, 기획, 개발, 디자인, QA, DevSecOps, 운영입니다.",
+      "부서는 PMO, 기획, 개발, 디자인, QA, DevSecOps, 운영, 전략보수팀입니다.",
       "직원 UI는 한국어로 표시하고 내부 저장값은 영어 canonical을 유지합니다.",
       "경험, 장기기억, Skill 숙련도는 직원 성장 판단 보조 지표로 사용합니다.",
     ],
-    example: "pmo, planning, dev, design, qa, devsecops, operations",
-    tags: ["7부서", "직원", "성장"],
+    example: "pmo, planning, dev, design, qa, devsecops, operations, strategic_maintenance",
+    tags: ["8부서", "직원", "성장"],
   },
   {
     id: "tasks",

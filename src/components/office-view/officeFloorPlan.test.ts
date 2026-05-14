@@ -2,19 +2,26 @@ import { describe, expect, it } from "vitest";
 import type { Agent, Department } from "../../types";
 import { buildOfficeFloorPlan, estimateOfficeSceneWidth } from "./officeFloorPlan";
 
-const departments: Department[] = ["pmo", "planning", "dev", "design", "qa", "devsecops", "operations"].map(
-  (id, index) => ({
-    id,
-    name: id,
-    name_ko: id,
-    icon: id.toUpperCase(),
-    color: "#000000",
-    description: null,
-    prompt: null,
-    sort_order: index + 1,
-    created_at: 0,
-  }),
-);
+const departments: Department[] = [
+  "pmo",
+  "planning",
+  "dev",
+  "design",
+  "qa",
+  "devsecops",
+  "operations",
+  "strategic_maintenance",
+].map((id, index) => ({
+  id,
+  name: id,
+  name_ko: id,
+  icon: id.toUpperCase(),
+  color: "#000000",
+  description: null,
+  prompt: null,
+  sort_order: index + 1,
+  created_at: 0,
+}));
 
 const agents: Agent[] = departments.flatMap((department) =>
   Array.from({ length: department.id === "pmo" ? 1 : 3 }, (_, index) => ({
@@ -35,7 +42,7 @@ const agents: Agent[] = departments.flatMap((department) =>
 );
 
 describe("buildOfficeFloorPlan", () => {
-  it("places seven canonical departments into four office floors", () => {
+  it("places eight canonical departments into four office floors", () => {
     const officeW = estimateOfficeSceneWidth({ viewportW: 980, departments });
     const plan = buildOfficeFloorPlan({ officeW, departments, agents });
 
@@ -50,6 +57,7 @@ describe("buildOfficeFloorPlan", () => {
     expect(plan.roomLayouts.get("pmo")?.floorId).toBe("strategy");
     expect(plan.roomLayouts.get("dev")?.floorId).toBe("production");
     expect(plan.roomLayouts.get("operations")?.floorId).toBe("quality");
+    expect(plan.roomLayouts.get("strategic_maintenance")?.floorId).toBe("quality");
     expect(plan.sharedFacilities.map((facility) => facility.id)).toEqual([
       "lobby",
       "break",
@@ -63,10 +71,12 @@ describe("buildOfficeFloorPlan", () => {
     expect(plan.transportCore?.h).toBeGreaterThan(700);
   });
 
-  it("keeps the three-department quality floor wide instead of squeezing rooms", () => {
+  it("keeps the four-department quality floor wide instead of squeezing rooms", () => {
     const officeW = estimateOfficeSceneWidth({ viewportW: 390, departments });
     const plan = buildOfficeFloorPlan({ officeW, departments, agents });
-    const qualityRooms = ["qa", "devsecops", "operations"].map((id) => plan.roomLayouts.get(id));
+    const qualityRooms = ["qa", "devsecops", "operations", "strategic_maintenance"].map((id) =>
+      plan.roomLayouts.get(id),
+    );
 
     expect(officeW).toBeGreaterThan(1000);
     for (const room of qualityRooms) {
@@ -75,5 +85,6 @@ describe("buildOfficeFloorPlan", () => {
     }
     expect(qualityRooms[0]!.x + qualityRooms[0]!.w).toBeLessThan(qualityRooms[1]!.x);
     expect(qualityRooms[1]!.x + qualityRooms[1]!.w).toBeLessThan(qualityRooms[2]!.x);
+    expect(qualityRooms[2]!.x + qualityRooms[2]!.w).toBeLessThan(qualityRooms[3]!.x);
   });
 });

@@ -20,6 +20,11 @@ const TAB_ITEMS: Array<{ key: SettingsTab; label: (t: TFunction) => string }> = 
     label: (t) => t({ ko: "정책 인스펙터", en: "Policy Inspector", ja: "Policy Inspector", zh: "Policy Inspector" }),
   },
   {
+    key: "strategic-maintenance",
+    label: (t) =>
+      t({ ko: "전략보수", en: "Strategic Maintenance", ja: "Strategic Maintenance", zh: "Strategic Maintenance" }),
+  },
+  {
     key: "organization",
     label: (t) =>
       t({ ko: "조직 기본값", en: "Organization Defaults", ja: "Organization Defaults", zh: "Organization Defaults" }),

@@ -189,7 +189,14 @@ export async function installDonggriSkillToCodex(skillName: string): Promise<{
 }
 
 // Codex sub-agents catalog (VoltAgent/awesome-codex-subagents mirror output)
-export type CodexSubagentDepartment = "planning" | "dev" | "design" | "qa" | "devsecops" | "operations";
+export type CodexSubagentDepartment =
+  | "planning"
+  | "dev"
+  | "design"
+  | "qa"
+  | "devsecops"
+  | "operations"
+  | "strategic_maintenance";
 
 export interface CodexSubagentEntry {
   name: string;

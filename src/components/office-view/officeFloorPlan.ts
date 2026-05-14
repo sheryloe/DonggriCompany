@@ -74,7 +74,7 @@ const FLOOR_DEPARTMENTS: Array<{
     id: "quality",
     label: "품질/운영층",
     level: "4F",
-    departments: ["qa", "devsecops", "operations"],
+    departments: ["qa", "devsecops", "operations", "strategic_maintenance"],
     accent: 0xf97316,
   },
 ];
@@ -96,7 +96,7 @@ export function estimateOfficeSceneWidth(params: { viewportW: number; department
       (floor) => floor.departments.filter((departmentId) => knownDepartmentIds.has(departmentId)).length,
     ),
   );
-  const transportWidth = viewportW >= 560 ? DESKTOP_TRANSPORT_CORE_W : 0;
+  const transportWidth = Math.max(Math.floor(viewportW), MIN_WIDE_OFFICE_W) >= 560 ? DESKTOP_TRANSPORT_CORE_W : 0;
   const minimumFloorWidth =
     SIDE_PAD * 2 + transportWidth + maxDepartmentsOnFloor * MIN_ROOM_W + (maxDepartmentsOnFloor - 1) * ROOM_GAP + 48;
   return Math.max(Math.floor(viewportW), MIN_WIDE_OFFICE_W, minimumFloorWidth);

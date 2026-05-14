@@ -1,6 +1,13 @@
 import { getCanonicalSpecializationRegistry } from "../../../company/canonical-policy.ts";
 
-export type CodexSubagentDepartment = "planning" | "dev" | "design" | "qa" | "devsecops" | "operations";
+export type CodexSubagentDepartment =
+  | "planning"
+  | "dev"
+  | "design"
+  | "qa"
+  | "devsecops"
+  | "operations"
+  | "strategic_maintenance";
 
 export interface CodexSubagentCatalogAgent {
   name: string;

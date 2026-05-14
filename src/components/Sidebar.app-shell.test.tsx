@@ -83,6 +83,17 @@ const departments: Department[] = [
     sort_order: 7,
     created_at: 1,
   },
+  {
+    id: "strategic_maintenance",
+    name: "Strategic Maintenance",
+    name_ko: "전략보수팀",
+    icon: "SM",
+    color: "#45b9aa",
+    description: null,
+    prompt: null,
+    sort_order: 8,
+    created_at: 1,
+  },
 ];
 
 function buildAgent(id: string, departmentId: string, status: Agent["status"], spriteNumber: number): Agent {
@@ -105,7 +116,7 @@ function buildAgent(id: string, departmentId: string, status: Agent["status"], s
 }
 
 describe("Sidebar app shell", () => {
-  it("한국어 내비게이션과 7부서 상태를 표시한다", () => {
+  it("한국어 내비게이션과 8부서 상태를 표시한다", () => {
     const { container } = render(
       <I18nProvider language="ko">
         <Sidebar
@@ -134,8 +145,8 @@ describe("Sidebar app shell", () => {
     }
 
     expect(screen.getByText("부서 현황")).toBeInTheDocument();
-    expect(screen.getByText("7부서")).toBeInTheDocument();
-    for (const label of ["PMO", "기획", "개발", "디자인", "QA", "DevSecOps", "운영"]) {
+    expect(screen.getByText("8부서")).toBeInTheDocument();
+    for (const label of ["PMO", "기획", "개발", "디자인", "QA", "DevSecOps", "운영", "전략보수"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getByText("연결됨")).toBeInTheDocument();

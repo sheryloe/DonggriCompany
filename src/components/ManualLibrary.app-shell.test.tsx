@@ -22,7 +22,7 @@ describe("ManualLibrary app shell", () => {
       expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
     }
     expect(screen.getByText(/docker compose up -d --build/)).toBeInTheDocument();
-    expect(screen.getByText("7부서")).toBeInTheDocument();
+    expect(screen.getByText("8부서")).toBeInTheDocument();
   });
 
   it("검색어로 메뉴얼 카드를 실제 필터링한다", async () => {

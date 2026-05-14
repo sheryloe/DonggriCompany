@@ -7,7 +7,16 @@ import type { Translator } from "./types";
 type Catalog = api.CodexSubagentCatalogSnapshot;
 type CatalogAgent = api.CodexSubagentEntry;
 
-const STANDARD_DEPT_ORDER = ["pmo", "planning", "dev", "design", "qa", "devsecops", "operations"] as const;
+const STANDARD_DEPT_ORDER = [
+  "pmo",
+  "planning",
+  "dev",
+  "design",
+  "qa",
+  "devsecops",
+  "operations",
+  "strategic_maintenance",
+] as const;
 
 const LEGACY_DEPARTMENT_MAP: Record<string, string> = {
   development: "dev",

@@ -43,6 +43,7 @@ export type SettingsTab =
   | "api"
   | "workflow-packs"
   | "canonical"
+  | "strategic-maintenance"
   | "gateway"
   | "organization";
 

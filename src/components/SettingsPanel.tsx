@@ -22,6 +22,7 @@ import CanonicalInspectorTab from "./settings/CanonicalInspectorTab";
 import SettingsTabNav from "./settings/SettingsTabNav";
 import WorkflowPacksTab from "./settings/WorkflowPacksTab";
 import OrganizationDefaultsTab from "./settings/OrganizationDefaultsTab";
+import StrategicMaintenanceSettingsTab from "./settings/StrategicMaintenanceSettingsTab";
 import type { AccountDraftMap, AccountDraftPatch, LocalSettings, SettingsTab } from "./settings/types";
 import { useApiProvidersState } from "./settings/useApiProvidersState";
 
@@ -772,6 +773,10 @@ export default function SettingsPanel({
       {tab === "workflow-packs" && <WorkflowPacksTab t={t} />}
 
       {tab === "canonical" && <CanonicalInspectorTab t={t} locale={form.language} />}
+
+      {tab === "strategic-maintenance" && (
+        <StrategicMaintenanceSettingsTab t={t} form={form} setForm={setForm} persistSettings={persistSettings} />
+      )}
 
       {tab === "gateway" && (
         <GatewaySettingsTab t={t} form={form} setForm={setForm} persistSettings={persistSettings} />

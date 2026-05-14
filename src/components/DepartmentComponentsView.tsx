@@ -30,7 +30,15 @@ import type {
   WorkflowPackKey,
 } from "../types";
 
-type DepartmentComponentId = "pmo" | "planning" | "dev" | "design" | "qa" | "devsecops" | "operations";
+type DepartmentComponentId =
+  | "pmo"
+  | "planning"
+  | "dev"
+  | "design"
+  | "qa"
+  | "devsecops"
+  | "operations"
+  | "strategic_maintenance";
 
 interface TaskCreateInput {
   title: string;
@@ -67,7 +75,16 @@ interface DepartmentComponentDefinition {
   icon: LucideIcon;
 }
 
-const DEPARTMENT_ORDER: DepartmentComponentId[] = ["pmo", "planning", "dev", "design", "qa", "devsecops", "operations"];
+const DEPARTMENT_ORDER: DepartmentComponentId[] = [
+  "pmo",
+  "planning",
+  "dev",
+  "design",
+  "qa",
+  "devsecops",
+  "operations",
+  "strategic_maintenance",
+];
 
 const DEPARTMENT_FALLBACK_LABELS: Record<DepartmentComponentId, string> = {
   pmo: "PMO",
@@ -77,6 +94,7 @@ const DEPARTMENT_FALLBACK_LABELS: Record<DepartmentComponentId, string> = {
   qa: "QA",
   devsecops: "DevSecOps",
   operations: "운영",
+  strategic_maintenance: "전략보수",
 };
 
 const COMPONENTS: DepartmentComponentDefinition[] = [

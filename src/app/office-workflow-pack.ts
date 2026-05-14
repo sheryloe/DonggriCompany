@@ -197,6 +197,21 @@ const DEPARTMENT_COPY: Record<string, DepartmentCopy> = {
       zh: "Control runtime environments and operational risk.",
     },
   },
+  strategic_maintenance: {
+    description: {
+      ko: "현 시스템을 정기 점검하고 개선 과제를 설계합니다.",
+      en: "The strategic maintenance team reviews the current system and plans improvement work.",
+      ja: "The strategic maintenance team reviews the current system and plans improvement work.",
+      zh: "The strategic maintenance team reviews the current system and plans improvement work.",
+    },
+    promptTitle: { ko: "[부서 역할]", en: "[Department Role]", ja: "[Department Role]", zh: "[Department Role]" },
+    promptBody: {
+      ko: "주기 점검, 리스크 정리, 개선 태스크 생성, 운영 보고를 담당합니다.",
+      en: "Own recurring reviews, risk synthesis, improvement task creation, and operational reports.",
+      ja: "Own recurring reviews, risk synthesis, improvement task creation, and operational reports.",
+      zh: "Own recurring reviews, risk synthesis, improvement task creation, and operational reports.",
+    },
+  },
   devsecops: {
     description: {
       ko: "보안과 운영 통제 레이어를 점검합니다.",

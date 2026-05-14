@@ -490,7 +490,7 @@ export default function OfficeView({
           </button>
         ))}
         <span className="ml-auto hidden text-slate-400 md:inline">
-          WASD/방향키로 CEO 이동 · Enter/Space 상호작용 · 19명 운영
+          WASD/방향키로 CEO 이동 · Enter/Space 상호작용 · 22명 운영
         </span>
       </div>
       <div className="mx-auto mb-3 grid w-full max-w-5xl grid-cols-2 gap-2 md:grid-cols-4">

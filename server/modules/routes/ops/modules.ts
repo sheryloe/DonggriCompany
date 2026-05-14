@@ -14,7 +14,16 @@ const MODULE_CATEGORIES = new Set([
   "operations",
 ]);
 const IMAGE_MODULE_TYPES = new Set(["image_prompt_pack", "game_asset_pipeline"]);
-const DEPARTMENT_COMPONENT_IDS = new Set(["pmo", "planning", "dev", "design", "qa", "devsecops", "operations"]);
+const DEPARTMENT_COMPONENT_IDS = new Set([
+  "pmo",
+  "planning",
+  "dev",
+  "design",
+  "qa",
+  "devsecops",
+  "operations",
+  "strategic_maintenance",
+]);
 
 export interface ModuleManifest {
   module_key: string;

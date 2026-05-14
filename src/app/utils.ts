@@ -4,6 +4,7 @@ import type {
   MessengerChannelConfig,
   MessengerChannelsConfig,
   RoomTheme,
+  StrategicMaintenanceSettings,
   Task,
 } from "../types";
 import { DEFAULT_SETTINGS, MESSENGER_CHANNELS } from "../types";
@@ -200,6 +201,7 @@ export function areTaskListsEquivalent(prev: Task[], next: Task[]): boolean {
 }
 
 export function mergeSettingsWithDefaults(settings?: Partial<CompanySettings> | null): CompanySettings {
+  const defaultStrategicMaintenance = DEFAULT_SETTINGS.strategicMaintenance as StrategicMaintenanceSettings;
   const mergedMessengerChannels = MESSENGER_CHANNELS.reduce<MessengerChannelsConfig>((acc, channel) => {
     const defaults = DEFAULT_SETTINGS.messengerChannels?.[channel] ?? {
       token: "",
@@ -222,6 +224,12 @@ export function mergeSettingsWithDefaults(settings?: Partial<CompanySettings> | 
     providerModelConfig: {
       ...(DEFAULT_SETTINGS.providerModelConfig ?? {}),
       ...(settings?.providerModelConfig ?? {}),
+    },
+    strategicMaintenance: {
+      ...defaultStrategicMaintenance,
+      ...(settings?.strategicMaintenance ?? {}),
+      emailTo: settings?.strategicMaintenance?.emailTo ?? defaultStrategicMaintenance.emailTo,
+      emailCc: settings?.strategicMaintenance?.emailCc ?? defaultStrategicMaintenance.emailCc,
     },
     messengerChannels: mergedMessengerChannels,
   };

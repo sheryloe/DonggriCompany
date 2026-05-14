@@ -395,6 +395,7 @@ const DEPT_THEME_LIGHT: Record<string, RoomTheme> = {
   qa: { floor1: 0xffd7d7, floor2: 0xf8c4c4, wall: 0xb85e64, accent: 0xe25d63 },
   devsecops: { floor1: 0xffdec6, floor2: 0xf7c9ab, wall: 0xb56e41, accent: 0xe36f38 },
   operations: { floor1: 0xd3f4d6, floor2: 0xbff0c8, wall: 0x5d9a61, accent: 0x2eb86a },
+  strategic_maintenance: { floor1: 0xd3f0ec, floor2: 0xc6ebe6, wall: 0x629e96, accent: 0x45b9aa },
 };
 const DEPT_THEME_DARK: Record<string, RoomTheme> = {
   pmo: { floor1: 0x59d0c1, floor2: 0x36afa0, wall: 0x18766c, accent: 0x2dd4bf },
@@ -404,6 +405,7 @@ const DEPT_THEME_DARK: Record<string, RoomTheme> = {
   qa: { floor1: 0xff8b96, floor2: 0xd86471, wall: 0x9c3e47, accent: 0xfb7185 },
   devsecops: { floor1: 0xffa060, floor2: 0xd8793b, wall: 0x9a4a20, accent: 0xfb923c },
   operations: { floor1: 0x71d88c, floor2: 0x45b765, wall: 0x2b7a43, accent: 0x4ade80 },
+  strategic_maintenance: { floor1: 0x7ddbd0, floor2: 0x45b9aa, wall: 0x236f66, accent: 0x5eead4 },
 };
 let DEPT_THEME = DEPT_THEME_LIGHT;
 

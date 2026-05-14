@@ -25,7 +25,7 @@ const NAV_ITEMS: Array<{ view: View; mark: string; label: string }> = [
   { view: "settings", mark: "ST", label: "설정" },
 ];
 
-const DEPARTMENT_ORDER = ["pmo", "planning", "dev", "design", "qa", "devsecops", "operations"];
+const DEPARTMENT_ORDER = ["pmo", "planning", "dev", "design", "qa", "devsecops", "operations", "strategic_maintenance"];
 const DEPARTMENT_SHORT_LABELS: Record<string, string> = {
   pmo: "PMO",
   planning: "기획",
@@ -34,6 +34,7 @@ const DEPARTMENT_SHORT_LABELS: Record<string, string> = {
   qa: "QA",
   devsecops: "DevSecOps",
   operations: "운영",
+  strategic_maintenance: "전략보수",
 };
 
 const ACTIVE_OFFICE_STAFF_LIMIT: Record<string, number> = {
@@ -44,6 +45,7 @@ const ACTIVE_OFFICE_STAFF_LIMIT: Record<string, number> = {
   qa: 3,
   devsecops: 3,
   operations: 3,
+  strategic_maintenance: 3,
 };
 
 function spriteSrc(agent: Agent): string | null {
@@ -123,7 +125,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
           )}
         </button>
         {!collapsed && (
-          <span className="rounded-lg border border-slate-700/70 px-2 py-1 text-xs text-slate-400">v4</span>
+          <span className="rounded-lg border border-slate-700/70 px-2 py-1 text-xs text-slate-400">v5</span>
         )}
       </div>
 
@@ -171,7 +173,7 @@ export default function Sidebar({ currentView, onChangeView, departments, agents
         <div className="mx-3 mb-3 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3">
           <div className="mb-2 flex items-center justify-between">
             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">부서 현황</div>
-            <span className="rounded-md border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-400">7부서</span>
+            <span className="rounded-md border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-400">8부서</span>
           </div>
           <div className="space-y-1.5">
             {visibleDepartments.map((department) => {

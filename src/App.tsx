@@ -354,6 +354,7 @@ export default function App() {
         onOpenDecisionChat={actions.handleOpenDecisionChat}
         selectedAgent={selectedAgent}
         activeOfficeWorkflowPack={settings.officeWorkflowPack ?? "development"}
+        pixelAgentMode={settings.pixelAgentMode}
         departments={overlayDepartments}
         tasks={tasks}
         subAgents={subAgents}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Agent, Department } from "../../types";
+import type { Agent, Department, PixelAgentModeSettings } from "../../types";
 import { localeName } from "../../i18n";
 import AgentCard from "./AgentCard";
 import { StackedSpriteIcon } from "./EmojiPicker";
@@ -25,6 +25,7 @@ interface AgentsTabProps {
   randomIconSprites: {
     total: [number, number];
   };
+  pixelAgentMode?: PixelAgentModeSettings;
 }
 
 const DEPT_ROW_HEIGHT = 36;
@@ -49,8 +50,10 @@ export default function AgentsTab({
   onDeleteAgent,
   saving,
   randomIconSprites,
+  pixelAgentMode,
 }: AgentsTabProps) {
   const workingCount = agents.filter((agent) => agent.status === "working").length;
+  const pixelModeEnabled = pixelAgentMode?.enabled === true;
   const deptCounts = useMemo(() => {
     const counts = new Map<string, { total: number; working: number }>();
     for (const agent of agents) {
@@ -103,8 +106,26 @@ export default function AgentsTab({
       .slice(0, 12);
   }, [deptRows]);
 
+  const pixelDensityLabel =
+    pixelAgentMode?.density === "compact" ? "간결" : pixelAgentMode?.density === "showcase" ? "쇼케이스" : "균형";
+
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${pixelModeEnabled ? "pixel-agent-mode" : ""}`}>
+      {pixelModeEnabled && (
+        <div className="pixel-agent-console rounded-xl border border-cyan-300/20 bg-slate-950/55 px-4 py-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="font-mono text-xs font-bold text-cyan-100">동그리 8비트 에이전트 명단</div>
+              <div className="mt-1 text-xs text-slate-400">
+                스프라이트 배지와 운영 상태를 픽셀 오피스 기준으로 표시합니다.
+              </div>
+            </div>
+            <div className="font-mono text-[11px] uppercase text-cyan-200/80">
+              밀도 {pixelDensityLabel} · 클라우드 랩
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           {
@@ -198,6 +219,7 @@ export default function AgentsTab({
                   onDeleteConfirm={() => onDeleteAgent(agent.id)}
                   onDeleteCancel={() => setConfirmDeleteId(null)}
                   saving={saving}
+                  pixelAgentMode={pixelAgentMode}
                 />
               ))}
             </div>

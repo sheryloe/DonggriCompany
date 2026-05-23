@@ -6,7 +6,16 @@ import { getRoleDisplayLabel } from "../app/canonical-display";
 import { resolveAgentVisualProfile } from "../agent-visual-profiles";
 import { localeName, useI18n } from "../i18n";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../i18n/canonical-label-registry";
-import type { Agent, AgentMemoryResponse, Department, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
+import type {
+  Agent,
+  AgentMemoryResponse,
+  Department,
+  PixelAgentModeSettings,
+  SubAgent,
+  SubTask,
+  Task,
+  WorkflowPackKey,
+} from "../types";
 import AgentAvatar from "./AgentAvatar";
 import AgentDetailTabContent from "./agent-detail/AgentDetailTabContent";
 import { CLI_LABELS, oauthAccountLabel, STATUS_CONFIG, statusLabel } from "./agent-detail/constants";
@@ -25,6 +34,7 @@ interface AgentDetailProps {
   onAssignTask: (agentId: string) => void;
   onOpenTerminal?: (taskId: string) => void;
   onAgentUpdated?: () => void;
+  pixelAgentMode?: PixelAgentModeSettings;
 }
 
 const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "gemini", "jules"];
@@ -43,6 +53,7 @@ export default function AgentDetail({
   onAssignTask,
   onOpenTerminal,
   onAgentUpdated,
+  pixelAgentMode,
 }: AgentDetailProps) {
   const { t, language } = useI18n();
   const [tab, setTab] = useState<"info" | "tasks" | "alba" | "memory">("info");
@@ -121,6 +132,9 @@ export default function AgentDetail({
     if (typeof agent.sprite_number === "number") return `스프라이트 ${agent.sprite_number}`;
     return "-";
   }, [agent]);
+  const pixelModeEnabled = pixelAgentMode?.enabled === true;
+  const pixelDensityLabel =
+    pixelAgentMode?.density === "compact" ? "간결" : pixelAgentMode?.density === "showcase" ? "쇼케이스" : "균형";
 
   useEffect(() => {
     setSelectedCli(agent.cli_provider);
@@ -271,7 +285,11 @@ export default function AgentDetail({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(event) => event.target === event.currentTarget && onClose()}
     >
-      <div className="w-[min(1280px,96vw)] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+      <div
+        className={`w-[min(1280px,96vw)] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl ${
+          pixelModeEnabled ? "pixel-agent-detail" : ""
+        }`}
+      >
         <div
           className="relative border-b border-slate-700 px-6 py-5"
           style={{ background: department ? `linear-gradient(135deg, ${department.color}22, transparent)` : undefined }}
@@ -287,9 +305,11 @@ export default function AgentDetail({
               <AgentAvatar
                 agent={agent}
                 agents={agents}
-                size={64}
+                size={pixelModeEnabled ? 72 : 64}
                 rounded="2xl"
-                className={agent.status === "working" ? "animate-agent-work" : ""}
+                className={`${agent.status === "working" ? "animate-agent-work" : ""} ${
+                  pixelModeEnabled ? "pixel-agent-portrait" : ""
+                }`}
               />
               <div
                 className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-slate-800 ${agent.status === "working" ? "bg-blue-500" : agent.status === "idle" ? "bg-green-500" : agent.status === "break" ? "bg-yellow-500" : "bg-slate-500"}`}
@@ -304,6 +324,11 @@ export default function AgentDetail({
               </div>
               <div className="mt-0.5 text-sm text-slate-400">{canonicalSummary}</div>
               <div className="mt-1 text-xs text-slate-500">
+                {pixelModeEnabled && (
+                  <div className="mb-2 inline-flex items-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 font-mono text-[11px] text-cyan-100">
+                    픽셀 #{agent.sprite_number ?? "-"} · 밀도 {pixelDensityLabel}
+                  </div>
+                )}
                 {editingCli ? (
                   <div className="space-y-2 rounded-lg border border-slate-700/70 bg-slate-800/60 p-3">
                     <div className="text-[11px] text-slate-400">

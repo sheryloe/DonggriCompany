@@ -30,6 +30,7 @@ import { applyOfficePackToTaskInput, filterTasksByOfficePack, type TaskCreateInp
 
 const OfficeView = lazy(() => import("../components/OfficeView"));
 const Dashboard = lazy(() => import("../components/Dashboard"));
+const ControlPlanePage = lazy(() => import("../components/ControlPlanePage"));
 const TaskBoard = lazy(() => import("../components/TaskBoard"));
 const AgentManager = lazy(() => import("../components/AgentManager"));
 const SkillsLibrary = lazy(() => import("../components/SkillsLibrary"));
@@ -214,7 +215,7 @@ export default function AppMainLayout({
     if (uiLanguage === "ko") return `${officePackBootstrappingLabel} 오피스 팩 배치를 적용하는 중입니다...`;
     return `Deploying ${officePackBootstrappingLabel} office pack...`;
   }, [officePackBootstrappingLabel, uiLanguage]);
-  const viewLoadingLabel = uiLanguage === "ko" ? "화면 데이터를 불러오는 중..." : "Loading view...";
+  const viewLoadingLabel = uiLanguage === "ko" ? "화면 데이터를 불러오는 중입니다..." : "Loading view...";
   const generatedOfficePresentation = useMemo(
     () =>
       buildOfficePackPresentation({
@@ -408,7 +409,13 @@ export default function AppMainLayout({
             </div>
           )}
 
-          <div className={view === "departmentComponents" ? "p-3 sm:p-4 lg:p-6" : "app-main-grid p-3 sm:p-4 lg:p-6"}>
+          <div
+            className={
+              view === "departmentComponents" || view === "controlPlane" || view === "projects" || view === "departments" || view === "memory"
+                ? "p-3 sm:p-4 lg:p-6"
+                : "app-main-grid p-3 sm:p-4 lg:p-6"
+            }
+          >
             <div className="min-w-0">
               <Suspense
                 fallback={<div className="command-panel px-4 py-6 text-sm text-slate-300">{viewLoadingLabel}</div>}
@@ -431,6 +438,7 @@ export default function AppMainLayout({
                     themeHighlightTargetId={activeRoomThemeTargetId}
                     onSelectAgent={onSelectAgent}
                     onSelectDepartment={onSelectDepartment}
+                    pixelAgentMode={settings.pixelAgentMode}
                   />
                 )}
 
@@ -441,8 +449,17 @@ export default function AppMainLayout({
                     tasks={tasks}
                     companyName={settings.companyName}
                     onPrimaryCtaClick={() => setView("tasks")}
+                    onOpenControlPlane={() => setView("controlPlane")}
                   />
                 )}
+
+                {view === "controlPlane" && <ControlPlanePage initialTab="root" />}
+
+                {view === "projects" && <ControlPlanePage initialTab="operators" compactHeader />}
+
+                {view === "departments" && <ControlPlanePage initialTab="departments" compactHeader />}
+
+                {view === "memory" && <ControlPlanePage initialTab="memory" compactHeader />}
 
                 {view === "tasks" && (
                   <TaskBoard
@@ -474,6 +491,7 @@ export default function AppMainLayout({
                     activeOfficeWorkflowPack={officePackKey}
                     dbBackedOfficePack={isHydratedOfficePack}
                     onSaveOfficePackProfile={async () => {}}
+                    pixelAgentMode={settings.pixelAgentMode}
                   />
                 )}
 
@@ -512,7 +530,7 @@ export default function AppMainLayout({
                 )}
               </Suspense>
             </div>
-            {view !== "departmentComponents" && (
+            {view !== "departmentComponents" && view !== "controlPlane" && view !== "projects" && view !== "departments" && view !== "memory" && (
               <LiveOperationsRail agents={displayAgents} tasks={tasksForActivePack} connected={connected} />
             )}
           </div>

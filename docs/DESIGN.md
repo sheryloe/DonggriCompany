@@ -1,134 +1,128 @@
-# Claw-Empire UI/UX Design Guide
+# Dongri-grigri UI/UX Design Guide
 
-> **Theme:** "Cute but Efficient Empire"
-> **Goal:** Manage a chaotic AI empire with a smile.
+## Design North Star
 
----
+Dongri-grigri is an office-style Control Platform for the `G:\Donggri_DevDrive` root workspace.
+The default screen is the operations office, not a separate control-console product.
 
-## 1. Design Philosophy
+The UI should feel:
 
-Claw-Empire combines the **seriousness of a CLI dashboard** with the **charm of a pixel-art simulation**.
-The interface should feel like a powerful command center ("The CEO's Desk") but populated by lively, autonomous agents.
+- friendly but operational
+- Korean-first
+- compact enough for daily work
+- wide-screen aware
+- clear in both light and dark themes
 
--   **Dark & Glassy:** Deep slate backgrounds (`slate-950`) with translucent glass panels (`backdrop-blur`).
--   **Pixel Perfect:** Agents are rendered with `image-rendering: pixelated` to maintain their retro charm.
--   **Alive:** The UI breathes with subtle animations (`agent-bounce`, `pulse-ring`) to show the system is active.
+## Information Architecture
 
----
+Primary navigation:
 
-## 2. Color System
+- 운영실
+- 프로젝트
+- 부서 에이전트
+- 업무
+- Skill
+- Memory
+- 설정
 
-We use Tailwind v4 with a custom `empire` palette.
+The Control Plane is embedded into the office experience through status panels, safety gates, memory scope views, and run timelines.
 
-### Primary Interface
-| Color Name | Hex | Usage |
-| :--- | :--- | :--- |
-| `empire-900` | `#0f172a` | Main Background (Deep Space) |
-| `empire-800` | `#1e293b` | Card Backgrounds |
-| `empire-700` | `#334155` | Borders, Separators |
-| `empire-500` | `#64748b` | Secondary Text |
-| `empire-300` | `#cbd5e1` | Primary Text |
+## Agent Model
 
-### Task Status (Semantic)
-| Status | Color | Visual Meaning |
-| :--- | :--- | :--- |
-| **Inbox** | `Slate` | Unsorted, raw input. |
-| **Planned** | `Blue` | Scheduled, ready to start. |
-| **In Progress** | `Amber` | Active work, high energy. |
-| **Review** | `Purple` | Needs wisdom/checking. |
-| **Done** | `Green` | Success, profit. |
-| **Pending** | `Orange` | Blocked, waiting. |
-| **Cancelled** | `Red` | Dead end. |
+Default user-facing agents:
 
-### Department Coding
-Departments are color-coded to allow quick scanning of the board.
--   **Development**: Cyan/Blue
--   **Design**: Pink
--   **Analysis**: Indigo
--   **Presentation**: Orange
--   **Documentation**: Teal
+- 기획 마스터
+- 개발 마스터
+- 디자인 마스터
+- 품질 마스터
+- 운영 마스터
+- 외부강사 마스터
 
----
+Each master agent may create disposable subagents for one task, then accept, reject, recreate, or merge the result.
+The old staff hierarchy is compatibility data only and must not be the default visual model.
 
-## 3. Components
+## Layout Rules
 
-### Glass Panels (`.game-panel`)
-Used for the main game view and high-level dashboards.
--   **Background**: `rgba(255, 255, 255, 0.03)`
--   **Border**: `1px solid rgba(255, 255, 255, 0.06)`
--   **Effect**: `backdrop-filter: blur(12px)`
--   **Shadow**: Deep drop shadow for depth.
+- Use the full desktop width. Avoid narrow centered settings panels on wide screens.
+- Keep menu rows compact.
+- Use cards for repeated items, not for every section wrapper.
+- Keep the office scene wide enough that the pixel room reads as the main surface.
+- The right rail is for real department/run/memory events, not invented conversation.
 
-### Task Cards (`.dash-card` variant)
-The core unit of work.
--   **Layout**: Header (Title + Priority), Badges, Status, Footer (Agent + Time).
--   **Interactivity**: Hover effects (`border-slate-600`), expand for details.
--   **Progress**: Subtask bars use a **Green-to-Emerald gradient**.
+## Theme Rules
 
-### Agent Avatars
--   **Source**: `/public/sprites/{id}-D-1.png`
--   **Rendering**: Always `pixelated` to prevent blur.
--   **Animation**: Agents in the office view must `bounce` when walking or working.
--   **Fallback**: Robot Emoji 🤖 if sprite missing.
+Use semantic tokens instead of hard-coded dark colors.
 
----
+- Light theme text must be dark enough on light backgrounds.
+- White text is allowed only on dark surfaces or strong CTA backgrounds.
+- Avoid dark-theme-only classes such as fixed `text-white` on general containers.
+- Use department accent colors to separate areas:
+  - 기획: blue
+  - 개발: teal
+  - 디자인: violet
+  - 품질: red
+  - 운영: cyan
+  - 외부강사: amber
 
-## 4. Typography
+## Typography
 
-We use a system font stack for maximum legibility and "native" feel.
+Use one Korean-safe font stack:
+
 ```css
-font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+font-family:
+  Pretendard,
+  "Noto Sans KR",
+  "Apple SD Gothic Neo",
+  "Malgun Gothic",
+  system-ui,
+  sans-serif;
 ```
--   **Headings**: Bold, often uppercase or tracked (letter-spacing) for "Dashboard" feel.
--   **Code/Logs**: Monospace (for Terminal panels).
 
----
+Do not mix unrelated font families between menus.
 
-## 5. Animation & Motion
+## Korean Text Integrity
 
-Animations are critical for the "Alive" feel.
+Broken Korean is a release blocker.
 
-| Animation | Usage | Description |
-| :--- | :--- | :--- |
-| `agent-bounce` | Agents | Gentle up/down float. |
-| `kpi-pop` | Metrics | Scale up/down when numbers change. |
-| `sparkle-spin` | Awards/Shiny | Rotating sparkle effect. |
-| `shimmer` | Loading | Skeleton loading state. |
-| `xp-shine` | Progress | Shiny sweep across XP bars. |
+Scan for replacement characters and common CP949/UTF-8 mojibake fragments.
+Keep the actual pattern list in test scripts or release evidence so this guide itself does not trip UI text scans.
 
----
+Rendered UI must also be checked in the browser because console encoding alone can mislead.
 
-## 6. Icons & Assets
+## Skill And Memory UX
 
--   **Icons**: [Lucide React](https://lucide.dev/) (v0.469+). Use thin strokes (1.5px or 2px) to match the UI.
--   **Sprites**: 12 unique agent sprites, 3 directions (Down, Left, Right).
--   **CEO**: `ceo-lobster.png` (The Boss).
+Skill should be easy to choose:
 
----
+- category
+- search
+- install/status
+- source quality
+- license/readiness
+- related department
 
-## 7. Tone of Voice
+Memory should be shown by scope:
 
--   **System Messages**: "Command accepted", "Deployment ready."
--   **Agent Dialogue**: Cute, slightly subservient but independent. "On it, Boss!", "Taking a coffee break."
--   **Error Messages**: Helpful but distinct. "Mission Failed" rather than "Error 500".
+- root
+- department
+- project
+- run
+- persona
 
----
+AgentMemory integration is read-only by default. Write/remember/hooks require explicit approval.
 
-## 8. Layout Structure
+## Verification
 
-The application uses a **Shell Layout** with a persistent sidebar and dynamic content area.
+Before calling UI work done:
 
-### Sidebar (`Sidebar.tsx`)
--   **Fixed Left**: Navigation and status summary.
--   **Theme**: Darker contrast (`slate-950` or `slate-900`).
--   **Function**: Context switching (Office -> Dashboard -> Tasks).
+```powershell
+corepack pnpm run test:web -- ControlPlanePage Sidebar.app-shell ManualLibrary TaskBoard SkillsLibrary
+corepack pnpm run build
+```
 
-### Header (`App.tsx`)
--   **Sticky Top**: Always visible context.
--   **Style**: Glassmorphism (`bg-slate-900/80 backdrop-blur-sm`) to let content scroll "underneath".
--   **Elements**: Page Title, Global Actions (Announcements), Connectivity Status.
+Browser smoke should verify:
 
-### Panels & Modals
--   **ChatPanel**: Slide-in from right. Dedicated communication channel.
--   **TerminalPanel**: Slide-in overlay for technical logs and output.
--   **AgentDetail**: Center modal for focused information.
+- title includes `Dongri-grigri`
+- office dashboard is the first screen
+- light theme text is readable
+- no old product naming appears in normal UI
+- no broken Korean appears in rendered text

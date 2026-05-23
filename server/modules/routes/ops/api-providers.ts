@@ -364,6 +364,7 @@ async function fetchModelsFromUrl(params: {
   try {
     const resp = await fetch(params.url, {
       headers: params.headers,
+      redirect: "error",
       signal: AbortSignal.timeout(15_000),
     });
     if (!resp.ok) {

@@ -1,20 +1,5 @@
-﻿import { useMemo } from "react";
 import type { Agent, CompanyStats, Task } from "../types";
-import { localeName, useI18n } from "../i18n";
-import {
-  DashboardHeroHeader,
-  DashboardHudStats,
-  DashboardRankingBoard,
-  type HudStat,
-  type RankedAgent,
-} from "./dashboard/HeroSections";
-import {
-  DashboardCommandTimeline,
-  DashboardDeptAndSquad,
-  DashboardMissionLog,
-  type DepartmentPerformance,
-} from "./dashboard/OpsSections";
-import { DEPT_COLORS, useNow } from "./dashboard/model";
+import ControlPlaneSummaryCard from "./ControlPlaneSummaryCard";
 
 interface DashboardProps {
   stats: CompanyStats | null;
@@ -22,207 +7,95 @@ interface DashboardProps {
   tasks: Task[];
   companyName: string;
   onPrimaryCtaClick: () => void;
+  onOpenControlPlane?: () => void;
 }
 
-export default function Dashboard({ stats, agents, tasks, companyName, onPrimaryCtaClick }: DashboardProps) {
-  const { t, language, locale: localeTag } = useI18n();
-  const { date, time, briefing } = useNow(localeTag, t);
-  const agentMap = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
-  const numberFormatter = useMemo(() => new Intl.NumberFormat(localeTag), [localeTag]);
+function countTasks(tasks: Task[], status: string): number {
+  return tasks.filter((task) => task.status === status).length;
+}
 
+function StatCard({ label, value, hint }: { label: string; value: string | number; hint: string }) {
+  return (
+    <article className="game-panel p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--th-text-muted)" }}>
+        {label}
+      </div>
+      <div className="mt-2 text-3xl font-black tracking-tight text-cyan-600">{value}</div>
+      <div className="mt-1 text-xs" style={{ color: "var(--th-text-secondary)" }}>{hint}</div>
+    </article>
+  );
+}
+
+export default function Dashboard({
+  stats,
+  agents,
+  tasks,
+  onPrimaryCtaClick,
+  onOpenControlPlane,
+}: DashboardProps) {
   const totalTasks = stats?.tasks?.total ?? tasks.length;
-  const completedTasks = stats?.tasks?.done ?? tasks.filter((task) => task.status === "done").length;
-  const inProgressTasks = stats?.tasks?.in_progress ?? tasks.filter((task) => task.status === "in_progress").length;
-  const plannedTasks = stats?.tasks?.planned ?? tasks.filter((task) => task.status === "planned").length;
-  const reviewTasks = stats?.tasks?.review ?? tasks.filter((task) => task.status === "review").length;
-  const pendingTasks = tasks.filter((task) => task.status === "pending").length;
-  const activeAgents = stats?.agents?.working ?? agents.filter((agent) => agent.status === "working").length;
-  const idleAgents = stats?.agents?.idle ?? agents.filter((agent) => agent.status === "idle").length;
-  const totalAgents = stats?.agents?.total ?? agents.length;
-  const completionRate =
-    stats?.tasks?.completion_rate ?? (totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0);
-  const activeRate = totalAgents > 0 ? Math.round((activeAgents / totalAgents) * 100) : 0;
-  const reviewQueue = reviewTasks + pendingTasks;
-
-  const primaryCtaLabel = t({ ko: "미션 시작", en: "Start Mission", ja: "ミッション開始", zh: "开始任务" });
-  const primaryCtaEyebrow = t({ ko: "빠른 실행", en: "Quick Start", ja: "クイック開始", zh: "快速开始" });
-  const primaryCtaDescription = t({
-    ko: "우선순위 업무를 바로 생성하고 실행으로 전환하세요.",
-    en: "Create a priority task and move execution immediately.",
-    ja: "優先タスクを作成してすぐ実行に切り替えます。",
-    zh: "创建优先任务并立即进入执行。",
-  });
-
-  const deptData = useMemo<DepartmentPerformance[]>(() => {
-    if (stats?.tasks_by_department && stats.tasks_by_department.length > 0) {
-      return stats.tasks_by_department
-        .map((department, idx) => ({
-          id: department.id,
-          name: department.name,
-          icon: department.icon ?? "D",
-          done: department.done_tasks,
-          total: department.total_tasks,
-          ratio: department.total_tasks > 0 ? Math.round((department.done_tasks / department.total_tasks) * 100) : 0,
-          color: DEPT_COLORS[idx % DEPT_COLORS.length],
-        }))
-        .sort((a, b) => b.ratio - a.ratio || b.total - a.total);
-    }
-
-    const deptMap = new Map<string, { name: string; icon: string; done: number; total: number }>();
-    for (const agent of agents) {
-      if (!agent.department_id) continue;
-      if (!deptMap.has(agent.department_id)) {
-        deptMap.set(agent.department_id, {
-          name: agent.department ? localeName(language, agent.department) : agent.department_id,
-          icon: agent.department?.icon ?? "D",
-          done: 0,
-          total: 0,
-        });
-      }
-    }
-    for (const task of tasks) {
-      if (!task.department_id) continue;
-      const entry = deptMap.get(task.department_id);
-      if (!entry) continue;
-      entry.total += 1;
-      if (task.status === "done") entry.done += 1;
-    }
-    return Array.from(deptMap.entries())
-      .map(([id, value], idx) => ({
-        id,
-        ...value,
-        ratio: value.total > 0 ? Math.round((value.done / value.total) * 100) : 0,
-        color: DEPT_COLORS[idx % DEPT_COLORS.length],
-      }))
-      .sort((a, b) => b.ratio - a.ratio || b.total - a.total);
-  }, [stats, agents, tasks, language]);
-
-  const topAgents = useMemo<RankedAgent[]>(() => {
-    if (stats?.top_agents && stats.top_agents.length > 0) {
-      return stats.top_agents.slice(0, 5).map((topAgent) => {
-        const agent = agentMap.get(topAgent.id);
-        return {
-          id: topAgent.id,
-          name: agent ? localeName(language, agent) : topAgent.name,
-          department: agent?.department ? localeName(language, agent.department) : "",
-          tasksDone: topAgent.stats_tasks_done,
-          xp: topAgent.stats_xp,
-        };
-      });
-    }
-    return [...agents]
-      .sort((a, b) => b.stats_xp - a.stats_xp)
-      .slice(0, 5)
-      .map((agent) => ({
-        id: agent.id,
-        name: localeName(language, agent),
-        department: agent.department ? localeName(language, agent.department) : "",
-        tasksDone: agent.stats_tasks_done,
-        xp: agent.stats_xp,
-      }));
-  }, [stats, agents, agentMap, language]);
-
-  const maxXp = topAgents.length > 0 ? Math.max(...topAgents.map((agent) => agent.xp), 1) : 1;
-  const recentTasks = useMemo(() => [...tasks].sort((a, b) => b.updated_at - a.updated_at).slice(0, 6), [tasks]);
-  const workingAgents = agents.filter((agent) => agent.status === "working");
-  const idleAgentsList = agents.filter((agent) => agent.status === "idle");
-
-  const podiumOrder =
-    topAgents.length >= 3
-      ? [topAgents[1], topAgents[0], topAgents[2]]
-      : topAgents.length === 2
-        ? [topAgents[1], topAgents[0]]
-        : topAgents;
-
-  const hudStats: HudStat[] = [
-    {
-      id: "total",
-      label: t({ ko: "미션", en: "MISSIONS", ja: "ミッション", zh: "任务" }),
-      value: totalTasks,
-      sub: t({ ko: "전체 태스크", en: "Total tasks", ja: "総タスク", zh: "总任务" }),
-      color: "#3b82f6",
-      icon: "M",
-    },
-    {
-      id: "clear",
-      label: t({ ko: "완료율", en: "CLEAR RATE", ja: "完了率", zh: "完成率" }),
-      value: `${completionRate}%`,
-      sub: `${numberFormatter.format(completedTasks)} ${t({ ko: "완료", en: "cleared", ja: "完了", zh: "已完成" })}`,
-      color: "#10b981",
-      icon: "C",
-    },
-    {
-      id: "squad",
-      label: t({ ko: "스쿼드", en: "SQUAD", ja: "スクワッド", zh: "小队" }),
-      value: `${activeAgents}/${totalAgents}`,
-      sub: `${t({ ko: "가동률", en: "uptime", ja: "稼働率", zh: "在线率" })} ${activeRate}%`,
-      color: "#00f0ff",
-      icon: "S",
-    },
-    {
-      id: "active",
-      label: t({ ko: "진행중", en: "IN PROGRESS", ja: "進行中", zh: "进行中" }),
-      value: inProgressTasks,
-      sub: `${t({ ko: "계획", en: "planned", ja: "計画", zh: "计划" })} ${numberFormatter.format(plannedTasks)}`,
-      color: "#f59e0b",
-      icon: "P",
-    },
-  ];
+  const doneTasks = stats?.tasks?.done ?? countTasks(tasks, "done");
+  const inProgressTasks = stats?.tasks?.in_progress ?? countTasks(tasks, "in_progress");
+  const reviewTasks = stats?.tasks?.review ?? countTasks(tasks, "review");
+  const activeSubagents = agents.filter((agent) => agent.status === "working").length;
 
   return (
-    <section className="relative isolate space-y-4" style={{ color: "var(--th-text-primary)" }}>
-      <div className="pointer-events-none absolute -left-40 -top-32 h-96 w-96 rounded-full bg-violet-600/10 blur-[100px] animate-drift-slow" />
-      <div className="pointer-events-none absolute -right-32 top-20 h-80 w-80 rounded-full bg-cyan-500/10 blur-[100px] animate-drift-slow-rev" />
-      <div className="pointer-events-none absolute left-1/3 bottom-32 h-72 w-72 rounded-full bg-amber-500/[0.05] blur-[80px]" />
+    <section className="space-y-4" style={{ color: "var(--th-text-primary)" }}>
+      <div className="game-panel overflow-hidden p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <div className="text-[11px] font-black uppercase tracking-[0.22em] text-cyan-600">
+              Office-first Control Platform
+            </div>
+            <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Dongri-grigri 운영 대시보드</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--th-text-secondary)" }}>
+              8bit 운영실을 중심으로 마스터 에이전트, 프로젝트 scope, SDD pipeline, AgentMemory 상태를 함께 봅니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onPrimaryCtaClick}
+            className="inline-flex items-center justify-center rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-5 py-3 text-sm font-bold text-cyan-700 transition hover:bg-cyan-400/20 dark:text-cyan-100"
+          >
+            업무 보기
+          </button>
+        </div>
+      </div>
 
-      <DashboardHeroHeader
-        companyName={companyName}
-        time={time}
-        date={date}
-        briefing={briefing}
-        reviewQueue={reviewQueue}
-        numberFormatter={numberFormatter}
-        primaryCtaEyebrow={primaryCtaEyebrow}
-        primaryCtaDescription={primaryCtaDescription}
-        primaryCtaLabel={primaryCtaLabel}
-        onPrimaryCtaClick={onPrimaryCtaClick}
-        t={t}
-      />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="업무" value={totalTasks} hint={`진행 ${inProgressTasks} · 검토 ${reviewTasks}`} />
+        <StatCard label="완료" value={doneTasks} hint="evidence/handoff 기준으로 종료" />
+        <StatCard label="마스터 에이전트" value={6} hint="기획 · 개발 · 디자인 · 품질 · 운영 · 외부강사" />
+        <StatCard label="활성 실행" value={activeSubagents} hint="서브에이전트는 작업마다 회수" />
+      </div>
 
-      <DashboardHudStats hudStats={hudStats} numberFormatter={numberFormatter} />
+      <ControlPlaneSummaryCard onOpen={onOpenControlPlane} />
 
-      <DashboardCommandTimeline timeline={stats?.command_timeline} tasks={tasks} language={language} />
+      <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+        <section className="game-panel p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-600">Project scopes</div>
+              <h2 className="mt-1 text-lg font-bold">운영 마스터 1:N 모델</h2>
+            </div>
+            <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-100">
+              1 운영 · N 프로젝트
+            </span>
+          </div>
+          <p className="mt-3 text-sm leading-6" style={{ color: "var(--th-text-secondary)" }}>
+            프로젝트마다 상주 운영자를 늘리지 않고, 운영 마스터가 project scope를 전환합니다.
+            구현은 개발 마스터가 승인된 task와 repo-map allowed files 안에서만 수행합니다.
+          </p>
+        </section>
 
-      <DashboardRankingBoard
-        topAgents={topAgents}
-        podiumOrder={podiumOrder}
-        agentMap={agentMap}
-        agents={agents}
-        maxXp={maxXp}
-        numberFormatter={numberFormatter}
-        t={t}
-      />
-
-      <DashboardDeptAndSquad
-        deptData={deptData}
-        workingAgents={workingAgents}
-        idleAgentsList={idleAgentsList}
-        agents={agents}
-        language={language}
-        numberFormatter={numberFormatter}
-        t={t}
-      />
-
-      <DashboardMissionLog
-        recentTasks={recentTasks}
-        agentMap={agentMap}
-        agents={agents}
-        language={language}
-        localeTag={localeTag}
-        idleAgents={idleAgents}
-        numberFormatter={numberFormatter}
-        t={t}
-      />
+        <aside className="game-panel p-5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-600">Department rooms</div>
+          <h2 className="mt-1 text-lg font-bold">부서 대화방</h2>
+          <p className="mt-2 text-sm leading-6" style={{ color: "var(--th-text-secondary)" }}>
+            실제 run, persona, decision 이벤트만 표시합니다. 가짜 대화나 사람 조직 계층은 기본 화면에 만들지 않습니다.
+          </p>
+        </aside>
+      </div>
     </section>
   );
 }

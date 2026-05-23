@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { getOpenSourceSkillCandidates, type ControlPlaneOpenSourceCandidateResult } from "../api/control-plane";
 import { useI18n } from "../i18n";
 import type { Agent } from "../types";
 import ClassroomOverlay from "./skills-library/ClassroomOverlay";
@@ -18,13 +20,16 @@ interface SkillsLibraryProps {
 export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
   const { t, locale: localeTag } = useI18n();
   const vm = useSkillsLibraryState({ agents, localeTag, t });
+  const [candidateQuery, setCandidateQuery] = useState("agent framework");
+  const [candidateResult, setCandidateResult] = useState<ControlPlaneOpenSourceCandidateResult | null>(null);
+  const [candidateLoading, setCandidateLoading] = useState(false);
 
   if (vm.loading) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
-          <div className="text-slate-400 text-sm">{skillText(t, "loading.catalog")}</div>
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          <div className="text-sm text-slate-400">{skillText(t, "loading.catalog")}</div>
         </div>
       </div>
     );
@@ -34,12 +39,12 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
-          <div className="text-xs font-semibold text-rose-300 mb-3">불러오기 실패</div>
-          <div className="text-slate-400 text-sm">{skillText(t, "loading.failed")}</div>
-          <div className="text-slate-500 text-xs mt-1">{vm.error}</div>
+          <div className="mb-3 text-xs font-semibold text-rose-300">불러오기 실패</div>
+          <div className="text-sm text-slate-400">{skillText(t, "loading.failed")}</div>
+          <div className="mt-1 text-xs text-slate-500">{vm.error}</div>
           <button
             onClick={vm.loadSkills}
-            className="mt-4 px-4 py-2 text-sm bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 transition-all"
+            className="mt-4 rounded-lg border border-blue-500/30 bg-blue-600/20 px-4 py-2 text-sm text-blue-400 transition-all hover:bg-blue-600/30"
           >
             {skillText(t, "action.retry")}
           </button>
@@ -50,6 +55,77 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
 
   return (
     <div className="space-y-4">
+      <section className="command-panel p-4">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-600">Skill Library</div>
+        <h1 className="mt-1 text-xl font-bold tracking-normal" style={{ color: "var(--th-text-primary)" }}>Skill 선택과 부서 메모리</h1>
+        <p className="mt-1 text-sm" style={{ color: "var(--th-text-secondary)" }}>
+          Skill은 마스터 에이전트가 사용할 수 있는 작업 지침입니다. 검색, 카테고리, 학습 상태를 먼저 확인하고 필요한 Skill만 연결합니다.
+        </p>
+      </section>
+
+      <section className="command-panel p-4">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-600">External Instructor</div>
+        <div className="mt-1 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-bold" style={{ color: "var(--th-text-primary)" }}>외부강사 마스터 · 오픈소스 Skill 후보</h2>
+            <p className="mt-1 text-sm" style={{ color: "var(--th-text-secondary)" }}>
+              GitHub high-star 후보를 읽기 전용으로 가져와 Skill 후보를 제안합니다. 설치, hooks, MCP 연결은 OPS 승인 뒤에만 합니다.
+            </p>
+          </div>
+          <div className="grid w-full gap-2 sm:grid-cols-[1fr_auto] xl:w-[520px]">
+            <input
+              value={candidateQuery}
+              onChange={(event) => setCandidateQuery(event.target.value)}
+              className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+              style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+              placeholder="예: agent memory, ai coding assistant, testing"
+            />
+            <button
+              type="button"
+              disabled={candidateLoading}
+              onClick={() => {
+                setCandidateLoading(true);
+                getOpenSourceSkillCandidates(candidateQuery, 6)
+                  .then(setCandidateResult)
+                  .finally(() => setCandidateLoading(false));
+              }}
+              className="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-700 disabled:opacity-50 dark:text-cyan-100"
+            >
+              후보 가져오기
+            </button>
+          </div>
+        </div>
+        {candidateResult && (
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {candidateResult.candidates.length === 0 ? (
+              <div className="text-sm" style={{ color: "var(--th-text-muted)" }}>
+                후보를 가져오지 못했습니다. {candidateResult.error ?? "검색 결과 없음"}
+              </div>
+            ) : (
+              candidateResult.candidates.map((candidate) => (
+                <a
+                  key={candidate.name}
+                  href={candidate.url ?? undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border p-3 transition hover:border-cyan-400/50"
+                  style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 font-semibold">{candidate.name}</div>
+                    <div className="shrink-0 text-xs" style={{ color: "var(--th-text-muted)" }}>★ {candidate.stars.toLocaleString()}</div>
+                  </div>
+                  <p className="mt-2 line-clamp-3 text-xs" style={{ color: "var(--th-text-secondary)" }}>{candidate.description}</p>
+                  <div className="mt-2 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                    {candidate.language ?? "unknown"} · {candidate.updated_at ? new Date(candidate.updated_at).toLocaleDateString("ko-KR") : "-"}
+                  </div>
+                </a>
+              ))
+            )}
+          </div>
+        )}
+      </section>
+
       <SkillsHeader
         t={t}
         totalSkillsCount={vm.totalSkillsCount}
@@ -185,7 +261,7 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
         }}
       />
 
-      <div className="text-center text-xs text-slate-600 py-4">{skillText(t, "footer.sources")}</div>
+      <div className="py-4 text-center text-xs text-slate-600">{skillText(t, "footer.sources")}</div>
     </div>
   );
 }

@@ -236,4 +236,29 @@ describe("api client", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/session");
     expect(window.sessionStorage.getItem("claw_api_csrf_token")).toBeNull();
   });
+
+  it("rebootstraps once and retries a mutation when the server rejects a stale csrf token", async () => {
+    const fetchMock = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ ok: true, csrf_token: "csrf-old" }, 200))
+      .mockResolvedValueOnce(jsonResponse({ error: "csrf_token_invalid" }, 403))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, csrf_token: "csrf-new" }, 200))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }, 200));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const api = await import("./api");
+    await expect(api.bootstrapSession({ promptOnUnauthorized: false })).resolves.toBe(true);
+    await expect(api.pauseTask("task-1")).resolves.toEqual({ ok: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/auth/session");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/tasks/task-1/stop");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/auth/session");
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/tasks/task-1/stop");
+
+    const firstMutationHeaders = new Headers((fetchMock.mock.calls[1]?.[1] as RequestInit | undefined)?.headers);
+    const retriedMutationHeaders = new Headers((fetchMock.mock.calls[3]?.[1] as RequestInit | undefined)?.headers);
+    expect(firstMutationHeaders.get("x-csrf-token")).toBe("csrf-old");
+    expect(retriedMutationHeaders.get("x-csrf-token")).toBe("csrf-new");
+  });
 });

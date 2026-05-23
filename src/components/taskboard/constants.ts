@@ -110,62 +110,14 @@ export const COLUMNS: {
   borderColor: string;
   dotColor: string;
 }[] = [
-  {
-    status: "inbox",
-    icon: "📥",
-    headerBg: "bg-slate-800",
-    borderColor: "border-slate-600",
-    dotColor: "bg-slate-400",
-  },
-  {
-    status: "planned",
-    icon: "📋",
-    headerBg: "bg-blue-900",
-    borderColor: "border-blue-700",
-    dotColor: "bg-blue-400",
-  },
-  {
-    status: "collaborating",
-    icon: "🤝",
-    headerBg: "bg-indigo-900",
-    borderColor: "border-indigo-700",
-    dotColor: "bg-indigo-400",
-  },
-  {
-    status: "in_progress",
-    icon: "⚡",
-    headerBg: "bg-amber-900",
-    borderColor: "border-amber-700",
-    dotColor: "bg-amber-400",
-  },
-  {
-    status: "review",
-    icon: "🔍",
-    headerBg: "bg-purple-900",
-    borderColor: "border-purple-700",
-    dotColor: "bg-purple-400",
-  },
-  {
-    status: "done",
-    icon: "✅",
-    headerBg: "bg-green-900",
-    borderColor: "border-green-700",
-    dotColor: "bg-green-400",
-  },
-  {
-    status: "pending",
-    icon: "⏸️",
-    headerBg: "bg-orange-900",
-    borderColor: "border-orange-700",
-    dotColor: "bg-orange-400",
-  },
-  {
-    status: "cancelled",
-    icon: "🚫",
-    headerBg: "bg-red-900",
-    borderColor: "border-red-700",
-    dotColor: "bg-red-400",
-  },
+  { status: "inbox", icon: "IN", headerBg: "bg-slate-800", borderColor: "border-slate-600", dotColor: "bg-slate-400" },
+  { status: "planned", icon: "PL", headerBg: "bg-blue-900", borderColor: "border-blue-700", dotColor: "bg-blue-400" },
+  { status: "collaborating", icon: "CO", headerBg: "bg-indigo-900", borderColor: "border-indigo-700", dotColor: "bg-indigo-400" },
+  { status: "in_progress", icon: "DO", headerBg: "bg-amber-900", borderColor: "border-amber-700", dotColor: "bg-amber-400" },
+  { status: "review", icon: "RV", headerBg: "bg-purple-900", borderColor: "border-purple-700", dotColor: "bg-purple-400" },
+  { status: "done", icon: "DN", headerBg: "bg-green-900", borderColor: "border-green-700", dotColor: "bg-green-400" },
+  { status: "pending", icon: "PD", headerBg: "bg-orange-900", borderColor: "border-orange-700", dotColor: "bg-orange-400" },
+  { status: "cancelled", icon: "CX", headerBg: "bg-red-900", borderColor: "border-red-700", dotColor: "bg-red-400" },
 ];
 
 export const STATUS_OPTIONS: TaskStatus[] = [
@@ -194,16 +146,18 @@ export function taskStatusLabel(status: TaskStatus, t: TFunction) {
       return t({ ko: "수신함", en: "Inbox", ja: "受信箱", zh: "收件箱" });
     case "planned":
       return t({ ko: "계획됨", en: "Planned", ja: "計画済み", zh: "已计划" });
+    case "collaborating":
+      return t({ ko: "협업", en: "Collaborating", ja: "協業", zh: "协作中" });
     case "in_progress":
       return t({ ko: "진행 중", en: "In Progress", ja: "進行中", zh: "进行中" });
     case "review":
-      return t({ ko: "검토", en: "Review", ja: "レビュー", zh: "审核" });
+      return t({ ko: "검토", en: "Review", ja: "レビュー", zh: "审查" });
     case "done":
       return t({ ko: "완료", en: "Done", ja: "完了", zh: "完成" });
     case "pending":
-      return t({ ko: "보류", en: "Pending", ja: "保留", zh: "待处理" });
+      return t({ ko: "보류", en: "Pending", ja: "保留", zh: "待定" });
     case "cancelled":
-      return t({ ko: "취소", en: "Cancelled", ja: "キャンセル", zh: "已取消" });
+      return t({ ko: "취소", en: "Cancelled", ja: "取消", zh: "取消" });
     default:
       return status;
   }
@@ -212,7 +166,7 @@ export function taskStatusLabel(status: TaskStatus, t: TFunction) {
 export function taskTypeLabel(type: TaskType, t: TFunction) {
   switch (type) {
     case "general":
-      return t({ ko: "일반", en: "General", ja: "一般", zh: "通用" });
+      return t({ ko: "일반", en: "General", ja: "一般", zh: "一般" });
     case "development":
       return t({ ko: "개발", en: "Development", ja: "開発", zh: "开发" });
     case "design":
@@ -220,7 +174,7 @@ export function taskTypeLabel(type: TaskType, t: TFunction) {
     case "analysis":
       return t({ ko: "분석", en: "Analysis", ja: "分析", zh: "分析" });
     case "presentation":
-      return t({ ko: "발표", en: "Presentation", ja: "プレゼン", zh: "演示" });
+      return t({ ko: "발표", en: "Presentation", ja: "発表", zh: "演示" });
     case "documentation":
       return t({ ko: "문서화", en: "Documentation", ja: "文書化", zh: "文档" });
     default:
@@ -234,9 +188,9 @@ export function getTaskTypeBadge(type: TaskType, t: TFunction) {
 }
 
 export function priorityIcon(priority: number) {
-  if (priority >= 4) return "🔴";
-  if (priority >= 2) return "🟡";
-  return "🟢";
+  if (priority >= 4) return "H";
+  if (priority >= 2) return "M";
+  return "L";
 }
 
 export function priorityLabel(priority: number, t: TFunction) {

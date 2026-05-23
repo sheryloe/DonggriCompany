@@ -9,6 +9,7 @@ import { buildBreakRoom } from "./buildScene-break-room";
 import { buildFinalLayers } from "./buildScene-final-layers";
 import { buildOfficeFloorPlan, estimateOfficeSceneWidth } from "./officeFloorPlan";
 import { buildFloorAccessLayer } from "./buildScene-floor-access";
+import { buildCloudLabLayer } from "./buildScene-cloud-lab";
 
 export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   const {
@@ -85,6 +86,7 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
     subAgents,
     unreadAgentIds: unread,
     customDeptThemes: customThemes,
+    pixelAgentMode,
   } = dataRef.current;
 
   const previousSubSnapshot = subCloneSnapshotRef.current;
@@ -165,6 +167,17 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
     totalH,
     isDark,
   });
+
+  if (pixelAgentMode?.enabled) {
+    buildCloudLabLayer({
+      app,
+      officeW: OFFICE_W,
+      floorBands: floorPlan.floorBands,
+      tasks,
+      isDark,
+      pixelAgentMode,
+    });
+  }
 
   buildDepartmentRooms({
     app,

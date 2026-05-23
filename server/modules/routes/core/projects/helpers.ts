@@ -11,6 +11,8 @@ interface CreateProjectRouteHelpersOptions {
   normalizeTextField: NormalizeTextField;
 }
 
+const DONGGRI_REPO_ESTATE_ROOT = "G:\\Donggri_DevDrive\\repos";
+
 export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProjectRouteHelpersOptions) {
   function normalizeProjectPathInput(raw: unknown): string | null {
     const value = normalizeTextField(raw);
@@ -60,7 +62,20 @@ export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProj
     return out;
   }
 
-  const PROJECT_PATH_ALLOWED_ROOTS = parseProjectPathAllowedRootsEnv(process.env.PROJECT_PATH_ALLOWED_ROOTS);
+  function getDefaultAllowedRoots(): string[] {
+    try {
+      if (fs.statSync(DONGGRI_REPO_ESTATE_ROOT).isDirectory()) {
+        return [path.normalize(DONGGRI_REPO_ESTATE_ROOT)];
+      }
+    } catch {
+      // Preserve portable test/dev behavior when the Donggri root is absent.
+    }
+    return [];
+  }
+
+  const configuredAllowedRoots = parseProjectPathAllowedRootsEnv(process.env.PROJECT_PATH_ALLOWED_ROOTS);
+  const PROJECT_PATH_ALLOWED_ROOTS =
+    configuredAllowedRoots.length > 0 ? configuredAllowedRoots : getDefaultAllowedRoots();
 
   function pathInsideRoot(candidatePath: string, rootPath: string): boolean {
     const rel = path.relative(rootPath, candidatePath);
@@ -96,7 +111,13 @@ export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProj
     }
 
     const homeDir = os.homedir();
-    for (const candidate of [path.join(homeDir, "Projects"), path.join(homeDir, "projects"), homeDir, process.cwd()]) {
+    for (const candidate of [
+      DONGGRI_REPO_ESTATE_ROOT,
+      path.join(homeDir, "Projects"),
+      path.join(homeDir, "projects"),
+      homeDir,
+      process.cwd(),
+    ]) {
       try {
         if (fs.statSync(candidate).isDirectory()) return candidate;
       } catch {
@@ -215,7 +236,7 @@ export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProj
     const roots =
       PROJECT_PATH_ALLOWED_ROOTS.length > 0
         ? PROJECT_PATH_ALLOWED_ROOTS
-        : [path.join(os.homedir(), "Projects"), path.join(os.homedir(), "projects")];
+        : [DONGGRI_REPO_ESTATE_ROOT, path.join(os.homedir(), "Projects"), path.join(os.homedir(), "projects")];
     const q = query.trim().toLowerCase();
     const out = new Set<string>();
     const seenCanonical = new Set<string>();
@@ -377,7 +398,7 @@ export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProj
     // BIF_RETURNONLYFSDIRS(1) + BIF_NEWDIALOGSTYLE(64) = 65
     const psCommand = [
       "$shell = New-Object -ComObject Shell.Application;",
-      "$folder = $shell.BrowseForFolder(0, 'Select project folder for Claw-Empire', 65, 0);",
+      "$folder = $shell.BrowseForFolder(0, 'Select project folder for Dongri-grigri', 65, 0);",
       `if ($folder -ne $null) { [System.IO.File]::WriteAllText('${escapedResultFile}', $folder.Self.Path) }`,
     ].join(" ");
 
@@ -417,7 +438,7 @@ export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProj
       "Dim shell, folder, fso",
       'Set shell = CreateObject("Shell.Application")',
       "If Err.Number <> 0 Then WScript.Quit 1",
-      'Set folder = shell.BrowseForFolder(0, "Select project folder for Claw-Empire", 65, 0)',
+      'Set folder = shell.BrowseForFolder(0, "Select project folder for Dongri-grigri", 65, 0)',
       "If Not folder Is Nothing Then",
       '  Set fso = CreateObject("Scripting.FileSystemObject")',
       `  Set f = fso.CreateTextFile("${resultFile.replace(/\\/g, "\\\\")}", True)`,
@@ -491,7 +512,7 @@ export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProj
 
     if (process.platform === "darwin") {
       const script =
-        'try\nPOSIX path of (choose folder with prompt "Select project folder for Claw-Empire")\non error number -128\n""\nend try';
+        'try\nPOSIX path of (choose folder with prompt "Select project folder for Dongri-grigri")\non error number -128\n""\nend try';
       const { stdout } = await execFileText("osascript", ["-e", script], timeoutMs);
       const value = stdout.trim();
       return { path: value || null, cancelled: !value, source: "osascript" };
@@ -516,7 +537,7 @@ export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProj
     try {
       const { stdout } = await execFileText(
         "zenity",
-        ["--file-selection", "--directory", "--title=Select project folder for Claw-Empire"],
+        ["--file-selection", "--directory", "--title=Select project folder for Dongri-grigri"],
         timeoutMs,
       );
       const value = stdout.trim();
@@ -529,7 +550,7 @@ export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProj
             "--getexistingdirectory",
             path.join(os.homedir(), "Projects"),
             "--title",
-            "Select project folder for Claw-Empire",
+            "Select project folder for Dongri-grigri",
           ],
           timeoutMs,
         );

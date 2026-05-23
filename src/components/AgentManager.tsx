@@ -31,6 +31,7 @@ export default function AgentManager({
   activeOfficeWorkflowPack: _activeOfficeWorkflowPack,
   dbBackedOfficePack: _dbBackedOfficePack = false,
   onSaveOfficePackProfile: _onSaveOfficePackProfile,
+  pixelAgentMode,
 }: AgentManagerProps) {
   const { t, locale } = useI18n();
   const tr = (ko: string, en: string, ja = en, zh = en) => t({ ko, en, ja, zh });
@@ -497,6 +498,7 @@ export default function AgentManager({
           onDeleteAgent={handleDelete}
           saving={saving}
           randomIconSprites={{ total: randomIconSprites.total }}
+          pixelAgentMode={pixelAgentMode}
         />
       )}
 

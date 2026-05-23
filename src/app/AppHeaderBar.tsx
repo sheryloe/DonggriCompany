@@ -1,3 +1,4 @@
+import { Bell, CheckSquare, FileText, Menu, Moon, Radio, Search, Sun, X } from "lucide-react";
 import type { WorkflowPackKey } from "../types";
 import type { View } from "./types";
 
@@ -43,71 +44,19 @@ interface AppHeaderBarProps {
 
 const VIEW_MARKS: Partial<Record<View, string>> = {
   office: "OF",
-  agents: "AG",
-  skills: "SK",
-  modules: "MO",
-  manual: "MN",
   dashboard: "DB",
+  projects: "PJ",
+  departments: "AG",
   tasks: "TS",
+  skills: "SK",
+  memory: "MM",
+  controlPlane: "CP",
   settings: "ST",
+  agents: "LG",
+  modules: "MO",
+  departmentComponents: "LC",
+  manual: "MN",
 };
-
-function SearchIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
-function ThemeIcon({ theme }: { theme: "light" | "dark" }) {
-  return theme === "dark" ? (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  ) : (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="5" />
-      <line x1="12" y1="1" x2="12" y2="3" />
-      <line x1="12" y1="21" x2="12" y2="23" />
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-      <line x1="1" y1="12" x2="3" y2="12" />
-      <line x1="21" y1="12" x2="23" y2="12" />
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-    </svg>
-  );
-}
 
 export default function AppHeaderBar({
   currentView,
@@ -145,49 +94,40 @@ export default function AppHeaderBar({
       <div className="flex min-w-0 items-center gap-2">
         <button
           onClick={onOpenMobileNav}
-          className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-950/40 text-slate-300 transition hover:border-sky-400/50 hover:text-sky-200 lg:hidden"
+          className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border transition lg:hidden"
+          style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
           aria-label="내비게이션 열기"
         >
-          <span className="font-mono text-sm font-bold">DG</span>
+          <Menu className="h-4 w-4" />
         </button>
         <h1 className="flex min-w-0 items-center gap-3 truncate text-base font-bold sm:text-lg">
-          <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-400/10 font-mono text-sm text-sky-200 sm:inline-flex">
+          <span
+            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border font-mono text-sm sm:inline-flex"
+            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+          >
             {viewMark}
           </span>
-          {currentView === "agents" && (
-            <span className="relative inline-flex items-center" style={{ width: 30, height: 22 }}>
-              <img
-                src="/sprites/8-D-1.png"
-                alt=""
-                className="absolute left-0 top-0 h-5 w-5 rounded-full object-cover"
-                style={{ imageRendering: "pixelated", opacity: 0.85 }}
-              />
-              <img
-                src="/sprites/3-D-1.png"
-                alt=""
-                className="absolute left-2.5 top-0.5 h-5 w-5 rounded-full object-cover"
-                style={{ imageRendering: "pixelated", zIndex: 1 }}
-              />
-            </span>
-          )}
-          <span className="truncate text-slate-50 max-[430px]:hidden">{viewTitle}</span>
+          <span className="truncate max-[430px]:hidden" style={{ color: "var(--th-text-primary)" }}>
+            {viewTitle}
+          </span>
         </h1>
         {currentView === "manual" && (
           <button type="button" onClick={focusManualSearch} className="manual-header-search">
-            <SearchIcon />
-            <span>메뉴얼 검색...</span>
+            <Search className="h-4 w-4" />
+            <span>도움말 검색</span>
             <kbd>Ctrl K</kbd>
           </button>
         )}
         {officePackControl && (
-          <label className="hidden items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-950/35 px-3 py-2 xl:flex">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <label className="hidden items-center gap-2 rounded-xl border px-3 py-2 xl:flex" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--th-text-muted)" }}>
               {officePackControl.label}
             </span>
             <select
               value={officePackControl.value}
               onChange={(e) => officePackControl.onChange(e.target.value as WorkflowPackKey)}
-              className="min-w-[170px] bg-transparent text-xs font-semibold text-slate-100 focus:outline-none"
+              className="min-w-[170px] bg-transparent text-xs font-semibold focus:outline-none"
+              style={{ color: "var(--th-text-primary)" }}
             >
               {officePackControl.options.map((option) => (
                 <option key={option.key} value={option.key}>
@@ -198,13 +138,11 @@ export default function AppHeaderBar({
           </label>
         )}
       </div>
+
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="hidden items-center gap-2 md:flex">
-          <button
-            onClick={onOpenTasks}
-            className="header-action-btn header-action-btn-primary"
-            aria-label={tasksPrimaryLabel}
-          >
+          <button onClick={onOpenTasks} className="header-action-btn header-action-btn-primary" aria-label={tasksPrimaryLabel}>
+            <CheckSquare className="h-4 w-4" />
             <span>업무</span>
           </button>
           <button
@@ -215,29 +153,28 @@ export default function AppHeaderBar({
             }`}
             aria-label={decisionLabel}
           >
-            <span>{decisionInboxLoading ? "확인 중" : "의사결정"}</span>
+            <span>{decisionInboxLoading ? "확인 중" : "승인"}</span>
             {decisionInboxCount > 0 && <span className="header-decision-badge">{decisionInboxCount}</span>}
           </button>
           <button onClick={onOpenAgentStatus} className="header-action-btn header-action-btn-secondary">
+            <Radio className="h-4 w-4" />
             {agentStatusLabel}
           </button>
         </div>
         <div className="hidden items-center gap-2 xl:flex">
           <button onClick={onOpenReportHistory} className="header-action-btn header-action-btn-ghost">
+            <FileText className="h-4 w-4" />
             {reportLabel}
           </button>
           <button onClick={onOpenAnnouncement} className="header-action-btn header-action-btn-ghost">
+            <Bell className="h-4 w-4" />
             {announcementLabel}
           </button>
           <button onClick={onOpenRoomManager} className="header-action-btn header-action-btn-ghost">
             {roomManagerLabel}
           </button>
         </div>
-        <button
-          onClick={onOpenTasks}
-          className="header-action-btn header-action-btn-primary header-mobile-action"
-          aria-label={tasksPrimaryLabel}
-        >
+        <button onClick={onOpenTasks} className="header-action-btn header-action-btn-primary header-mobile-action" aria-label={tasksPrimaryLabel}>
           업무
         </button>
         <button
@@ -248,50 +185,33 @@ export default function AppHeaderBar({
           }`}
           aria-label={decisionLabel}
         >
-          {decisionInboxLoading ? "확인" : "결정"}
+          {decisionInboxLoading ? "확인" : "승인"}
           {decisionInboxCount > 0 && <span className="header-decision-badge">{decisionInboxCount}</span>}
         </button>
         <button
           onClick={onToggleTheme}
           className="theme-toggle-btn"
-          aria-label={theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"}
-          title={theme === "dark" ? "라이트 모드" : "다크 모드"}
+          aria-label={theme === "dark" ? "주간 테마로 전환" : "야간 테마로 전환"}
+          title={theme === "dark" ? "주간 테마" : "야간 테마"}
         >
-          <span className="theme-toggle-icon">
-            <ThemeIcon theme={theme} />
-          </span>
+          <span className="theme-toggle-icon">{theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</span>
         </button>
         <div className="relative sm:hidden">
           <button
             onClick={onToggleMobileHeaderMenu}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-950/40 text-slate-300 transition hover:border-sky-400/50 hover:text-sky-200"
-            aria-label="더보기 메뉴"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border transition"
+            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+            aria-label="추가 메뉴"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="5" r="1" />
-              <circle cx="12" cy="12" r="1" />
-              <circle cx="12" cy="19" r="1" />
-            </svg>
+            {mobileHeaderMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
           {mobileHeaderMenuOpen && (
             <>
               <button className="fixed inset-0 z-40" onClick={onCloseMobileHeaderMenu} aria-label="메뉴 닫기" />
-              <div className="absolute right-0 top-full z-50 mt-2 min-w-[210px] rounded-2xl border border-slate-700/70 bg-slate-950/95 py-1 shadow-2xl shadow-black/30">
+              <div className="absolute right-0 top-full z-50 mt-2 min-w-[210px] rounded-2xl border py-1 shadow-2xl" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-elevated)" }}>
                 {officePackControl && (
-                  <div className="border-b border-slate-800 px-3 py-2">
-                    <label
-                      htmlFor="mobile-office-pack-selector"
-                      className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500"
-                    >
+                  <div className="border-b px-3 py-2" style={{ borderColor: "var(--th-border)" }}>
+                    <label htmlFor="mobile-office-pack-selector" className="mb-1 block text-[10px] uppercase tracking-wider" style={{ color: "var(--th-text-muted)" }}>
                       {officePackControl.label}
                     </label>
                     <select
@@ -301,7 +221,8 @@ export default function AppHeaderBar({
                         officePackControl.onChange(e.target.value as WorkflowPackKey);
                         onCloseMobileHeaderMenu();
                       }}
-                      className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 focus:outline-none"
+                      className="w-full rounded-md border px-2 py-1.5 text-xs focus:outline-none"
+                      style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
                     >
                       {officePackControl.options.map((option) => (
                         <option key={option.key} value={option.key}>
@@ -311,48 +232,30 @@ export default function AppHeaderBar({
                     </select>
                   </div>
                 )}
-                <button
-                  onClick={() => {
-                    onOpenAgentStatus();
-                    onCloseMobileHeaderMenu();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-slate-900"
-                >
-                  {agentStatusLabel}
-                </button>
-                <button
-                  onClick={() => {
-                    onOpenReportHistory();
-                    onCloseMobileHeaderMenu();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-slate-900"
-                >
-                  {reportLabel}
-                </button>
-                <button
-                  onClick={() => {
-                    onOpenAnnouncement();
-                    onCloseMobileHeaderMenu();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-slate-900"
-                >
-                  {announcementLabel}
-                </button>
-                <button
-                  onClick={() => {
-                    onOpenRoomManager();
-                    onCloseMobileHeaderMenu();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-100 transition hover:bg-slate-900"
-                >
-                  {roomManagerLabel}
-                </button>
+                {[
+                  [agentStatusLabel, onOpenAgentStatus],
+                  [reportLabel, onOpenReportHistory],
+                  [announcementLabel, onOpenAnnouncement],
+                  [roomManagerLabel, onOpenRoomManager],
+                ].map(([label, handler]) => (
+                  <button
+                    key={String(label)}
+                    onClick={() => {
+                      (handler as () => void)();
+                      onCloseMobileHeaderMenu();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:opacity-80"
+                    style={{ color: "var(--th-text-primary)" }}
+                  >
+                    {String(label)}
+                  </button>
+                ))}
               </div>
             </>
           )}
         </div>
-        <div className="hidden items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-950/35 px-2.5 py-2 text-xs text-slate-400 sm:flex">
-          <div className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-rose-400"}`} />
+        <div className="hidden items-center gap-2 rounded-xl border px-2.5 py-2 text-xs sm:flex" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}>
+          <div className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500" : "bg-rose-500"}`} />
           <span>{connected ? "연결됨" : "오프라인"}</span>
         </div>
       </div>

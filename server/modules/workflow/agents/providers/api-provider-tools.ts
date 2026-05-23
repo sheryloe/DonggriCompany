@@ -352,6 +352,7 @@ export function createApiProviderTools(deps: CreateApiProviderToolsDeps) {
       method: "POST",
       headers: req.headers,
       body: req.body,
+      redirect: "error",
       signal,
     });
 

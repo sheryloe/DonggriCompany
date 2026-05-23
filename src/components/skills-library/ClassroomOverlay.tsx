@@ -25,7 +25,7 @@ export default function ClassroomOverlay({ t, show, skillName, providers, agents
           </div>
 
           <div className="classroom-claw-teacher">
-            <img src="/claw-empire.png" alt="Skill 교육 담당자" />
+            <img src="/dongri-grigri.svg" alt="Dongri-grigri Skill 안내" />
             <span className="classroom-chalk-pointer">학습</span>
           </div>
 

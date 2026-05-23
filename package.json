@@ -1,7 +1,7 @@
 {
   "name": "donggri-company",
   "version": "2.0.4",
-  "description": "DonggriCompany - local-first AI company operations platform derived from Claw-Empire.",
+  "description": "DonggriCompany - local-first Dongri-grigri office control platform.",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
@@ -24,6 +24,7 @@
     "preview": "vite preview",
     "setup": "node scripts/setup.mjs",
     "arch:map": "node scripts/generate-architecture-report.mjs",
+    "db:reset:dongri": "node --experimental-sqlite scripts/reset-dongri-grigri-runtime-db.mjs",
     "subagents:sync": "node scripts/sync-awesome-codex-subagents.mjs",
     "agents:sprites": "node tools/agents/build-agent-sprites-from-sheet.mjs",
     "agents:sprites:check": "node tools/agents/check-walk-normalize-assets.mjs",

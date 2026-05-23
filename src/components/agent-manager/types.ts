@@ -6,6 +6,7 @@ import type {
   CanonicalIdentitySource,
   Department,
   OfficePackProfile,
+  PixelAgentModeSettings,
   WorkflowPackKey,
 } from "../../types";
 
@@ -18,6 +19,7 @@ export interface AgentManagerProps {
   activeOfficeWorkflowPack: WorkflowPackKey;
   dbBackedOfficePack?: boolean;
   onSaveOfficePackProfile: (packKey: WorkflowPackKey, profile: OfficePackProfile) => Promise<void>;
+  pixelAgentMode?: PixelAgentModeSettings;
 }
 
 export interface FormData {

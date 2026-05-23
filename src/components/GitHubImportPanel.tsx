@@ -184,7 +184,7 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
       setStep("clone");
       if (selectedRepo) {
         setProjectName(selectedRepo.name);
-        setTargetPath(`~/Projects/${selectedRepo.name}`);
+        setTargetPath(`G:\\Donggri_DevDrive\\repos\\${selectedRepo.name}`);
         setCoreGoal("");
       }
     },

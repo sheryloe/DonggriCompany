@@ -12,6 +12,7 @@ export type GitHubRouteDeps = Pick<RuntimeContext, "app" | "db" | "broadcast">;
 
 export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
   const { app, db, broadcast } = deps;
+  const donggriRepoEstateRoot = "G:\\Donggri_DevDrive\\repos";
 
   function getGitHubAccessToken(): string | null {
     const row = db
@@ -44,7 +45,8 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
 
   function normalizeTargetPath(rawPath: unknown, fallbackRepoName = "repo"): string {
     const candidate = typeof rawPath === "string" ? rawPath.trim() : "";
-    const defaultTarget = path.join(os.homedir(), "Projects", fallbackRepoName);
+    const defaultRoot = fs.existsSync(donggriRepoEstateRoot) ? donggriRepoEstateRoot : path.join(os.homedir(), "Projects");
+    const defaultTarget = path.join(defaultRoot, fallbackRepoName);
     let targetPath = candidate || defaultTarget;
     if (targetPath === "~") targetPath = os.homedir();
     else if (targetPath.startsWith("~/")) targetPath = path.join(os.homedir(), targetPath.slice(2));

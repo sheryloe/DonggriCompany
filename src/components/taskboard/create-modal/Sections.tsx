@@ -377,7 +377,7 @@ export function ProjectSection({
                           ja: "Resolving default root...",
                           zh: "Resolving default root...",
                         })
-                      : defaultProjectRoot || "~/Projects"}
+                      : defaultProjectRoot || "G:\\Donggri_DevDrive\\repos"}
                   </p>
                 </div>
               </div>

@@ -24,7 +24,7 @@ export type AppDomainInitialRoomThemes = {
 };
 
 export function useAppDomainState({ initialRoomThemes }: { initialRoomThemes: AppDomainInitialRoomThemes }) {
-  const [view, setView] = useState<View>("manual");
+  const [view, setView] = useState<View>("office");
   const [departments, setDepartments] = useState<Department[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -57,7 +57,7 @@ export function useAppDomainState({ initialRoomThemes }: { initialRoomThemes: Ap
     content: string;
   } | null>(null);
 
-  const viewRef = useRef<View>("manual");
+  const viewRef = useRef<View>("office");
   viewRef.current = view;
   const agentsRef = useRef<Agent[]>(agents);
   agentsRef.current = agents;

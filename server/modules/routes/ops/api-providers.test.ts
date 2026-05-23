@@ -136,6 +136,29 @@ describe("api provider routes", () => {
     }
   });
 
+  it("rejects custom provider URLs that target private IPv6 network endpoints", async () => {
+    const { app, db } = await createHarness();
+
+    try {
+      for (const baseUrl of [
+        "https://[fc00::1]/v1",
+        "https://[fe80::1]/v1",
+        "https://[::ffff:169.254.169.254]/v1",
+      ]) {
+        const response = await request(app).post("/api/api-providers").send({
+          name: "Private IPv6",
+          type: "custom",
+          base_url: baseUrl,
+        });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toBe("base_url_private_network_not_allowed");
+      }
+    } finally {
+      db.close();
+    }
+  });
+
   it("requires non-local providers to use HTTPS", async () => {
     const { app, db } = await createHarness();
 
@@ -544,6 +567,7 @@ describe("api provider routes", () => {
         "http://localhost:11434/v1/models",
         expect.objectContaining({
           headers: expect.objectContaining({ Accept: "application/json" }),
+          redirect: "error",
         }),
       );
       expect(fetchMock).toHaveBeenNthCalledWith(
@@ -551,6 +575,7 @@ describe("api provider routes", () => {
         "http://localhost:11434/api/tags",
         expect.objectContaining({
           headers: expect.objectContaining({ Accept: "application/json" }),
+          redirect: "error",
         }),
       );
     } finally {

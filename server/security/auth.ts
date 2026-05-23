@@ -12,6 +12,26 @@ import {
 
 const CSRF_TOKEN = randomBytes(32).toString("hex");
 const TASK_INTERRUPT_TOKEN_SCOPE = "task_interrupt_v1";
+const PUBLIC_API_RATE_LIMIT_WINDOW_MS = 60_000;
+const PUBLIC_API_RATE_LIMITS: Array<{ pathPrefix: string; methods: Set<string>; limit: number }> = [
+  { pathPrefix: "/api/auth/session", methods: new Set(["GET"]), limit: 120 },
+  { pathPrefix: "/api/inbox", methods: new Set(["POST"]), limit: 60 },
+  { pathPrefix: "/api/oauth/", methods: new Set(["GET", "POST"]), limit: 60 },
+];
+const publicApiRateLimitBuckets = new Map<string, { windowStart: number; count: number }>();
+
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "style-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline'",
+  "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*",
+  "form-action 'self'",
+].join("; ");
 
 export function isLoopbackHostname(hostname: string): boolean {
   const h = hostname.toLowerCase();
@@ -178,6 +198,59 @@ export function safeSecretEquals(input: string, expected: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+export function applySecurityHeaders(_req: Request, res: Response, next: NextFunction): void {
+  res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "same-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+}
+
+export function resetPublicApiRateLimitState(): void {
+  publicApiRateLimitBuckets.clear();
+}
+
+export function getPublicApiRateLimit(pathname: string, method: string): number | null {
+  const normalizedMethod = method.toUpperCase();
+  if (normalizedMethod === "OPTIONS") return null;
+  const rule = PUBLIC_API_RATE_LIMITS.find(
+    (entry) => pathname === entry.pathPrefix || pathname.startsWith(entry.pathPrefix),
+  );
+  if (!rule || !rule.methods.has(normalizedMethod)) return null;
+  return rule.limit;
+}
+
+function publicApiRateLimitKey(req: Request): string {
+  const address = req.socket?.remoteAddress || "unknown";
+  return `${address}:${req.method.toUpperCase()}:${req.path}`;
+}
+
+export function checkPublicApiRateLimit(
+  req: Request,
+  now = Date.now(),
+): { allowed: boolean; limit: number; remaining: number; resetMs: number } | null {
+  if (!isPublicApiPath(req.path)) return null;
+  const limit = getPublicApiRateLimit(req.path, req.method);
+  if (!limit) return null;
+
+  const key = publicApiRateLimitKey(req);
+  const bucket = publicApiRateLimitBuckets.get(key);
+  const current =
+    bucket && now - bucket.windowStart < PUBLIC_API_RATE_LIMIT_WINDOW_MS ? bucket : { windowStart: now, count: 0 };
+  current.count += 1;
+  publicApiRateLimitBuckets.set(key, current);
+
+  const resetMs = Math.max(0, current.windowStart + PUBLIC_API_RATE_LIMIT_WINDOW_MS - now);
+  const remaining = Math.max(0, limit - current.count);
+  return {
+    allowed: current.count <= limit,
+    limit,
+    remaining,
+    resetMs,
+  };
+}
+
 export function incomingMessageBearerToken(req: IncomingMessage): string | null {
   const raw = req.headers.authorization;
   if (!raw || Array.isArray(raw)) return null;
@@ -207,6 +280,8 @@ export function isIncomingMessageOriginTrusted(req: IncomingMessage): boolean {
 }
 
 export function installSecurityMiddleware(app: Express): void {
+  app.use(applySecurityHeaders);
+
   const corsMiddleware = cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
@@ -238,6 +313,19 @@ export function installSecurityMiddleware(app: Express): void {
 
   app.use(express.json({ limit: "12mb" }));
 
+  app.use((req, res, next) => {
+    const rateLimit = checkPublicApiRateLimit(req);
+    if (!rateLimit) return next();
+    res.setHeader("X-RateLimit-Limit", String(rateLimit.limit));
+    res.setHeader("X-RateLimit-Remaining", String(rateLimit.remaining));
+    res.setHeader("X-RateLimit-Reset", String(Math.ceil(rateLimit.resetMs / 1000)));
+    if (!rateLimit.allowed) {
+      res.setHeader("Retry-After", String(Math.ceil(rateLimit.resetMs / 1000)));
+      return res.status(429).json({ error: "rate_limited" });
+    }
+    return next();
+  });
+
   app.get("/api/auth/session", (req, res) => {
     const bearer = bearerToken(req);
     const hasBearerAuth = bearer === SESSION_AUTH_TOKEN;
@@ -253,6 +341,9 @@ export function installSecurityMiddleware(app: Express): void {
     if (isPublicApiPath(req.path)) return next();
     if (!isAuthenticated(req)) {
       return res.status(401).json({ error: "unauthorized" });
+    }
+    if (shouldRequireCsrf(req) && !hasValidCsrfToken(req)) {
+      return res.status(403).json({ error: "csrf_token_invalid" });
     }
     issueSessionCookie(req, res);
     return next();

@@ -13,7 +13,7 @@ import {
 import type { GitHubCreateRepoResponse, GitHubStatus } from "../../api";
 import type { AssignmentMode, Project } from "../../types";
 
-const DEFAULT_PROJECT_ROOT = "~/Projects";
+const DEFAULT_PROJECT_ROOT = "G:\\Donggri_DevDrive\\repos";
 const CLONE_POLL_INTERVAL_MS = 1_000;
 const CLONE_TIMEOUT_MS = 120_000;
 

@@ -1,8 +1,8 @@
 # API Contract Baseline
 
-This document defines a contributor-facing API baseline for Claw-Empire.
+This document defines a contributor-facing API baseline for DonggriCompany.
 It is intentionally compact and focused on frequently used endpoints.
-Current baseline target: `v1.2.4` (local snapshot, 2026-03-07).
+Current baseline target: `v2.0.4` (local snapshot, 2026-05-20).
 
 ## Base
 
@@ -179,6 +179,29 @@ or
 | GET    | `/api/docs/swagger-bootstrap.js`    | Swagger bootstrap helper that primes `/api/auth/session`                |
 | GET    | `/api/cli-usage`                    | Cached CLI quota/usage windows by provider                              |
 | POST   | `/api/cli-usage/refresh`            | Refresh CLI quota/usage cache and broadcast update                      |
+| GET    | `/api/control-plane/state`          | Live read-only DevDrive Control Plane state                             |
+| GET    | `/api/control-plane/memory/status`  | AgentMemory runtime/config status and memory document health            |
+| GET    | `/api/control-plane/memory/search`  | Read-only AgentMemory search probe by query; raw payload is omitted     |
+| GET    | `/api/control-plane/v1/state`       | Donggri Root Control SDD Ver.1 read-only projection                     |
+| GET    | `/api/control-plane/v1/steering`    | Ver.1 steering document status                                          |
+| GET    | `/api/control-plane/v1/specs/active` | Ver.1 active spec status                                                |
+| GET    | `/api/control-plane/v1/hooks/status` | Ver.1 control hook policy status                                        |
+| POST   | `/api/control-plane/v1/hooks/evaluate` | Ver.1 hook policy evaluation without command execution                   |
+| GET    | `/api/control-plane/v1/orchestrator/state` | Ver.1 orchestrator and persona subagent status                          |
+| GET    | `/api/control-plane/v1/agents/departments` | Six Ver.1 department agent projection                                   |
+| GET    | `/api/control-plane/v1/context-pack` | Ver.1 context-pack status                                               |
+| GET    | `/api/control-plane/v1/quality/score` | Ver.1 quality score and hard gate status                                |
+| GET    | `/api/control-plane/v1/gemini-review/latest` | Latest Gemini third-party review status                                 |
+| GET    | `/api/control-plane/v1/codex/assets` | Sanitized Codex app assets: skills, MCP, plugins, automations, root agents, trusted aliases |
+| GET    | `/api/control-plane/v1/sync/status` | Control Plane DB snapshot/link table status without creating tables |
+| POST   | `/api/control-plane/v1/sync/preview` | Preview registry/project/spec-task links without DB writes |
+| POST   | `/api/control-plane/v1/sync/apply` | Approved idempotent write to `control_plane_*` snapshot/link tables only |
+| GET    | `/api/control-plane/v1/runs/status` | Dedicated Control Plane runner table/run/persona status |
+| POST   | `/api/control-plane/v1/runs/prepare` | Prepare a department-agent run with context-pack, routing decision, and hook preview |
+| POST   | `/api/control-plane/v1/runs/:runId/start` | Mark a prepared Control Plane run as running after gates are checked |
+| GET    | `/api/control-plane/v1/runs/:runId` | Read a Control Plane run with routing, persona, and event timeline |
+| POST   | `/api/control-plane/v1/runs/:runId/personas` | Create a disposable persona run under the parent department agent |
+| POST   | `/api/control-plane/v1/personas/:personaId/decision` | Record accept/reject/recreate/merge decision for a returned persona |
 
 ### Messaging / Inbox / Decision
 

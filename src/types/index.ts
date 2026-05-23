@@ -932,6 +932,15 @@ export interface StrategicMaintenanceStatus {
   gmail: GmailSendStatusView;
 }
 
+export type PixelAgentDensity = "compact" | "balanced" | "showcase";
+export type PixelAgentOfficeTheme = "donggri_cloud_lab";
+
+export interface PixelAgentModeSettings {
+  enabled: boolean;
+  density: PixelAgentDensity;
+  officeTheme: PixelAgentOfficeTheme;
+}
+
 export const MESSENGER_CHANNELS = [
   "telegram",
   "whatsapp",
@@ -996,13 +1005,14 @@ export interface CompanySettings {
   providerModelConfig?: Record<string, ProviderModelConfig>;
   roomThemes?: Record<string, RoomTheme>;
   strategicMaintenance?: StrategicMaintenanceSettings;
+  pixelAgentMode?: PixelAgentModeSettings;
   messengerChannels?: MessengerChannelsConfig;
   officePackProfiles?: OfficePackProfiles;
   officePackHydratedPacks?: string[];
 }
 
 export const DEFAULT_SETTINGS: CompanySettings = {
-  companyName: "Claw-Empire",
+  companyName: "Dongri-grigri",
   ceoName: "CEO",
   autoAssign: true,
   yoloMode: false,
@@ -1028,6 +1038,11 @@ export const DEFAULT_SETTINGS: CompanySettings = {
     emailEnabled: false,
     emailTo: [],
     emailCc: [],
+  },
+  pixelAgentMode: {
+    enabled: false,
+    density: "balanced",
+    officeTheme: "donggri_cloud_lab",
   },
   providerModelConfig: {
     claude: { model: "claude-opus-4-6", subModel: "claude-sonnet-4-6" },

@@ -1014,6 +1014,7 @@ async function createProviderEmbedding(
       method: "POST",
       headers: providerEmbeddingHeaders(provider),
       body: JSON.stringify(request.body),
+      redirect: "error",
       signal: AbortSignal.timeout(12_000),
     });
     if (!resp.ok) {

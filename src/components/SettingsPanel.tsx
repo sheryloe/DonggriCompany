@@ -22,6 +22,7 @@ import CanonicalInspectorTab from "./settings/CanonicalInspectorTab";
 import SettingsTabNav from "./settings/SettingsTabNav";
 import WorkflowPacksTab from "./settings/WorkflowPacksTab";
 import OrganizationDefaultsTab from "./settings/OrganizationDefaultsTab";
+import PixelAgentModeSettingsTab from "./settings/PixelAgentModeSettingsTab";
 import StrategicMaintenanceSettingsTab from "./settings/StrategicMaintenanceSettingsTab";
 import type { AccountDraftMap, AccountDraftPatch, LocalSettings, SettingsTab } from "./settings/types";
 import { useApiProvidersState } from "./settings/useApiProvidersState";
@@ -695,7 +696,7 @@ export default function SettingsPanel({
   );
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
+    <div className="mx-auto w-full max-w-7xl space-y-4 sm:space-y-6">
       <h2 className="flex items-center gap-2 text-xl font-bold" style={{ color: "var(--th-text-heading)" }}>
         설정
       </h2>
@@ -773,6 +774,10 @@ export default function SettingsPanel({
       {tab === "workflow-packs" && <WorkflowPacksTab t={t} />}
 
       {tab === "canonical" && <CanonicalInspectorTab t={t} locale={form.language} />}
+
+      {tab === "pixel-agents" && (
+        <PixelAgentModeSettingsTab t={t} form={form} setForm={setForm} persistSettings={persistSettings} />
+      )}
 
       {tab === "strategic-maintenance" && (
         <StrategicMaintenanceSettingsTab t={t} form={form} setForm={setForm} persistSettings={persistSettings} />

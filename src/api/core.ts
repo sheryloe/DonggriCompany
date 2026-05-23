@@ -116,6 +116,12 @@ function shouldRetryStatus(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
+function isCsrfTokenInvalidResponse(status: number, body: unknown): boolean {
+  if (status !== 403 || !body || typeof body !== "object") return false;
+  const error = (body as { error?: unknown }).error;
+  return error === "csrf_token_invalid" || error === "csrf_required";
+}
+
 function backoffDelayMs(attempt: number): number {
   const exponential = Math.min(POST_BACKOFF_BASE_MS * 2 ** attempt, POST_BACKOFF_MAX_MS);
   const jitter = Math.floor(Math.random() * 120);
@@ -157,6 +163,10 @@ export async function postWithIdempotency<T>(
       }
 
       const responseBody = await r.json().catch(() => null);
+      if (isCsrfTokenInvalidResponse(r.status, responseBody) && canRetryAuth && url !== SESSION_BOOTSTRAP_PATH) {
+        await bootstrapSession({ force: true });
+        return postWithIdempotency<T>(url, body, idempotencyKey, false);
+      }
       const errCode = typeof responseBody?.error === "string" ? responseBody.error : null;
       const errMsg = errCode ?? responseBody?.message ?? `Request failed: ${r.status}`;
       if (attempt < POST_RETRY_LIMIT && shouldRetryStatus(r.status)) {
@@ -271,6 +281,10 @@ export async function request<T>(url: string, init?: RequestInit, canRetryAuth =
   }
   if (!r.ok) {
     const body = await r.json().catch(() => null);
+    if (isCsrfTokenInvalidResponse(r.status, body) && canRetryAuth && url !== SESSION_BOOTSTRAP_PATH) {
+      await bootstrapSession({ force: true });
+      return request<T>(url, init, false);
+    }
     const errorCode = typeof body?.error === "string" ? body.error : null;
     throw new ApiRequestError(errorCode ?? body?.message ?? `Request failed: ${r.status}`, {
       status: r.status,

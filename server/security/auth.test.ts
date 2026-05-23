@@ -1,15 +1,17 @@
 import express, { type Request, type Response } from "express";
 import type { IncomingMessage } from "node:http";
 import request from "supertest";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SESSION_AUTH_TOKEN, SESSION_COOKIE_NAME } from "../config/runtime.ts";
 import {
   bearerToken,
   buildTaskInterruptControlToken,
+  checkPublicApiRateLimit,
   cookieToken,
   csrfTokenFromRequest,
   getCsrfToken,
+  getPublicApiRateLimit,
   hasValidCsrfToken,
   hasValidTaskInterruptControlToken,
   incomingMessageBearerToken,
@@ -28,6 +30,7 @@ import {
   issueSessionCookie,
   normalizeHostHeader,
   parseCookies,
+  resetPublicApiRateLimitState,
   safeSecretEquals,
   shouldRequireCsrf,
   shouldUseSecureCookie,
@@ -208,6 +211,46 @@ describe("auth helpers", () => {
 });
 
 describe("installSecurityMiddleware", () => {
+  beforeEach(() => {
+    resetPublicApiRateLimitState();
+  });
+
+  it("sets baseline browser security headers", async () => {
+    const app = express();
+    installSecurityMiddleware(app);
+    app.get("/api/health", (_req, res) => {
+      res.json({ ok: true });
+    });
+
+    const response = await request(app).get("/api/health").expect(200, { ok: true });
+    expect(response.headers["content-security-policy"]).toContain("default-src 'self'");
+    expect(response.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.headers["x-frame-options"]).toBe("DENY");
+    expect(response.headers["referrer-policy"]).toBe("same-origin");
+    expect(response.headers["permissions-policy"]).toContain("camera=()");
+  });
+
+  it("rate limits public session, inbox, and OAuth endpoints by socket address", async () => {
+    expect(getPublicApiRateLimit("/api/inbox", "POST")).toBe(60);
+    expect(getPublicApiRateLimit("/api/health", "GET")).toBeNull();
+
+    const fakeReq = {
+      path: "/api/inbox",
+      method: "POST",
+      socket: { remoteAddress: "203.0.113.10" },
+    } as Request;
+    for (let i = 0; i < 60; i += 1) {
+      const check = checkPublicApiRateLimit(fakeReq, 1_000);
+      expect(check?.allowed).toBe(true);
+    }
+    expect(checkPublicApiRateLimit(fakeReq, 1_000)?.allowed).toBe(false);
+
+    const resetCheck = checkPublicApiRateLimit(fakeReq, 62_000);
+    expect(resetCheck?.allowed).toBe(true);
+    expect(resetCheck?.remaining).toBe(59);
+  });
+
   it("issues a session cookie and protects non-public APIs", async () => {
     const app = express();
     installSecurityMiddleware(app);
@@ -223,6 +266,53 @@ describe("installSecurityMiddleware", () => {
     expect(sessionRes.body?.csrf_token).toBeTypeOf("string");
 
     await request(app).get("/api/protected").set("Cookie", String(cookieHeader)).expect(200, { ok: true });
+  });
+
+  it("requires CSRF for cookie-authenticated API mutations while allowing bearer automation", async () => {
+    const app = express();
+    installSecurityMiddleware(app);
+    app.post("/api/protected", (_req, res) => {
+      res.json({ ok: true });
+    });
+    app.post("/api/inbox", (_req, res) => {
+      res.json({ ok: true, public: true });
+    });
+
+    await request(app).post("/api/protected").send({ ok: true }).expect(401);
+
+    const sessionRes = await request(app).get("/api/auth/session").expect(200);
+    const cookieHeader = sessionRes.headers["set-cookie"]?.[0];
+    const csrf = String(sessionRes.body?.csrf_token ?? "");
+    expect(cookieHeader).toContain(`${SESSION_COOKIE_NAME}=`);
+    expect(csrf).toBeTruthy();
+
+    await request(app)
+      .post("/api/protected")
+      .set("Cookie", String(cookieHeader))
+      .send({ ok: true })
+      .expect(403, { error: "csrf_token_invalid" });
+
+    await request(app)
+      .post("/api/protected")
+      .set("Cookie", String(cookieHeader))
+      .set("x-csrf-token", "wrong")
+      .send({ ok: true })
+      .expect(403, { error: "csrf_token_invalid" });
+
+    await request(app)
+      .post("/api/protected")
+      .set("Cookie", String(cookieHeader))
+      .set("x-csrf-token", csrf)
+      .send({ ok: true })
+      .expect(200, { ok: true });
+
+    await request(app)
+      .post("/api/protected")
+      .set("authorization", `Bearer ${SESSION_AUTH_TOKEN}`)
+      .send({ ok: true })
+      .expect(200, { ok: true });
+
+    await request(app).post("/api/inbox").send({ text: "public webhook path" }).expect(200, { ok: true, public: true });
   });
 
   it("protects /api/agents and /api/subagents/catalog until a session is established", async () => {

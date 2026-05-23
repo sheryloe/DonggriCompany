@@ -50,6 +50,7 @@ export default function OfficeView({
   onOpenActiveMeetingMinutes,
   customDeptThemes,
   themeHighlightTargetId,
+  pixelAgentMode,
   onSelectAgent,
   onSelectDepartment,
 }: OfficeViewProps) {
@@ -133,8 +134,26 @@ export default function OfficeView({
   themeHighlightTargetIdRef.current = themeHighlightTargetId ?? null;
 
   // Latest data via refs (avoids stale closures)
-  const dataRef = useRef({ departments, agents, tasks, subAgents, unreadAgentIds, meetingPresence, customDeptThemes });
-  dataRef.current = { departments, agents, tasks, subAgents, unreadAgentIds, meetingPresence, customDeptThemes };
+  const dataRef = useRef({
+    departments,
+    agents,
+    tasks,
+    subAgents,
+    unreadAgentIds,
+    meetingPresence,
+    customDeptThemes,
+    pixelAgentMode,
+  });
+  dataRef.current = {
+    departments,
+    agents,
+    tasks,
+    subAgents,
+    unreadAgentIds,
+    meetingPresence,
+    customDeptThemes,
+    pixelAgentMode,
+  };
   const cbRef = useRef({ onSelectAgent, onSelectDepartment });
   cbRef.current = { onSelectAgent, onSelectDepartment };
   const activeMeetingTaskIdRef = useRef<string | null>(activeMeetingTaskId ?? null);
@@ -224,9 +243,9 @@ export default function OfficeView({
     const activeSubAgents = subAgents.filter((subAgent) => subAgent.status === "working").length;
     return [
       { label: "진행 업무", value: inProgressTasks, detail: `검토 대기 ${reviewTasks}` },
-      { label: "근무 직원", value: workingAgents, detail: `전체 ${agents.length}` },
-      { label: "호출 Subagent", value: activeSubAgents, detail: "전문 실행 풀" },
-      { label: "운영 층", value: 5, detail: "공용·옥상·전략·제작·품질" },
+      { label: "마스터 에이전트", value: 6, detail: `실행 중 ${workingAgents}` },
+      { label: "서브에이전트", value: activeSubAgents, detail: "작업마다 생성 후 회수" },
+      { label: "프로젝트 scope", value: "1:N", detail: "운영 마스터가 전환" },
     ];
   }, [agents, subAgents, tasks]);
 
@@ -413,6 +432,7 @@ export default function OfficeView({
     language,
     activeMeetingTaskId,
     customDeptThemes,
+    pixelAgentMode,
     currentTheme,
   });
 
@@ -453,14 +473,32 @@ export default function OfficeView({
     processedCeoOfficeRef,
   });
 
+  const pixelDensityLabel =
+    pixelAgentMode?.density === "compact" ? "간결" : pixelAgentMode?.density === "showcase" ? "쇼케이스" : "균형";
+
   return (
-    <div className="w-full overflow-auto" style={{ minHeight: "100%" }}>
+    <div
+      className={`w-full overflow-auto ${pixelAgentMode?.enabled ? "pixel-agent-mode" : ""} ${
+        pixelAgentMode?.enabled ? `pixel-agent-density-${pixelAgentMode.density}` : ""
+      }`}
+      style={{ minHeight: "100%" }}
+    >
+      {pixelAgentMode?.enabled && (
+        <div className="mx-auto mb-3 w-full max-w-5xl rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-xs text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <span className="font-semibold">픽셀 에이전트 모드 · Dongri-grigri 운영실</span>
+            <span className="text-cyan-100/75">
+              {pixelDensityLabel} · 서브에이전트와 부서 상태를 강조합니다
+            </span>
+          </div>
+        </div>
+      )}
       <div className="mx-auto mb-3 flex w-full max-w-5xl flex-wrap items-center gap-2 rounded-2xl border border-cyan-400/15 bg-slate-950/45 px-3 py-2 text-xs text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur">
         <span className="mr-1 font-semibold text-cyan-100">층 이동</span>
         {[
           ["shared", "1F 공용층"],
           ["rooftop", "RF 옥상층"],
-          ["strategy", "2F 전략층"],
+          ["strategy", "2F 기획층"],
           ["production", "3F 제작층"],
           ["quality", "4F 품질/운영층"],
         ].map(([area, label]) => (
@@ -490,7 +528,7 @@ export default function OfficeView({
           </button>
         ))}
         <span className="ml-auto hidden text-slate-400 md:inline">
-          WASD/방향키로 CEO 이동 · Enter/Space 상호작용 · 22명 운영
+          WASD/방향키로 운영자 이동 · Enter/Space 상호작용 · 6개 마스터 부서
         </span>
       </div>
       <div className="mx-auto mb-3 grid w-full max-w-5xl grid-cols-2 gap-2 md:grid-cols-4">

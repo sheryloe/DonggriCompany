@@ -7,6 +7,7 @@ import SwaggerParser from "@apidevtools/swagger-parser";
 import prettier from "prettier";
 
 const OPENAPI_PATH = path.resolve(process.cwd(), "docs", "openapi.json");
+const PACKAGE_JSON_PATH = path.resolve(process.cwd(), "package.json");
 const MODE = process.argv.includes("--write") ? "write" : "check";
 
 const METHODS = ["get", "post", "put", "patch", "delete"];
@@ -87,6 +88,9 @@ const RESPONSE_EXAMPLE_OVERRIDES = {
   "GET /api/health 200": {
     ok: true,
     status: "healthy",
+    version: readPackageVersion(),
+    app: "DonggriCompany",
+    dbPath: "/workspace/donggri-company.sqlite",
   },
   "GET /api/auth/session 200": {
     ok: true,
@@ -116,10 +120,21 @@ const RESPONSE_EXAMPLE_OVERRIDES = {
   "GET /api/openapi.json 200": {
     openapi: "3.0.3",
     info: {
-      title: "Claw-Empire API",
+      title: "DonggriCompany API",
+      version: readPackageVersion(),
     },
   },
 };
+
+function readPackageVersion() {
+  try {
+    const raw = fs.readFileSync(PACKAGE_JSON_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return typeof parsed.version === "string" && parsed.version.trim() ? parsed.version.trim() : "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
 
 function normalizeNullableType(schema) {
   if (!schema || typeof schema !== "object") return;
@@ -442,13 +457,14 @@ function ensureResponseExamples(pathname, method, operation, doc) {
     for (const mediaType of JSON_MEDIA_TYPES) {
       const media = content[mediaType];
       if (!media || typeof media !== "object") continue;
-      if (media.example !== undefined || media.examples !== undefined) continue;
-
       const overrideKey = `${method.toUpperCase()} ${pathname} ${statusCode}`;
       if (RESPONSE_EXAMPLE_OVERRIDES[overrideKey]) {
         media.example = RESPONSE_EXAMPLE_OVERRIDES[overrideKey];
+        delete media.examples;
         continue;
       }
+
+      if (media.example !== undefined || media.examples !== undefined) continue;
 
       const inferred = inferExampleFromSchema(media.schema, doc);
       if (inferred !== null) {
@@ -461,6 +477,10 @@ function ensureResponseExamples(pathname, method, operation, doc) {
 }
 
 function normalizeOpenApiDoc(doc) {
+  doc.info ??= {};
+  doc.info.title = "DonggriCompany API";
+  doc.info.version = readPackageVersion();
+  doc.info.description = "Baseline OpenAPI contract for commonly used DonggriCompany endpoints.";
   normalizeNullableTypes(doc);
   ensureErrorResponseSchema(doc);
   ensureStandardErrorResponses(doc);

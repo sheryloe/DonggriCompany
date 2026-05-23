@@ -1,0 +1,67 @@
+/* Donggri 8-bit agent mode */
+.pixel-agent-mode {
+  image-rendering: pixelated;
+}
+
+.pixel-agent-console {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 14px 28px rgba(2, 6, 23, 0.16);
+}
+
+.pixel-agent-console::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.18;
+  background-image:
+    linear-gradient(rgba(125, 211, 252, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 211, 252, 0.16) 1px, transparent 1px);
+  background-size: 12px 12px;
+  mask-image: linear-gradient(90deg, transparent, black 18%, black 82%, transparent);
+}
+
+.pixel-agent-card {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 14px 26px rgba(2, 6, 23, 0.12);
+}
+
+.pixel-agent-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.16;
+  background-image: linear-gradient(90deg, transparent 0 48%, rgba(125, 211, 252, 0.42) 48% 52%, transparent 52%);
+  background-size: 18px 18px;
+}
+
+.pixel-agent-portrait {
+  border: 1px solid rgba(125, 211, 252, 0.38);
+  background:
+    linear-gradient(135deg, rgba(8, 47, 73, 0.84), rgba(15, 23, 42, 0.92)),
+    repeating-linear-gradient(45deg, rgba(125, 211, 252, 0.12) 0 2px, transparent 2px 5px);
+  box-shadow:
+    inset 0 0 0 2px rgba(2, 6, 23, 0.72),
+    0 0 0 1px rgba(14, 165, 233, 0.16);
+}
+
+.pixel-agent-detail {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 24px 60px rgba(2, 6, 23, 0.42);
+}
+
+.pixel-agent-density-showcase .pixel-agent-portrait img {
+  transform: scale(1.08);
+}
+
+.pixel-agent-density-compact .pixel-agent-console {
+  display: none;
+}

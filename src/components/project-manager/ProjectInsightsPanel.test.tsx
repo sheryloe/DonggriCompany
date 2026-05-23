@@ -469,7 +469,7 @@ describe("ProjectInsightsPanel", () => {
     expect(screen.getByTestId("project-health-panel")).toBeInTheDocument();
     expect(screen.getByText("프로젝트 Health Panel")).toBeInTheDocument();
     expect(screen.getByText("Orphan 복구 액션")).toBeInTheDocument();
-    expect(screen.getByText("QA Hold 증거 부족")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("QA Hold 증거 부족")).toBeInTheDocument());
 
     fireEvent.click(screen.getAllByRole("button", { name: "대기열 복구" })[0]);
     await waitFor(() =>

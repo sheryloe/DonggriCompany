@@ -156,8 +156,8 @@ export function getOauthSettingsCopy(t: TFunction) {
     disconnecting: t({ ko: "연결 해제 중...", en: "Disconnecting..." }),
     disconnect: t({ ko: "연결 해제", en: "Disconnect" }),
     cliCredentialWarning: t({
-      ko: "CLI에서 감지한 자격 증명은 Claw-Empire 실행에 직접 사용하지 않습니다. Web OAuth로 다시 연결하세요.",
-      en: "CLI-detected credentials are not used directly for Claw-Empire execution. Reconnect with Web OAuth.",
+      ko: "CLI에서 감지한 자격 증명은 Dongri-grigri 실행에 직접 사용하지 않습니다. Web OAuth로 다시 연결하세요.",
+      en: "CLI-detected credentials are not used directly for Dongri-grigri execution. Reconnect with Web OAuth.",
     }),
     scope: t({ ko: "권한 범위", en: "Scope" }),
     expires: t({ ko: "만료 시각", en: "Expires" }),

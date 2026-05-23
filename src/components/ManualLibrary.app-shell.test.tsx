@@ -4,34 +4,33 @@ import { describe, expect, it } from "vitest";
 import ManualLibrary from "./ManualLibrary";
 
 describe("ManualLibrary app shell", () => {
-  it("컨셉형 메뉴얼 랜딩, 카드, 코드 예시, 태그를 표시한다", () => {
+  it("renders the Korean Dongri-grigri manual sections", () => {
     render(<ManualLibrary />);
 
-    expect(screen.getByRole("region", { name: "Donggri 운영 메뉴얼" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "운영 메뉴얼" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Dongri-grigri 운영 매뉴얼" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "운영 매뉴얼" })).toBeInTheDocument();
     for (const title of [
       "빠른 시작",
-      "부서/직원",
-      "업무 등록",
-      "Skill 문서고",
-      "모듈",
-      "CLI 계정",
-      "프로젝트 관리",
-      "품질/ISO",
+      "마스터 부서 에이전트",
+      "업무 흐름",
+      "Skill",
+      "Memory",
+      "프로젝트 scope",
+      "품질 게이트",
     ]) {
       expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
     }
-    expect(screen.getByText(/docker compose up -d --build/)).toBeInTheDocument();
-    expect(screen.getByText("8부서")).toBeInTheDocument();
+    expect(screen.getByText(/corepack pnpm run dev:local/)).toBeInTheDocument();
+    expect(screen.getByText("6개 마스터 부서")).toBeInTheDocument();
   });
 
-  it("검색어로 메뉴얼 카드를 실제 필터링한다", async () => {
+  it("filters manual cards by search text", async () => {
     const user = userEvent.setup();
     render(<ManualLibrary />);
 
-    await user.type(screen.getByLabelText("메뉴얼 검색"), "NotebookLM");
+    await user.type(screen.getByLabelText("매뉴얼 검색"), "AgentMemory");
 
-    expect(screen.getByRole("heading", { name: "모듈" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Memory" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "빠른 시작" })).not.toBeInTheDocument();
   });
 });

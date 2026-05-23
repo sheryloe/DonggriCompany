@@ -1,6 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
+import {
+  decryptMessengerChannelsForRuntime,
+  MESSENGER_TOKEN_REDACTION_PLACEHOLDER,
+} from "../../../messenger/token-crypto.ts";
 import { registerOpsSettingsStatsRoutes } from "./settings-stats.ts";
 
 type RouteHandler = (req: any, res: any) => any;
@@ -67,9 +71,13 @@ function createResponse() {
 }
 
 function createHarness(db: DatabaseSync) {
+  const getRoutes = new Map<string, RouteHandler>();
   const putRoutes = new Map<string, RouteHandler>();
   const app = {
-    get: () => app,
+    get(path: string, handler: RouteHandler) {
+      getRoutes.set(path, handler);
+      return this;
+    },
     put(path: string, handler: RouteHandler) {
       putRoutes.set(path, handler);
       return this;
@@ -82,7 +90,7 @@ function createHarness(db: DatabaseSync) {
     nowMs: () => Date.now(),
   } as any);
 
-  return { putRoutes };
+  return { getRoutes, putRoutes };
 }
 
 describe("settings-stats projection write guard", () => {
@@ -260,6 +268,144 @@ describe("settings-stats projection write guard", () => {
 
       const discord = stored.discord as Record<string, unknown>;
       expect(Array.isArray(discord?.sessions) ? discord.sessions : []).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("redacts messenger tokens from settings reads", () => {
+    const db = createDb();
+    try {
+      const { getRoutes, putRoutes } = createHarness(db);
+      const putHandler = putRoutes.get("/api/settings");
+      const getHandler = getRoutes.get("/api/settings");
+      expect(putHandler).toBeTypeOf("function");
+      expect(getHandler).toBeTypeOf("function");
+
+      const writeRes = createResponse();
+      putHandler?.(
+        {
+          body: {
+            messengerChannels: {
+              telegram: {
+                token: "tg-main-secret",
+                receiveEnabled: true,
+                sessions: [
+                  {
+                    id: "global",
+                    name: "Global Telegram Group",
+                    targetId: "-100999",
+                    enabled: true,
+                    token: "tg-session-secret",
+                  },
+                ],
+                departmentBots: {
+                  qa: {
+                    token: "tg-qa-secret",
+                    targetId: "-100999",
+                    enabled: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        writeRes,
+      );
+      expect(writeRes.statusCode).toBe(200);
+
+      const readRes = createResponse();
+      getHandler?.({}, readRes);
+      expect(readRes.statusCode).toBe(200);
+
+      const payload = readRes.payload as { settings?: Record<string, any> };
+      const messengerChannels = payload.settings?.messengerChannels as Record<string, any>;
+      expect(messengerChannels.telegram.token).toBe(MESSENGER_TOKEN_REDACTION_PLACEHOLDER);
+      expect(messengerChannels.telegram.sessions[0].token).toBe(MESSENGER_TOKEN_REDACTION_PLACEHOLDER);
+      expect(messengerChannels.telegram.departmentBots.qa.token).toBe(MESSENGER_TOKEN_REDACTION_PLACEHOLDER);
+
+      const serialized = JSON.stringify(readRes.payload);
+      expect(serialized).not.toContain("tg-main-secret");
+      expect(serialized).not.toContain("tg-session-secret");
+      expect(serialized).not.toContain("tg-qa-secret");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("preserves stored messenger tokens when a settings write sends redaction placeholders", () => {
+    const db = createDb();
+    try {
+      const { putRoutes } = createHarness(db);
+      const handler = putRoutes.get("/api/settings");
+      expect(handler).toBeTypeOf("function");
+
+      const firstWriteRes = createResponse();
+      handler?.(
+        {
+          body: {
+            messengerChannels: {
+              telegram: {
+                token: "tg-main-secret",
+                receiveEnabled: true,
+                sessions: [
+                  {
+                    id: "global",
+                    name: "Global Telegram Group",
+                    targetId: "-100999",
+                    enabled: true,
+                    token: "tg-session-secret",
+                  },
+                ],
+              },
+            },
+          },
+        },
+        firstWriteRes,
+      );
+      expect(firstWriteRes.statusCode).toBe(200);
+
+      const secondWriteRes = createResponse();
+      handler?.(
+        {
+          body: {
+            messengerChannels: {
+              telegram: {
+                token: MESSENGER_TOKEN_REDACTION_PLACEHOLDER,
+                receiveEnabled: true,
+                sessions: [
+                  {
+                    id: "global",
+                    name: "Global Telegram Group",
+                    targetId: "-100999",
+                    enabled: false,
+                    token: MESSENGER_TOKEN_REDACTION_PLACEHOLDER,
+                  },
+                ],
+              },
+            },
+          },
+        },
+        secondWriteRes,
+      );
+      expect(secondWriteRes.statusCode).toBe(200);
+
+      const storedRaw = db.prepare("SELECT value FROM settings WHERE key = 'messengerChannels'").get() as
+        | { value: string }
+        | undefined;
+      expect(storedRaw?.value).toBeTypeOf("string");
+      expect(storedRaw?.value).not.toContain(MESSENGER_TOKEN_REDACTION_PLACEHOLDER);
+
+      const runtimeChannels = decryptMessengerChannelsForRuntime(
+        JSON.parse(storedRaw?.value ?? "{}"),
+      ) as Record<string, any>;
+      expect(runtimeChannels.telegram.token).toBe("tg-main-secret");
+      expect(runtimeChannels.telegram.sessions[0]).toMatchObject({
+        id: "global",
+        targetId: "-100999",
+        enabled: false,
+        token: "tg-session-secret",
+      });
     } finally {
       db.close();
     }

@@ -27,6 +27,7 @@ type AgentProfileExtras = {
 const RESERVED_ROOT_DIRS = new Set(["archive", "classes"]);
 const DEFAULT_CLASS_PATH = "(unclassified)";
 const DEFAULT_PROMOTION_POLICY = "junior -> senior @xp>=300, team_leader manual only";
+const MASTER_AGENT_PROMOTION_POLICY = "master_agent fixed role; no junior/senior ladder";
 const PROJECT_AGENTS_ROOT = path.resolve(process.cwd(), "agents");
 let warnedExternalGuideRoot = false;
 
@@ -140,14 +141,28 @@ function extractAgentProfileExtras(agentProfileJson: string | null | undefined):
       preferredSubagents: [],
     };
   }
+  const isDongriMaster = parsed.model === "dongri-grigri-master-agent";
   return {
     classPath: normalizeClassPath(parsed.class_path),
-    promotionPolicy: normalizePromotionPolicy(parsed.promotion_policy),
+    promotionPolicy: isDongriMaster
+      ? normalizePromotionPolicy(parsed.promotion_policy ?? MASTER_AGENT_PROMOTION_POLICY)
+      : normalizePromotionPolicy(parsed.promotion_policy),
     visualProfileKey: String(parsed.visual_profile_key ?? "").trim() || "(none)",
     preferredSubagents: Array.isArray(parsed.preferred_subagents)
       ? parsed.preferred_subagents.map((entry) => String(entry ?? "").trim()).filter(Boolean)
       : [],
   };
+}
+
+function isDongriMasterProfile(agentProfileJson: string | null | undefined): boolean {
+  return parseJsonObject(agentProfileJson)?.model === "dongri-grigri-master-agent";
+}
+
+function displayRole(input: AgentGuideInput): string {
+  if (isDongriMasterProfile(input.agentProfileJson ?? null)) {
+    return "master_agent";
+  }
+  return String(input.role ?? "junior");
 }
 
 function readTextSafe(filePath: string): string {
@@ -267,7 +282,7 @@ function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: stri
   const tasksDone = safeNumber(input.statsTasksDone);
   const xp = safeNumber(input.statsXp);
   const level = Math.floor(xp / 100) + 1;
-  const role = String(input.role ?? "junior");
+  const role = displayRole(input);
   const departmentId = String(input.departmentId ?? "unassigned");
   const workflowProfileRaw = String(input.workflowProfileJson ?? "").trim() || "(none)";
   const workflowPreview =
@@ -309,9 +324,13 @@ function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: stri
     `- XP: ${xp}`,
     `- Level: ${level}`,
     "",
-    "## Promotion Policy",
-    "- Default: junior -> senior auto-promotion at 300 XP",
-    "- Exception: team_leader promotion remains manual only",
+    "## Role Policy",
+    role === "master_agent"
+      ? "- Master agents are fixed department operators and do not use junior/senior promotion ladders."
+      : "- Default: junior -> senior auto-promotion at 300 XP",
+    role === "master_agent"
+      ? "- Master agents may spawn disposable single-task subagents and must accept, reject, recreate, or merge their results."
+      : "- Exception: team_leader promotion remains manual only",
     `- Applied Rule: ${extras.promotionPolicy}`,
     "",
     "## Visual Profile",
@@ -319,8 +338,10 @@ function buildAgentGuideContent(input: AgentGuideInput, relativeBundlePath: stri
     "- Runtime Sprite Source: /sprites/{sprite_number}-D-1.png for v1 preview",
     "- Contact Sheet: public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png",
     "",
-    "## Subagent Supervision",
-    "- Staff members supervise specialized subagents instead of owning every specialty directly.",
+    "## Subagent Delegation",
+    role === "master_agent"
+      ? "- This department master creates disposable subagents only for bounded work and collects their evidence before merge."
+      : "- Staff members supervise specialized subagents instead of owning every specialty directly.",
     ...(extras.preferredSubagents.length > 0
       ? extras.preferredSubagents.map((subagent) => `- Preferred Subagent: ${subagent}`)
       : ["- Preferred Subagent: task-specific catalog selection"]),
@@ -390,7 +411,7 @@ function buildSettingsContent(input: AgentGuideInput, updatedAt: string): string
   const payload = {
     agent_id: input.id,
     agent_name: input.name,
-    role: input.role ?? "junior",
+    role: displayRole(input),
     department_id: input.departmentId ?? "unassigned",
     workflow_profile: input.workflowProfileJson ? String(input.workflowProfileJson) : null,
     agent_profile_json: input.agentProfileJson ? String(input.agentProfileJson) : null,

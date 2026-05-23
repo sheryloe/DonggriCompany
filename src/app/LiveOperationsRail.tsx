@@ -27,6 +27,16 @@ function statusTone(status: TaskStatus): string {
   return getTaskStatusDotClass(status);
 }
 
+function safeDisplayText(value: string | null | undefined, fallback = "제목 인코딩 확인 필요"): string {
+  const text = (value ?? "").trim();
+  const mojibakeMarkers = [0xfffd, 0xf9cd, 0x6e72, 0x8a87, 0x5a9b, 0x6fe1, 0x907a].map((code) =>
+    String.fromCharCode(code),
+  );
+  if (!text) return fallback;
+  if (/\?{3,}/.test(text) || mojibakeMarkers.some((marker) => text.includes(marker))) return fallback;
+  return text;
+}
+
 export default function LiveOperationsRail({ agents, tasks, connected }: LiveOperationsRailProps) {
   const workingAgents = agents.filter((agent) => agent.status === "working");
   const idleAgents = agents.filter((agent) => agent.status === "idle");
@@ -37,12 +47,12 @@ export default function LiveOperationsRail({ agents, tasks, connected }: LiveOpe
   const recentTasks = [...tasks].sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0)).slice(0, 4);
 
   return (
-    <aside className="live-ops-rail" aria-label="실시간 업무 현황">
+    <aside className="live-ops-rail" aria-label="부서 대화방과 실행 로그">
       <section className="command-panel p-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-300">Live Ops</div>
-            <h2 className="mt-1 text-base font-bold text-slate-50">실시간 업무 현황</h2>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-600">Department rooms</div>
+            <h2 className="mt-1 text-base font-bold" style={{ color: "var(--th-text-primary)" }}>부서 대화방</h2>
           </div>
           <span className={`live-status-pill ${connected ? "is-online" : "is-offline"}`}>
             {connected ? "라이브" : "오프라인"}
@@ -50,28 +60,29 @@ export default function LiveOperationsRail({ agents, tasks, connected }: LiveOpe
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="rounded-xl border border-slate-700/70 bg-slate-950/45 p-3">
-            <div className="text-[11px] text-slate-500">근무 직원</div>
-            <div className="mt-1 font-mono text-xl font-bold text-emerald-300">{workingAgents.length}</div>
+          <div className="rounded-xl border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+            <div className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>활성 실행</div>
+            <div className="mt-1 font-mono text-xl font-bold text-emerald-600 dark:text-emerald-300">{workingAgents.length}</div>
           </div>
-          <div className="rounded-xl border border-slate-700/70 bg-slate-950/45 p-3">
-            <div className="text-[11px] text-slate-500">대기 직원</div>
-            <div className="mt-1 font-mono text-xl font-bold text-sky-300">{idleAgents.length}</div>
+          <div className="rounded-xl border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+            <div className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>대기 서브</div>
+            <div className="mt-1 font-mono text-xl font-bold text-cyan-600 dark:text-sky-300">{idleAgents.length}</div>
           </div>
         </div>
 
         <div className="mt-4 space-y-2">
           {liveTasks.length === 0 ? (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-4 text-sm text-slate-400">
+            <div className="rounded-xl border px-3 py-4 text-sm" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}>
               현재 진행 중인 업무가 없습니다.
             </div>
           ) : (
             liveTasks.map((task) => {
               const agent = agents.find((candidate) => candidate.id === task.assigned_agent_id);
               const sprite = agentSprite(agent);
+              const title = safeDisplayText(task.title);
               return (
                 <div key={task.id} className="live-task-row">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
                     {sprite ? (
                       <img
                         src={sprite}
@@ -84,14 +95,14 @@ export default function LiveOperationsRail({ agents, tasks, connected }: LiveOpe
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-slate-100">{task.title}</div>
-                    <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
-                      <span>{agent?.name_ko || agent?.name || "미배정"}</span>
+                    <div className="truncate text-sm font-semibold" style={{ color: "var(--th-text-primary)" }}>{title}</div>
+                    <div className="mt-0.5 flex items-center gap-2 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                      <span>{safeDisplayText(agent?.name_ko || agent?.name, "미배정")}</span>
                       <span>·</span>
                       <span>{formatRelativeTime(task.updated_at)}</span>
                     </div>
                   </div>
-                  <span className="rounded-md border border-sky-400/20 bg-sky-400/10 px-2 py-1 text-[10px] font-semibold text-sky-200">
+                  <span className="rounded-md border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold text-cyan-700 dark:text-sky-200">
                     {getTaskStatusKoLabel(task.status)}
                   </span>
                 </div>
@@ -102,11 +113,11 @@ export default function LiveOperationsRail({ agents, tasks, connected }: LiveOpe
       </section>
 
       <section className="command-panel p-4">
-        <h2 className="text-sm font-bold text-slate-50">시스템 상태</h2>
+        <h2 className="text-sm font-bold" style={{ color: "var(--th-text-primary)" }}>시스템 상태</h2>
         <div className="mt-3 space-y-2">
           <div className="system-status-row">
             <span>서버 연결</span>
-            <strong className={connected ? "text-emerald-300" : "text-rose-300"}>
+            <strong className={connected ? "text-emerald-600 dark:text-emerald-300" : "text-rose-600 dark:text-rose-300"}>
               {connected ? "정상" : "확인 필요"}
             </strong>
           </div>
@@ -115,20 +126,20 @@ export default function LiveOperationsRail({ agents, tasks, connected }: LiveOpe
             <strong>{tasks.length}건</strong>
           </div>
           <div className="system-status-row">
-            <span>직원 풀</span>
-            <strong>{agents.length}명</strong>
+            <span>서브에이전트 풀</span>
+            <strong>{agents.length}개</strong>
           </div>
         </div>
       </section>
 
       <section className="command-panel p-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-50">최근 시스템 로그</h2>
-          <span className="text-[10px] text-slate-500">최근 {recentTasks.length}건</span>
+          <h2 className="text-sm font-bold" style={{ color: "var(--th-text-primary)" }}>최근 실행 로그</h2>
+          <span className="text-[10px]" style={{ color: "var(--th-text-muted)" }}>최근 {recentTasks.length}건</span>
         </div>
         <div className="mt-3 space-y-2">
           {recentTasks.length === 0 ? (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-3 text-xs text-slate-500">
+            <div className="rounded-xl border px-3 py-3 text-xs" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}>
               표시할 업무 로그가 없습니다.
             </div>
           ) : (
@@ -136,8 +147,8 @@ export default function LiveOperationsRail({ agents, tasks, connected }: LiveOpe
               <div key={task.id} className="flex items-start gap-2 text-xs">
                 <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${statusTone(task.status)}`} />
                 <div className="min-w-0">
-                  <div className="truncate font-mono text-emerald-300">Task #{task.id.slice(0, 6)}</div>
-                  <div className="truncate text-slate-400">{task.title}</div>
+                  <div className="truncate font-mono text-emerald-600 dark:text-emerald-300">Task #{task.id.slice(0, 6)}</div>
+                  <div className="truncate" style={{ color: "var(--th-text-secondary)" }}>{safeDisplayText(task.title)}</div>
                 </div>
               </div>
             ))

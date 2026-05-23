@@ -18,11 +18,11 @@ describe("useAppDomainState", () => {
   it("keeps app domain collections and refs behind one hook boundary", () => {
     const { result } = renderHook(() => useAppDomainState({ initialRoomThemes }));
 
-    expect(result.current.view).toBe("manual");
+    expect(result.current.view).toBe("office");
     expect(result.current.loading).toBe(true);
     expect(result.current.departments).toEqual([]);
     expect(result.current.customRoomThemes.design.accent).toBe(0x58c4dd);
-    expect(result.current.viewRef.current).toBe("manual");
+    expect(result.current.viewRef.current).toBe("office");
 
     const department: Department = {
       id: "design",
@@ -38,8 +38,8 @@ describe("useAppDomainState", () => {
     };
     const agent: Agent = {
       id: "agent-design",
-      name: "Design Lead",
-      name_ko: "디자인 리드",
+      name: "Design Agent",
+      name_ko: "디자인 에이전트",
       avatar_emoji: "D",
       role: "team_leader",
       department_id: "design",

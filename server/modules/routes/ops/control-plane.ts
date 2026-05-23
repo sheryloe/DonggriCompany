@@ -1,0 +1,3588 @@
+import { execFileSync } from "node:child_process";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { Express } from "express";
+import type { RuntimeContext } from "../../../types/runtime-context.ts";
+
+const CONTROL_ROOT = "G:\\Donggri_DevDrive";
+const REPO_ESTATE_ROOT = path.join(CONTROL_ROOT, "repos");
+const RUNTIME_PROJECTION_APP = path.join(REPO_ESTATE_ROOT, "DonggriCompany");
+const CODEX_CONTROL_ROOT = path.join(CONTROL_ROOT, "storage", "codex-control");
+const AGENTMEMORY_URL = "http://127.0.0.1:3111";
+const AGENTMEMORY_VIEWER_URL = "http://127.0.0.1:3113";
+const AGENTMEMORY_RUNTIME_PATH = "G:\\Donggr_Runtime\\agentmemory";
+const AGENTMEMORY_PACKAGE = "@agentmemory/agentmemory";
+const AGENTMEMORY_OBSERVED_VERSION = "0.9.21";
+const AGENTMEMORY_SOURCE_URL = "https://github.com/rohitg00/agentmemory";
+const AGENTMEMORY_REST_GROUPS = [
+  {
+    key: "status",
+    label: "Status",
+    paths: ["/agentmemory/health", "/agentmemory/livez", "/agentmemory/config/flags"],
+    dongri_policy: "safe-read",
+  },
+  {
+    key: "recall",
+    label: "Search and context",
+    paths: ["/agentmemory/smart-search", "/agentmemory/search", "/agentmemory/context", "/agentmemory/file-context"],
+    dongri_policy: "summary-only-read",
+  },
+  {
+    key: "capture",
+    label: "Remember and observe",
+    paths: ["/agentmemory/remember", "/agentmemory/observe", "/agentmemory/session/start", "/agentmemory/session/end"],
+    dongri_policy: "confirm-and-approval-required",
+  },
+  {
+    key: "insight",
+    label: "Timeline, patterns, profile",
+    paths: ["/agentmemory/timeline", "/agentmemory/patterns", "/agentmemory/profile", "/agentmemory/verify"],
+    dongri_policy: "summary-only-read",
+  },
+  {
+    key: "blocked",
+    label: "Destructive or global operations",
+    paths: ["/agentmemory/forget", "/agentmemory/governance/bulk-delete", "/agentmemory/import", "/agentmemory/snapshot/restore"],
+    dongri_policy: "blocked-until-explicit-approval",
+  },
+];
+const AGENTMEMORY_MCP_TOOLS = [
+  "memory_recall",
+  "memory_smart_search",
+  "memory_save",
+  "memory_patterns",
+  "memory_timeline",
+  "memory_profile",
+  "memory_verify",
+  "memory_lesson_save",
+  "memory_lesson_recall",
+  "memory_audit",
+  "memory_governance_delete",
+];
+const VER1_FALLBACK_SPEC_ID = "20260522-donggri-root-control-sdd-v1";
+const VER1_REQUIRED_SPEC_DOCS = [
+  "metadata.md",
+  "requirements.md",
+  "design.md",
+  "tasks.md",
+  "repo-map.md",
+  "approvals.md",
+  "evidence.md",
+  "handoff.md",
+  "learnings.md",
+];
+const VER1_GROUPS = {
+  steering: ["product.md", "tech.md", "structure.md", "safety.md", "agent-model.md", "context.md"],
+  hooks: [
+    "README.md",
+    "pre-task.yaml",
+    "pre-implement.yaml",
+    "pre-git.yaml",
+    "pre-docker.yaml",
+    "pre-secret.yaml",
+    "post-verify.yaml",
+    "pre-handoff.yaml",
+  ],
+  orchestrator: ["README.md", "waves.md", "persona-subagents.md", "run-state.md", "recovery.md", "routing.md"],
+  context_packs: ["README.md", "_template.md"],
+  quality: ["rubric.md", "hard-gates.md", "gemini-review.md"],
+  integrations: ["codex-app.md", "donggricompany.md", "agentmemory.md", "gemini-cli.md"],
+};
+const LEGACY_THREAD_TARGETS = [
+  "bloggergent",
+  "donggricompany",
+  "donggrolgamebook",
+  "gisoolsa",
+  "jasosul",
+  "dongri-archive",
+];
+
+type DocStatus = {
+  key: string;
+  path: string;
+  exists: boolean;
+  size: number | null;
+  mtime: string | null;
+  sha256: string | null;
+  parse_status?: "ok" | "missing" | "error";
+  error?: string;
+};
+
+type RegistryProject = {
+  key: string;
+  path: string;
+  absolute_path: string;
+  type: string | null;
+  has_agents: boolean | null;
+  status: string | null;
+  summary: string | null;
+  operation_agent: ProjectOperationAgentConfig | null;
+  exists: boolean;
+  db_project_id: string | null;
+  db_project_name: string | null;
+  git: {
+    is_repo: boolean;
+    branch: string | null;
+    ahead: number;
+    behind: number;
+    dirty_count: number;
+    untracked_count: number;
+    status: "clean" | "dirty" | "missing" | "not_git";
+    error: string | null;
+  };
+};
+
+type ProjectOperationAgentConfig = {
+  operator_id: string | null;
+  project_key: string | null;
+  owner_department: string | null;
+  status: string | null;
+  authority: string | null;
+  memory_scope: string | null;
+  assignment_policy: string | null;
+  enabled: boolean | null;
+};
+
+type ProjectOperatorAgent = {
+  operator_id: string;
+  project_key: string;
+  project_path: string;
+  absolute_path: string;
+  owner_department: "OPS";
+  enabled: boolean;
+  status: "active" | "disabled-candidate" | "missing";
+  authority: "operations-only";
+  memory_scope: string;
+  assignment_policy: string;
+  implementation_delegate: "IMPLEMENT";
+  can_create_read_persona: true;
+  can_create_write_persona: false;
+  can_write_repo: false;
+  db_project_id: string | null;
+  db_project_name: string | null;
+  project_type: string | null;
+  project_status: string | null;
+  has_agents: boolean | null;
+  git_status: RegistryProject["git"]["status"];
+  git_branch: string | null;
+  link_status: ControlPlaneProjectLink["link_status"];
+  memory_tabs: string[];
+  risk_flags: string[];
+  notes: string | null;
+};
+
+type DbProjectProjection = {
+  id: string;
+  name: string;
+  project_path: string;
+  classification: "linked" | "legacy-runtime" | "repo-estate-unregistered" | "outside-repo-estate";
+  linked_registry_key: string | null;
+};
+
+type ControlPlaneProjectLink = {
+  id: string;
+  registry_key: string;
+  registry_path: string;
+  absolute_path: string;
+  registry_type: string | null;
+  db_project_id: string | null;
+  db_project_name: string | null;
+  link_status: "linked" | "unlinked" | "missing" | "not-git" | "candidate";
+  notes: string | null;
+  payload: Record<string, unknown>;
+};
+
+type ControlPlaneSpecTaskLink = {
+  id: string;
+  spec_id: string;
+  task_key: string;
+  requirement_refs: string[];
+  status: string | null;
+  evidence_refs: string[];
+  payload: Record<string, unknown>;
+};
+
+type ControlPlaneSyncPreview = {
+  ok: true;
+  mode: "preview";
+  writes: false;
+  approved_for_apply: true;
+  snapshot: {
+    id: string;
+    root_path: string;
+    repo_estate_root: string;
+    active_spec_id: string | null;
+    projects_yaml_hash: string | null;
+    active_spec_hash: string | null;
+    registry_project_count: number;
+    db_project_count: number;
+    unlinked_registry_count: number;
+  };
+  counts: {
+    project_links: number;
+    linked: number;
+    unlinked: number;
+    missing: number;
+    not_git: number;
+    candidate: number;
+    spec_task_links: number;
+  };
+  project_links: ControlPlaneProjectLink[];
+  spec_task_links: ControlPlaneSpecTaskLink[];
+};
+
+type DepartmentAgentManifest = {
+  id: "CONTROL" | "SPEC" | "EXPLORE" | "IMPLEMENT" | "REVIEW" | "OPS";
+  file: string;
+  name: string;
+  description: string;
+  sandbox_mode: string;
+  role: string;
+  write_policy: string;
+  can_spawn_read_persona: boolean;
+  can_spawn_write_persona: boolean;
+  canonical: boolean;
+};
+
+type MasterDepartmentAgent = {
+  id: string;
+  label: string;
+  short_label: string;
+  accent: string;
+  mission: string;
+  memory_scope: string;
+  memory_focus: string;
+  internal_roles: DepartmentAgentManifest["id"][];
+  can_create_read_persona: boolean;
+  can_create_write_persona: boolean;
+  write_boundary: string;
+  external_sources?: string[];
+};
+
+type RunnerStatus = {
+  tables_exist: boolean;
+  latest_run: Record<string, unknown> | null;
+  run_counts: Record<string, number>;
+  persona_counts: Record<string, number>;
+  recent_runs: Record<string, unknown>[];
+  recent_personas: Record<string, unknown>[];
+  recent_events: Record<string, unknown>[];
+};
+
+function toIso(ms: number): string {
+  return new Date(ms).toISOString();
+}
+
+function safeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeSlashes(value: string): string {
+  return value.replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
+}
+
+function isInside(parent: string, child: string): boolean {
+  const rel = path.relative(path.resolve(parent), path.resolve(child));
+  return rel === "" || (!!rel && !rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function isSafeSpecId(value: string | null): value is string {
+  return Boolean(value && /^[0-9]{8}-[a-z0-9][a-z0-9-]*$/.test(value));
+}
+
+function resolveInside(base: string, relativePath: string): string | null {
+  if (!relativePath) return null;
+  const resolved = path.isAbsolute(relativePath) ? path.resolve(relativePath) : path.resolve(base, relativePath);
+  return isInside(base, resolved) ? resolved : null;
+}
+
+function fileStatus(key: string, filePath: string, parseStatus?: DocStatus["parse_status"]): DocStatus {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return {
+        key,
+        path: filePath,
+        exists: false,
+        size: null,
+        mtime: null,
+        sha256: null,
+        parse_status: parseStatus ?? "missing",
+      };
+    }
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) {
+      return {
+        key,
+        path: filePath,
+        exists: true,
+        size: stat.size,
+        mtime: toIso(stat.mtimeMs),
+        sha256: null,
+        parse_status: parseStatus ?? "ok",
+      };
+    }
+    const bytes = fs.readFileSync(filePath);
+    return {
+      key,
+      path: filePath,
+      exists: true,
+      size: stat.size,
+      mtime: toIso(stat.mtimeMs),
+      sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+      parse_status: parseStatus ?? "ok",
+    };
+  } catch (error) {
+    return {
+      key,
+      path: filePath,
+      exists: false,
+      size: null,
+      mtime: null,
+      sha256: null,
+      parse_status: "error",
+      error: safeError(error),
+    };
+  }
+}
+
+function readText(filePath: string): string {
+  if (!fs.existsSync(filePath)) return "";
+  return fs.readFileSync(filePath, "utf8");
+}
+
+function stripMarkdownHtmlComments(raw: string): string {
+  return raw.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+function extractMarkdownSection(raw: string, heading: string): string {
+  const lines = raw.split(/\r?\n/);
+  const headingPattern = new RegExp(`^##\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
+  const start = lines.findIndex((line) => headingPattern.test(line));
+  if (start < 0) return raw;
+  const sectionLines: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^##\s+/.test(line)) break;
+    sectionLines.push(line);
+  }
+  return sectionLines.join("\n");
+}
+
+function parseActiveSpec(raw: string) {
+  const cleaned = stripMarkdownHtmlComments(raw);
+  const currentSection = extractMarkdownSection(cleaned, "Current Active Spec");
+  const matchField = (label: string) => {
+    const match = currentSection.match(new RegExp(`^- ${label}:\\s*(.+)$`, "m"));
+    return match?.[1]?.trim().replace(/^`|`$/g, "") ?? null;
+  };
+  const nextActionMatch = cleaned.match(/## Next Recommended Action\s+([\s\S]*?)(?:\n## |\s*$)/);
+  return {
+    id: matchField("Spec ID"),
+    status: matchField("Status"),
+    phase: matchField("Phase"),
+    related_repo: matchField("Related repo"),
+    next_recommended_action: nextActionMatch?.[1]?.trim() ?? null,
+  };
+}
+
+function resolveVer1SpecId(activeSpecId: string | null): string {
+  if (activeSpecId && /-v1$/.test(activeSpecId)) return activeSpecId;
+  return VER1_FALLBACK_SPEC_ID;
+}
+
+function parseSimpleProjectsYaml(raw: string): Array<{
+  key: string;
+  path: string;
+  type: string | null;
+  has_agents: boolean | null;
+  status: string | null;
+  summary: string | null;
+  operation_agent: ProjectOperationAgentConfig | null;
+}> {
+  const lines = raw.split(/\r?\n/);
+  const projects: Array<{
+    key: string;
+    path: string;
+    type: string | null;
+    has_agents: boolean | null;
+    status: string | null;
+    summary: string | null;
+    operation_agent: ProjectOperationAgentConfig | null;
+  }> = [];
+  let inProjects = false;
+  let current: (typeof projects)[number] | null = null;
+  let inOperationAgent = false;
+  const parseYamlBool = (value: string): boolean | null =>
+    value === "true" ? true : value === "false" ? false : null;
+
+  for (const line of lines) {
+    if (/^projects:\s*$/.test(line)) {
+      inProjects = true;
+      continue;
+    }
+    if (!inProjects) continue;
+    const projectMatch = line.match(/^ {2}([^:\s][^:]*):\s*$/);
+    if (projectMatch) {
+      if (current) projects.push(current);
+      current = {
+        key: projectMatch[1].trim(),
+        path: "",
+        type: null,
+        has_agents: null,
+        status: null,
+        summary: null,
+        operation_agent: null,
+      };
+      inOperationAgent = false;
+      continue;
+    }
+    if (!current) continue;
+    const agentFieldMatch = line.match(/^ {6}([a-zA-Z0-9_]+):\s*(.*)$/);
+    if (inOperationAgent && agentFieldMatch) {
+      const field = agentFieldMatch[1] as keyof ProjectOperationAgentConfig;
+      const value = agentFieldMatch[2].trim().replace(/^["']|["']$/g, "");
+      if (!current.operation_agent) {
+        current.operation_agent = {
+          operator_id: null,
+          project_key: null,
+          owner_department: null,
+          status: null,
+          authority: null,
+          memory_scope: null,
+          assignment_policy: null,
+          enabled: null,
+        };
+      }
+      if (field === "enabled") {
+        current.operation_agent.enabled = parseYamlBool(value);
+      } else if (field in current.operation_agent) {
+        current.operation_agent[field] = value as never;
+      }
+      continue;
+    }
+    const fieldMatch = line.match(/^ {4}([a-zA-Z0-9_]+):\s*(.*)$/);
+    if (!fieldMatch) continue;
+    const field = fieldMatch[1];
+    const value = fieldMatch[2].trim().replace(/^["']|["']$/g, "");
+    inOperationAgent = field === "operation_agent";
+    if (inOperationAgent) {
+      current.operation_agent = {
+        operator_id: null,
+        project_key: null,
+        owner_department: null,
+        status: null,
+        authority: null,
+        memory_scope: null,
+        assignment_policy: null,
+        enabled: null,
+      };
+      continue;
+    }
+    if (field === "path") current.path = value;
+    if (field === "type") current.type = value;
+    if (field === "status") current.status = value;
+    if (field === "summary") current.summary = value;
+    if (field === "has_agents") current.has_agents = parseYamlBool(value);
+  }
+  if (current) projects.push(current);
+  return projects.filter((project) => project.key && project.path);
+}
+
+function inspectGit(projectPath: string): RegistryProject["git"] {
+  if (!fs.existsSync(projectPath)) {
+    return {
+      is_repo: false,
+      branch: null,
+      ahead: 0,
+      behind: 0,
+      dirty_count: 0,
+      untracked_count: 0,
+      status: "missing",
+      error: null,
+    };
+  }
+
+  try {
+    execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: projectPath, timeout: 5000, stdio: "pipe" });
+  } catch {
+    return {
+      is_repo: false,
+      branch: null,
+      ahead: 0,
+      behind: 0,
+      dirty_count: 0,
+      untracked_count: 0,
+      status: "not_git",
+      error: null,
+    };
+  }
+
+  try {
+    const output = execFileSync("git", ["status", "--short", "--branch"], {
+      cwd: projectPath,
+      timeout: 8000,
+      stdio: "pipe",
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    })
+      .toString("utf8")
+      .trim();
+    const lines = output ? output.split(/\r?\n/) : [];
+    const branchLine = lines[0] ?? "";
+    const branchMatch = branchLine.match(/^##\s+([^\s.]+|[^\s]+?)(?:\.\.\.[^\s]+)?(?:\s+\[(.*?)\])?/);
+    const divergence = branchMatch?.[2] ?? "";
+    const ahead = Number(divergence.match(/ahead\s+(\d+)/)?.[1] ?? 0);
+    const behind = Number(divergence.match(/behind\s+(\d+)/)?.[1] ?? 0);
+    const changes = lines.slice(1);
+    const untrackedCount = changes.filter((line) => line.startsWith("??")).length;
+    return {
+      is_repo: true,
+      branch: branchMatch?.[1] ?? null,
+      ahead,
+      behind,
+      dirty_count: changes.length,
+      untracked_count: untrackedCount,
+      status: changes.length > 0 ? "dirty" : "clean",
+      error: null,
+    };
+  } catch (error) {
+    return {
+      is_repo: true,
+      branch: null,
+      ahead: 0,
+      behind: 0,
+      dirty_count: 0,
+      untracked_count: 0,
+      status: "dirty",
+      error: safeError(error),
+    };
+  }
+}
+
+function readDbProjectRows(db: RuntimeContext["db"]) {
+  try {
+    return db.prepare("SELECT id, name, project_path FROM projects").all() as Array<{
+      id: string;
+      name: string;
+      project_path: string;
+    }>;
+  } catch {
+    return [];
+  }
+}
+
+function readDbProjects(db: RuntimeContext["db"]) {
+  try {
+    const rows = readDbProjectRows(db);
+    const byPath = new Map<string, { id: string; name: string }>();
+    for (const row of rows) {
+      if (!row.project_path) continue;
+      byPath.set(normalizeSlashes(path.resolve(row.project_path)), { id: row.id, name: row.name });
+    }
+    return byPath;
+  } catch {
+    return new Map<string, { id: string; name: string }>();
+  }
+}
+
+function buildDbProjectProjections(
+  dbRows: ReturnType<typeof readDbProjectRows>,
+  registryByPath: Map<string, string>,
+): DbProjectProjection[] {
+  return dbRows.map((row) => {
+    const resolved = row.project_path ? path.resolve(row.project_path) : "";
+    const normalized = normalizeSlashes(resolved);
+    const linkedRegistryKey = registryByPath.get(normalized) ?? null;
+    const classification: DbProjectProjection["classification"] = linkedRegistryKey
+      ? "linked"
+      : /[/\\]runtime[/\\]/i.test(row.project_path)
+        ? "legacy-runtime"
+        : isInside(REPO_ESTATE_ROOT, resolved)
+          ? "repo-estate-unregistered"
+          : "outside-repo-estate";
+    return {
+      id: row.id,
+      name: row.name,
+      project_path: row.project_path,
+      classification,
+      linked_registry_key: linkedRegistryKey,
+    };
+  });
+}
+
+function tableExists(db: RuntimeContext["db"], tableName: string): boolean {
+  try {
+    const row = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(tableName) as { name?: string } | undefined;
+    return row?.name === tableName;
+  } catch {
+    return false;
+  }
+}
+
+function readControlSyncStatus(db: RuntimeContext["db"]) {
+  const requiredTables = [
+    "control_plane_snapshots",
+    "control_plane_project_links",
+    "control_plane_spec_task_links",
+  ];
+  const tables = Object.fromEntries(requiredTables.map((name) => [name, tableExists(db, name)]));
+  const tablesExist = Object.values(tables).every(Boolean);
+  if (!tablesExist) {
+    return {
+      tables_exist: false,
+      tables,
+      latest_snapshot: null,
+      project_link_counts: {},
+      spec_task_count: 0,
+    };
+  }
+
+  try {
+    const latestSnapshot =
+      (db
+        .prepare(
+          `SELECT id, root_path, repo_estate_root, active_spec_id, registry_project_count, db_project_count,
+                  unlinked_registry_count, created_at, updated_at
+             FROM control_plane_snapshots
+            ORDER BY updated_at DESC
+            LIMIT 1`,
+        )
+        .get() as Record<string, unknown> | undefined) ?? null;
+    const linkRows = db
+      .prepare("SELECT link_status, COUNT(*) AS count FROM control_plane_project_links GROUP BY link_status")
+      .all() as Array<{ link_status: string; count: number }>;
+    const specTaskCountRow = db
+      .prepare("SELECT COUNT(*) AS count FROM control_plane_spec_task_links")
+      .get() as { count?: number } | undefined;
+    return {
+      tables_exist: true,
+      tables,
+      latest_snapshot: latestSnapshot,
+      project_link_counts: Object.fromEntries(linkRows.map((row) => [row.link_status, row.count])),
+      spec_task_count: Number(specTaskCountRow?.count ?? 0),
+    };
+  } catch (error) {
+    return {
+      tables_exist: true,
+      tables,
+      latest_snapshot: null,
+      project_link_counts: {},
+      spec_task_count: 0,
+      error: safeError(error),
+    };
+  }
+}
+
+function ensureControlSyncTables(db: RuntimeContext["db"]): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS control_plane_snapshots (
+      id TEXT PRIMARY KEY,
+      root_path TEXT NOT NULL,
+      repo_estate_root TEXT NOT NULL,
+      active_spec_id TEXT,
+      projects_yaml_hash TEXT,
+      active_spec_hash TEXT,
+      registry_project_count INTEGER NOT NULL DEFAULT 0,
+      db_project_count INTEGER NOT NULL DEFAULT 0,
+      unlinked_registry_count INTEGER NOT NULL DEFAULT 0,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_project_links (
+      id TEXT PRIMARY KEY,
+      snapshot_id TEXT NOT NULL,
+      registry_key TEXT NOT NULL UNIQUE,
+      registry_path TEXT NOT NULL,
+      absolute_path TEXT NOT NULL,
+      registry_type TEXT,
+      db_project_id TEXT,
+      db_project_name TEXT,
+      link_status TEXT NOT NULL CHECK (link_status IN ('linked', 'unlinked', 'missing', 'not-git', 'candidate')),
+      notes TEXT,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (snapshot_id) REFERENCES control_plane_snapshots(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_spec_task_links (
+      id TEXT PRIMARY KEY,
+      snapshot_id TEXT NOT NULL,
+      spec_id TEXT NOT NULL,
+      task_key TEXT NOT NULL,
+      requirement_refs_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT,
+      evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE (spec_id, task_key),
+      FOREIGN KEY (snapshot_id) REFERENCES control_plane_snapshots(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_control_plane_snapshots_updated
+      ON control_plane_snapshots(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_project_links_snapshot
+      ON control_plane_project_links(snapshot_id);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_project_links_status
+      ON control_plane_project_links(link_status);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_spec_task_links_snapshot
+      ON control_plane_spec_task_links(snapshot_id);
+  `);
+}
+
+function ensureControlRunnerTables(db: RuntimeContext["db"]): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS control_plane_agent_runs (
+      id TEXT PRIMARY KEY,
+      spec_id TEXT,
+      task_id TEXT,
+      department_agent TEXT NOT NULL,
+      status TEXT NOT NULL,
+      objective TEXT NOT NULL,
+      context_pack_json TEXT NOT NULL DEFAULT '{}',
+      approval_refs_json TEXT NOT NULL DEFAULT '[]',
+      hook_decisions_json TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_routing_decisions (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      spec_id TEXT,
+      selected_department TEXT NOT NULL,
+      selected_repo TEXT,
+      persona_needed INTEGER NOT NULL DEFAULT 0,
+      confidence TEXT NOT NULL DEFAULT 'medium',
+      evidence_json TEXT NOT NULL DEFAULT '[]',
+      rejection_reason TEXT,
+      approval_refs_json TEXT NOT NULL DEFAULT '[]',
+      next_safe_action TEXT,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (run_id) REFERENCES control_plane_agent_runs(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_persona_runs (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      spec_id TEXT,
+      task_id TEXT,
+      parent_agent TEXT NOT NULL,
+      persona_id TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL,
+      objective TEXT NOT NULL,
+      input_docs_json TEXT NOT NULL DEFAULT '[]',
+      allowed_paths_json TEXT NOT NULL DEFAULT '{}',
+      write_policy TEXT NOT NULL,
+      return_schema_json TEXT NOT NULL DEFAULT '[]',
+      expiry TEXT NOT NULL DEFAULT 'single-task',
+      quality_bar TEXT NOT NULL,
+      recreate_policy TEXT NOT NULL,
+      recreate_count INTEGER NOT NULL DEFAULT 0,
+      max_recreate_attempts INTEGER NOT NULL DEFAULT 2,
+      approval_ref TEXT,
+      evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (run_id) REFERENCES control_plane_agent_runs(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_persona_events (
+      id TEXT PRIMARY KEY,
+      persona_id TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      decision TEXT,
+      reason TEXT,
+      evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+      source_hash TEXT,
+      merged_into TEXT,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (persona_id) REFERENCES control_plane_persona_runs(persona_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_control_plane_agent_runs_updated
+      ON control_plane_agent_runs(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_persona_runs_run
+      ON control_plane_persona_runs(run_id);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_persona_events_run
+      ON control_plane_persona_events(run_id);
+  `);
+}
+
+function ensureProjectOperatorTables(db: RuntimeContext["db"]): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS control_plane_project_operators (
+      id TEXT PRIMARY KEY,
+      operator_id TEXT NOT NULL UNIQUE,
+      project_key TEXT NOT NULL,
+      owner_department TEXT NOT NULL,
+      status TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      authority TEXT NOT NULL,
+      memory_scope TEXT NOT NULL,
+      assignment_policy TEXT NOT NULL,
+      implementation_delegate TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      absolute_path TEXT NOT NULL,
+      db_project_id TEXT,
+      link_status TEXT,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_project_operator_runs (
+      id TEXT PRIMARY KEY,
+      operator_id TEXT NOT NULL,
+      run_id TEXT,
+      spec_id TEXT,
+      status TEXT NOT NULL,
+      objective TEXT,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_project_operator_memory_links (
+      id TEXT PRIMARY KEY,
+      operator_id TEXT NOT NULL,
+      memory_scope TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_ref TEXT NOT NULL,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_project_operator_events (
+      id TEXT PRIMARY KEY,
+      operator_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      severity TEXT,
+      message TEXT,
+      evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_control_plane_project_operators_project_key
+      ON control_plane_project_operators(project_key);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_project_operator_runs_operator
+      ON control_plane_project_operator_runs(operator_id);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_project_operator_events_operator
+      ON control_plane_project_operator_events(operator_id);
+  `);
+}
+
+function readControlRunnerStatus(db: RuntimeContext["db"]): RunnerStatus {
+  const requiredTables = [
+    "control_plane_agent_runs",
+    "control_plane_routing_decisions",
+    "control_plane_persona_runs",
+    "control_plane_persona_events",
+  ];
+  const tablesExist = requiredTables.every((name) => tableExists(db, name));
+  if (!tablesExist) {
+    return {
+      tables_exist: false,
+      latest_run: null,
+      run_counts: {},
+      persona_counts: {},
+      recent_runs: [],
+      recent_personas: [],
+      recent_events: [],
+    };
+  }
+
+  const latestRun =
+    (db
+      .prepare("SELECT * FROM control_plane_agent_runs ORDER BY updated_at DESC LIMIT 1")
+      .get() as Record<string, unknown> | undefined) ?? null;
+  const runRows = db
+    .prepare("SELECT status, COUNT(*) AS count FROM control_plane_agent_runs GROUP BY status")
+    .all() as Array<{ status: string; count: number }>;
+  const personaRows = db
+    .prepare("SELECT status, COUNT(*) AS count FROM control_plane_persona_runs GROUP BY status")
+    .all() as Array<{ status: string; count: number }>;
+  const recentRuns = db
+    .prepare("SELECT id, spec_id, task_id, department_agent, status, objective, created_at, updated_at FROM control_plane_agent_runs ORDER BY updated_at DESC LIMIT 8")
+    .all() as Record<string, unknown>[];
+  const recentPersonas = db
+    .prepare("SELECT persona_id, run_id, parent_agent, status, objective, write_policy, recreate_count, updated_at FROM control_plane_persona_runs ORDER BY updated_at DESC LIMIT 10")
+    .all() as Record<string, unknown>[];
+  const recentEvents = db
+    .prepare("SELECT id, persona_id, run_id, event_type, decision, reason, merged_into, created_at FROM control_plane_persona_events ORDER BY created_at DESC LIMIT 12")
+    .all() as Record<string, unknown>[];
+  return {
+    tables_exist: true,
+    latest_run: latestRun,
+    run_counts: Object.fromEntries(runRows.map((row) => [row.status, row.count])),
+    persona_counts: Object.fromEntries(personaRows.map((row) => [row.status, row.count])),
+    recent_runs: recentRuns,
+    recent_personas: recentPersonas,
+    recent_events: recentEvents,
+  };
+}
+
+function splitRefs(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(/[,;]/)
+    .map((item) => item.trim().replace(/^`|`$/g, ""))
+    .filter(Boolean);
+}
+
+function parseSpecTaskLinks(specId: string | null): ControlPlaneSpecTaskLink[] {
+  if (!isSafeSpecId(specId)) return [];
+  const tasksPath = path.join(CODEX_CONTROL_ROOT, "specs", specId, "tasks.md");
+  const raw = readText(tasksPath);
+  const lines = raw.split(/\r?\n/);
+  const tableLinks = lines
+    .filter((line) => /^\|\s*T-\d{3}\s*\|/.test(line))
+    .map((line) => {
+      const cells = line
+        .split("|")
+        .slice(1, -1)
+        .map((cell) => cell.trim());
+      const taskKey = cells[0] ?? "";
+      const refs = splitRefs(cells[6]);
+      const evidenceRefs = splitRefs(cells[10]);
+      const status = cells[11] ?? null;
+      return {
+        id: `control-plane:spec-task:${specId}:${taskKey}`,
+        spec_id: specId,
+        task_key: taskKey,
+        requirement_refs: refs,
+        status,
+        evidence_refs: evidenceRefs,
+        payload: {
+          wave: cells[1] ?? null,
+          role: cells[2] ?? null,
+          repo_area: cells[3] ?? null,
+          scope: cells[4] ?? null,
+          allowed_files: cells[5] ?? null,
+          dependencies: cells[7] ?? null,
+          approval: cells[8] ?? null,
+          verification: cells[9] ?? null,
+          tasks_path: tasksPath,
+        },
+      };
+    });
+  if (tableLinks.length > 0) return tableLinks;
+
+  const links: ControlPlaneSpecTaskLink[] = [];
+  let current:
+    | {
+        taskKey: string;
+        title: string | null;
+        fields: Map<string, string>;
+      }
+    | null = null;
+
+  const flush = () => {
+    if (!current) return;
+    const fields = current.fields;
+    const requirementRefs = splitRefs(
+      fields.get("requirement refs") ?? fields.get("requirements") ?? fields.get("refs") ?? fields.get("req refs"),
+    );
+    const evidenceRefs = splitRefs(fields.get("evidence") ?? fields.get("evidence refs"));
+    links.push({
+      id: `control-plane:spec-task:${specId}:${current.taskKey}`,
+      spec_id: specId,
+      task_key: current.taskKey,
+      requirement_refs: requirementRefs,
+      status: fields.get("status") ?? null,
+      evidence_refs: evidenceRefs,
+      payload: {
+        title: current.title,
+        wave: fields.get("wave") ?? null,
+        role: fields.get("role") ?? null,
+        repo_area: fields.get("repo") ?? fields.get("area") ?? null,
+        scope: fields.get("scope") ?? null,
+        allowed_files: fields.get("allowed files") ?? null,
+        dependencies: fields.get("dependencies") ?? null,
+        approval: fields.get("approval") ?? null,
+        verification: fields.get("verification") ?? null,
+        tasks_path: tasksPath,
+      },
+    });
+  };
+
+  for (const line of lines) {
+    const heading = /^##\s+(T-\d{3})(?:(?::|\s+)\s*(.+))?\s*$/.exec(line);
+    if (heading) {
+      flush();
+      current = {
+        taskKey: heading[1],
+        title: heading[2] ?? null,
+        fields: new Map(),
+      };
+      continue;
+    }
+    const field = /^-\s+([^:]+):\s*(.*)\s*$/.exec(line);
+    if (current && field) {
+      current.fields.set(field[1].trim().toLowerCase(), field[2].trim());
+    }
+  }
+  flush();
+  return links;
+}
+
+function getProjectLinkStatus(project: RegistryProject): ControlPlaneProjectLink["link_status"] {
+  return project.db_project_id
+    ? "linked"
+    : !project.exists
+      ? "missing"
+      : project.status === "candidate" || project.type === "runtime-artifact"
+        ? "candidate"
+        : !project.git.is_repo
+          ? "not-git"
+          : "unlinked";
+}
+
+function slugProjectKey(key: string): string {
+  return key
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildProjectOperators(projects: RegistryProject[]): ProjectOperatorAgent[] {
+  return projects.map((project) => {
+    const config = project.operation_agent;
+    const candidate = project.status === "candidate" || project.type === "runtime-artifact";
+    const enabled = config?.enabled ?? (!candidate && project.exists);
+    const status: ProjectOperatorAgent["status"] = !project.exists
+      ? "missing"
+      : enabled
+        ? "active"
+        : "disabled-candidate";
+    const operatorId = config?.operator_id ?? `ops-project-${slugProjectKey(project.key)}`;
+    const linkStatus = getProjectLinkStatus(project);
+    const riskFlags = [
+      !project.exists ? "missing-path" : null,
+      !project.git.is_repo && project.type !== "folder" && project.type !== "runtime-artifact" ? "not-git" : null,
+      project.git.status === "dirty" ? "dirty-worktree" : null,
+      candidate ? "candidate-disabled" : null,
+      !project.db_project_id ? "db-link-missing" : null,
+    ].filter(Boolean) as string[];
+
+    return {
+      operator_id: operatorId,
+      project_key: config?.project_key ?? project.key,
+      project_path: project.path,
+      absolute_path: project.absolute_path,
+      owner_department: "OPS",
+      enabled,
+      status,
+      authority: "operations-only",
+      memory_scope: config?.memory_scope ?? `project:${project.key}`,
+      assignment_policy:
+        config?.assignment_policy ??
+        (enabled ? "single-ops-agent-project-scope-implement-delegated" : "candidate-disabled-needs-confirmation"),
+      implementation_delegate: "IMPLEMENT",
+      can_create_read_persona: true,
+      can_create_write_persona: false,
+      can_write_repo: false,
+      db_project_id: project.db_project_id,
+      db_project_name: project.db_project_name,
+      project_type: project.type,
+      project_status: project.status,
+      has_agents: project.has_agents,
+      git_status: project.git.status,
+      git_branch: project.git.branch,
+      link_status: linkStatus,
+      memory_tabs: ["Memory", "Runs", "Handoff", "Backlog", "Risk"],
+      risk_flags: riskFlags,
+      notes: enabled
+        ? "OPS project scope; not a separate persistent project agent; repo writes route to IMPLEMENT"
+        : "disabled candidate scope; needs confirmation",
+    };
+  });
+}
+
+function buildProjectSyncLinks(projects: RegistryProject[]): ControlPlaneProjectLink[] {
+  return projects.map((project) => {
+    const linkStatus = getProjectLinkStatus(project);
+    return {
+      id: `control-plane:project:${project.key}`,
+      registry_key: project.key,
+      registry_path: project.path,
+      absolute_path: project.absolute_path,
+      registry_type: project.type,
+      db_project_id: project.db_project_id,
+      db_project_name: project.db_project_name,
+      link_status: linkStatus,
+      notes: project.status === "candidate" ? "needs-confirmation" : null,
+      payload: {
+        exists: project.exists,
+        has_agents: project.has_agents,
+        summary: project.summary,
+        registry_status: project.status,
+        git_status: project.git.status,
+        git_branch: project.git.branch,
+        dirty_count: project.git.dirty_count,
+      },
+    };
+  });
+}
+
+function buildControlSyncPreview(db: RuntimeContext["db"]): ControlPlaneSyncPreview {
+  const registry = buildRegistryProjects(db);
+  const activeSpec = buildActiveSpecStatus();
+  const rootDoc = fileStatus("AGENTS.md", path.join(CONTROL_ROOT, "AGENTS.md"));
+  const rootHash = (rootDoc.sha256 ?? crypto.createHash("sha256").update(CONTROL_ROOT).digest("hex")).slice(0, 16);
+  const projectsHash = (registry.doc.sha256 ?? "missing").slice(0, 16);
+  const activeHash = (activeSpec.doc.sha256 ?? "missing").slice(0, 16);
+  const projectLinks = buildProjectSyncLinks(registry.projects);
+  const specTaskLinks = parseSpecTaskLinks(activeSpec.id);
+  const countByStatus = (status: ControlPlaneProjectLink["link_status"]) =>
+    projectLinks.filter((link) => link.link_status === status).length;
+
+  return {
+    ok: true,
+    mode: "preview",
+    writes: false,
+    approved_for_apply: true,
+    snapshot: {
+      id: `control:${rootHash}:${projectsHash}:${activeHash}`,
+      root_path: CONTROL_ROOT,
+      repo_estate_root: REPO_ESTATE_ROOT,
+      active_spec_id: activeSpec.id,
+      projects_yaml_hash: registry.doc.sha256,
+      active_spec_hash: activeSpec.doc.sha256,
+      registry_project_count: registry.registered_count,
+      db_project_count: registry.db_project_count,
+      unlinked_registry_count: registry.unlinked_count,
+    },
+    counts: {
+      project_links: projectLinks.length,
+      linked: countByStatus("linked"),
+      unlinked: countByStatus("unlinked"),
+      missing: countByStatus("missing"),
+      not_git: countByStatus("not-git"),
+      candidate: countByStatus("candidate"),
+      spec_task_links: specTaskLinks.length,
+    },
+    project_links: projectLinks,
+    spec_task_links: specTaskLinks,
+  };
+}
+
+function applyControlSync(db: RuntimeContext["db"]) {
+  const preview = buildControlSyncPreview(db);
+  const now = Date.now();
+  const payload = JSON.stringify({
+    control_root: CONTROL_ROOT,
+    repo_estate_root: REPO_ESTATE_ROOT,
+    runtime_projection_app: RUNTIME_PROJECTION_APP,
+    counts: preview.counts,
+  });
+
+  ensureControlSyncTables(db);
+  db.exec("BEGIN");
+  try {
+    db.prepare(
+      `INSERT INTO control_plane_snapshots (
+        id, root_path, repo_estate_root, active_spec_id, projects_yaml_hash, active_spec_hash,
+        registry_project_count, db_project_count, unlinked_registry_count, payload_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        root_path = excluded.root_path,
+        repo_estate_root = excluded.repo_estate_root,
+        active_spec_id = excluded.active_spec_id,
+        projects_yaml_hash = excluded.projects_yaml_hash,
+        active_spec_hash = excluded.active_spec_hash,
+        registry_project_count = excluded.registry_project_count,
+        db_project_count = excluded.db_project_count,
+        unlinked_registry_count = excluded.unlinked_registry_count,
+        payload_json = excluded.payload_json,
+        updated_at = excluded.updated_at`,
+    ).run(
+      preview.snapshot.id,
+      preview.snapshot.root_path,
+      preview.snapshot.repo_estate_root,
+      preview.snapshot.active_spec_id,
+      preview.snapshot.projects_yaml_hash,
+      preview.snapshot.active_spec_hash,
+      preview.snapshot.registry_project_count,
+      preview.snapshot.db_project_count,
+      preview.snapshot.unlinked_registry_count,
+      payload,
+      now,
+      now,
+    );
+
+    const projectStmt = db.prepare(
+      `INSERT INTO control_plane_project_links (
+        id, snapshot_id, registry_key, registry_path, absolute_path, registry_type, db_project_id,
+        db_project_name, link_status, notes, payload_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(registry_key) DO UPDATE SET
+        id = excluded.id,
+        snapshot_id = excluded.snapshot_id,
+        registry_path = excluded.registry_path,
+        absolute_path = excluded.absolute_path,
+        registry_type = excluded.registry_type,
+        db_project_id = excluded.db_project_id,
+        db_project_name = excluded.db_project_name,
+        link_status = excluded.link_status,
+        notes = excluded.notes,
+        payload_json = excluded.payload_json,
+        updated_at = excluded.updated_at`,
+    );
+    for (const link of preview.project_links) {
+      projectStmt.run(
+        link.id,
+        preview.snapshot.id,
+        link.registry_key,
+        link.registry_path,
+        link.absolute_path,
+        link.registry_type,
+        link.db_project_id,
+        link.db_project_name,
+        link.link_status,
+        link.notes,
+        JSON.stringify(link.payload),
+        now,
+        now,
+      );
+    }
+
+    const taskStmt = db.prepare(
+      `INSERT INTO control_plane_spec_task_links (
+        id, snapshot_id, spec_id, task_key, requirement_refs_json, status, evidence_refs_json,
+        payload_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(spec_id, task_key) DO UPDATE SET
+        id = excluded.id,
+        snapshot_id = excluded.snapshot_id,
+        requirement_refs_json = excluded.requirement_refs_json,
+        status = excluded.status,
+        evidence_refs_json = excluded.evidence_refs_json,
+        payload_json = excluded.payload_json,
+        updated_at = excluded.updated_at`,
+    );
+    for (const task of preview.spec_task_links) {
+      taskStmt.run(
+        task.id,
+        preview.snapshot.id,
+        task.spec_id,
+        task.task_key,
+        JSON.stringify(task.requirement_refs),
+        task.status,
+        JSON.stringify(task.evidence_refs),
+        JSON.stringify(task.payload),
+        now,
+        now,
+      );
+    }
+
+    db.exec("COMMIT");
+  } catch (error) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      // ignore rollback errors
+    }
+    throw error;
+  }
+
+  return {
+    ok: true,
+    mode: "apply",
+    writes: true,
+    snapshot: preview.snapshot,
+    counts: preview.counts,
+    status: readControlSyncStatus(db),
+  };
+}
+
+function buildProjectOperatorSyncPreview(db: RuntimeContext["db"]) {
+  const registry = buildRegistryProjects(db);
+  const activeSpec = buildActiveSpecStatus();
+  const operators = buildProjectOperators(registry.projects);
+  const enabledCount = operators.filter((operator) => operator.enabled).length;
+  const disabledCount = operators.length - enabledCount;
+
+  return {
+    ok: true,
+    mode: "preview" as const,
+    writes: false,
+    approved_for_apply: true,
+    active_spec_id: activeSpec.id,
+    counts: {
+      operators: operators.length,
+      enabled: enabledCount,
+      disabled: disabledCount,
+      candidate_disabled: operators.filter((operator) => operator.status === "disabled-candidate").length,
+      direct_repo_write_allowed: operators.filter((operator) => operator.can_write_repo).length,
+    },
+    operators,
+    policy: {
+      owner_department: "OPS",
+      authority: "operations-only",
+      implementation_delegate: "IMPLEMENT",
+      write_target: "control_plane_* tables only",
+      domain_tables_mutated: false,
+    },
+  };
+}
+
+function applyProjectOperatorSync(db: RuntimeContext["db"]) {
+  const preview = buildProjectOperatorSyncPreview(db);
+  const now = Date.now();
+  ensureProjectOperatorTables(db);
+  db.exec("BEGIN");
+  try {
+    const operatorStmt = db.prepare(
+      `INSERT INTO control_plane_project_operators (
+        id, operator_id, project_key, owner_department, status, enabled, authority, memory_scope,
+        assignment_policy, implementation_delegate, project_path, absolute_path, db_project_id,
+        link_status, payload_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(operator_id) DO UPDATE SET
+        project_key = excluded.project_key,
+        owner_department = excluded.owner_department,
+        status = excluded.status,
+        enabled = excluded.enabled,
+        authority = excluded.authority,
+        memory_scope = excluded.memory_scope,
+        assignment_policy = excluded.assignment_policy,
+        implementation_delegate = excluded.implementation_delegate,
+        project_path = excluded.project_path,
+        absolute_path = excluded.absolute_path,
+        db_project_id = excluded.db_project_id,
+        link_status = excluded.link_status,
+        payload_json = excluded.payload_json,
+        updated_at = excluded.updated_at`,
+    );
+    const memoryStmt = db.prepare(
+      `INSERT INTO control_plane_project_operator_memory_links (
+        id, operator_id, memory_scope, source_type, source_ref, payload_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        operator_id = excluded.operator_id,
+        memory_scope = excluded.memory_scope,
+        source_type = excluded.source_type,
+        source_ref = excluded.source_ref,
+        payload_json = excluded.payload_json,
+        updated_at = excluded.updated_at`,
+    );
+
+    for (const operator of preview.operators) {
+      operatorStmt.run(
+        `control-plane:project-operator:${operator.operator_id}`,
+        operator.operator_id,
+        operator.project_key,
+        operator.owner_department,
+        operator.status,
+        operator.enabled ? 1 : 0,
+        operator.authority,
+        operator.memory_scope,
+        operator.assignment_policy,
+        operator.implementation_delegate,
+        operator.project_path,
+        operator.absolute_path,
+        operator.db_project_id,
+        operator.link_status,
+        JSON.stringify(operator),
+        now,
+        now,
+      );
+      memoryStmt.run(
+        `control-plane:project-operator-memory:${operator.operator_id}`,
+        operator.operator_id,
+        operator.memory_scope,
+        "control-plane-summary",
+        `storage/codex-control/registry/projects.yaml#${operator.project_key}`,
+        JSON.stringify({
+          project_key: operator.project_key,
+          enabled: operator.enabled,
+          exposure_policy: "summary-only-no-raw-memory-no-secrets",
+        }),
+        now,
+        now,
+      );
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      // ignore rollback errors
+    }
+    throw error;
+  }
+
+  return {
+    ok: true,
+    mode: "apply" as const,
+    writes: true,
+    active_spec_id: preview.active_spec_id,
+    counts: preview.counts,
+    operators: preview.operators,
+    policy: preview.policy,
+  };
+}
+
+function readProjectOperatorRows(db: RuntimeContext["db"], operatorId: string, table: string): Record<string, unknown>[] {
+  try {
+    ensureProjectOperatorTables(db);
+    return db
+      .prepare(`SELECT * FROM ${table} WHERE operator_id = ? ORDER BY updated_at DESC LIMIT 20`)
+      .all(operatorId) as Record<string, unknown>[];
+  } catch {
+    return [];
+  }
+}
+
+function buildProjectOperatorMemory(operator: ProjectOperatorAgent, memory: Awaited<ReturnType<typeof buildAgentMemoryStatus>>) {
+  return {
+    operator_id: operator.operator_id,
+    project_key: operator.project_key,
+    memory_scope: operator.memory_scope,
+    tabs: operator.memory_tabs,
+    sources: [
+      "projects.yaml operation_agent",
+      "active spec docs",
+      "project evidence/handoff",
+      "control_plane_project_operator_memory_links",
+      "AgentMemory status/search summaries",
+    ],
+    agentmemory: {
+      available: memory.health.available,
+      configured: memory.config.mcp_configured || memory.config.mentions_agentmemory,
+      runtime_path: memory.runtime_path,
+      install_required_approval: memory.install_required_approval,
+    },
+    exposure_policy: "safe-summary-only-no-raw-config-no-secrets-no-transcripts",
+  };
+}
+
+function buildRegistryProjects(db: RuntimeContext["db"]): {
+  doc: DocStatus;
+  projects: RegistryProject[];
+  repo_estate_root: string;
+  db_project_count: number;
+  db_projects: DbProjectProjection[];
+  registered_count: number;
+  dirty_count: number;
+  missing_count: number;
+  unlinked_count: number;
+} {
+  const registryPath = path.join(CODEX_CONTROL_ROOT, "registry", "projects.yaml");
+  let parseStatus: DocStatus["parse_status"] = "ok";
+  let raw = "";
+  let entries: ReturnType<typeof parseSimpleProjectsYaml> = [];
+  try {
+    raw = readText(registryPath);
+    entries = parseSimpleProjectsYaml(raw);
+  } catch {
+    parseStatus = "error";
+  }
+  const doc = fileStatus("projects.yaml", registryPath, parseStatus);
+  const dbRows = readDbProjectRows(db);
+  const dbProjects = readDbProjects(db);
+  const registryByAbsolutePath = new Map<string, string>();
+  const projects: RegistryProject[] = entries.map((entry): RegistryProject => {
+    const absolutePath = resolveInside(CONTROL_ROOT, entry.path);
+    if (!absolutePath) {
+      return {
+        key: entry.key,
+        path: entry.path,
+        absolute_path: "",
+        type: entry.type,
+        has_agents: entry.has_agents,
+        status: entry.status,
+        summary: entry.summary,
+        operation_agent: entry.operation_agent,
+        exists: false,
+        db_project_id: null,
+        db_project_name: null,
+        git: {
+          is_repo: false,
+          branch: null,
+          ahead: 0,
+          behind: 0,
+          dirty_count: 0,
+          untracked_count: 0,
+          status: "missing",
+          error: "path_outside_control_root",
+        },
+      };
+    }
+    registryByAbsolutePath.set(normalizeSlashes(absolutePath), entry.key);
+    const dbMatch = dbProjects.get(normalizeSlashes(absolutePath)) ?? null;
+    return {
+      key: entry.key,
+      path: entry.path,
+      absolute_path: absolutePath,
+      type: entry.type,
+      has_agents: entry.has_agents,
+      status: entry.status,
+      summary: entry.summary,
+      operation_agent: entry.operation_agent,
+      exists: fs.existsSync(absolutePath),
+      db_project_id: dbMatch?.id ?? null,
+      db_project_name: dbMatch?.name ?? null,
+      git: inspectGit(absolutePath),
+    };
+  });
+  return {
+    doc,
+    projects,
+    repo_estate_root: REPO_ESTATE_ROOT,
+    db_project_count: dbRows.length,
+    db_projects: buildDbProjectProjections(dbRows, registryByAbsolutePath),
+    registered_count: projects.length,
+    dirty_count: projects.filter((project) => project.git.status === "dirty").length,
+    missing_count: projects.filter((project) => !project.exists).length,
+    unlinked_count: projects.filter((project) => !project.db_project_id).length,
+  };
+}
+
+function listMarkdownDocs(dir: string): DocStatus[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".md"))
+    .map((entry) => fileStatus(entry.name, path.join(dir, entry.name)));
+}
+
+function buildActiveSpecStatus() {
+  const activePath = path.join(CODEX_CONTROL_ROOT, "specs", "_active.md");
+  const raw = readText(activePath);
+  const active = parseActiveSpec(raw);
+  const safeActiveId = isSafeSpecId(active.id) ? active.id : null;
+  const specDir = safeActiveId ? path.join(CODEX_CONTROL_ROOT, "specs", safeActiveId) : null;
+  const docs = specDir ? listMarkdownDocs(specDir) : [];
+  const requiredDocs = VER1_REQUIRED_SPEC_DOCS;
+  const missingDocs = requiredDocs.filter((doc) => !docs.some((item) => item.key === doc && item.exists));
+  return {
+    doc: fileStatus("_active.md", activePath, raw ? "ok" : "missing"),
+    ...active,
+    id: safeActiveId,
+    parse_error: active.id && !safeActiveId ? "invalid_spec_id" : null,
+    spec_dir: specDir,
+    docs,
+    missing_docs: missingDocs,
+  };
+}
+
+function buildDocGroupStatus(key: string, relativeDir: string, files: string[]) {
+  const dir = path.join(CODEX_CONTROL_ROOT, relativeDir);
+  const docs = files.map((name) => fileStatus(name, path.join(dir, name)));
+  return {
+    key,
+    dir,
+    exists: fs.existsSync(dir),
+    docs,
+    expected_count: files.length,
+    present_count: docs.filter((doc) => doc.exists).length,
+    missing_count: docs.filter((doc) => !doc.exists).length,
+  };
+}
+
+function parseApprovalLedger(specId: string | null) {
+  if (!isSafeSpecId(specId)) {
+    return { path: null, entries: [], approved_count: 0, required_count: 0 };
+  }
+  const approvalPath = path.join(CODEX_CONTROL_ROOT, "specs", specId, "approvals.md");
+  const raw = readText(approvalPath);
+  let headers: string[] = [];
+  const entries = raw.split(/\r?\n/).flatMap((line) => {
+    const cells = line
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cell.trim());
+    if (cells.length === 0) return [];
+    if (/approval id/i.test(cells[0]) || /approval_id/i.test(cells[0])) {
+      headers = cells.map((cell) => cell.toLowerCase().replace(/\s+/g, "_"));
+      return [];
+    }
+    if (!/^APR-[A-Z]+-\d{3}$/.test(cells[0])) return [];
+    const byHeader = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""]));
+    return [
+      {
+        id: byHeader.approval_id ?? cells[0] ?? "",
+        status: byHeader.status ?? cells[1] ?? "",
+        created_at: byHeader.created_at ?? "",
+        expires_at: byHeader.expires_at ?? "",
+        requester_role: byHeader.requester_role ?? "",
+        approver: byHeader.approver ?? "",
+        scope: byHeader.scope ?? "",
+        repo: byHeader.repo ?? "",
+        resolved_paths: byHeader.resolved_paths ?? "",
+        operation_class: byHeader.operation_class ?? "",
+        command_digest: byHeader.command_digest ?? "",
+        risk: byHeader.risk_level ?? byHeader.risk ?? "",
+        policy_decision: byHeader.policy_decision ?? "",
+        approval_text_ref: byHeader.approval_text_ref ?? "",
+        preflight_result: byHeader.preflight_result ?? "",
+        postflight_result: byHeader.postflight_result ?? "",
+        evidence: byHeader.evidence_ref ?? byHeader.evidence ?? "",
+        reason_code: byHeader.reason_code ?? "",
+      },
+    ];
+  });
+  return {
+    path: approvalPath,
+    entries,
+    approved_count: entries.filter((entry) => entry.status === "approved").length,
+    required_count: entries.filter((entry) => entry.status === "required").length,
+  };
+}
+
+function buildVer1Status(activeSpecId: string | null) {
+  const ver1SpecId = resolveVer1SpecId(activeSpecId);
+  const groups = {
+    steering: buildDocGroupStatus("steering", "steering", VER1_GROUPS.steering),
+    hooks: buildDocGroupStatus("hooks", "hooks", VER1_GROUPS.hooks),
+    orchestrator: buildDocGroupStatus("orchestrator", "orchestrator", VER1_GROUPS.orchestrator),
+    context_packs: buildDocGroupStatus("context-packs", "context-packs", VER1_GROUPS.context_packs),
+    quality: buildDocGroupStatus("quality", "quality", VER1_GROUPS.quality),
+    integrations: buildDocGroupStatus("integrations", "integrations", VER1_GROUPS.integrations),
+  };
+  const hardGateDocs = [
+    ...Object.values(groups).flatMap((group) => group.docs),
+    ...VER1_REQUIRED_SPEC_DOCS.map((name) => fileStatus(name, path.join(CODEX_CONTROL_ROOT, "specs", ver1SpecId, name))),
+  ];
+  const missingCount = hardGateDocs.filter((doc) => !doc.exists).length;
+  const hasKiroDir =
+    fs.existsSync(path.join(CONTROL_ROOT, ".kiro")) || findDirectoryByName(CODEX_CONTROL_ROOT, ".kiro").length > 0;
+  const score = Math.max(0, 100 - missingCount * 5 - (hasKiroDir ? 50 : 0) - (activeSpecId !== ver1SpecId ? 10 : 0));
+  return {
+    version: "Donggri Root Control SDD Ver.1",
+    spec_id: ver1SpecId,
+    active: activeSpecId === ver1SpecId,
+    structure_map: {
+      specs: "storage\\codex-control\\specs",
+      steering: "storage\\codex-control\\steering",
+      hooks: "storage\\codex-control\\hooks",
+      orchestration: "storage\\codex-control\\orchestrator",
+      context_injection: "storage\\codex-control\\context-packs",
+      verification: "storage\\codex-control\\quality",
+      reporting: "DonggriCompany Control Plane page",
+    },
+    groups,
+    department_agents: buildDepartmentAgentManifests(),
+    persona_subagents: {
+      model: "department-agent-controlled-disposable-personas",
+      permanent_team_hierarchy: false,
+      lifecycle_states: ["created", "running", "returned", "accepted", "rejected", "recreated", "merged", "expired", "failed"],
+      max_recreate_attempts: 2,
+      repo_write_parent: "IMPLEMENT",
+      required_fields: [
+        "persona_id",
+        "parent_agent",
+        "objective",
+        "input_docs",
+        "allowed_paths",
+        "write_policy",
+        "return_schema",
+        "expiry",
+        "quality_bar",
+        "recreate_policy",
+      ],
+    },
+    approval_ledger: parseApprovalLedger(activeSpecId),
+    hard_gates: {
+      has_kiro_dir: hasKiroDir,
+      missing_required_docs: missingCount,
+      no_kiro_runtime_dependency: true,
+      no_team_hierarchy: true,
+      future_version_planning_started: false,
+    },
+    quality_score: {
+      score,
+      target: 95,
+      pass: score >= 95 && !hasKiroDir && activeSpecId === ver1SpecId,
+    },
+    gemini_review: {
+      required: true,
+      model: "gemini-3.1-pro-preview",
+      status: "pending-local-verification",
+      command_cwd: "C:\\Users\\wlflq\\Downloads",
+    },
+  };
+}
+
+function findDirectoryByName(root: string, name: string): string[] {
+  if (!fs.existsSync(root)) return [];
+  const found: string[] = [];
+  const stack = [root];
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current) continue;
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const full = path.join(current, entry.name);
+      if (entry.name.toLowerCase() === name.toLowerCase()) found.push(full);
+      stack.push(full);
+    }
+  }
+  return found;
+}
+
+function buildHandoffStatus() {
+  const handoffDir = path.join(CODEX_CONTROL_ROOT, "handoffs", "legacy-threads");
+  const files = fs.existsSync(handoffDir)
+    ? fs
+        .readdirSync(handoffDir)
+        .filter((name) => name.toLowerCase().endsWith(".md"))
+        .map((name) => fileStatus(name, path.join(handoffDir, name)))
+    : [];
+  const foundTargets = new Set(
+    files.map((file) =>
+      file.key
+        .replace(/-\d{8}\.md$/i, "")
+        .replace(/\.md$/i, "")
+        .toLowerCase(),
+    ),
+  );
+  const missing = LEGACY_THREAD_TARGETS.filter((target) => !foundTargets.has(target));
+  return {
+    dir: handoffDir,
+    count: files.length,
+    files,
+    expected_targets: LEGACY_THREAD_TARGETS,
+    missing_targets: missing,
+  };
+}
+
+function buildMemoryDocs() {
+  const memoryDir = path.join(CODEX_CONTROL_ROOT, "memory");
+  const docs = ["policy.md", "sources.md", "retention.md", "agentmemory.md"].map((name) =>
+    fileStatus(name, path.join(memoryDir, name)),
+  );
+  return {
+    dir: memoryDir,
+    docs,
+    missing_count: docs.filter((doc) => !doc.exists).length,
+  };
+}
+
+function buildSafetyStatus() {
+  const configPath = path.join(os.homedir(), ".codex", "config.toml");
+  const setupFinalPath = path.join(CODEX_CONTROL_ROOT, "prompts", "setup-final.md");
+  const configExists = fs.existsSync(configPath);
+  const config = configExists ? readText(configPath) : "";
+  const sandboxMode = config.match(/^\s*sandbox_mode\s*=\s*["']([^"']+)["']/m)?.[1] ?? null;
+  const setupFinalPending = sandboxMode === "danger-full-access";
+  return {
+    setup_final: {
+      prompt: fileStatus("setup-final.md", setupFinalPath),
+      global_config_exists: configExists,
+      sandbox_mode: sandboxMode,
+      pending: setupFinalPending,
+      expected_sandbox_mode: "workspace-write",
+    },
+    approvals_required: [
+      "AgentMemory install/connect and hooks/MCP wiring",
+      "Docker execution or volume changes",
+      "Git commit/push/history changes",
+      "Secrets or deployment config changes",
+    ],
+    approved_operations: ["DB sync apply/link-table writes limited to control_plane_* tables"],
+    deferred_operations: ["SETUP-FINAL global Codex config permission lowering"],
+    drive_rules: {
+      d: "system-reserved",
+      f: "asset/runtime/cache/archive backing store",
+      g: "current Dev Drive for code/control docs/lightweight state",
+    },
+  };
+}
+
+async function searchOpenSourceSkillCandidates(query: string, limit: number) {
+  const safeQuery = query.trim().slice(0, 160) || "agent framework";
+  const safeLimit = Math.max(1, Math.min(12, Math.floor(limit) || 6));
+  const url = new URL("https://api.github.com/search/repositories");
+  url.searchParams.set("q", `${safeQuery} in:name,description stars:>100`);
+  url.searchParams.set("sort", "stars");
+  url.searchParams.set("order", "desc");
+  url.searchParams.set("per_page", String(safeLimit));
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "dongri-grigri-external-instructor",
+      },
+    });
+    if (!response.ok) {
+      return {
+        ok: false,
+        available: false,
+        query: safeQuery,
+        candidates: [],
+        status_code: response.status,
+        error: `github_search_failed_${response.status}`,
+      };
+    }
+    const body = (await response.json()) as {
+      items?: Array<{
+        full_name?: string;
+        html_url?: string;
+        description?: string | null;
+        stargazers_count?: number;
+        language?: string | null;
+        updated_at?: string | null;
+        topics?: string[];
+      }>;
+    };
+    return {
+      ok: true,
+      available: true,
+      query: safeQuery,
+      source: "GitHub Search API",
+      policy: "read-only candidate discovery; install and hook wiring require OPS approval",
+      candidates: (body.items ?? []).slice(0, safeLimit).map((item) => ({
+        name: item.full_name ?? "unknown",
+        url: item.html_url ?? null,
+        description: item.description ?? "",
+        stars: Number(item.stargazers_count ?? 0),
+        language: item.language ?? null,
+        updated_at: item.updated_at ?? null,
+        topics: item.topics ?? [],
+        suggested_scope: "external-instructor-skill-candidate",
+      })),
+      status_code: response.status,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      available: false,
+      query: safeQuery,
+      candidates: [],
+      status_code: null,
+      error: safeError(error),
+    };
+  }
+}
+
+function parseTomlSections(raw: string, sectionPrefix: string): Array<{ key: string; enabled: boolean | null }> {
+  const lines = raw.split(/\r?\n/);
+  const out: Array<{ key: string; enabled: boolean | null }> = [];
+  let current: { key: string; enabled: boolean | null } | null = null;
+  const header = new RegExp(`^\\[${sectionPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.([^\\]]+)\\]\\s*$`);
+  for (const line of lines) {
+    const match = line.match(header);
+    if (match) {
+      if (current) out.push(current);
+      current = { key: match[1].trim().replace(/^["']|["']$/g, ""), enabled: null };
+      continue;
+    }
+    if (/^\[/.test(line)) {
+      if (current) out.push(current);
+      current = null;
+      continue;
+    }
+    if (!current) continue;
+    const enabledMatch = line.match(/^\s*enabled\s*=\s*(true|false)\s*$/i);
+    if (enabledMatch) current.enabled = enabledMatch[1].toLowerCase() === "true";
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+function parseTrustedProjectSections(raw: string): Array<{ path: string; classification: string; trust_level: string | null }> {
+  const lines = raw.split(/\r?\n/);
+  const out: Array<{ path: string; classification: string; trust_level: string | null }> = [];
+  let current: { path: string; classification: string; trust_level: string | null } | null = null;
+  for (const line of lines) {
+    const match = line.match(/^\[projects\.([^\]]+)\]\s*$/);
+    if (match) {
+      if (current) out.push(current);
+      const projectPath = match[1].trim().replace(/^["']|["']$/g, "");
+      const resolved = path.resolve(projectPath);
+      const classification =
+        normalizeSlashes(resolved) === normalizeSlashes(CONTROL_ROOT)
+          ? "control-root"
+          : normalizeSlashes(resolved) === normalizeSlashes(REPO_ESTATE_ROOT)
+            ? "repo-estate-root"
+            : isInside(REPO_ESTATE_ROOT, resolved)
+              ? "legacy-repo-alias"
+              : "legacy-or-external";
+      current = { path: projectPath, classification, trust_level: null };
+      continue;
+    }
+    if (/^\[/.test(line)) {
+      if (current) out.push(current);
+      current = null;
+      continue;
+    }
+    if (!current) continue;
+    const trustMatch = line.match(/^\s*trust_level\s*=\s*["']([^"']+)["']\s*$/);
+    if (trustMatch) current.trust_level = trustMatch[1];
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+function countEntries(dir: string, predicate: (entry: fs.Dirent) => boolean): number {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true }).filter(predicate).length;
+  } catch {
+    return 0;
+  }
+}
+
+function listFiles(dir: string, extension: string): string[] {
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(extension))
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+const DEPARTMENT_AGENT_FILES: Array<{
+  id: DepartmentAgentManifest["id"];
+  file: string;
+  role: string;
+  write_policy: string;
+  can_spawn_write_persona: boolean;
+}> = [
+  { id: "CONTROL", file: "control.toml", role: "root state, routing, approvals, quality gate, run creation", write_policy: "control-plane-docs", can_spawn_write_persona: true },
+  { id: "SPEC", file: "spec_writer.toml", role: "requirements, design, tasks, repo-map, approvals", write_policy: "spec-docs", can_spawn_write_persona: true },
+  { id: "EXPLORE", file: "explorer.toml", role: "read-only repo and document investigation", write_policy: "read-only", can_spawn_write_persona: false },
+  { id: "IMPLEMENT", file: "implementer.toml", role: "approved task implementation", write_policy: "approved-task-files", can_spawn_write_persona: true },
+  { id: "REVIEW", file: "reviewer.toml", role: "read-only findings-first review", write_policy: "read-only", can_spawn_write_persona: false },
+  { id: "OPS", file: "ops.toml", role: "runtime, config, DB sync, Gemini, AgentMemory, safety gates", write_policy: "evidence-and-approved-ops", can_spawn_write_persona: true },
+];
+
+const DONGRI_GRIGRI_DEPARTMENTS: Record<
+  DepartmentAgentManifest["id"],
+  { label: string; short_label: string; accent: string; memory_focus: string }
+> = {
+  CONTROL: {
+    label: "Control",
+    short_label: "CTL",
+    accent: "#38bdf8",
+    memory_focus: "root state, routing, approvals, quality gate",
+  },
+  SPEC: {
+    label: "Spec",
+    short_label: "SPC",
+    accent: "#a78bfa",
+    memory_focus: "requirements, design, tasks, repo-map",
+  },
+  EXPLORE: {
+    label: "Explore",
+    short_label: "EXP",
+    accent: "#22c55e",
+    memory_focus: "read-only investigation and repo discovery",
+  },
+  IMPLEMENT: {
+    label: "Implement",
+    short_label: "IMP",
+    accent: "#f59e0b",
+    memory_focus: "approved task implementation and evidence",
+  },
+  REVIEW: {
+    label: "Review",
+    short_label: "REV",
+    accent: "#fb7185",
+    memory_focus: "findings-first review and regression risk",
+  },
+  OPS: {
+    label: "Ops",
+    short_label: "OPS",
+    accent: "#14b8a6",
+    memory_focus: "runtime, Git, Docker, AgentMemory, Gemini, DB sync",
+  },
+};
+
+const DONGRI_MASTER_DEPARTMENTS: MasterDepartmentAgent[] = [
+  {
+    id: "strategy",
+    label: "기획 마스터",
+    short_label: "기획",
+    accent: "#2563eb",
+    mission: "목표, 요구사항, 우선순위, SDD 산출물을 정리합니다.",
+    memory_scope: "department:strategy",
+    memory_focus: "요구사항, 의사결정, 승인 체크리스트, 프로젝트 방향",
+    internal_roles: ["CONTROL", "SPEC"],
+    can_create_read_persona: true,
+    can_create_write_persona: true,
+    write_boundary: "Control Plane spec 문서와 승인 장부만 갱신",
+  },
+  {
+    id: "engineering",
+    label: "개발 마스터",
+    short_label: "개발",
+    accent: "#16a34a",
+    mission: "구조 분석, 구현 계획, 승인된 코드 변경을 담당합니다.",
+    memory_scope: "department:engineering",
+    memory_focus: "코드 구조, 구현 근거, allowed files, 빌드/테스트 결과",
+    internal_roles: ["EXPLORE", "IMPLEMENT"],
+    can_create_read_persona: true,
+    can_create_write_persona: true,
+    write_boundary: "승인된 T-NNN과 repo-map allowed files 안에서만 구현",
+  },
+  {
+    id: "design",
+    label: "디자인 마스터",
+    short_label: "디자인",
+    accent: "#d946ef",
+    mission: "UI/UX, 화면 밀도, 테마, 한글 표현 품질을 책임집니다.",
+    memory_scope: "department:design",
+    memory_focus: "화면 개선, 한글 문구, 접근성, 주간/야간 테마 증거",
+    internal_roles: ["EXPLORE", "IMPLEMENT", "REVIEW"],
+    can_create_read_persona: true,
+    can_create_write_persona: true,
+    write_boundary: "승인된 UI task와 디자인 관련 allowed files 안에서만 변경",
+  },
+  {
+    id: "quality",
+    label: "품질 마스터",
+    short_label: "품질",
+    accent: "#f97316",
+    mission: "검토, 테스트, 회귀 위험, 릴리즈 게이트를 관리합니다.",
+    memory_scope: "department:quality",
+    memory_focus: "테스트 결과, findings, hard gate, 남은 리스크",
+    internal_roles: ["REVIEW"],
+    can_create_read_persona: true,
+    can_create_write_persona: false,
+    write_boundary: "read-only 검토, evidence/handoff 요약은 부모 에이전트가 병합",
+  },
+  {
+    id: "operations",
+    label: "운영 마스터",
+    short_label: "운영",
+    accent: "#0f766e",
+    mission: "프로젝트 scope, 런타임, DB sync, AgentMemory, Gemini 검토를 운영합니다.",
+    memory_scope: "department:operations",
+    memory_focus: "프로젝트 scope, runtime 상태, DB sync, AgentMemory, 승인 이력",
+    internal_roles: ["CONTROL", "OPS"],
+    can_create_read_persona: true,
+    can_create_write_persona: true,
+    write_boundary: "control_plane_* append/upsert와 승인된 OPS 작업만 수행",
+  },
+  {
+    id: "instructor",
+    label: "외부강사 마스터",
+    short_label: "강사",
+    accent: "#7c3aed",
+    mission: "오픈소스 트렌드와 높은 star 도구를 조사해 Skill 후보로 제안합니다.",
+    memory_scope: "department:instructor",
+    memory_focus: "GitHub 트렌드, high-star repository, Skill 후보, 적용 근거",
+    internal_roles: ["EXPLORE", "OPS"],
+    can_create_read_persona: true,
+    can_create_write_persona: false,
+    write_boundary: "read-only 조사와 후보 제안만 수행, 설치/후킹은 OPS 승인 필요",
+    external_sources: ["GitHub Search API", "rohitg00/agentmemory", "공식 문서와 릴리즈 노트"],
+  },
+];
+
+const TEXT_INTEGRITY_FILES = [
+  "src/components/Sidebar.tsx",
+  "src/components/ControlPlanePage.tsx",
+  "src/components/ControlPlaneSummaryCard.tsx",
+  "src/components/Dashboard.tsx",
+  "src/components/TaskBoard.tsx",
+  "src/components/SkillsLibrary.tsx",
+  "src/components/settings/SettingsTabNav.tsx",
+  "src/components/settings/PixelAgentModeSettingsTab.tsx",
+  "src/components/settings/settings-copy.ts",
+  "src/app/AppMainLayout.tsx",
+  "src/app/useAppLabels.ts",
+  "src/types/index.ts",
+];
+
+const MOJIBAKE_PATTERNS: Array<{ id: string; regex: RegExp }> = [
+  { id: "replacement-character", regex: /\uFFFD/g },
+  { id: "question-hangul-fragment", regex: /\?[ㄱ-ㅎㅏ-ㅣ가-힣]/g },
+  { id: "known-broken-syllable-fragment", regex: /[留湲誇媛濡遺筌怨願塋鼇]/g },
+  { id: "legacy-garbled-token", regex: /\?쒕|\?댁|\?ㅽ|\?낅|쒕|꾨|덈/g },
+];
+
+function extractTomlString(raw: string, key: string): string | null {
+  const single = raw.match(new RegExp(`^\\s*${key}\\s*=\\s*"([^"]*)"\\s*$`, "m"));
+  if (single) return single[1];
+  const multi = raw.match(new RegExp(`^\\s*${key}\\s*=\\s*"""([\\s\\S]*?)"""`, "m"));
+  return multi?.[1]?.trim() ?? null;
+}
+
+function buildDepartmentAgentManifests(): DepartmentAgentManifest[] {
+  const rootAgentsDir = path.join(CONTROL_ROOT, ".codex", "agents");
+  return DEPARTMENT_AGENT_FILES.map((item) => {
+    const filePath = path.join(rootAgentsDir, item.file);
+    const raw = readText(filePath);
+    return {
+      id: item.id,
+      file: item.file,
+      name: extractTomlString(raw, "name") ?? item.id.toLowerCase(),
+      description: extractTomlString(raw, "description") ?? item.role,
+      sandbox_mode: extractTomlString(raw, "sandbox_mode") ?? "unknown",
+      role: item.role,
+      write_policy: item.write_policy,
+      can_spawn_read_persona: true,
+      can_spawn_write_persona: item.can_spawn_write_persona,
+      canonical: fs.existsSync(filePath),
+    };
+  });
+}
+
+function asDepartmentId(value: unknown): DepartmentAgentManifest["id"] | null {
+  const upper = String(value ?? "").toUpperCase();
+  return DEPARTMENT_AGENT_FILES.some((item) => item.id === upper) ? (upper as DepartmentAgentManifest["id"]) : null;
+}
+
+function parseMaybeJsonArray(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatEventTime(value: unknown): string | null {
+  const numeric = Number(value ?? 0);
+  return Number.isFinite(numeric) && numeric > 0 ? new Date(numeric).toISOString() : null;
+}
+
+function buildDepartmentMemorySummaries(
+  memory: Awaited<ReturnType<typeof buildAgentMemoryStatus>>,
+  memoryDocs: ReturnType<typeof buildMemoryDocs>,
+  runner: RunnerStatus,
+) {
+  const recentByDepartment = new Map<DepartmentAgentManifest["id"], number>();
+  for (const run of runner.recent_runs) {
+    const department = asDepartmentId(run.department_agent);
+    const updatedAt = Number(run.updated_at ?? 0);
+    if (department && updatedAt > (recentByDepartment.get(department) ?? 0)) recentByDepartment.set(department, updatedAt);
+  }
+  for (const persona of runner.recent_personas) {
+    const department = asDepartmentId(persona.parent_agent);
+    const updatedAt = Number(persona.updated_at ?? 0);
+    if (department && updatedAt > (recentByDepartment.get(department) ?? 0)) recentByDepartment.set(department, updatedAt);
+  }
+
+  return buildDepartmentAgentManifests().map((agent) => {
+    const meta = DONGRI_GRIGRI_DEPARTMENTS[agent.id];
+    const lastActivity = recentByDepartment.get(agent.id) ?? null;
+    return {
+      department: agent.id,
+      label: meta.label,
+      short_label: meta.short_label,
+      accent: meta.accent,
+      memory_scope: `department:${agent.id.toLowerCase()}`,
+      memory_focus: meta.memory_focus,
+      sources: [
+        "root AGENTS.md",
+        "projects.yaml",
+        "active spec docs",
+        "runner/persona events",
+        "AgentMemory status/search summaries",
+      ],
+      docs_present: memoryDocs.docs.filter((doc) => doc.exists).length,
+      docs_missing: memoryDocs.missing_count,
+      agentmemory_available: memory.health.available,
+      agentmemory_configured: memory.config.mcp_configured || memory.config.mentions_agentmemory,
+      last_activity_at: lastActivity ? new Date(lastActivity).toISOString() : null,
+      exposure_policy: "safe-summary-only-no-raw-config-no-secrets-no-transcripts",
+    };
+  });
+}
+
+function buildMasterDepartmentManifests() {
+  return DONGRI_MASTER_DEPARTMENTS.map((department) => ({
+    ...department,
+    subagent_policy: "single-task disposable helpers; parent master accepts, rejects, recreates, and merges results",
+  }));
+}
+
+function buildMasterDepartmentMemorySummaries(
+  memory: Awaited<ReturnType<typeof buildAgentMemoryStatus>>,
+  memoryDocs: ReturnType<typeof buildMemoryDocs>,
+  runner: RunnerStatus,
+) {
+  const recentByRole = new Map<DepartmentAgentManifest["id"], number>();
+  for (const run of runner.recent_runs) {
+    const role = asDepartmentId(run.department_agent);
+    const updatedAt = Number(run.updated_at ?? 0);
+    if (role && updatedAt > (recentByRole.get(role) ?? 0)) recentByRole.set(role, updatedAt);
+  }
+  for (const persona of runner.recent_personas) {
+    const role = asDepartmentId(persona.parent_agent);
+    const updatedAt = Number(persona.updated_at ?? 0);
+    if (role && updatedAt > (recentByRole.get(role) ?? 0)) recentByRole.set(role, updatedAt);
+  }
+
+  return DONGRI_MASTER_DEPARTMENTS.map((department) => {
+    const latest = department.internal_roles.reduce((max, role) => Math.max(max, recentByRole.get(role) ?? 0), 0);
+    return {
+      department: department.id,
+      label: department.label,
+      short_label: department.short_label,
+      accent: department.accent,
+      memory_scope: department.memory_scope,
+      memory_focus: department.memory_focus,
+      sources: [
+        "root AGENTS.md",
+        "projects.yaml",
+        "active spec docs",
+        "department/persona run events",
+        "AgentMemory safe search/context summaries",
+      ],
+      docs_present: memoryDocs.docs.filter((doc) => doc.exists).length,
+      docs_missing: memoryDocs.missing_count,
+      agentmemory_available: memory.health.available,
+      agentmemory_configured: memory.config.mcp_configured || memory.config.mentions_agentmemory,
+      last_activity_at: latest > 0 ? new Date(latest).toISOString() : null,
+      exposure_policy: "safe-summary-only-no-raw-config-no-secrets-no-transcripts",
+    };
+  });
+}
+
+function buildDepartmentChatRooms(runner: RunnerStatus) {
+  const rooms = buildDepartmentAgentManifests().map((agent) => ({
+    department: agent.id,
+    label: DONGRI_GRIGRI_DEPARTMENTS[agent.id].label,
+    accent: DONGRI_GRIGRI_DEPARTMENTS[agent.id].accent,
+    messages: [] as Array<{
+      id: string;
+      at: string | null;
+      kind: "run" | "persona" | "event";
+      title: string;
+      detail: string;
+      evidence_refs: string[];
+      source: string;
+    }>,
+  }));
+  const byDepartment = new Map(rooms.map((room) => [room.department, room]));
+
+  for (const run of runner.recent_runs) {
+    const department = asDepartmentId(run.department_agent);
+    if (!department) continue;
+    byDepartment.get(department)?.messages.push({
+      id: String(run.id ?? `run-${run.updated_at ?? ""}`),
+      at: formatEventTime(run.updated_at),
+      kind: "run",
+      title: `Run ${String(run.status ?? "unknown")}`,
+      detail: String(run.objective ?? "Control Plane run"),
+      evidence_refs: [],
+      source: "control_plane_agent_runs",
+    });
+  }
+
+  for (const persona of runner.recent_personas) {
+    const department = asDepartmentId(persona.parent_agent);
+    if (!department) continue;
+    byDepartment.get(department)?.messages.push({
+      id: String(persona.persona_id ?? `persona-${persona.updated_at ?? ""}`),
+      at: formatEventTime(persona.updated_at),
+      kind: "persona",
+      title: `Persona ${String(persona.status ?? "unknown")}`,
+      detail: String(persona.objective ?? "persona run"),
+      evidence_refs: [],
+      source: "control_plane_persona_runs",
+    });
+  }
+
+  for (const event of runner.recent_events) {
+    const persona = runner.recent_personas.find((item) => item.persona_id === event.persona_id);
+    const department = asDepartmentId(persona?.parent_agent);
+    if (!department) continue;
+    byDepartment.get(department)?.messages.push({
+      id: String(event.id ?? `event-${event.created_at ?? ""}`),
+      at: formatEventTime(event.created_at),
+      kind: "event",
+      title: `Decision ${String(event.decision ?? event.event_type ?? "recorded")}`,
+      detail: String(event.reason ?? event.merged_into ?? "persona lifecycle event"),
+      evidence_refs: parseMaybeJsonArray(event.evidence_refs_json),
+      source: "control_plane_persona_events",
+    });
+  }
+
+  return rooms.map((room) => ({
+    ...room,
+    messages: room.messages
+      .sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")))
+      .slice(0, 8),
+  }));
+}
+
+function roleToMasterDepartment(role: DepartmentAgentManifest["id"]): string {
+  if (role === "SPEC") return "strategy";
+  if (role === "IMPLEMENT") return "engineering";
+  if (role === "REVIEW") return "quality";
+  if (role === "OPS" || role === "CONTROL") return "operations";
+  return "instructor";
+}
+
+function buildMasterDepartmentChatRooms(runner: RunnerStatus) {
+  const rooms = DONGRI_MASTER_DEPARTMENTS.map((department) => ({
+    department: department.id,
+    label: department.label,
+    accent: department.accent,
+    messages: [] as Array<{
+      id: string;
+      at: string | null;
+      kind: "run" | "persona" | "event";
+      title: string;
+      detail: string;
+      evidence_refs: string[];
+      source: string;
+    }>,
+  }));
+  const byDepartment = new Map(rooms.map((room) => [room.department, room]));
+
+  for (const run of runner.recent_runs) {
+    const role = asDepartmentId(run.department_agent);
+    if (!role) continue;
+    byDepartment.get(roleToMasterDepartment(role))?.messages.push({
+      id: String(run.id ?? `run-${run.updated_at ?? ""}`),
+      at: formatEventTime(run.updated_at),
+      kind: "run",
+      title: `Run ${String(run.status ?? "unknown")}`,
+      detail: String(run.objective ?? "Control Plane run"),
+      evidence_refs: [],
+      source: "control_plane_agent_runs",
+    });
+  }
+
+  for (const persona of runner.recent_personas) {
+    const role = asDepartmentId(persona.parent_agent);
+    if (!role) continue;
+    byDepartment.get(roleToMasterDepartment(role))?.messages.push({
+      id: String(persona.persona_id ?? `persona-${persona.updated_at ?? ""}`),
+      at: formatEventTime(persona.updated_at),
+      kind: "persona",
+      title: `Persona ${String(persona.status ?? "unknown")}`,
+      detail: String(persona.objective ?? "persona run"),
+      evidence_refs: [],
+      source: "control_plane_persona_runs",
+    });
+  }
+
+  for (const event of runner.recent_events) {
+    const persona = runner.recent_personas.find((item) => item.persona_id === event.persona_id);
+    const role = asDepartmentId(persona?.parent_agent);
+    if (!role) continue;
+    byDepartment.get(roleToMasterDepartment(role))?.messages.push({
+      id: String(event.id ?? `event-${event.created_at ?? ""}`),
+      at: formatEventTime(event.created_at),
+      kind: "event",
+      title: `Decision ${String(event.decision ?? event.event_type ?? "recorded")}`,
+      detail: String(event.reason ?? event.merged_into ?? "persona lifecycle event"),
+      evidence_refs: parseMaybeJsonArray(event.evidence_refs_json),
+      source: "control_plane_persona_events",
+    });
+  }
+
+  return rooms.map((room) => ({
+    ...room,
+    messages: room.messages
+      .sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")))
+      .slice(0, 8),
+  }));
+}
+
+function buildKoreanTextIntegrityStatus() {
+  const files = TEXT_INTEGRITY_FILES.map((relativePath) => {
+    const filePath = path.join(RUNTIME_PROJECTION_APP, relativePath);
+    const raw = readText(filePath);
+    const matches = MOJIBAKE_PATTERNS.flatMap((pattern) =>
+      [...raw.matchAll(pattern.regex)].slice(0, 20).map((match) => ({
+        pattern: pattern.id,
+        sample: match[0],
+        index: match.index ?? 0,
+      })),
+    );
+    return {
+      path: filePath,
+      relative_path: relativePath,
+      exists: fs.existsSync(filePath),
+      match_count: matches.length,
+      matches: matches.slice(0, 12),
+    };
+  });
+  const totalMatches = files.reduce((sum, file) => sum + file.match_count, 0);
+  return {
+    pass: totalMatches === 0,
+    checked_files: files.length,
+    total_matches: totalMatches,
+    files,
+    policy: "visible Korean UI text must be readable; console mojibake is not accepted as proof",
+  };
+}
+
+function parseJsonArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  if (typeof value === "string") {
+    return value
+      .split(/[,;]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function parseAllowedPaths(value: unknown): { read: string[]; write: string[] } {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const item = value as Record<string, unknown>;
+    return {
+      read: parseJsonArray(item.read),
+      write: parseJsonArray(item.write),
+    };
+  }
+  return { read: [], write: [] };
+}
+
+function hasApprovedApproval(
+  specId: string | null,
+  pattern: RegExp,
+  predicate: (entry: Record<string, string>) => boolean = () => true,
+): boolean {
+  if (!isSafeSpecId(specId)) return false;
+  const now = Date.now();
+  return parseApprovalLedger(specId).entries.some((entry) => {
+    const expiresAt = entry.expires_at ? Date.parse(entry.expires_at) : Number.NaN;
+    const notExpired = Number.isNaN(expiresAt) || expiresAt >= now;
+    return entry.status === "approved" && pattern.test(entry.id) && notExpired && predicate(entry as Record<string, string>);
+  });
+}
+
+function hasApprovedDbSync(specId: string | null): boolean {
+  return hasApprovedApproval(
+    specId,
+    /^APR-DB-\d+$/,
+    (entry) =>
+      entry.operation_class === "db-write-non-destructive" &&
+      entry.policy_decision === "allow" &&
+      entry.scope.includes("control_plane") &&
+      entry.resolved_paths.includes("control_plane_") &&
+      !/delete|drop|truncate|reset/i.test(entry.command_digest ?? ""),
+  );
+}
+
+function hasApprovedAgentMemoryRemember(specId: string | null): boolean {
+  return hasApprovedApproval(
+    specId,
+    /^APR-MEM-\d+$/,
+    (entry) =>
+      entry.operation_class === "agentmemory-remember-non-destructive" &&
+      entry.policy_decision === "allow" &&
+      !/delete|forget|bulk|import|hook|mcp/i.test(entry.command_digest ?? ""),
+  );
+}
+
+function isAllowedControlPlaneMutationOrigin(req: { get?: (name: string) => string | undefined }): boolean {
+  const origin = req.get?.("origin");
+  if (!origin) return true;
+  return /^https?:\/\/(127\.0\.0\.1|localhost):8800$/i.test(origin);
+}
+
+function buildContextPackPayload(specId: string | null, department: string, objective: string) {
+  return {
+    root: CONTROL_ROOT,
+    control_root: CODEX_CONTROL_ROOT,
+    active_spec: specId,
+    department,
+    objective,
+    read_order: [
+      "AGENTS.md",
+      "storage/codex-control/registry/projects.yaml",
+      "storage/codex-control/specs/_active.md",
+      "storage/codex-control/steering/agent-model.md",
+      "active spec docs",
+    ],
+    denied_operations: ["git-history-or-remote", "docker-mutation", "secret-change", "deploy", "destructive-db"],
+  };
+}
+
+function createControlRun(db: RuntimeContext["db"], body: Record<string, unknown>) {
+  ensureControlRunnerTables(db);
+  const activeSpec = buildActiveSpecStatus();
+  const department = String(body.department_agent ?? body.department ?? "CONTROL").toUpperCase();
+  const allowedDepartments = new Set(DEPARTMENT_AGENT_FILES.map((item) => item.id));
+  if (!allowedDepartments.has(department as DepartmentAgentManifest["id"])) {
+    return { ok: false, status: 400, error: "invalid_department_agent" };
+  }
+  const objective = typeof body.objective === "string" && body.objective.trim() ? body.objective.trim() : "Control Plane run";
+  const taskId = typeof body.task_id === "string" ? body.task_id.trim() : "";
+  const selectedRepo = typeof body.selected_repo === "string" ? body.selected_repo.trim() : "";
+  const runId = `cprun-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const routingId = `cproute-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const now = Date.now();
+  const approvalRefs = parseJsonArray(body.approval_refs);
+  const contextPack = buildContextPackPayload(activeSpec.id, department, objective);
+  const hookDecisions = [
+    {
+      hook: "pre-task",
+      decision: "allow",
+      reason_code: "CONTROL_RUN_PREPARED",
+    },
+  ];
+  db.prepare(
+    `INSERT INTO control_plane_agent_runs (
+      id, spec_id, task_id, department_agent, status, objective, context_pack_json,
+      approval_refs_json, hook_decisions_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    runId,
+    activeSpec.id,
+    taskId || null,
+    department,
+    "prepared",
+    objective,
+    JSON.stringify(contextPack),
+    JSON.stringify(approvalRefs),
+    JSON.stringify(hookDecisions),
+    now,
+    now,
+  );
+  db.prepare(
+    `INSERT INTO control_plane_routing_decisions (
+      id, run_id, spec_id, selected_department, selected_repo, persona_needed, confidence,
+      evidence_json, rejection_reason, approval_refs_json, next_safe_action, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    routingId,
+    runId,
+    activeSpec.id,
+    department,
+    selectedRepo || null,
+    body.persona_needed === false ? 0 : 1,
+    typeof body.confidence === "string" ? body.confidence : "medium",
+    JSON.stringify(parseJsonArray(body.evidence)),
+    typeof body.rejection_reason === "string" ? body.rejection_reason : null,
+    JSON.stringify(approvalRefs),
+    "Start run or create persona after approval gates are checked.",
+    now,
+  );
+  return {
+    ok: true,
+    status: 200,
+    run: db.prepare("SELECT * FROM control_plane_agent_runs WHERE id = ?").get(runId),
+    routing: db.prepare("SELECT * FROM control_plane_routing_decisions WHERE id = ?").get(routingId),
+  };
+}
+
+function readControlRun(db: RuntimeContext["db"], runId: string) {
+  if (!tableExists(db, "control_plane_agent_runs")) return null;
+  const run = db.prepare("SELECT * FROM control_plane_agent_runs WHERE id = ?").get(runId) as Record<string, unknown> | undefined;
+  if (!run) return null;
+  const routing = db
+    .prepare("SELECT * FROM control_plane_routing_decisions WHERE run_id = ? ORDER BY created_at DESC")
+    .all(runId) as Record<string, unknown>[];
+  const personas = db
+    .prepare("SELECT * FROM control_plane_persona_runs WHERE run_id = ? ORDER BY updated_at DESC")
+    .all(runId) as Record<string, unknown>[];
+  const events = db
+    .prepare("SELECT * FROM control_plane_persona_events WHERE run_id = ? ORDER BY created_at DESC")
+    .all(runId) as Record<string, unknown>[];
+  return { run, routing, personas, events };
+}
+
+function startControlRun(db: RuntimeContext["db"], runId: string) {
+  ensureControlRunnerTables(db);
+  const existing = readControlRun(db, runId);
+  if (!existing) return { ok: false, status: 404, error: "run_not_found" };
+  const now = Date.now();
+  db.prepare("UPDATE control_plane_agent_runs SET status = ?, updated_at = ? WHERE id = ?").run("running", now, runId);
+  return { ok: true, status: 200, ...readControlRun(db, runId) };
+}
+
+function validatePersonaInput(run: Record<string, unknown>, body: Record<string, unknown>) {
+  const parentAgent = String(body.parent_agent ?? run.department_agent ?? "").toUpperCase();
+  const allowedDepartments = new Set(DEPARTMENT_AGENT_FILES.map((item) => item.id));
+  if (!allowedDepartments.has(parentAgent as DepartmentAgentManifest["id"])) return "invalid_parent_agent";
+  const writePolicy = String(body.write_policy ?? "read-only");
+  const allowedWritePolicies = new Set(["read-only", "control-plane-docs", "evidence-handoff", "approved-task-files", "approved-db-sync"]);
+  if (!allowedWritePolicies.has(writePolicy)) return "invalid_write_policy";
+  const allowedPaths = parseAllowedPaths(body.allowed_paths);
+  if (writePolicy === "approved-task-files" && parentAgent !== "IMPLEMENT") return "repo_write_requires_implement_parent";
+  if (writePolicy === "approved-task-files" && allowedPaths.write.length === 0) return "repo_write_requires_allowed_paths";
+  if (writePolicy !== "read-only" && !String(body.approval_ref ?? "").trim()) return "write_persona_requires_approval_ref";
+  if (!String(body.objective ?? "").trim()) return "objective_required";
+  return null;
+}
+
+function createPersonaRun(db: RuntimeContext["db"], runId: string, body: Record<string, unknown>) {
+  ensureControlRunnerTables(db);
+  const existing = readControlRun(db, runId);
+  if (!existing) return { ok: false, status: 404, error: "run_not_found" };
+  const validationError = validatePersonaInput(existing.run, body);
+  if (validationError) return { ok: false, status: 400, error: validationError };
+  const now = Date.now();
+  const parentAgent = String(body.parent_agent ?? existing.run.department_agent).toUpperCase();
+  const personaId =
+    typeof body.persona_id === "string" && body.persona_id.trim()
+      ? body.persona_id.trim()
+      : `${parentAgent.toLowerCase()}-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
+  const objective = String(body.objective).trim();
+  const allowedPaths = parseAllowedPaths(body.allowed_paths);
+  const writePolicy = String(body.write_policy ?? "read-only");
+  const specId = typeof existing.run.spec_id === "string" ? existing.run.spec_id : null;
+  const taskId =
+    typeof body.task_id === "string"
+      ? body.task_id
+      : typeof existing.run.task_id === "string"
+        ? existing.run.task_id
+        : null;
+  db.prepare(
+    `INSERT INTO control_plane_persona_runs (
+      id, run_id, spec_id, task_id, parent_agent, persona_id, status, objective, input_docs_json,
+      allowed_paths_json, write_policy, return_schema_json, expiry, quality_bar, recreate_policy,
+      max_recreate_attempts, approval_ref, evidence_refs_json, payload_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    `cppersona-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
+    runId,
+    specId,
+    taskId,
+    parentAgent,
+    personaId,
+    "created",
+    objective,
+    JSON.stringify(parseJsonArray(body.input_docs)),
+    JSON.stringify(allowedPaths),
+    writePolicy,
+    JSON.stringify(parseJsonArray(body.return_schema)),
+    typeof body.expiry === "string" ? body.expiry : "single-task",
+    typeof body.quality_bar === "string" ? body.quality_bar : "Evidence-backed result with concrete paths.",
+    typeof body.recreate_policy === "string" ? body.recreate_policy : "recreate if missing evidence or unclear conclusion",
+    2,
+    typeof body.approval_ref === "string" ? body.approval_ref : null,
+    JSON.stringify(parseJsonArray(body.evidence_refs)),
+    JSON.stringify({ source: "control-plane-runner" }),
+    now,
+    now,
+  );
+  db.prepare(
+    `INSERT INTO control_plane_persona_events (
+      id, persona_id, run_id, event_type, decision, reason, evidence_refs_json, source_hash, merged_into, payload_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    `cpevent-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
+    personaId,
+    runId,
+    "created",
+    "created",
+    "persona created by parent department agent",
+    JSON.stringify([]),
+    null,
+    null,
+    JSON.stringify({ write_policy: writePolicy }),
+    now,
+  );
+  return { ok: true, status: 200, ...readControlRun(db, runId) };
+}
+
+function decidePersona(db: RuntimeContext["db"], personaId: string, body: Record<string, unknown>) {
+  ensureControlRunnerTables(db);
+  const persona = db.prepare("SELECT * FROM control_plane_persona_runs WHERE persona_id = ?").get(personaId) as
+    | Record<string, unknown>
+    | undefined;
+  if (!persona) return { ok: false, status: 404, error: "persona_not_found" };
+  const decision = String(body.decision ?? "").toLowerCase();
+  const allowed = new Set(["accept", "reject", "recreate", "merge"]);
+  if (!allowed.has(decision)) return { ok: false, status: 400, error: "invalid_decision" };
+  const recreateCount = Number(persona.recreate_count ?? 0);
+  const maxRecreate = Number(persona.max_recreate_attempts ?? 2);
+  if (decision === "recreate" && recreateCount >= maxRecreate) {
+    return { ok: false, status: 400, error: "max_recreate_attempts_reached" };
+  }
+  const statusMap: Record<string, string> = {
+    accept: "accepted",
+    reject: "rejected",
+    recreate: "recreated",
+    merge: "merged",
+  };
+  const now = Date.now();
+  const runId = typeof persona.run_id === "string" ? persona.run_id : String(persona.run_id ?? "");
+  db.prepare("UPDATE control_plane_persona_runs SET status = ?, recreate_count = ?, evidence_refs_json = ?, updated_at = ? WHERE persona_id = ?").run(
+    statusMap[decision],
+    decision === "recreate" ? recreateCount + 1 : recreateCount,
+    JSON.stringify(parseJsonArray(body.evidence_refs)),
+    now,
+    personaId,
+  );
+  const sourceHash = crypto.createHash("sha256").update(JSON.stringify(body.payload ?? {})).digest("hex");
+  db.prepare(
+    `INSERT INTO control_plane_persona_events (
+      id, persona_id, run_id, event_type, decision, reason, evidence_refs_json, source_hash, merged_into, payload_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    `cpevent-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
+    personaId,
+    runId,
+    "decision",
+    decision,
+    typeof body.reason === "string" ? body.reason : null,
+    JSON.stringify(parseJsonArray(body.evidence_refs)),
+    sourceHash,
+    typeof body.merged_into === "string" ? body.merged_into : null,
+    JSON.stringify(body.payload ?? {}),
+    now,
+  );
+  return { ok: true, status: 200, ...readControlRun(db, runId) };
+}
+
+function evaluateControlHook(body: Record<string, unknown>) {
+  const hook = typeof body.hook === "string" ? body.hook : "";
+  const task = typeof body.task === "string" ? body.task : "";
+  const operation = String(body.operation ?? body.command ?? "").toLowerCase();
+  const hookPath = hook ? path.join(CODEX_CONTROL_ROOT, "hooks", `${hook}.yaml`) : "";
+  if (!hook || !/^[a-z0-9-]+$/.test(hook) || !fs.existsSync(hookPath) || !isInside(path.join(CODEX_CONTROL_ROOT, "hooks"), hookPath)) {
+    return { ok: false, decision: "block", reason_code: "E_HOOK_MISSING", hook, task };
+  }
+  if (!task && (hook === "pre-task" || hook === "pre-implement")) {
+    return { ok: true, decision: "block", reason_code: "E_TASK_ID_MISSING", hook, task };
+  }
+  if (hook === "pre-git") {
+    const riskyGit = /\b(commit|push|pull|fetch|reset|rebase|merge|stash|clean|checkout|restore|switch)\b/.test(operation) ||
+      /\bbranch\s+-d\b/.test(operation) ||
+      /\btag\s+-d\b/.test(operation);
+    return {
+      ok: true,
+      decision: riskyGit ? "approval-required" : "allow",
+      reason_code: riskyGit ? "E_GIT_APPROVAL_REQUIRED" : "GIT_READ_ONLY_OR_SAFE",
+      operation_class: riskyGit ? "git-history-or-worktree-change" : "git-read-only",
+      required_approval: riskyGit ? "APR-GIT-001" : null,
+      hook,
+      task,
+    };
+  }
+  if (hook === "pre-docker") {
+    const composeConfigOnly = /\bdocker\s+compose\s+config\b/.test(operation);
+    const riskyDocker = /\b(up|down|prune|volume|rm|restart|build|push|pull)\b/.test(operation) && !composeConfigOnly;
+    return {
+      ok: true,
+      decision: riskyDocker ? "approval-required" : "allow",
+      reason_code: riskyDocker ? "E_DOCKER_APPROVAL_REQUIRED" : "DOCKER_CONFIG_OR_READ_ONLY",
+      operation_class: riskyDocker ? "docker-runtime-change" : "docker-read-only",
+      required_approval: riskyDocker ? "APR-DOCKER-001" : null,
+      hook,
+      task,
+    };
+  }
+  if (hook === "pre-secret") {
+    const touchesSecret = /(^|[/\\])\.env(\.|$)|token|secret|password|private[_-]?key|api[_-]?key/i.test(operation);
+    return {
+      ok: true,
+      decision: touchesSecret ? "approval-required" : "allow",
+      reason_code: touchesSecret ? "E_SECRET_APPROVAL_REQUIRED" : "NO_SECRET_PATH_DETECTED",
+      operation_class: touchesSecret ? "secret-change" : "non-secret",
+      required_approval: touchesSecret ? "APR-SEC-001" : null,
+      hook,
+      task,
+    };
+  }
+  if (hook === "pre-implement") {
+    return {
+      ok: true,
+      decision: String(body.approval_ref ?? "").trim() ? "allow" : "approval-required",
+      reason_code: String(body.approval_ref ?? "").trim() ? "IMPLEMENT_APPROVAL_PRESENT" : "E_IMPLEMENT_APPROVAL_REQUIRED",
+      operation_class: "repo-write",
+      required_approval: String(body.approval_ref ?? "").trim() ? null : "APR-AGENT-001",
+      hook,
+      task,
+    };
+  }
+  return {
+    ok: true,
+    decision: task ? "approval-required" : "block",
+    reason_code: task ? "E_APPROVAL_REQUIRED_FOR_WRITE" : "E_TASK_ID_MISSING",
+    hook,
+    task,
+  };
+}
+
+function buildCodexAssetsStatus() {
+  const configPath = path.join(os.homedir(), ".codex", "config.toml");
+  const config = fs.existsSync(configPath) ? readText(configPath) : "";
+  const rootAgentsDir = path.join(CONTROL_ROOT, ".codex", "agents");
+  const rootSkillsDir = path.join(CONTROL_ROOT, ".agents", "skills");
+  const globalSkillsDir = path.join(os.homedir(), ".codex", "skills");
+  const automationsDir = path.join(os.homedir(), ".codex", "automations");
+  return {
+    config: {
+      doc: fileStatus("config.toml", configPath, config ? "ok" : "missing"),
+      sandbox_mode: config.match(/^\s*sandbox_mode\s*=\s*["']([^"']+)["']/m)?.[1] ?? null,
+      approval_policy: config.match(/^\s*approval_policy\s*=\s*["']([^"']+)["']/m)?.[1] ?? null,
+      approvals_reviewer: config.match(/^\s*approvals_reviewer\s*=\s*["']([^"']+)["']/m)?.[1] ?? null,
+    },
+    trusted_paths: parseTrustedProjectSections(config),
+    plugins: parseTomlSections(config, "plugins"),
+    marketplaces: parseTomlSections(config, "marketplaces"),
+    mcp_servers: parseTomlSections(config, "mcp_servers"),
+    skills: {
+      root_dir: rootSkillsDir,
+      root_count: countEntries(rootSkillsDir, (entry) => entry.isDirectory()),
+      global_dir: globalSkillsDir,
+      global_count: countEntries(globalSkillsDir, (entry) => entry.isDirectory()),
+      sdd_runner_exists: fs.existsSync(path.join(rootSkillsDir, "sdd-runner", "SKILL.md")),
+    },
+    agents: {
+      root_dir: rootAgentsDir,
+      files: listFiles(rootAgentsDir, ".toml"),
+    },
+    automations: {
+      dir: automationsDir,
+      count: countEntries(automationsDir, (entry) => entry.isDirectory() || entry.isFile()),
+    },
+    exposure_policy: "summary-only-no-raw-config-no-secrets-no-transcripts",
+  };
+}
+
+async function fetchJson(
+  url: string,
+  init?: RequestInit,
+): Promise<{ ok: boolean; status: number | null; body: unknown; error: string | null }> {
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(1200),
+    });
+    const body = await response.json().catch(() => null);
+    return { ok: response.ok, status: response.status, body, error: null };
+  } catch (error) {
+    return { ok: false, status: null, body: null, error: safeError(error) };
+  }
+}
+
+function summarizeAgentMemoryPayload(payload: unknown) {
+  const pickArray = (): { container: string; items: unknown[] } | null => {
+    if (Array.isArray(payload)) return { container: "root", items: payload };
+    if (!payload || typeof payload !== "object") return null;
+    const objectPayload = payload as Record<string, unknown>;
+    for (const key of ["results", "matches", "memories", "items"]) {
+      const value = objectPayload[key];
+      if (Array.isArray(value)) return { container: key, items: value };
+    }
+    return null;
+  };
+
+  const arrayPayload = pickArray();
+  if (!arrayPayload) {
+    return {
+      raw_payload_omitted: true,
+      result_count: null,
+      result_container: null,
+      sample_keys: [],
+    };
+  }
+
+  const sampleKeys = new Set<string>();
+  for (const item of arrayPayload.items.slice(0, 3)) {
+    if (!item || typeof item !== "object") continue;
+    for (const key of Object.keys(item as Record<string, unknown>).slice(0, 8)) {
+      sampleKeys.add(key);
+    }
+  }
+
+  return {
+    raw_payload_omitted: true,
+    result_count: arrayPayload.items.length,
+    result_container: arrayPayload.container,
+    sample_keys: [...sampleKeys],
+  };
+}
+
+function summarizeAgentMemoryResponse(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return {
+      raw_payload_omitted: true,
+      top_level_keys: [],
+      collection_summary: summarizeAgentMemoryPayload(payload),
+    };
+  }
+  const objectPayload = payload as Record<string, unknown>;
+  return {
+    raw_payload_omitted: true,
+    top_level_keys: Object.keys(objectPayload).slice(0, 20),
+    collection_summary: summarizeAgentMemoryPayload(payload),
+  };
+}
+
+function buildAgentMemoryCapabilities() {
+  return {
+    package: AGENTMEMORY_PACKAGE,
+    observed_version: AGENTMEMORY_OBSERVED_VERSION,
+    node_engine: ">=20.0.0",
+    source_url: AGENTMEMORY_SOURCE_URL,
+    source_files: {
+      package_json: "https://raw.githubusercontent.com/rohitg00/agentmemory/main/package.json",
+      rest_api: "https://raw.githubusercontent.com/rohitg00/agentmemory/main/src/triggers/api.ts",
+      mcp_tools: "https://raw.githubusercontent.com/rohitg00/agentmemory/main/src/mcp/tools-registry.ts",
+    },
+    rest_groups: AGENTMEMORY_REST_GROUPS,
+    observed_rest_path_count: 124,
+    mcp_tools: {
+      representative: AGENTMEMORY_MCP_TOOLS,
+      observed_memory_tool_count: 53,
+      wiring_status: "approval-required",
+    },
+    scope_model: ["root", "department:<ID>", "project:<project-key>", "run:<run-id>", "persona:<persona-id>", "spec:<spec-id>", "evidence:<EV-id>"],
+    safety: {
+      source_of_truth: "storage/codex-control",
+      search_context: "summary-only-read",
+      remember: "confirm-and-APR-MEM-001-required",
+      delete_forget_import_hooks_mcp: "blocked-until-explicit-approval",
+      raw_transcripts: "not-exposed",
+      secrets: "not-exposed",
+    },
+  };
+}
+
+function readAgentMemoryConfigStatus() {
+  const configPath = path.join(os.homedir(), ".codex", "config.toml");
+  const config = fs.existsSync(configPath) ? readText(configPath) : "";
+  return {
+    codex_config_exists: fs.existsSync(configPath),
+    mentions_agentmemory: /agentmemory/i.test(config),
+    hooks_feature_enabled: /^\s*hooks\s*=\s*true\s*$/m.test(config),
+    plugin_hooks_enabled: /^\s*plugin_hooks\s*=\s*true\s*$/m.test(config),
+    mcp_configured: /\[mcp_servers\.[^\]]*agentmemory[^\]]*\]/i.test(config),
+    mcp_mention_only: /agentmemory/i.test(config) && !/\[mcp_servers\.[^\]]*agentmemory[^\]]*\]/i.test(config),
+  };
+}
+
+async function buildAgentMemoryStatus() {
+  const health = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/health`);
+  const livez = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/livez`);
+  const configFlags = health.ok ? await fetchJson(`${AGENTMEMORY_URL}/agentmemory/config/flags`) : { ok: false, status: null, body: null, error: "health_unavailable" };
+  const serverAvailable = health.ok || livez.ok;
+  const config = readAgentMemoryConfigStatus();
+  return {
+    runtime_path: AGENTMEMORY_RUNTIME_PATH,
+    server_url: AGENTMEMORY_URL,
+    viewer_url: AGENTMEMORY_VIEWER_URL,
+    health: {
+      available: health.ok,
+      status_code: health.status,
+      error: health.error,
+    },
+    livez: {
+      available: livez.ok,
+      status_code: livez.status,
+      error: livez.error,
+    },
+    config_flags: {
+      available: configFlags.ok,
+      status_code: configFlags.status,
+      summary: summarizeAgentMemoryResponse(configFlags.body),
+      error: configFlags.error,
+    },
+    config,
+    capabilities: buildAgentMemoryCapabilities(),
+    readiness: {
+      server_available: serverAvailable,
+      viewer_url: AGENTMEMORY_VIEWER_URL,
+      smart_search_available: serverAvailable,
+      context_available: serverAvailable,
+      remember_available: serverAvailable,
+      remember_requires_confirmation: true,
+      remember_requires_approval: "APR-MEM-001",
+      mcp_wiring_enabled: false,
+      hook_auto_capture_enabled: false,
+      delete_forget_enabled: false,
+    },
+    integration_mode: "functional-safe-proxy",
+    install_required_approval: !serverAvailable,
+    safe_proxy_available: serverAvailable,
+  };
+}
+
+export async function buildControlPlaneState(db: RuntimeContext["db"]) {
+  const markerPath = path.join(CONTROL_ROOT, "CODEX_CONTROL_ROOT");
+  const rootDocPath = path.join(CONTROL_ROOT, "AGENTS.md");
+  const registry = buildRegistryProjects(db);
+  const activeSpec = buildActiveSpecStatus();
+  const handoffs = buildHandoffStatus();
+  const memoryDocs = buildMemoryDocs();
+  const memory = await buildAgentMemoryStatus();
+  const runner = readControlRunnerStatus(db);
+  const projectOperators = buildProjectOperators(registry.projects);
+  const internalDepartmentMemory = buildDepartmentMemorySummaries(memory, memoryDocs, runner);
+  const internalDepartmentChats = buildDepartmentChatRooms(runner);
+  const masterDepartments = buildMasterDepartmentManifests();
+  const departmentMemory = buildMasterDepartmentMemorySummaries(memory, memoryDocs, runner);
+  const departmentChats = buildMasterDepartmentChatRooms(runner);
+  const textIntegrity = buildKoreanTextIntegrityStatus();
+
+  return {
+    ok: true,
+    generated_at: new Date().toISOString(),
+    root: {
+      path: CONTROL_ROOT,
+      repo_estate_root: {
+        path: REPO_ESTATE_ROOT,
+        exists: fs.existsSync(REPO_ESTATE_ROOT),
+        inside_root: isInside(CONTROL_ROOT, REPO_ESTATE_ROOT),
+      },
+      runtime_projection_app: {
+        path: RUNTIME_PROJECTION_APP,
+        exists: fs.existsSync(RUNTIME_PROJECTION_APP),
+        inside_repo_estate: isInside(REPO_ESTATE_ROOT, RUNTIME_PROJECTION_APP),
+      },
+      marker: fileStatus("CODEX_CONTROL_ROOT", markerPath),
+      agents_doc: fileStatus("AGENTS.md", rootDocPath),
+      control_root: {
+        path: CODEX_CONTROL_ROOT,
+        exists: fs.existsSync(CODEX_CONTROL_ROOT),
+        inside_root: isInside(CONTROL_ROOT, CODEX_CONTROL_ROOT),
+      },
+    },
+    active_spec: activeSpec,
+    ver1: buildVer1Status(activeSpec.id),
+    registry,
+    handoffs,
+    memory_docs: memoryDocs,
+    memory,
+    codex_assets: buildCodexAssetsStatus(),
+    sync: readControlSyncStatus(db),
+    runner,
+    dongri_grigri: {
+      brand: "Dongri-grigri",
+      reset_mode: "soft-reset-legacy-preserved",
+      primary_model: "business-master-departments-plus-disposable-subagents",
+      legacy_staff_visibility: "hidden-by-default",
+      master_departments: masterDepartments,
+      project_operators: projectOperators,
+      project_scopes: projectOperators,
+      department_memory: departmentMemory,
+      department_chats: departmentChats,
+      internal_sdd_roles: {
+        roles: buildDepartmentAgentManifests(),
+        memory: internalDepartmentMemory,
+        chats: internalDepartmentChats,
+        display_policy: "internal-only; not shown as business departments",
+      },
+      korean_text_integrity: textIntegrity,
+    },
+    safety: buildSafetyStatus(),
+  };
+}
+
+function normalizedMemoryString(value: unknown, maxLength: number): string {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+function normalizedMemoryScope(value: unknown): string {
+  const scope = normalizedMemoryString(value, 120);
+  if (!scope) return "root";
+  return /^[A-Za-z0-9:_./-]+$/.test(scope) ? scope : "root";
+}
+
+function buildAgentMemoryMetadata(body: Record<string, unknown>) {
+  return {
+    source: "dongri-grigri-control-hub",
+    root: CONTROL_ROOT,
+    control_root: CODEX_CONTROL_ROOT,
+    scope: normalizedMemoryScope(body.scope),
+    department: normalizedMemoryString(body.department, 40) || null,
+    project_key: normalizedMemoryString(body.project_key, 80) || null,
+    spec_id: normalizedMemoryString(body.spec_id, 120) || buildActiveSpecStatus().id,
+    source_ref: normalizedMemoryString(body.source_ref, 160) || null,
+    evidence_refs: parseJsonArray(body.evidence_refs).slice(0, 10),
+  };
+}
+
+export async function searchAgentMemory(query: string, scope = "root") {
+  const normalized = query.trim().slice(0, 300);
+  if (!normalized) {
+    return { ok: false, available: false, results: [], error: "query_required" };
+  }
+  const result = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/smart-search`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query: normalized, scope: normalizedMemoryScope(scope), limit: 10 }),
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      available: false,
+      results: [],
+      status_code: result.status,
+      error: result.error ?? "agentmemory_unavailable",
+    };
+  }
+  return {
+    ok: true,
+    available: true,
+    query: normalized,
+    scope: normalizedMemoryScope(scope),
+    results: summarizeAgentMemoryPayload(result.body),
+    status_code: result.status,
+    error: null,
+  };
+}
+
+export async function getAgentMemoryContext(body: Record<string, unknown>) {
+  const query = normalizedMemoryString(body.query, 300);
+  if (!query) {
+    return { ok: false, available: false, context: null, error: "query_required" };
+  }
+  const scope = normalizedMemoryScope(body.scope);
+  const result = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/context`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      query,
+      scope,
+      limit: 8,
+      metadata: buildAgentMemoryMetadata(body),
+    }),
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      available: false,
+      context: null,
+      status_code: result.status,
+      error: result.error ?? "agentmemory_unavailable",
+    };
+  }
+  return {
+    ok: true,
+    available: true,
+    query,
+    scope,
+    context: summarizeAgentMemoryResponse(result.body),
+    status_code: result.status,
+    error: null,
+  };
+}
+
+export async function rememberAgentMemory(body: Record<string, unknown>) {
+  const text = normalizedMemoryString(body.text ?? body.content, 4000);
+  if (!text) {
+    return { ok: false, available: false, captured: false, error: "text_required" };
+  }
+  if (body.confirm !== "remember-to-agentmemory") {
+    return { ok: false, available: false, captured: false, error: "confirmation_required" };
+  }
+  const activeSpec = buildActiveSpecStatus();
+  if (!hasApprovedAgentMemoryRemember(activeSpec.id)) {
+    return { ok: false, available: false, captured: false, error: "approval_required", required_approval: "APR-MEM-001" };
+  }
+  const metadata = buildAgentMemoryMetadata(body);
+  const result = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/remember`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      content: text,
+      text,
+      kind: "dongri-control-plane-memory",
+      scope: metadata.scope,
+      tags: ["dongri-grigri", "control-plane", metadata.scope],
+      metadata,
+    }),
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      available: false,
+      captured: false,
+      status_code: result.status,
+      error: result.error ?? "agentmemory_unavailable",
+    };
+  }
+  return {
+    ok: true,
+    available: true,
+    captured: true,
+    scope: metadata.scope,
+    result: summarizeAgentMemoryResponse(result.body),
+    status_code: result.status,
+    error: null,
+  };
+}
+
+export function registerControlPlaneRoutes(
+  ctx: Pick<RuntimeContext, "app" | "db"> | { app: Express; db: RuntimeContext["db"] },
+): void {
+  const { app, db } = ctx;
+
+  app.get("/api/control-plane/state", async (_req, res) => {
+    try {
+      res.json(await buildControlPlaneState(db));
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "control_plane_state_failed", message: safeError(error) });
+    }
+  });
+
+  app.get("/api/control-plane/memory/status", async (_req, res) => {
+    try {
+      res.json({ ok: true, memory: await buildAgentMemoryStatus(), memory_docs: buildMemoryDocs() });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "control_plane_memory_status_failed", message: safeError(error) });
+    }
+  });
+
+  app.get("/api/control-plane/memory/search", async (req, res) => {
+    const query = typeof req.query.query === "string" ? req.query.query : "";
+    const scope = typeof req.query.scope === "string" ? req.query.scope : "root";
+    const result = await searchAgentMemory(query, scope);
+    res.status(result.ok || result.error === "query_required" ? 200 : 503).json(result);
+  });
+
+  app.get("/api/control-plane/v1/state", async (_req, res) => {
+    try {
+      res.json(await buildControlPlaneState(db));
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "control_plane_v1_state_failed", message: safeError(error) });
+    }
+  });
+
+  app.get("/api/control-plane/v1/steering", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, steering: state.ver1.groups.steering });
+  });
+
+  app.get("/api/control-plane/v1/specs/active", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, active_spec: state.active_spec, ver1: { active: state.ver1.active, spec_id: state.ver1.spec_id } });
+  });
+
+  app.get("/api/control-plane/v1/hooks/status", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, hooks: state.ver1.groups.hooks, hard_gates: state.ver1.hard_gates });
+  });
+
+  app.get("/api/control-plane/v1/orchestrator/state", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({
+      ok: true,
+      orchestrator: state.ver1.groups.orchestrator,
+      persona_subagents: state.ver1.persona_subagents,
+      runner: state.runner,
+    });
+  });
+
+  app.get("/api/control-plane/v1/agents/departments", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({
+      ok: true,
+      master_departments: state.dongri_grigri.master_departments,
+      internal_sdd_roles: state.dongri_grigri.internal_sdd_roles.roles,
+    });
+  });
+
+  app.get("/api/control-plane/v1/departments/memory", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, department_memory: state.dongri_grigri.department_memory, memory: state.memory });
+  });
+
+  app.get("/api/control-plane/v1/memory/agentmemory/capabilities", async (_req, res) => {
+    res.json({ ok: true, capabilities: buildAgentMemoryCapabilities() });
+  });
+
+  app.get("/api/control-plane/v1/memory/agentmemory/status", async (_req, res) => {
+    try {
+      res.json({ ok: true, memory: await buildAgentMemoryStatus(), memory_docs: buildMemoryDocs() });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "agentmemory_status_failed", message: safeError(error) });
+    }
+  });
+
+  app.get("/api/control-plane/v1/departments/chats", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, rooms: state.dongri_grigri.department_chats });
+  });
+
+  app.get("/api/control-plane/v1/instructor/open-source/candidates", async (req, res) => {
+    const query = typeof req.query.query === "string" ? req.query.query : "agent framework";
+    const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : 6;
+    res.json(await searchOpenSourceSkillCandidates(query, limit));
+  });
+
+  app.get("/api/control-plane/v1/text-integrity", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, korean_text_integrity: state.dongri_grigri.korean_text_integrity });
+  });
+
+  app.get("/api/control-plane/v1/context-pack", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({
+      ok: true,
+      context_pack: state.ver1.groups.context_packs,
+      active_spec: state.active_spec.id,
+      open_approvals: state.ver1.approval_ledger,
+      next_safe_action: state.active_spec.next_recommended_action,
+    });
+  });
+
+  app.get("/api/control-plane/v1/quality/score", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, quality: state.ver1.quality_score, hard_gates: state.ver1.hard_gates });
+  });
+
+  app.get("/api/control-plane/v1/gemini-review/latest", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, gemini_review: state.ver1.gemini_review });
+  });
+
+  app.get("/api/control-plane/v1/codex/assets", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, codex_assets: state.codex_assets });
+  });
+
+  app.get("/api/control-plane/v1/project-operators", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    const operators = state.dongri_grigri.project_operators;
+    res.json({
+      ok: true,
+      project_operators: operators,
+      counts: {
+        total: operators.length,
+        enabled: operators.filter((operator) => operator.enabled).length,
+        disabled: operators.filter((operator) => !operator.enabled).length,
+      },
+      policy: {
+        owner_department: "OPS",
+        authority: "operations-only",
+        implementation_delegate: "IMPLEMENT",
+      },
+    });
+  });
+
+  app.get("/api/control-plane/v1/project-operators/:operatorId", async (req, res) => {
+    const operatorId = typeof req.params?.operatorId === "string" ? req.params.operatorId : "";
+    const state = await buildControlPlaneState(db);
+    const operator = state.dongri_grigri.project_operators.find((item) => item.operator_id === operatorId);
+    if (!operator) {
+      res.status(404).json({ ok: false, error: "project_operator_not_found" });
+      return;
+    }
+    res.json({ ok: true, project_operator: operator });
+  });
+
+  app.get("/api/control-plane/v1/project-operators/:operatorId/runs", async (req, res) => {
+    const operatorId = typeof req.params?.operatorId === "string" ? req.params.operatorId : "";
+    const state = await buildControlPlaneState(db);
+    const operator = state.dongri_grigri.project_operators.find((item) => item.operator_id === operatorId);
+    if (!operator) {
+      res.status(404).json({ ok: false, error: "project_operator_not_found" });
+      return;
+    }
+    const runs = readProjectOperatorRows(db, operatorId, "control_plane_project_operator_runs");
+    res.json({ ok: true, operator_id: operatorId, runs });
+  });
+
+  app.get("/api/control-plane/v1/project-operators/:operatorId/memory", async (req, res) => {
+    const operatorId = typeof req.params?.operatorId === "string" ? req.params.operatorId : "";
+    const state = await buildControlPlaneState(db);
+    const operator = state.dongri_grigri.project_operators.find((item) => item.operator_id === operatorId);
+    if (!operator) {
+      res.status(404).json({ ok: false, error: "project_operator_not_found" });
+      return;
+    }
+    const links = readProjectOperatorRows(db, operatorId, "control_plane_project_operator_memory_links");
+    res.json({ ok: true, memory: buildProjectOperatorMemory(operator, state.memory), links });
+  });
+
+  app.get("/api/control-plane/v1/sync/status", async (_req, res) => {
+    res.json({ ok: true, sync: readControlSyncStatus(db) });
+  });
+
+  app.get("/api/control-plane/v1/runs/status", async (_req, res) => {
+    res.json({ ok: true, runner: readControlRunnerStatus(db) });
+  });
+
+  app.get("/api/control-plane/v1/runs/:runId", async (req, res) => {
+    const runId = typeof req.params?.runId === "string" ? req.params.runId : "";
+    const result = readControlRun(db, runId);
+    if (!result) {
+      res.status(404).json({ ok: false, error: "run_not_found" });
+      return;
+    }
+    res.json({ ok: true, ...result });
+  });
+
+  const post = (app as unknown as {
+    post?: (path: string, handler: (req: any, res: any) => unknown) => unknown;
+  }).post;
+  if (typeof post === "function") {
+    post.call(app, "/api/control-plane/v1/memory/agentmemory/search", async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const result = await searchAgentMemory(
+        normalizedMemoryString(body.query, 300),
+        normalizedMemoryScope(body.scope),
+      );
+      res.status(result.ok || result.error === "query_required" ? 200 : 503).json(result);
+    });
+
+    post.call(app, "/api/control-plane/v1/memory/agentmemory/context", async (req, res) => {
+      const result = await getAgentMemoryContext((req.body ?? {}) as Record<string, unknown>);
+      res.status(result.ok || result.error === "query_required" ? 200 : 503).json(result);
+    });
+
+    post.call(app, "/api/control-plane/v1/memory/agentmemory/remember", async (req, res) => {
+      if (!isAllowedControlPlaneMutationOrigin(req)) {
+        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+        return;
+      }
+      const result = await rememberAgentMemory((req.body ?? {}) as Record<string, unknown>);
+      if (result.error === "text_required" || result.error === "confirmation_required") {
+        res.status(400).json(result);
+        return;
+      }
+      if (result.error === "approval_required") {
+        res.status(403).json(result);
+        return;
+      }
+      res.status(result.ok ? 200 : 503).json(result);
+    });
+
+    post.call(app, "/api/control-plane/v1/sync/preview", async (_req, res) => {
+      try {
+        res.json(buildControlSyncPreview(db));
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "control_plane_sync_preview_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/sync/apply", async (req, res) => {
+      if (!isAllowedControlPlaneMutationOrigin(req)) {
+        res.status(403).json({
+          ok: false,
+          error: "control_plane_origin_blocked",
+          message: "Control Plane writes are only allowed from the local Dongri-grigri app origin.",
+        });
+        return;
+      }
+      if (req.body?.confirm !== "apply-control-plane-sync") {
+        res.status(400).json({
+          ok: false,
+          error: "confirmation_required",
+          message: "confirm must be apply-control-plane-sync",
+        });
+        return;
+      }
+      const activeSpec = buildActiveSpecStatus();
+      if (!hasApprovedDbSync(activeSpec.id)) {
+        res.status(403).json({
+          ok: false,
+          error: "approval_required",
+          message: "A non-expired APR-DB approval for non-destructive control_plane_* writes is required before DB sync apply.",
+        });
+        return;
+      }
+      try {
+        res.json(applyControlSync(db));
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "control_plane_sync_apply_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/project-operators/sync/preview", async (_req, res) => {
+      try {
+        res.json(buildProjectOperatorSyncPreview(db));
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "project_operator_sync_preview_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/project-operators/sync/apply", async (req, res) => {
+      if (!isAllowedControlPlaneMutationOrigin(req)) {
+        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+        return;
+      }
+      if (req.body?.confirm !== "apply-project-operators-sync") {
+        res.status(400).json({
+          ok: false,
+          error: "confirmation_required",
+          message: "confirm must be apply-project-operators-sync",
+        });
+        return;
+      }
+      const activeSpec = buildActiveSpecStatus();
+      if (!hasApprovedDbSync(activeSpec.id)) {
+        res.status(403).json({
+          ok: false,
+          error: "approval_required",
+          message: "A non-expired APR-DB approval for non-destructive control_plane_* writes is required before project operator sync apply.",
+        });
+        return;
+      }
+      try {
+        res.json(applyProjectOperatorSync(db));
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "project_operator_sync_apply_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/runs/prepare", async (req, res) => {
+      if (!isAllowedControlPlaneMutationOrigin(req)) {
+        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+        return;
+      }
+      try {
+        const result = createControlRun(db, req.body ?? {});
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "control_plane_run_prepare_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/runs/:runId/start", async (req, res) => {
+      if (!isAllowedControlPlaneMutationOrigin(req)) {
+        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+        return;
+      }
+      try {
+        const runId = typeof req.params?.runId === "string" ? req.params.runId : "";
+        const result = startControlRun(db, runId);
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "control_plane_run_start_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/runs/:runId/personas", async (req, res) => {
+      if (!isAllowedControlPlaneMutationOrigin(req)) {
+        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+        return;
+      }
+      try {
+        const runId = typeof req.params?.runId === "string" ? req.params.runId : "";
+        const result = createPersonaRun(db, runId, req.body ?? {});
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "control_plane_persona_create_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/personas/:personaId/decision", async (req, res) => {
+      if (!isAllowedControlPlaneMutationOrigin(req)) {
+        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+        return;
+      }
+      try {
+        const personaId = typeof req.params?.personaId === "string" ? req.params.personaId : "";
+        const result = decidePersona(db, personaId, req.body ?? {});
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "control_plane_persona_decision_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/hooks/evaluate", async (req, res) => {
+      res.json(evaluateControlHook(req.body ?? {}));
+    });
+  }
+}

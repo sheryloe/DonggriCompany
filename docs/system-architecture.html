@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DonggriCompany System Architecture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f7f8f5;
+        --ink: #202521;
+        --muted: #657067;
+        --line: #d9ded7;
+        --panel: #ffffff;
+        --soft: #eef3ee;
+        --teal: #137c73;
+        --teal-soft: #d9efea;
+        --blue: #315b8f;
+        --blue-soft: #dce8f6;
+        --amber: #956716;
+        --amber-soft: #f4e8c9;
+        --rose: #9b3d4d;
+        --rose-soft: #f2d9de;
+        --mono: "Cascadia Mono", Consolas, monospace;
+        --sans: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--sans);
+        line-height: 1.58;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+        min-height: 100dvh;
+      }
+
+      aside {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        height: 100dvh;
+        padding: 28px 20px;
+        border-right: 1px solid var(--line);
+        background: #eef0ec;
+        overflow: auto;
+      }
+
+      main {
+        min-width: 0;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .brand {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 24px;
+      }
+
+      .brand strong {
+        font-size: 17px;
+      }
+
+      .brand span,
+      .small {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      nav {
+        display: grid;
+        gap: 6px;
+      }
+
+      nav a {
+        display: block;
+        padding: 8px 10px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: #445047;
+        font-size: 13px;
+        text-decoration: none;
+      }
+
+      nav a:hover {
+        border-color: var(--line);
+        background: #ffffff;
+        color: var(--ink);
+      }
+
+      .hero {
+        padding: 48px min(6vw, 72px) 30px;
+        border-bottom: 1px solid var(--line);
+        background:
+          linear-gradient(135deg, rgba(19, 124, 115, 0.13), transparent 34%),
+          linear-gradient(180deg, #ffffff 0%, #f4f6f1 100%);
+      }
+
+      .eyebrow {
+        color: var(--teal);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.16;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 980px;
+        margin-top: 10px;
+        font-size: clamp(34px, 5vw, 64px);
+      }
+
+      h2 {
+        font-size: 26px;
+      }
+
+      h3 {
+        font-size: 15px;
+      }
+
+      .hero p,
+      .section-head p {
+        max-width: 960px;
+        margin: 14px 0 0;
+        color: #48534b;
+      }
+
+      .content {
+        padding: 34px min(6vw, 72px) 56px;
+      }
+
+      section {
+        margin-top: 34px;
+      }
+
+      section:first-child {
+        margin-top: 0;
+      }
+
+      .section-head {
+        margin-bottom: 14px;
+      }
+
+      .meta-grid,
+      .four-col {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .meta-grid {
+        margin-top: 28px;
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+        gap: 16px;
+      }
+
+      .three-col {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .panel,
+      .metric,
+      .module,
+      .note,
+      .node {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .panel,
+      .module,
+      .note {
+        padding: 18px;
+      }
+
+      .metric {
+        padding: 14px;
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 18px;
+      }
+
+      .module p,
+      .note p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .architecture-map {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .node {
+        min-height: 132px;
+        padding: 14px;
+        position: relative;
+      }
+
+      .node:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: -8px;
+        width: 10px;
+        height: 1px;
+        background: #aeb8af;
+      }
+
+      .node span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .node.teal {
+        background: var(--teal-soft);
+        border-color: #acd8d1;
+      }
+
+      .node.blue {
+        background: var(--blue-soft);
+        border-color: #bed1e7;
+      }
+
+      .node.amber {
+        background: var(--amber-soft);
+        border-color: #e5cf99;
+      }
+
+      .node.rose {
+        background: var(--rose-soft);
+        border-color: #e2b5bf;
+      }
+
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 4px 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+        color: #3f4a43;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .tag.teal {
+        border-color: #acd8d1;
+        background: var(--teal-soft);
+        color: #0f5f58;
+      }
+
+      .tag.blue {
+        border-color: #bed1e7;
+        background: var(--blue-soft);
+        color: #264d7d;
+      }
+
+      .tag.amber {
+        border-color: #e5cf99;
+        background: var(--amber-soft);
+        color: #6b4a0f;
+      }
+
+      .tag.rose {
+        border-color: #e2b5bf;
+        background: var(--rose-soft);
+        color: #813141;
+      }
+
+      code,
+      pre {
+        font-family: var(--mono);
+      }
+
+      code {
+        padding: 1px 5px;
+        border: 1px solid #dbe1da;
+        border-radius: 6px;
+        background: #f3f5f1;
+        font-size: 0.92em;
+      }
+
+      pre {
+        margin: 0;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #f4f6f2;
+        color: #28302b;
+        font-size: 12px;
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        padding: 10px 9px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: #3f4b43;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+      }
+
+      li + li {
+        margin-top: 6px;
+      }
+
+      .note {
+        background: #fffdf7;
+        border-color: #e3d3a3;
+      }
+
+      .source-list {
+        columns: 2;
+        column-gap: 28px;
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .source-list li {
+        break-inside: avoid;
+        margin: 0 0 7px;
+      }
+
+      .footer {
+        margin-top: 42px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      @media (max-width: 980px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        aside {
+          position: relative;
+          height: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        nav {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .meta-grid,
+        .four-col,
+        .three-col,
+        .two-col,
+        .architecture-map {
+          grid-template-columns: 1fr;
+        }
+
+        .node::after {
+          display: none;
+        }
+
+        .source-list {
+          columns: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside>
+        <div class="brand">
+          <strong>DonggriCompany Architecture</strong>
+          <span>Generated: 2026-05-22 KST</span>
+          <span><code>G:\Donggri_DevDrive\repos\DonggriCompany</code></span>
+        </div>
+        <nav aria-label="문서 목차">
+          <a href="#snapshot">현재 스냅샷</a>
+          <a href="#overview">전체 구조</a>
+          <a href="#boot">서버 부트스트랩</a>
+          <a href="#frontend">프런트엔드</a>
+          <a href="#backend">백엔드 API</a>
+          <a href="#data">데이터와 런타임</a>
+          <a href="#workflow">업무 오케스트레이션</a>
+          <a href="#org">조직 모델</a>
+          <a href="#control-plane">Control Plane</a>
+          <a href="#safety">보안과 승인 게이트</a>
+          <a href="#sources">근거 파일</a>
+        </nav>
+      </aside>
+
+      <main>
+        <header class="hero">
+          <div class="eyebrow">Local-first AI company operations platform</div>
+          <h1>DonggriCompany 구조 시스템 아키텍처</h1>
+          <p>
+            DonggriCompany는 React/Vite UI, Express 기반 API 서버, SQLite 로컬 상태 저장소,
+            WebSocket 실시간 동기화, CLI/API 에이전트 실행기, 그리고
+            <code>G:\Donggri_DevDrive\storage\codex-control</code>을 읽는 Control Plane 투영 계층으로 구성된다.
+            이 문서는 현재 repo 파일과 활성 스펙을 기준으로 정리한 읽기 전용 구조 보고서다.
+          </p>
+
+          <div class="meta-grid" id="snapshot">
+            <div class="metric"><span>Active Spec</span><strong>20260522 control-plane-dashboard</strong></div>
+            <div class="metric"><span>Phase</span><strong>phase-1-complete</strong></div>
+            <div class="metric"><span>Runtime</span><strong>Node 22 / SQLite WAL</strong></div>
+            <div class="metric"><span>Git Snapshot</span><strong>ahead 5, dirty</strong></div>
+          </div>
+        </header>
+
+        <div class="content">
+          <section id="overview">
+            <div class="section-head">
+              <h2>전체 구조</h2>
+              <p>시스템은 UI, API, workflow runtime, persistence, external integration, Control Plane projection으로 나뉜다.</p>
+            </div>
+            <div class="architecture-map">
+              <div class="node teal">
+                <h3>React UI</h3>
+                <span>Vite, React 19, Tailwind 4. Office, Dashboard, Task Board, Agent Manager, Control Plane 화면을 제공한다.</span>
+              </div>
+              <div class="node blue">
+                <h3>API Client</h3>
+                <span><code>src/api/*</code>. Session bootstrap, CSRF, retry, idempotency key, feature별 endpoint wrapper.</span>
+              </div>
+              <div class="node">
+                <h3>Express Server</h3>
+                <span><code>server/server-main.ts</code>. 보안 미들웨어, SQLite runtime, schema, workflow, route bundle을 조립한다.</span>
+              </div>
+              <div class="node amber">
+                <h3>Workflow Runtime</h3>
+                <span>부서 라우팅, 회의, review, subtask delegation, CLI/API provider 실행과 terminal stream을 관리한다.</span>
+              </div>
+              <div class="node rose">
+                <h3>External Layer</h3>
+                <span>CLI providers, OAuth, Telegram, Discord, Gmail, Calendar, GitHub, Control Plane read-only state.</span>
+              </div>
+            </div>
+          </section>
+
+          <section id="boot">
+            <div class="section-head">
+              <h2>서버 부트스트랩</h2>
+              <p><code>server/index.ts</code>는 <code>server/server-main.ts</code>를 로드하고 runtime context를 조립한다.</p>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <h3>부팅 순서</h3>
+                <table>
+                  <thead><tr><th>단계</th><th>소스</th><th>역할</th></tr></thead>
+                  <tbody>
+                    <tr><td>환경과 경로</td><td><code>server/config/runtime.ts</code></td><td>포트, 호스트, data root, DB/log path, OAuth runtime env path를 정규화한다.</td></tr>
+                    <tr><td>보안 미들웨어</td><td><code>server/security/auth.ts</code></td><td>세션, 인증 토큰, CSRF, origin 신뢰 여부를 검사한다.</td></tr>
+                    <tr><td>DB 초기화</td><td><code>server/db/runtime.ts</code></td><td>SQLite <code>journal_mode=WAL</code>, busy timeout, retry backoff를 적용한다.</td></tr>
+                    <tr><td>스키마와 seed</td><td><code>server/modules/bootstrap/schema/*</code></td><td>조직, task, OAuth, memory, module, runner 테이블과 기본 조직 seed를 보장한다.</td></tr>
+                    <tr><td>Workflow 초기화</td><td><code>server/modules/workflow.ts</code></td><td>core, agents, orchestration exports를 runtime context에 합친다.</td></tr>
+                    <tr><td>Route 등록</td><td><code>server/modules/routes.ts</code></td><td>core, collab, ops route bundle을 등록한다.</td></tr>
+                    <tr><td>Lifecycle 시작</td><td><code>server/modules/lifecycle.ts</code></td><td>HTTP, WebSocket, receiver, scheduler, watchdog sweep을 시작한다.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="panel">
+                <h3>실행 모드</h3>
+                <div class="tag-row">
+                  <span class="tag teal">local web 8800</span>
+                  <span class="tag teal">api 8790</span>
+                  <span class="tag blue">vite proxy</span>
+                  <span class="tag amber">APP_DATA_DIR=data</span>
+                  <span class="tag rose">Docker approval required</span>
+                </div>
+                <pre style="margin-top: 14px">corepack pnpm run dev:local
+Web: http://127.0.0.1:8800
+API: http://127.0.0.1:8790
+Health: /api/health, /healthz</pre>
+                <p class="small">문서 전용 요청 정책에 맞춰 install/build/test/Docker 명령은 실행하지 않았다.</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="frontend">
+            <div class="section-head">
+              <h2>프런트엔드 구조</h2>
+              <p>React app shell은 상태 bootstrap, lazy page routing, WebSocket 실시간 반영, overlay 패널을 조합한다.</p>
+            </div>
+            <div class="three-col">
+              <div class="panel">
+                <h3>App Shell</h3>
+                <ul>
+                  <li><code>src/main.tsx</code>가 React root를 만든다.</li>
+                  <li><code>src/App.tsx</code>는 domain state, overlay state, bootstrap, WebSocket sync를 묶는다.</li>
+                  <li><code>src/app/AppMainLayout.tsx</code>는 sidebar, header, live rail, lazy view를 렌더링한다.</li>
+                  <li><code>src/app/useAppBootstrapData.ts</code>가 settings, departments, agents, tasks, stats, subtasks, meeting presence를 병렬 로드한다.</li>
+                </ul>
+              </div>
+              <div class="panel">
+                <h3>주요 화면</h3>
+                <div class="tag-row">
+                  <span class="tag">OfficeView</span>
+                  <span class="tag">Dashboard</span>
+                  <span class="tag teal">ControlPlanePage</span>
+                  <span class="tag">TaskBoard</span>
+                  <span class="tag">AgentManager</span>
+                  <span class="tag">SkillsLibrary</span>
+                  <span class="tag">ModulesLibrary</span>
+                  <span class="tag">DepartmentComponents</span>
+                  <span class="tag">Manual</span>
+                  <span class="tag">Settings</span>
+                </div>
+              </div>
+              <div class="panel">
+                <h3>클라이언트 API 계층</h3>
+                <ul>
+                  <li><code>src/api.ts</code>는 feature별 API module을 재수출한다.</li>
+                  <li><code>src/api/core.ts</code>는 session bootstrap, auth header, CSRF, idempotency key, retry/backoff를 담당한다.</li>
+                  <li><code>src/api/control-plane.ts</code>는 read-only Control Plane state와 AgentMemory status/search를 호출한다.</li>
+                  <li><code>src/hooks/useWebSocket.ts</code>는 <code>/ws</code> 연결과 재접속을 관리한다.</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section id="backend">
+            <div class="section-head">
+              <h2>백엔드 API 구조</h2>
+              <p>Express route는 core, collaboration, operations로 분리되어 있고 runtime context를 통해 workflow 기능과 DB 핸들을 공유한다.</p>
+            </div>
+            <div class="three-col">
+              <div class="module">
+                <h3>Core routes</h3>
+                <p>Departments, agents, tasks, projects, memory, GitHub, messenger receiver 상태, health/update endpoints.</p>
+                <div class="tag-row"><span class="tag blue">/api/tasks</span><span class="tag blue">/api/agents</span><span class="tag blue">/api/projects</span></div>
+              </div>
+              <div class="module">
+                <h3>Collab routes</h3>
+                <p>부서 협업, subtask delegation, meeting/review coordination, language policy, report routing.</p>
+                <div class="tag-row"><span class="tag amber">planned approval</span><span class="tag amber">review rounds</span></div>
+              </div>
+              <div class="module">
+                <h3>Ops routes</h3>
+                <p>Settings, stats, CLI status, OAuth, API providers, modules, skills, worktrees, terminal, strategic maintenance, Control Plane.</p>
+                <div class="tag-row"><span class="tag teal">/api/control-plane/state</span><span class="tag teal">/api/office/runners</span></div>
+              </div>
+            </div>
+            <div class="panel" style="margin-top: 16px">
+              <h3>Route bundle wiring</h3>
+              <pre>registerApiRoutes(ctx)
+  -> registerRoutesPartB(runtime)  // collaboration
+  -> registerRoutesPartA(runtime)  // core
+  -> registerRoutesPartC(runtime)  // operations
+  -> route helper exports are validated with ROUTE_RUNTIME_HELPER_KEYS</pre>
+            </div>
+          </section>
+
+          <section id="data">
+            <div class="section-head">
+              <h2>데이터와 런타임 저장소</h2>
+              <p>영속 상태는 SQLite가 중심이고, 로그와 worktree, runtime asset은 파일 시스템에 분리된다.</p>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <h3>핵심 DB 테이블 그룹</h3>
+                <table>
+                  <thead><tr><th>그룹</th><th>대표 테이블</th><th>목적</th></tr></thead>
+                  <tbody>
+                    <tr><td>조직</td><td><code>departments</code>, <code>agents</code>, <code>office_pack_departments</code></td><td>8개 부서, 직원, office pack별 표시 상태</td></tr>
+                    <tr><td>프로젝트와 업무</td><td><code>projects</code>, <code>tasks</code>, <code>subtasks</code>, <code>task_logs</code></td><td>작업 수명주기, 실행 로그, 세부 위임</td></tr>
+                    <tr><td>회의와 리뷰</td><td><code>meeting_minutes</code>, <code>review_round_decision_states</code>, <code>review_round_feedback_items</code></td><td>planned/review 회의, 승인/보류 판단</td></tr>
+                    <tr><td>인증과 실행</td><td><code>oauth_accounts</code>, <code>oauth_sessions</code>, <code>office_runner_instances</code>, <code>cli_account_pools</code></td><td>OAuth, runner isolation, CLI account pool</td></tr>
+                    <tr><td>메모리와 품질</td><td><code>agent_memories</code>, <code>project_memories</code>, <code>memory_embeddings</code>, <code>quality_metric_events</code></td><td>agent/project memory, search, quality tracking</td></tr>
+                    <tr><td>모듈과 자산</td><td><code>project_module_bindings</code>, <code>asset_jobs</code>, <code>project_component_events</code></td><td>module 적용, asset job, component event history</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="panel">
+                <h3>파일 시스템 책임</h3>
+                <table>
+                  <thead><tr><th>영역</th><th>역할</th></tr></thead>
+                  <tbody>
+                    <tr><td><code>G:\Donggri_DevDrive</code></td><td>현재 Dev Drive root, repos와 Control Plane source-of-truth.</td></tr>
+                    <tr><td><code>storage\codex-control</code></td><td>AGENTS, registry, active specs, evidence, handoff, learnings.</td></tr>
+                    <tr><td><code>repos\DonggriCompany\data</code></td><td>local dev DB, logs, OAuth runtime side files. 비밀 파일은 읽지 않는다.</td></tr>
+                    <tr><td><code>repos\DonggriCompany\public\sprites</code></td><td>Office UI sprite output. 개별 PNG 수작업은 금지, generator pipeline으로 관리.</td></tr>
+                    <tr><td><code>F:</code></td><td>큰 asset/runtime/cache/archive backing store. Control Plane source-of-truth로 승격하지 않는다.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="workflow">
+            <div class="section-head">
+              <h2>업무 오케스트레이션</h2>
+              <p><code>$</code> directive와 <code>#</code> task registration은 프로젝트, 부서, 담당자, 실행기를 거쳐 추적 가능한 workflow로 변환된다.</p>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <h3>Workflow engine 모듈</h3>
+                <ul>
+                  <li><code>workflow/core.ts</code>: CLI tool detection, context building, prompt blocks, WebSocket hub, common utilities.</li>
+                  <li><code>workflow/agents.ts</code>: agent profile, provider/model mapping, execution argument building.</li>
+                  <li><code>workflow/orchestration.ts</code>: planned meeting, task execution, review finalization, report workflow, subtask delegation.</li>
+                  <li><code>routes/core/tasks/execution-run.ts</code>: task run endpoint와 auto assignment 진입점.</li>
+                  <li><code>routes/collab/*</code>: cross-department cooperation, subtask routing, review/meeting coordination.</li>
+                </ul>
+              </div>
+              <div class="panel">
+                <h3>상태 흐름</h3>
+                <pre>inbox
+  -> planned
+  -> collaborating
+  -> in_progress
+  -> review
+  -> done
+
+interrupt/hold path:
+pending, cancelled, stale assignment cleanup, watchdog recovery</pre>
+                <p class="small">Lifecycle watchdog는 in-progress orphan task, stale working agent, pending subtask delegation을 주기적으로 복구한다.</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="org">
+            <div class="section-head">
+              <h2>조직 모델</h2>
+              <p>현재 canonical 조직은 <code>org-v5</code> 기준 8개 부서, 22명 active staff다. PMO는 1명, 나머지 7개 부서는 각 3명이다.</p>
+            </div>
+            <div class="panel">
+              <table>
+                <thead><tr><th>층</th><th>부서</th><th>Active staff</th><th>대표 책임</th><th>추천 subagents</th></tr></thead>
+                <tbody>
+                  <tr><td>2F strategy</td><td>PMO</td><td>Summit</td><td>CEO 직속 command desk, priority, dependency, risk</td><td>task-distributor, project-manager, risk-manager</td></tr>
+                  <tr><td>2F strategy</td><td>Planning</td><td>Sage, Clio, Prism</td><td>scope, architecture, research, acceptance criteria</td><td>product-manager, architect-reviewer, research-analyst</td></tr>
+                  <tr><td>3F production</td><td>Development</td><td>Aria, Bolt, Nova</td><td>backend, frontend, TypeScript, database implementation</td><td>backend-developer, frontend-developer, typescript-pro, database-optimizer</td></tr>
+                  <tr><td>3F production</td><td>Design</td><td>Iris, Luna, Pixel</td><td>design system, UX flow, UI consistency, accessibility</td><td>ui-designer, ux-researcher, accessibility-tester</td></tr>
+                  <tr><td>4F quality/operations</td><td>QA</td><td>Hawk, Lint, Doro</td><td>release gate, regression, evidence, reliability</td><td>test-automator, reviewer, performance-monitor</td></tr>
+                  <tr><td>4F quality/operations</td><td>DevSecOps</td><td>Vault, Atlas, Shield</td><td>security gate, CI/CD, audit, compliance</td><td>security-auditor, devops-engineer, GitHub workflow specialists</td></tr>
+                  <tr><td>4F quality/operations</td><td>Operations</td><td>Harbor, Memo, Turbo</td><td>knowledge governance, docs, runtime, settings, workspace state</td><td>documentation-engineer, customer-success-manager, sre-engineer</td></tr>
+                  <tr><td>4F quality/operations</td><td>Strategic Maintenance</td><td>Beacon, Kairo, Orbit</td><td>recurring review, maintenance backlog, scheduled reporting</td><td>architect-reviewer, security-auditor, sre-engineer, documentation-engineer</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="note" style="margin-top: 16px">
+              <h3>Canonical rule</h3>
+              <p>직원은 내부 owner/orchestrator이고, 모든 전문성을 직접 수행하기보다 task type별 specialist subagent를 감독한다. legacy department id는 read-only alias이며 새 seed, MD bundle, API payload에는 canonical department id를 사용한다.</p>
+            </div>
+          </section>
+
+          <section id="control-plane">
+            <div class="section-head">
+              <h2>Control Plane 투영 계층</h2>
+              <p>DonggriCompany는 Control Plane의 canonical owner가 아니라, 정해진 allowlist를 읽어 운영 UI로 보여주는 projection이다.</p>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <h3>Read-only endpoint</h3>
+                <table>
+                  <thead><tr><th>Endpoint</th><th>역할</th></tr></thead>
+                  <tbody>
+                    <tr><td><code>GET /api/control-plane/state</code></td><td>root health, active spec, registry project 상태, handoff, memory docs, safety gates를 반환한다.</td></tr>
+                    <tr><td><code>GET /api/control-plane/memory/status</code></td><td>AgentMemory runtime path, REST health, Codex config mention, hooks/MCP 상태를 side-effect 없이 확인한다.</td></tr>
+                    <tr><td><code>GET /api/control-plane/memory/search</code></td><td>AgentMemory REST가 살아 있을 때만 검색하고, unavailable이면 fail-closed로 응답한다.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="panel">
+                <h3>Allowlist</h3>
+                <ul>
+                  <li><code>G:\Donggri_DevDrive\AGENTS.md</code></li>
+                  <li><code>storage\codex-control\registry</code></li>
+                  <li><code>storage\codex-control\specs</code></li>
+                  <li><code>storage\codex-control\handoffs</code></li>
+                  <li><code>storage\codex-control\learnings</code></li>
+                  <li><code>storage\codex-control\memory</code></li>
+                </ul>
+                <p class="small">API는 raw 문서 본문이 아니라 existence, mtime, size, sha256, parse status 같은 metadata를 반환한다.</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="safety">
+            <div class="section-head">
+              <h2>보안과 승인 게이트</h2>
+              <p>현재 요청 범위에서는 HTML 문서 생성만 수행하며, 실행/배포/비밀/파괴적 작업은 승인 없이 하지 않는다.</p>
+            </div>
+            <div class="three-col">
+              <div class="module">
+                <h3>항상 보호</h3>
+                <p><code>.env</code>, token, credential, key, password 파일은 읽거나 출력하지 않는다. Secret mutation은 별도 승인 대상이다.</p>
+              </div>
+              <div class="module">
+                <h3>승인 필요</h3>
+                <p>Docker 실행, volume/prune, deploy, Git commit/push/reset/rebase/merge/stash/clean, AgentMemory install/connect, MCP/hooks wiring.</p>
+              </div>
+              <div class="module">
+                <h3>현재 상태</h3>
+                <p>DonggriCompany worktree는 pre-existing dirty 상태다. 이번 작업은 기존 변경을 보존하고 새 HTML 문서만 추가한다.</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="sources">
+            <div class="section-head">
+              <h2>근거 파일</h2>
+              <p>기존 architecture map은 2026-02-18 생성본이라 최신 Control Plane 변경을 보강했다.</p>
+            </div>
+            <div class="panel">
+              <ul class="source-list">
+                <li><code>G:\Donggri_DevDrive\AGENTS.md</code></li>
+                <li><code>storage\codex-control\registry\projects.yaml</code></li>
+                <li><code>storage\codex-control\specs\_active.md</code></li>
+                <li><code>storage\codex-control\specs\20260522-donggricompany-control-plane-dashboard\*.md</code></li>
+                <li><code>repos\DonggriCompany\AGENTS.md</code></li>
+                <li><code>repos\DonggriCompany\package.json</code></li>
+                <li><code>repos\DonggriCompany\docs\DESIGN.md</code></li>
+                <li><code>repos\DonggriCompany\docs\REQUIREMENTS.md</code></li>
+                <li><code>repos\DonggriCompany\docs\architecture\README.md</code></li>
+                <li><code>repos\DonggriCompany\server\server-main.ts</code></li>
+                <li><code>repos\DonggriCompany\server\modules\routes.ts</code></li>
+                <li><code>repos\DonggriCompany\server\modules\routes\ops.ts</code></li>
+                <li><code>repos\DonggriCompany\server\modules\lifecycle.ts</code></li>
+                <li><code>repos\DonggriCompany\server\modules\bootstrap\schema\*.ts</code></li>
+                <li><code>repos\DonggriCompany\server\modules\workflow.ts</code></li>
+                <li><code>repos\DonggriCompany\src\App.tsx</code></li>
+                <li><code>repos\DonggriCompany\src\app\AppMainLayout.tsx</code></li>
+                <li><code>repos\DonggriCompany\src\api.ts</code></li>
+                <li><code>repos\DonggriCompany\src\hooks\useWebSocket.ts</code></li>
+              </ul>
+            </div>
+          </section>
+
+          <div class="footer">
+            문서 범위: 구조 설명 HTML 생성. 제외 범위: 설치, 빌드, 테스트 명령, Docker, DB mutation, 비밀 파일 접근, Git commit/push/history 작업.
+          </div>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

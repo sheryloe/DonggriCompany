@@ -7,11 +7,7 @@ import {
   previewCanonicalRouting,
   reloadCanonicalSnapshot,
 } from "../../company/canonical-policy.ts";
-import {
-  applyCanonicalResetOrganization,
-  previewCanonicalResetOrganization,
-} from "../../bootstrap/schema/organization-reset.ts";
-import { ORGANIZATION_SEED_VERSION } from "../../bootstrap/schema/organization-manifest.ts";
+import { applyDefaultSeeds, DONGRI_MASTER_SEED_VERSION } from "../../bootstrap/schema/seeds.ts";
 import { resolveProjectRoutingConstraint } from "../shared/project-staffing-policy.ts";
 
 type RegisterCompanyRoutesDeps = Pick<RuntimeContext, "app" | "db">;
@@ -44,15 +40,38 @@ export function registerCompanyRoutes({ app, db }: RegisterCompanyRoutesDeps): v
       .trim()
       .toLowerCase();
     const targetSeedVersion = String(body.target_seed_version ?? "").trim();
-    if (targetSeedVersion && targetSeedVersion !== ORGANIZATION_SEED_VERSION) {
+    if (targetSeedVersion && targetSeedVersion !== DONGRI_MASTER_SEED_VERSION) {
       return res.status(400).json({ error: "unsupported_seed_version", target_seed_version: targetSeedVersion });
     }
     if (mode !== "preview" && mode !== "apply") {
       return res.status(400).json({ error: "invalid_mode" });
     }
     try {
-      const result = mode === "apply" ? applyCanonicalResetOrganization(db) : previewCanonicalResetOrganization(db);
-      return res.json(result);
+      const before = {
+        departments: (db.prepare("SELECT COUNT(*) AS cnt FROM departments").get() as { cnt: number }).cnt,
+        agents: (db.prepare("SELECT COUNT(*) AS cnt FROM agents").get() as { cnt: number }).cnt,
+      };
+      if (mode === "apply") applyDefaultSeeds(db);
+      const after = {
+        departments: (db.prepare("SELECT COUNT(*) AS cnt FROM departments").get() as { cnt: number }).cnt,
+        agents: (db.prepare("SELECT COUNT(*) AS cnt FROM agents").get() as { cnt: number }).cnt,
+      };
+      return res.json({
+        mode,
+        seed_version: DONGRI_MASTER_SEED_VERSION,
+        target: {
+          departments: 6,
+          agents: 6,
+          model: "Dongri-grigri master department agents",
+        },
+        before,
+        after,
+        destructive_reset: false,
+        note:
+          mode === "apply"
+            ? "Missing Dongri-grigri master seed rows were synchronized. Use db:reset:dongri for approved history reset."
+            : "Preview only. No rows were changed.",
+      });
     } catch (error) {
       return res.status(500).json({
         error: "canonical_reset_failed",

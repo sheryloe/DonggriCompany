@@ -3,6 +3,7 @@ import type {
   CompanySettings,
   MessengerChannelConfig,
   MessengerChannelsConfig,
+  PixelAgentModeSettings,
   RoomTheme,
   StrategicMaintenanceSettings,
   Task,
@@ -202,6 +203,12 @@ export function areTaskListsEquivalent(prev: Task[], next: Task[]): boolean {
 
 export function mergeSettingsWithDefaults(settings?: Partial<CompanySettings> | null): CompanySettings {
   const defaultStrategicMaintenance = DEFAULT_SETTINGS.strategicMaintenance as StrategicMaintenanceSettings;
+  const defaultPixelAgentMode = DEFAULT_SETTINGS.pixelAgentMode as PixelAgentModeSettings;
+  const incomingPixelDensity = settings?.pixelAgentMode?.density;
+  const pixelAgentDensity =
+    incomingPixelDensity === "compact" || incomingPixelDensity === "balanced" || incomingPixelDensity === "showcase"
+      ? incomingPixelDensity
+      : defaultPixelAgentMode.density;
   const mergedMessengerChannels = MESSENGER_CHANNELS.reduce<MessengerChannelsConfig>((acc, channel) => {
     const defaults = DEFAULT_SETTINGS.messengerChannels?.[channel] ?? {
       token: "",
@@ -230,6 +237,12 @@ export function mergeSettingsWithDefaults(settings?: Partial<CompanySettings> | 
       ...(settings?.strategicMaintenance ?? {}),
       emailTo: settings?.strategicMaintenance?.emailTo ?? defaultStrategicMaintenance.emailTo,
       emailCc: settings?.strategicMaintenance?.emailCc ?? defaultStrategicMaintenance.emailCc,
+    },
+    pixelAgentMode: {
+      ...defaultPixelAgentMode,
+      ...(settings?.pixelAgentMode ?? {}),
+      density: pixelAgentDensity,
+      officeTheme: "donggri_cloud_lab",
     },
     messengerChannels: mergedMessengerChannels,
   };

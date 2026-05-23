@@ -15,105 +15,92 @@ const manualSections: ManualSection[] = [
     id: "quick-start",
     mark: "QS",
     title: "빠른 시작",
-    summary: "서버 실행, 상태 확인, 첫 화면 진입까지 가장 짧은 운영 경로입니다.",
+    summary: "로컬 서버 실행, 상태 확인, 첫 화면 진입까지 가장 짧은 운영 경로입니다.",
     steps: [
-      "Docker 기준 포트는 8900으로 고정합니다.",
-      "서버 상태는 /api/health로 먼저 확인합니다.",
-      "첫 화면은 메뉴얼이며 오피스는 좌측 메뉴에서 진입합니다.",
+      "Control root는 G:\\Donggri_DevDrive, repo estate root는 G:\\Donggri_DevDrive\\repos입니다.",
+      "서버는 API 8790, Web 8800을 기본으로 사용합니다.",
+      "첫 화면은 Dongri-grigri 운영실이며 Control Plane은 운영실 내부 상태로 표시됩니다.",
     ],
-    example: "docker compose up -d --build\nInvoke-RestMethod http://127.0.0.1:8900/api/health",
-    tags: ["서버", "시작", "상태 확인"],
+    example: "corepack pnpm run dev:local\nInvoke-RestMethod http://127.0.0.1:8790/api/health",
+    tags: ["서버", "시작", "운영실"],
   },
   {
     id: "departments",
-    mark: "DP",
-    title: "부서/직원",
-    summary: "Donggri 조직은 8부서 체계로 고정하고 직원 성장은 기억과 Skill 사용 이력으로 관리합니다.",
+    mark: "AG",
+    title: "마스터 부서 에이전트",
+    summary: "Dongri-grigri는 6개 마스터 부서 에이전트가 업무별 서브에이전트를 만들고 회수하는 구조입니다.",
     steps: [
-      "부서는 PMO, 기획, 개발, 디자인, QA, DevSecOps, 운영, 전략보수팀입니다.",
-      "직원 UI는 한국어로 표시하고 내부 저장값은 영어 canonical을 유지합니다.",
-      "경험, 장기기억, Skill 숙련도는 직원 성장 판단 보조 지표로 사용합니다.",
+      "부서는 기획, 개발, 디자인, 품질, 운영, 외부강사로 구성됩니다.",
+      "서브에이전트는 permanent 직원이 아니라 단일 작업용 helper입니다.",
+      "운영은 단일 OPS 마스터가 project scope를 바꿔 각 repo를 관리합니다.",
     ],
-    example: "pmo, planning, dev, design, qa, devsecops, operations, strategic_maintenance",
-    tags: ["8부서", "직원", "성장"],
+    example: "기획 -> 요구사항/설계\n개발 -> 승인된 구현\n운영 -> project scope 전환",
+    tags: ["6개 마스터 부서", "서브에이전트", "OPS"],
   },
   {
     id: "tasks",
     mark: "TK",
-    title: "업무 등록",
-    summary: "목표별 명령과 업무 보드를 통해 작업을 등록하고 에이전트 실행 흐름으로 연결합니다.",
+    title: "업무 흐름",
+    summary: "업무는 Intake, Routing, Department Run, Persona Timeline, Evidence/Handoff 순서로 추적합니다.",
     steps: [
-      "업무 관리에서 목표 카드를 선택하면 라우팅 메타데이터가 자동 저장됩니다.",
-      "직접 명령은 /dg-feature, /dg-fix, /dg-review 같은 canonical 명령을 사용합니다.",
-      "$ 지시는 CEO 업무지시이며 프로젝트 바인딩과 회의 여부를 먼저 확정합니다.",
+      "비 trivial 작업은 root SDD spec을 먼저 작성합니다.",
+      "구현은 승인된 tasks.md와 repo-map allowed files 안에서만 진행합니다.",
+      "완료 전 evidence.md와 handoff.md를 갱신합니다.",
     ],
-    example: "/dg-feature 고객 로그인 화면과 API를 구현하고 테스트까지 완료",
-    tags: ["업무", "라우팅", "CEO 지시"],
+    example: "requirements.md -> design.md -> tasks.md -> implementation -> evidence.md",
+    tags: ["업무", "SDD", "승인"],
   },
   {
     id: "skills",
     mark: "SK",
-    title: "Skill 문서고",
-    summary: "Skill은 직원이 작업 중 참조하는 기법, 절차, 도구 사용법입니다.",
+    title: "Skill",
+    summary: "Skill은 반복 작업 지침과 참고 리소스를 묶는 운영 지식 단위입니다.",
     steps: [
-      "주 1회 자동 조사는 보고서와 승인 대기 초안까지만 생성합니다.",
-      "승인된 Skill만 skills/donggri/<skill-name>/SKILL.md로 관리합니다.",
-      "Codex 앱 적용은 동기화 스크립트로 명시적으로 수행합니다.",
+      "외부강사 마스터는 GitHub 고 star 오픈소스 후보를 읽기 전용으로 조사합니다.",
+      "도입 전에는 license, 보안, 유지보수 상태를 확인합니다.",
+      "설치나 hook 연결은 별도 OPS 승인 뒤에 진행합니다.",
     ],
-    example: "powershell -ExecutionPolicy Bypass -File .\\tools\\skills\\sync-codex-skills.ps1 -Validate",
-    tags: ["Skill", "주간 조사", "Codex"],
+    example: "corepack pnpm run subagents:sync",
+    tags: ["Skill", "외부강사", "오픈소스"],
   },
   {
-    id: "modules",
-    mark: "MO",
-    title: "모듈",
-    summary: "모듈은 프로젝트에 적용 가능한 기능 패키지입니다. Skill과 섞지 않습니다.",
+    id: "memory",
+    mark: "ME",
+    title: "Memory",
+    summary: "메모리는 root, 부서, 프로젝트, run, persona scope로 나누어 상태와 검색을 제공합니다.",
     steps: [
-      "Google OAuth, Naver OAuth, 이미지 생성, NotebookLM import 같은 기능 단위를 축적합니다.",
-      "모듈 적용은 항상 미리보기 생성, 변경사항 확인, 적용 순서로 진행합니다.",
-      "secret과 token 원문은 저장하거나 화면에 노출하지 않습니다.",
+      "AgentMemory Ver.1은 health/search/context 중심의 read-only 통합입니다.",
+      "remember, delete, forget, import, MCP/hook 연결은 별도 승인이 필요합니다.",
+      "UI는 부서별 memory와 프로젝트 scope memory를 구분해서 보여줍니다.",
     ],
-    example: "modules/donggri/notebooklm-source-import/module.json",
-    tags: ["모듈", "재사용", "미리보기"],
-  },
-  {
-    id: "cli-accounts",
-    mark: "CL",
-    title: "CLI 계정",
-    summary: "Codex, Gemini, Claude 실행 계정을 계정 감지와 실행 가능 상태로 분리해 진단합니다.",
-    steps: [
-      "계정 감지, 사용량 확인, 실행 준비, 실행 홈 문제를 별도 상태로 봅니다.",
-      "사용량이 보여도 실행 프로필 동기화가 안 되면 실행 준비가 아닙니다.",
-      "토큰, secret, OAuth 코드 원문은 UI와 로그에 노출하지 않습니다.",
-    ],
-    example: "codex login status\ncodex auth report --json",
-    tags: ["CLI", "계정", "실행 상태"],
+    example: "root | department:operations | project:BloggerGent | run:<id> | persona:<id>",
+    tags: ["AgentMemory", "scope", "검색"],
   },
   {
     id: "projects",
     mark: "PJ",
-    title: "프로젝트 관리",
-    summary: "프로젝트는 업무, 칸반, 간트, 보고, 기억을 같은 맥락으로 관리합니다.",
+    title: "프로젝트 scope",
+    summary: "프로젝트마다 상주 운영 에이전트를 늘리지 않고 OPS가 scope를 바꿔 운영합니다.",
     steps: [
-      "프로젝트 기억은 project_id로 격리하고 승인된 전사 공통 지식만 공유합니다.",
-      "칸반과 간트는 같은 task/project mapping을 다른 방식으로 보여줍니다.",
-      "완료 판단은 테스트, 리뷰, 배포 증거, 의사결정 기록을 함께 확인합니다.",
+      "root registry는 storage\\codex-control\\registry\\projects.yaml이 기준입니다.",
+      "DonggriCompany domain DB projects는 자동 생성하지 않고 projection/link 상태로만 표시합니다.",
+      "repo code write는 개발 마스터와 승인된 task가 있어야 합니다.",
     ],
-    example: "업무 등록 → 담당 부서 지정 → 실행 → 검증 증거 첨부 → 완료",
-    tags: ["프로젝트", "칸반", "기억"],
+    example: "OPS scope = BloggerGent\nOPS scope = JasoSul\nOPS scope = DonggriCompany",
+    tags: ["프로젝트", "registry", "scope"],
   },
   {
     id: "quality",
     mark: "QA",
-    title: "품질/ISO",
-    summary: "ISO 9001 인증 주장이 아니라 QMS-ready 운영 구조를 목표로 합니다.",
+    title: "품질 게이트",
+    summary: "품질 마스터는 테스트, 빌드, 브라우저 스모크, 한글 깨짐 검사를 evidence로 남깁니다.",
     steps: [
-      "변경요청, 승인, 실행 로그, 검증 증거, 배포 기록, 시정조치를 남깁니다.",
-      "반복 실패는 tasks/lessons.md와 AGENTS.md 규칙으로 승격합니다.",
-      "CI, lint, build, 테스트 결과를 완료 기준의 증거로 사용합니다.",
+      "주간/야간 테마에서 글자 대비를 확인합니다.",
+      "깨진 한글 패턴이 UI source와 렌더링 화면에 남아 있으면 fail로 봅니다.",
+      "spec-quality 95점 이상과 P1 0건을 완료 기준으로 둡니다.",
     ],
-    example: "변경요청 → 영향 분석 → 승인 → 구현 → 검증 → 배포 → 시정조치",
-    tags: ["ISO 9001", "검증", "시정조치"],
+    example: "corepack pnpm run test:web -- ControlPlanePage Sidebar.app-shell",
+    tags: ["테스트", "한글", "evidence"],
   },
 ];
 
@@ -158,25 +145,24 @@ export default function ManualLibrary() {
   }, [query]);
 
   return (
-    <section className="manual-shell" aria-label="Donggri 운영 메뉴얼">
+    <section className="manual-shell" aria-label="Dongri-grigri 운영 매뉴얼">
       <div className="manual-hero">
         <div className="manual-hero-mark">DG</div>
         <div className="min-w-0 flex-1">
-          <div className="manual-kicker">Donggri Command Manual</div>
-          <h1>운영 메뉴얼</h1>
+          <div className="manual-kicker">Dongri-grigri Manual</div>
+          <h1>운영 매뉴얼</h1>
           <p>
-            처음 보는 사람도 서버 실행, 업무 등록, 직원 운영, Skill·모듈 적용, 품질 증거 관리까지 따라갈 수 있도록 핵심
-            절차를 한 화면에 정리했습니다.
+            운영실, root Control Plane, 마스터 부서 에이전트, Skill, Memory, 프로젝트 scope, 품질 게이트를 한글 기준으로 정리했습니다.
           </p>
         </div>
         <label className="manual-search">
-          <span className="sr-only">메뉴얼 검색</span>
+          <span className="sr-only">매뉴얼 검색</span>
           <input
             ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="메뉴얼 검색..."
-            aria-label="메뉴얼 검색"
+            placeholder="매뉴얼 검색..."
+            aria-label="매뉴얼 검색"
           />
           <span>Ctrl K</span>
         </label>
@@ -214,8 +200,8 @@ export default function ManualLibrary() {
       </div>
 
       {filteredSections.length === 0 && (
-        <div className="command-panel p-6 text-sm text-slate-300">
-          검색 결과가 없습니다. 다른 키워드로 다시 검색하세요.
+        <div className="command-panel p-6 text-sm text-[var(--text-muted)]">
+          검색 결과가 없습니다. 다른 키워드로 다시 검색해 주세요.
         </div>
       )}
     </section>

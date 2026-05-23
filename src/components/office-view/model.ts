@@ -8,6 +8,7 @@ import type {
   SubAgent,
   CrossDeptDelivery,
   CeoOfficeCall,
+  PixelAgentModeSettings,
 } from "../../types";
 import type { AgentSpriteDirection } from "./spriteAssets";
 import type { AgentWalkSprites } from "./spriteActors";
@@ -27,6 +28,7 @@ interface OfficeViewProps {
   onOpenActiveMeetingMinutes?: (taskId: string) => void;
   customDeptThemes?: Record<string, { floor1: number; floor2: number; wall: number; accent: number }>;
   themeHighlightTargetId?: string | null;
+  pixelAgentMode?: PixelAgentModeSettings;
   onSelectAgent: (agent: Agent) => void;
   onSelectDepartment: (dept: Department) => void;
 }

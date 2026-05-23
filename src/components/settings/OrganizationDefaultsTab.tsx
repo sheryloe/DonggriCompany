@@ -20,7 +20,7 @@ export default function OrganizationDefaultsTab({ t, departments }: Organization
       const res = await fetch("/api/ops/canonical-reset-organization", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode, target_seed_version: "org-v2" }),
+        body: JSON.stringify({ mode, target_seed_version: "dongri-grigri-v1" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Canonical reset failed");
@@ -45,10 +45,10 @@ export default function OrganizationDefaultsTab({ t, departments }: Organization
         </h3>
         <p className="text-xs leading-5 text-slate-400">
           {t({
-            ko: "8개 기본 부서와 22명 seed 직원을 미리보기하거나 명시적으로 적용합니다. 서버 부팅 시 누락분만 보강합니다.",
-            en: "Preview or explicitly apply the 8 default departments and 22 seed agents. Missing entries are backfilled on startup.",
-            ja: "Preview or explicitly apply the 8 default departments and 22 seed agents. Missing entries are backfilled on startup.",
-            zh: "Preview or explicitly apply the 8 default departments and 22 seed agents. Missing entries are backfilled on startup.",
+            ko: "6개 마스터 부서와 마스터 에이전트를 미리보기하거나 명시적으로 적용합니다. 서버 부팅 시 누락분만 보강합니다.",
+            en: "Preview or explicitly apply the 6 master departments and master agents. Missing entries are backfilled on startup.",
+            ja: "Preview or explicitly apply the 6 master departments and master agents. Missing entries are backfilled on startup.",
+            zh: "Preview or explicitly apply the 6 master departments and master agents. Missing entries are backfilled on startup.",
           })}
         </p>
 
@@ -92,10 +92,10 @@ export default function OrganizationDefaultsTab({ t, departments }: Organization
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200">
             {t({
-              ko: "8개 부서 전용 보기",
-              en: "8 Departments View",
-              ja: "8 Departments View",
-              zh: "8 Departments View",
+              ko: "마스터 부서 보기",
+              en: "Master Departments View",
+              ja: "Master Departments View",
+              zh: "Master Departments View",
             })}
           </h3>
           <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300">

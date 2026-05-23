@@ -21,6 +21,7 @@ import { registerCompanyRoutes } from "./ops/company-routes.ts";
 import { registerGoalCommandRoutes } from "./ops/goal-commands.ts";
 import { registerQualityMetricRoutes } from "./ops/quality-metrics.ts";
 import { registerStrategicMaintenanceRoutes } from "./ops/strategic-maintenance.ts";
+import { registerControlPlaneRoutes } from "./ops/control-plane.ts";
 
 export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   const __ctx: RuntimeContext = ctx;
@@ -223,6 +224,7 @@ export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   registerGoalCommandRoutes(__ctx);
   registerQualityMetricRoutes({ app, db });
   registerStrategicMaintenanceRoutes(__ctx);
+  registerControlPlaneRoutes({ app, db });
 
   const { normalizeSkillLearnProviders } = registerSkillRoutes(__ctx);
   registerModuleRoutes(__ctx);

@@ -8,7 +8,17 @@ import ReportHistory from "../components/ReportHistory";
 import AgentStatusPanel from "../components/AgentStatusPanel";
 import OfficeRoomManager from "../components/OfficeRoomManager";
 import type { DecisionInboxItem } from "../components/chat/decision-inbox";
-import type { Agent, Department, Message, RoomTheme, SubAgent, SubTask, Task, WorkflowPackKey } from "../types";
+import type {
+  Agent,
+  Department,
+  Message,
+  PixelAgentModeSettings,
+  RoomTheme,
+  SubAgent,
+  SubTask,
+  Task,
+  WorkflowPackKey,
+} from "../types";
 import type { UiLanguage } from "../i18n";
 import type { ProjectMetaPayload, RoomThemeMap, TaskPanelTab } from "./types";
 
@@ -50,6 +60,7 @@ interface AppOverlaysProps {
   onOpenDecisionChat: (agentId: string) => void;
   selectedAgent: Agent | null;
   activeOfficeWorkflowPack: WorkflowPackKey;
+  pixelAgentMode?: PixelAgentModeSettings;
   departments: Department[];
   tasks: Task[];
   subAgents: SubAgent[];
@@ -97,6 +108,7 @@ export default function AppOverlays({
   onOpenDecisionChat,
   selectedAgent,
   activeOfficeWorkflowPack,
+  pixelAgentMode,
   departments,
   tasks,
   subAgents,
@@ -167,6 +179,7 @@ export default function AppOverlays({
           onOpenTerminal={onOpenTerminalFromAgentDetail}
           onAgentUpdated={onAgentUpdated}
           activeOfficeWorkflowPack={activeOfficeWorkflowPack}
+          pixelAgentMode={pixelAgentMode}
         />
       )}
 

@@ -1,4 +1,4 @@
-﻿import type { Agent, Department } from "../../types";
+﻿import type { Agent, Department, PixelAgentModeSettings } from "../../types";
 import { buildAgentCapabilityCompactSummary, normalizeAgentProfile } from "../../agent-profile";
 import { localeName, normalizeLanguage } from "../../i18n";
 import { getCanonicalFamilyLabel, getCanonicalStageLabel } from "../../i18n/canonical-label-registry";
@@ -18,6 +18,7 @@ interface AgentCardProps {
   onDeleteConfirm: () => void;
   onDeleteCancel: () => void;
   saving: boolean;
+  pixelAgentMode?: PixelAgentModeSettings;
 }
 
 function statBar(value: number): string {
@@ -37,8 +38,10 @@ export default function AgentCard({
   onDeleteConfirm,
   onDeleteCancel,
   saving,
+  pixelAgentMode,
 }: AgentCardProps) {
   const isDeleting = confirmDeleteId === agent.id;
+  const pixelModeEnabled = pixelAgentMode?.enabled === true;
   const dept = departments.find((department) => department.id === agent.department_id);
   const profile = normalizeAgentProfile(agent.agent_profile, agent.role);
   const capabilitySummary = buildAgentCapabilityCompactSummary(profile, locale, [
@@ -57,16 +60,29 @@ export default function AgentCard({
   return (
     <div
       onClick={onEdit}
-      className="group cursor-pointer rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:shadow-xl"
+      className={`group cursor-pointer rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:shadow-xl ${
+        pixelModeEnabled ? "pixel-agent-card" : ""
+      }`}
       style={{ background: "var(--th-card-bg)", border: "1px solid var(--th-card-border)" }}
     >
       <div className="flex items-start gap-3">
         <div className="relative shrink-0">
-          <AgentAvatar agent={agent} spriteMap={spriteMap} size={52} rounded="xl" />
+          <AgentAvatar
+            agent={agent}
+            spriteMap={spriteMap}
+            size={pixelModeEnabled ? 58 : 52}
+            rounded="xl"
+            className={pixelModeEnabled ? "pixel-agent-portrait" : ""}
+          />
           <div
             className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 ${STATUS_DOT[agent.status] ?? STATUS_DOT.idle}`}
             style={{ borderColor: "var(--th-card-bg)" }}
           />
+          {pixelModeEnabled && (
+            <div className="absolute -left-1.5 -top-1.5 rounded-md border border-cyan-300/40 bg-slate-950 px-1 py-0.5 font-mono text-[9px] font-bold text-cyan-100">
+              #{agent.sprite_number ?? spriteMap.get(agent.id) ?? "--"}
+            </div>
+          )}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -147,6 +163,11 @@ export default function AgentCard({
         style={{ borderTop: "1px solid var(--th-card-border)" }}
       >
         <div className="flex items-center gap-2">
+          {pixelModeEnabled && (
+            <span className="rounded px-1.5 py-0.5 font-mono text-[10px] text-cyan-100 ring-1 ring-cyan-300/20">
+              픽셀
+            </span>
+          )}
           <span
             className="rounded px-1.5 py-0.5 text-[10px] font-mono"
             style={{ background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}

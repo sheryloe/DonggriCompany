@@ -1,6 +1,6 @@
 import { useEffect, type MutableRefObject } from "react";
 import { Application, Assets, TextureStyle, type Texture } from "pixi.js";
-import type { Agent, Department, SubAgent, Task } from "../../types";
+import type { Agent, Department, PixelAgentModeSettings, SubAgent, Task } from "../../types";
 import { buildSpriteMap } from "../AgentAvatar";
 import { type Delivery, MIN_OFFICE_W, findScrollContainer } from "./model";
 import { runOfficeTickerStep, type OfficeTickerContext } from "./officeTicker";
@@ -36,6 +36,7 @@ interface UseOfficePixiRuntimeParams {
   language: string;
   activeMeetingTaskId?: string | null;
   customDeptThemes?: Record<string, { floor1: number; floor2: number; wall: number; accent: number }>;
+  pixelAgentMode?: PixelAgentModeSettings;
   currentTheme: string;
 }
 
@@ -64,6 +65,7 @@ export function useOfficePixiRuntime({
   language,
   activeMeetingTaskId,
   customDeptThemes,
+  pixelAgentMode,
   currentTheme,
 }: UseOfficePixiRuntimeParams): void {
   useEffect(() => {
@@ -255,6 +257,7 @@ export function useOfficePixiRuntime({
     language,
     activeMeetingTaskId,
     customDeptThemes,
+    pixelAgentMode,
     currentTheme,
     buildScene,
     initDoneRef,

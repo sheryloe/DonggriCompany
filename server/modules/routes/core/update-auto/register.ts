@@ -353,7 +353,7 @@ export function registerUpdateAutoRoutes(ctx: RuntimeContext): void {
   const buildHealthPayload = () => ({
     ok: true,
     version: PKG_VERSION,
-    app: "Claw-Empire",
+    app: "Dongri-grigri",
     dbPath,
   });
 

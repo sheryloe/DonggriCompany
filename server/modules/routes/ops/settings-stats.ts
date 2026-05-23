@@ -1,7 +1,8 @@
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import {
-  decryptMessengerChannelsForClient,
   encryptMessengerChannelsForStorage,
+  mergeRedactedMessengerTokensForStorage,
+  redactMessengerChannelsForClient,
 } from "../../../messenger/token-crypto.ts";
 import { getCanonicalAgentsSourceMode } from "../../company/canonical-policy.ts";
 
@@ -184,7 +185,7 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
     for (const row of rows) {
       try {
         const parsed = JSON.parse(row.value);
-        settings[row.key] = row.key === MESSENGER_SETTINGS_KEY ? decryptMessengerChannelsForClient(parsed) : parsed;
+        settings[row.key] = row.key === MESSENGER_SETTINGS_KEY ? redactMessengerChannelsForClient(parsed) : parsed;
       } catch {
         settings[row.key] = row.value;
       }
@@ -225,7 +226,13 @@ export function registerOpsSettingsStatsRoutes(ctx: RuntimeContext): void {
               if (!warnings.includes(warning)) warnings.push(warning);
             }
           }
-          const encrypted = encryptMessengerChannelsForStorage(normalized.value);
+          const existingRow = db
+            .prepare("SELECT value FROM settings WHERE key = ?")
+            .get(MESSENGER_SETTINGS_KEY) as { value: string } | undefined;
+          const existingParsed =
+            existingRow && typeof existingRow.value === "string" ? safeJsonParse(existingRow.value) : {};
+          const merged = mergeRedactedMessengerTokensForStorage(normalized.value, existingParsed);
+          const encrypted = encryptMessengerChannelsForStorage(merged);
           upsert.run(key, typeof encrypted === "string" ? encrypted : JSON.stringify(encrypted));
           continue;
         }

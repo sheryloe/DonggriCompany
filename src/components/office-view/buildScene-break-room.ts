@@ -140,7 +140,7 @@ export function buildBreakRoom({
   breakRoom.addChild(brSignBg);
   const breakSignTextColor = isDark ? 0xffffff : contrastTextColor(breakTheme.accent);
   const brSignTxt = new Text({
-    text: "1F \uACF5\uC6A9\uCE35",
+    text: "공용 사무 구역",
     style: new TextStyle({
       fontSize: 9,
       fill: breakSignTextColor,
@@ -287,7 +287,7 @@ function drawSharedFloorHeader(
     brx,
     bry,
     brw,
-    `${floor?.level ?? "1F"} ${floor?.label ?? "\uACF5\uC6A9\uCE35"} / \uB85C\uBE44 / \uD734\uAC8C / \uD559\uC2B5 / \uD1F4\uADFC \uACF5\uBD80`,
+    `${floor?.label ?? "공용 사무 구역"} / 입구 / 휴게실 / 기억 서고 / 프로젝트 보드`,
     accent,
   );
 
@@ -298,7 +298,7 @@ function drawSharedFloorHeader(
       brx,
       rooftop.y,
       brw,
-      `${rooftop.level} ${rooftop.label} / \uD761\uC5F0\uC2E4 / \uB8E8\uD504\uAC00\uB4E0 / \uC57C\uC678 \uD734\uAC8C`,
+      `${rooftop.label} / 전망 휴게 / 식물 정원 / 리뷰 테라스`,
       rooftop.accent,
     );
   }
@@ -337,9 +337,9 @@ function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLa
     const zoneColor =
       facility.id === "lobby"
         ? 0xf4ead8
-        : facility.id === "study"
+        : facility.id === "memory"
           ? 0xddebf6
-          : facility.id === "after-hours"
+          : facility.id === "project-board"
             ? 0xdcdff0
             : facility.id === "smoking"
               ? 0xd9e1dc
@@ -386,12 +386,12 @@ function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLa
       drawCoffeeMachine(breakRoom, facility.x + facility.w - 44, facility.y + 18);
       drawVendingMachine(breakRoom, facility.x + facility.w - 74, facility.y + 18);
       drawMiniPendantLights(breakRoom, facility.x + 24, facility.y + 10, facility.w - 48, 0xf8d488);
-    } else if (facility.id === "study") {
+    } else if (facility.id === "memory") {
       drawBookshelf(breakRoom, facility.x + 12, facility.y + 22);
       drawWhiteboard(breakRoom, facility.x + facility.w - 58, facility.y + 18);
       drawHighTable(breakRoom, facility.x + Math.max(46, facility.w / 2 - 18), facility.y + facility.h - 44);
       drawMiniPendantLights(breakRoom, facility.x + 24, facility.y + 10, facility.w - 48, 0x93c5fd);
-    } else if (facility.id === "after-hours") {
+    } else if (facility.id === "project-board") {
       drawSofa(breakRoom, facility.x + 14, facility.y + facility.h - 26, 0x8fa0cf);
       drawWallMonitor(breakRoom, facility.x + facility.w - 66, facility.y + 14, 0x8192c8, 48, 24);
       drawPlant(breakRoom, facility.x + facility.w - 24, facility.y + facility.h - 20, 2);

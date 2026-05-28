@@ -7,7 +7,7 @@ import Sidebar from "./Sidebar";
 
 const departments: Department[] = [
   {
-    id: "ops",
+    id: "operations",
     name: "Ops",
     name_ko: "운영",
     icon: "OP",
@@ -25,7 +25,7 @@ function buildAgent(id: string, departmentId: string, status: Agent["status"], s
     name: id,
     name_ko: `${departmentId} 에이전트`,
     department_id: departmentId,
-    role: "junior",
+    role: "senior",
     cli_provider: "codex",
     avatar_emoji: "A",
     sprite_number: spriteNumber,
@@ -39,35 +39,37 @@ function buildAgent(id: string, departmentId: string, status: Agent["status"], s
 }
 
 describe("Sidebar app shell", () => {
-  it("shows Dongri-grigri office-first navigation without visible legacy sections", () => {
+  it("shows Dongri-grigri office navigation without rejected art-direction labels", () => {
     const { container } = render(
       <I18nProvider language="ko">
         <Sidebar
           currentView="office"
           onChangeView={vi.fn()}
           departments={departments}
-          agents={[buildAgent("agent-ops", "ops", "working", 3)]}
+          agents={[buildAgent("agent-ops", "operations", "working", 3)]}
           settings={DEFAULT_SETTINGS}
           connected
         />
       </I18nProvider>,
     );
 
-    for (const label of ["운영실", "프로젝트", "마스터 에이전트", "업무", "Skill", "Memory", "설정"]) {
+    for (const label of ["사무실", "프로젝트", "마스터 에이전트", "업무", "Skill", "Memory", "설정"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
 
     expect(screen.getByText("Dongri-grigri")).toBeInTheDocument();
-    expect(screen.getByText("Office Control Platform")).toBeInTheDocument();
+    expect(screen.getByText("8bit Office")).toBeInTheDocument();
     expect(screen.getByText("연결됨")).toBeInTheDocument();
     expect(screen.getByText("6개")).toBeInTheDocument();
     for (const label of ["기획", "개발", "디자인", "품질", "운영", "외부강사"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
 
-    expect(screen.queryByText(/Legacy/i)).not.toBeInTheDocument();
+    expect(screen.getByTitle("사무실")).toBeInTheDocument();
+    expect(screen.queryByText("타이쿤")).not.toBeInTheDocument();
+    expect(screen.queryByText("CloudOps")).not.toBeInTheDocument();
+    expect(screen.queryByText("8bit RPG Command Map")).not.toBeInTheDocument();
     expect(screen.queryByText("Control Hub")).not.toBeInTheDocument();
-    expect(screen.queryByText("Manual")).not.toBeInTheDocument();
     expect(container.querySelectorAll("nav .sidebar-nav-icon")).toHaveLength(7);
     expect(container.querySelectorAll("nav .sidebar-nav-icon img")).toHaveLength(0);
   });

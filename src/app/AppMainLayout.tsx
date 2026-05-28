@@ -5,8 +5,8 @@ import type {
   Agent,
   CeoOfficeCall,
   CliStatusMap,
-  CompanyStats,
   CompanySettings,
+  CompanyStats,
   CrossDeptDelivery,
   Department,
   MeetingPresence,
@@ -29,7 +29,6 @@ import { resolvePackAgentViews, resolvePackDepartmentsForDisplay } from "./offic
 import { applyOfficePackToTaskInput, filterTasksByOfficePack, type TaskCreateInput } from "./task-workflow-pack";
 
 const OfficeView = lazy(() => import("../components/OfficeView"));
-const Dashboard = lazy(() => import("../components/Dashboard"));
 const ControlPlanePage = lazy(() => import("../components/ControlPlanePage"));
 const TaskBoard = lazy(() => import("../components/TaskBoard"));
 const AgentManager = lazy(() => import("../components/AgentManager"));
@@ -274,6 +273,18 @@ export default function AppMainLayout({
     [onCreateTask, officePackKey],
   );
 
+  const showOperationsDashboard = view === "office" || view === "dashboard";
+  const useWideContent =
+    view === "office" ||
+    view === "dashboard" ||
+    view === "departmentComponents" ||
+    view === "controlPlane" ||
+    view === "projects" ||
+    view === "departments" ||
+    view === "memory" ||
+    view === "skills" ||
+    view === "settings";
+
   return (
     <I18nProvider language={uiLanguage}>
       <div className="app-shell flex h-[100dvh] min-h-[100dvh] overflow-hidden">
@@ -290,7 +301,7 @@ export default function AppMainLayout({
 
         {mobileNavOpen && (
           <button
-            aria-label="Close navigation"
+            aria-label="내비게이션 닫기"
             className="fixed inset-0 z-40 bg-black/50 lg:hidden"
             onClick={() => setMobileNavOpen(false)}
           />
@@ -313,7 +324,7 @@ export default function AppMainLayout({
           />
         </div>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <AppHeaderBar
             currentView={view}
             connected={connected}
@@ -336,7 +347,7 @@ export default function AppMainLayout({
             onOpenAnnouncement={onOpenAnnouncement}
             onOpenRoomManager={onOpenRoomManager}
             officePackControl={
-              view === "office" || view === "agents" || view === "tasks"
+              showOperationsDashboard || view === "agents" || view === "tasks"
                 ? {
                     label: officePackLabel,
                     value: officePackKey,
@@ -409,18 +420,16 @@ export default function AppMainLayout({
             </div>
           )}
 
-          <div
-            className={
-              view === "departmentComponents" || view === "controlPlane" || view === "projects" || view === "departments" || view === "memory"
-                ? "p-3 sm:p-4 lg:p-6"
-                : "app-main-grid p-3 sm:p-4 lg:p-6"
-            }
-          >
+          <div className={useWideContent ? "p-3 sm:p-4 lg:p-6" : "app-main-grid p-3 sm:p-4 lg:p-6"}>
             <div className="min-w-0">
               <Suspense
-                fallback={<div className="command-panel px-4 py-6 text-sm text-slate-300">{viewLoadingLabel}</div>}
+                fallback={
+                  <div className="command-panel px-4 py-6 text-sm" style={{ color: "var(--th-text-secondary)" }}>
+                    {viewLoadingLabel}
+                  </div>
+                }
               >
-                {view === "office" && (
+                {showOperationsDashboard && (
                   <OfficeView
                     departments={officePresentation.departments}
                     agents={officePresentation.agents}
@@ -438,18 +447,11 @@ export default function AppMainLayout({
                     themeHighlightTargetId={activeRoomThemeTargetId}
                     onSelectAgent={onSelectAgent}
                     onSelectDepartment={onSelectDepartment}
-                    pixelAgentMode={settings.pixelAgentMode}
-                  />
-                )}
-
-                {view === "dashboard" && (
-                  <Dashboard
-                    stats={stats}
-                    agents={agents}
-                    tasks={tasks}
-                    companyName={settings.companyName}
-                    onPrimaryCtaClick={() => setView("tasks")}
+                    onOpenTasks={() => setView("tasks")}
+                    onOpenProjects={() => setView("projects")}
+                    onOpenMemory={() => setView("memory")}
                     onOpenControlPlane={() => setView("controlPlane")}
+                    pixelAgentMode={settings.pixelAgentMode}
                   />
                 )}
 
@@ -530,7 +532,7 @@ export default function AppMainLayout({
                 )}
               </Suspense>
             </div>
-            {view !== "departmentComponents" && view !== "controlPlane" && view !== "projects" && view !== "departments" && view !== "memory" && (
+            {!useWideContent && (
               <LiveOperationsRail agents={displayAgents} tasks={tasksForActivePack} connected={connected} />
             )}
           </div>

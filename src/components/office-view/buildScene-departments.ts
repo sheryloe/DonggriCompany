@@ -66,6 +66,19 @@ interface BuildDepartmentRoomsParams {
   nextSubSnapshot: Map<string, { parentAgentId: string; x: number; y: number }>;
 }
 
+function normalizeOfficeDepartmentVisualId(departmentId: string): string {
+  if (departmentId === "development") return "dev";
+  if (departmentId === "quality") return "qa";
+  if (departmentId === "ops") return "operations";
+  if (departmentId === "instructor") return "strategic_maintenance";
+  return departmentId;
+}
+
+function isOperationsDepartment(departmentId: string): boolean {
+  const normalized = normalizeOfficeDepartmentVisualId(departmentId);
+  return normalized === "operations" || normalized === "devsecops";
+}
+
 export function buildDepartmentRooms({
   app,
   textures,
@@ -99,11 +112,17 @@ export function buildDepartmentRooms({
     const col = deptIdx % gridCols;
     const row = Math.floor(deptIdx / gridCols);
     const layout = roomLayouts?.get(dept.id);
-    const rx = layout?.x ?? roomStartX + col * (roomW + roomGap);
-    const ry = layout?.y ?? deptStartY + row * (roomH + roomGap);
-    const currentRoomW = layout?.w ?? roomW;
-    const currentRoomH = layout?.h ?? roomH;
-    const fallbackTheme = DEPT_THEME[dept.id] || DEPT_THEME.dev;
+    const visualDepartmentId = normalizeOfficeDepartmentVisualId(dept.id);
+    const isOpsCorner = isOperationsDepartment(dept.id);
+    const baseRx = layout?.x ?? roomStartX + col * (roomW + roomGap);
+    const baseRy = layout?.y ?? deptStartY + row * (roomH + roomGap);
+    const baseRoomW = layout?.w ?? roomW;
+    const baseRoomH = layout?.h ?? roomH;
+    const currentRoomW = isOpsCorner ? Math.min(232, Math.max(192, Math.floor(baseRoomW * 0.62))) : baseRoomW;
+    const currentRoomH = isOpsCorner ? Math.min(166, Math.max(146, Math.floor(baseRoomH * 0.78))) : baseRoomH;
+    const rx = isOpsCorner ? baseRx + baseRoomW - currentRoomW - 10 : baseRx;
+    const ry = isOpsCorner ? baseRy + 14 : baseRy;
+    const fallbackTheme = DEPT_THEME[dept.id] || DEPT_THEME[visualDepartmentId] || DEPT_THEME.dev;
     const theme = ensureVisibleRoomTheme(customThemes?.[dept.id] || fallbackTheme, fallbackTheme);
     const deptAgents = agents.filter((agent) => agent.department_id === dept.id);
     const currentAgentRows = Math.max(1, Math.ceil(deptAgents.length / COLS_PER_ROW));
@@ -116,7 +135,7 @@ export function buildDepartmentRooms({
     drawTiledFloor(floorG, rx, ry, currentRoomW, currentRoomH, theme.floor1, theme.floor2);
     room.addChild(floorG);
     drawRoomAtmosphere(room, rx, ry, currentRoomW, currentRoomH, theme.wall, theme.accent);
-    drawRoomDepthDetails(room, rx, ry, currentRoomW, currentRoomH, theme, dept.id);
+    drawRoomDepthDetails(room, rx, ry, currentRoomW, currentRoomH, theme, visualDepartmentId);
 
     const wallG = new Graphics();
     wallG.roundRect(rx, ry, currentRoomW, currentRoomH, 6).stroke({ width: 2.5, color: theme.wall });
@@ -157,7 +176,7 @@ export function buildDepartmentRooms({
 
     drawFloorLabel(room, layout?.floorLabel, rx, ry, currentRoomW, theme.accent);
     drawCeilingAndDecor(room, rx, ry, currentRoomW, currentRoomH, theme, deptIdx, wallClocksRef);
-    drawDepartmentFeatureWall(room, dept.id, rx, ry, currentRoomW, currentRoomH, theme);
+    drawDepartmentFeatureWall(room, visualDepartmentId, rx, ry, currentRoomW, currentRoomH, theme);
 
     if (deptAgents.length > 0) {
       drawRug(

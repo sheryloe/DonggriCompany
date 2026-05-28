@@ -3,88 +3,76 @@ import type { Agent, Department } from "../../types";
 import { buildOfficeFloorPlan, estimateOfficeSceneWidth } from "./officeFloorPlan";
 
 const departments: Department[] = [
-  "pmo",
   "planning",
+  "development",
   "dev",
   "design",
+  "quality",
   "qa",
-  "devsecops",
   "operations",
-  "strategic_maintenance",
+  "instructor",
 ].map((id, index) => ({
   id,
   name: id,
   name_ko: id,
-  icon: id.toUpperCase(),
-  color: "#000000",
+  icon: id.slice(0, 2).toUpperCase(),
+  color: "#0ea5e9",
   description: null,
   prompt: null,
   sort_order: index + 1,
   created_at: 0,
 }));
 
-const agents: Agent[] = departments.flatMap((department) =>
-  Array.from({ length: department.id === "pmo" ? 1 : 3 }, (_, index) => ({
-    id: `${department.id}-${index + 1}`,
-    name: `${department.id}-${index + 1}`,
-    name_ko: `${department.id}-${index + 1}`,
-    department_id: department.id,
-    role: index === 0 ? "team_leader" : "senior",
-    cli_provider: "codex",
-    avatar_emoji: "AG",
-    personality: null,
-    status: "idle",
-    current_task_id: null,
-    stats_tasks_done: 0,
-    stats_xp: 0,
-    created_at: 0,
-  })),
-);
+const agents: Agent[] = departments.map((department, index) => ({
+  id: `agent-${department.id}`,
+  name: `agent-${department.id}`,
+  name_ko: `agent-${department.id}`,
+  department_id: department.id,
+  role: "senior",
+  cli_provider: "codex",
+  avatar_emoji: "AG",
+  personality: null,
+  status: index % 2 === 0 ? "working" : "idle",
+  current_task_id: null,
+  stats_tasks_done: 0,
+  stats_xp: 0,
+  created_at: 0,
+}));
 
-describe("buildOfficeFloorPlan", () => {
-  it("places eight canonical departments into four office floors", () => {
-    const officeW = estimateOfficeSceneWidth({ viewportW: 980, departments });
-    const plan = buildOfficeFloorPlan({ officeW, departments, agents });
+describe("8bit office floor plan", () => {
+  it("places department aliases in office zones instead of overflow floors", () => {
+    const layout = buildOfficeFloorPlan({ officeW: 1280, departments, agents });
 
-    expect(plan.floorBands.map((floor) => `${floor.level} ${floor.label}`)).toEqual([
-      "1F 공용층",
-      "RF 옥상층",
-      "2F 전략층",
-      "3F 제작층",
-      "4F 품질/운영층",
-    ]);
-    expect([...plan.roomLayouts.keys()].sort()).toEqual(departments.map((department) => department.id).sort());
-    expect(plan.roomLayouts.get("pmo")?.floorId).toBe("strategy");
-    expect(plan.roomLayouts.get("dev")?.floorId).toBe("production");
-    expect(plan.roomLayouts.get("operations")?.floorId).toBe("quality");
-    expect(plan.roomLayouts.get("strategic_maintenance")?.floorId).toBe("quality");
-    expect(plan.sharedFacilities.map((facility) => facility.id)).toEqual([
-      "lobby",
-      "break",
-      "study",
-      "after-hours",
-      "smoking",
-      "roof-garden",
-      "roof-lounge",
-    ]);
-    expect(plan.sharedFacilities.find((facility) => facility.id === "smoking")?.label).toBe("흡연실");
-    expect(plan.transportCore?.h).toBeGreaterThan(700);
+    for (const id of ["planning", "development", "dev", "design", "quality", "qa", "operations", "instructor"]) {
+      expect(layout.roomLayouts.has(id)).toBe(true);
+      expect(layout.roomLayouts.get(id)?.floorLabel).not.toBe("확장 구역");
+    }
+
+    expect(layout.roomLayouts.get("development")?.floorId).toBe("production");
+    expect(layout.roomLayouts.get("dev")?.floorId).toBe("production");
+    expect(layout.roomLayouts.get("quality")?.floorId).toBe("quality");
+    expect(layout.roomLayouts.get("qa")?.floorId).toBe("quality");
+    expect(layout.roomLayouts.get("operations")?.floorId).toBe("quality");
+    expect(layout.roomLayouts.get("instructor")?.floorId).toBe("quality");
   });
 
-  it("keeps the four-department quality floor wide instead of squeezing rooms", () => {
-    const officeW = estimateOfficeSceneWidth({ viewportW: 390, departments });
-    const plan = buildOfficeFloorPlan({ officeW, departments, agents });
-    const qualityRooms = ["qa", "devsecops", "operations", "strategic_maintenance"].map((id) =>
-      plan.roomLayouts.get(id),
-    );
+  it("uses office area labels instead of literal floor codes", () => {
+    const layout = buildOfficeFloorPlan({ officeW: 1280, departments, agents });
+    const visibleText = [
+      ...layout.floorBands.flatMap((band) => [band.level, band.label]),
+      ...Array.from(layout.roomLayouts.values()).map((room) => room.floorLabel),
+      ...layout.sharedFacilities.map((facility) => facility.label),
+    ].join(" ");
 
-    expect(officeW).toBeGreaterThan(1000);
-    for (const room of qualityRooms) {
-      expect(room?.floorId).toBe("quality");
-      expect(room?.w).toBeGreaterThanOrEqual(304);
+    for (const removedLabel of ["1F", "RF", "2F", "3F", "4F"]) {
+      expect(visibleText).not.toContain(removedLabel);
     }
-    expect(qualityRooms[0]!.x + qualityRooms[0]!.w).toBeLessThan(qualityRooms[1]!.x);
-    expect(qualityRooms[1]!.x + qualityRooms[1]!.w).toBeLessThan(qualityRooms[2]!.x);
-    expect(qualityRooms[2]!.x + qualityRooms[2]!.w).toBeLessThan(qualityRooms[3]!.x);
+    expect(visibleText).toContain("기억 서고");
+    expect(visibleText).toContain("프로젝트 보드");
+    expect(visibleText).toContain("검토/운영 구역");
+  });
+
+  it("keeps the office scene wide enough for pixel rooms and props", () => {
+    expect(estimateOfficeSceneWidth({ viewportW: 960, departments })).toBeGreaterThanOrEqual(1180);
   });
 });

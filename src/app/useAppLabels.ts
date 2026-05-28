@@ -15,8 +15,8 @@ interface UseAppLabelsParams {
 }
 
 const VIEW_TITLE: Record<View, string> = {
-  office: "Dongri-grigri 운영실",
-  dashboard: "운영 대시보드",
+  office: "8bit 사무실",
+  dashboard: "8bit 사무실",
   projects: "프로젝트 스코프",
   departments: "마스터 에이전트",
   controlPlane: "Control Plane 상세",
@@ -42,10 +42,10 @@ export function useAppLabels({
 }: UseAppLabelsParams) {
   const uiLanguage = "ko" as const;
   const loadingTitle = "Dongri-grigri를 불러오는 중입니다.";
-  const loadingSubtitle = "운영실, 마스터 에이전트, 메모리, Control Plane 상태를 준비하고 있습니다.";
+  const loadingSubtitle = "픽셀 사무실, 마스터 에이전트, Memory, Control Plane 상태를 준비하고 있습니다.";
   const viewTitle = VIEW_TITLE[view] ?? "";
   const announcementLabel = "공지";
-  const roomManagerLabel = "대화방";
+  const roomManagerLabel = "부서 대화방";
   const roomManagerDepartments = useMemo(
     () => [{ id: "ceoOffice", name: "운영실" }, ...departments, { id: "breakRoom", name: "휴게실" }],
     [departments],
@@ -81,13 +81,13 @@ export function useAppLabels({
     `https://github.com/${effectiveUpdateStatus?.repo ?? "Dongri-grigri/DonggriCompany"}/releases/latest`;
 
   const updateTitle = updateBannerVisible
-    ? `새 버전 v${effectiveUpdateStatus?.latest_version} 사용 가능 - 현재 v${effectiveUpdateStatus?.current_version}`
+    ? `새 버전 v${effectiveUpdateStatus?.latest_version} 사용 가능 · 현재 v${effectiveUpdateStatus?.current_version}`
     : "";
 
   const updateHint =
     runtimeOs === "windows"
-      ? "Windows PowerShell에서 업데이트 명령을 확인한 뒤 서버를 다시 시작하세요."
-      : "업데이트 명령을 확인한 뒤 서버를 다시 시작하세요.";
+      ? "Windows PowerShell에서 업데이트 명령을 확인하고 서버를 다시 시작하세요."
+      : "업데이트 명령을 확인하고 서버를 다시 시작하세요.";
 
   const updateReleaseLabel = "릴리스 노트";
   const updateDismissLabel = "닫기";
@@ -101,12 +101,12 @@ export function useAppLabels({
     theme === "light"
       ? "border-b border-sky-200 bg-sky-50 px-3 py-2.5 sm:px-4 lg:px-6"
       : "border-b border-sky-500/30 bg-sky-500/10 px-3 py-2.5 sm:px-4 lg:px-6";
-  const autoUpdateNoticeTextClass = theme === "light" ? "min-w-0 text-xs text-sky-900" : "min-w-0 text-xs text-sky-100";
+  const autoUpdateNoticeTextClass = theme === "light" ? "min-w-0 text-xs text-sky-950" : "min-w-0 text-xs text-sky-100";
   const autoUpdateNoticeHintClass =
     theme === "light" ? "mt-0.5 text-[11px] text-sky-800" : "mt-0.5 text-[11px] text-sky-200/90";
   const autoUpdateNoticeButtonClass =
     theme === "light"
-      ? "rounded-md border border-sky-300 bg-white px-2.5 py-1 text-[11px] text-sky-900 transition hover:bg-sky-100"
+      ? "rounded-md border border-sky-300 bg-white px-2.5 py-1 text-[11px] text-sky-950 transition hover:bg-sky-100"
       : "rounded-md border border-sky-300/40 bg-sky-200/10 px-2.5 py-1 text-[11px] text-sky-100 transition hover:bg-sky-200/20";
 
   const updateTestModeHint = forceUpdateBanner

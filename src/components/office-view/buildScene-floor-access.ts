@@ -52,8 +52,8 @@ function drawFloorBand(stage: Container, band: OfficeFloorBand, officeW: number,
     }),
   });
   const levelBg = new Graphics();
-  levelBg.roundRect(x + 14, y + 7, 42, 18, 5).fill({ color: visual.panel, alpha: 0.92 });
-  levelBg.roundRect(x + 14, y + 7, 42, 18, 5).stroke({ width: 1, color: visual.trim, alpha: 0.75 });
+  levelBg.roundRect(x + 14, y + 7, 46, 18, 5).fill({ color: visual.panel, alpha: 0.92 });
+  levelBg.roundRect(x + 14, y + 7, 46, 18, 5).stroke({ width: 1, color: visual.trim, alpha: 0.75 });
   level.position.set(x + 23, y + 10);
   stage.addChild(levelBg);
   stage.addChild(level);
@@ -67,7 +67,7 @@ function drawFloorBand(stage: Container, band: OfficeFloorBand, officeW: number,
       fill: isDark ? 0xf8fafc : 0x132033,
     }),
   });
-  label.position.set(x + 64, y + 10);
+  label.position.set(x + 68, y + 10);
   stage.addChild(label);
 }
 

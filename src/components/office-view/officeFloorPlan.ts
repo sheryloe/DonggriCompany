@@ -28,7 +28,14 @@ export interface OfficeRoomLayout {
 }
 
 export interface SharedFacilityLayout {
-  id: "lobby" | "break" | "study" | "after-hours" | "smoking" | "roof-garden" | "roof-lounge";
+  id:
+    | "lobby"
+    | "break"
+    | "memory"
+    | "project-board"
+    | "smoking"
+    | "roof-garden"
+    | "roof-lounge";
   label: string;
   x: number;
   y: number;
@@ -68,13 +75,19 @@ const FLOOR_DEPARTMENTS: Array<{
   departments: string[];
   accent: number;
 }> = [
-  { id: "strategy", label: "전략층", level: "2F", departments: ["pmo", "planning"], accent: 0x14b8a6 },
-  { id: "production", label: "제작층", level: "3F", departments: ["dev", "design"], accent: 0x3b82f6 },
+  { id: "strategy", label: "기획 구역", level: "기획", departments: ["pmo", "planning"], accent: 0x14b8a6 },
+  {
+    id: "production",
+    label: "제작 구역",
+    level: "제작",
+    departments: ["dev", "development", "design"],
+    accent: 0x3b82f6,
+  },
   {
     id: "quality",
-    label: "품질/운영층",
-    level: "4F",
-    departments: ["qa", "devsecops", "operations", "strategic_maintenance"],
+    label: "검토/운영 구역",
+    level: "검토",
+    departments: ["qa", "quality", "operations", "ops", "instructor", "devsecops", "strategic_maintenance"],
     accent: 0xf97316,
   },
 ];
@@ -156,15 +169,15 @@ export function buildOfficeFloorPlan(params: {
   const rooftopFloorY = sharedFloorY + sharedFloorH + 18;
   const rooftopFloorH = ROOFTOP_FLOOR_H;
   const baseSharedFacilities: Array<Pick<SharedFacilityLayout, "id" | "label">> = [
-    { id: "lobby", label: "로비" },
+    { id: "lobby", label: "입구" },
     { id: "break", label: "휴게실" },
-    { id: "study", label: "학습실" },
-    { id: "after-hours", label: "퇴근 공부실" },
+    { id: "memory", label: "기억 서고" },
+    { id: "project-board", label: "프로젝트 보드" },
   ];
   const baseRooftopFacilities: Array<Pick<SharedFacilityLayout, "id" | "label">> = [
-    { id: "smoking", label: "흡연실" },
-    { id: "roof-garden", label: "루프가든" },
-    { id: "roof-lounge", label: "야외 휴게석" },
+    { id: "smoking", label: "전망 휴게" },
+    { id: "roof-garden", label: "식물 정원" },
+    { id: "roof-lounge", label: "리뷰 테라스" },
   ];
   const sharedFacilities: SharedFacilityLayout[] = [
     ...createFacilityLayouts(baseSharedFacilities, {
@@ -183,16 +196,16 @@ export function buildOfficeFloorPlan(params: {
 
   floorBands.push({
     id: "shared",
-    label: "공용층",
-    level: "1F",
+    label: "공용 사무 구역",
+    level: "공용",
     y: sharedFloorY,
     h: sharedFloorH,
     accent: 0xf59e0b,
   });
   floorBands.push({
     id: "rooftop",
-    label: "옥상층",
-    level: "RF",
+    label: "옥상 휴게 구역",
+    level: "옥상",
     y: rooftopFloorY,
     h: rooftopFloorH,
     accent: 0x22c55e,
@@ -228,7 +241,7 @@ export function buildOfficeFloorPlan(params: {
       roomLayouts.set(departmentId, {
         deptId: departmentId,
         floorId: floor.id,
-        floorLabel: `${floor.level} ${floor.label}`,
+        floorLabel: floor.label,
         x: SIDE_PAD + col * (roomW + ROOM_GAP),
         y: rowStartY,
         w: roomW,
@@ -266,7 +279,7 @@ export function buildOfficeFloorPlan(params: {
       roomLayouts.set(department.id, {
         deptId: department.id,
         floorId: "quality",
-        floorLabel: "4F 품질/운영층",
+        floorLabel: "확장 구역",
         x: SIDE_PAD + col * (roomW + ROOM_GAP),
         y: floorY + FLOOR_LABEL_H + 10 + row * (roomH + ROOM_GAP),
         w: roomW,
@@ -275,7 +288,7 @@ export function buildOfficeFloorPlan(params: {
     });
     const rows = countRows(overflowDepartments.length, cols);
     const floorH = FLOOR_LABEL_H + 10 + rows * roomH + (rows - 1) * ROOM_GAP;
-    floorBands.push({ id: "quality", label: "확장 구역", level: "4F", y: floorY, h: floorH, accent: 0xf97316 });
+    floorBands.push({ id: "quality", label: "확장 구역", level: "확장", y: floorY, h: floorH, accent: 0xf97316 });
     cursorY = floorY + floorH + FLOOR_GAP;
   }
 

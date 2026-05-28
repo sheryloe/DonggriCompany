@@ -1,15 +1,14 @@
-import { type Container } from "pixi.js";
+import type { BuildOfficeSceneContext } from "./buildScene-types";
 import { buildSpriteMap } from "../AgentAvatar";
 import { BREAK_ROOM_GAP, COLS_PER_ROW, ROOM_PAD, SLOT_H, SLOT_W, detachNode } from "./model";
 import { DEFAULT_BREAK_THEME, DEFAULT_CEO_THEME, applyOfficeThemeMode } from "./themes-locale";
-import type { BuildOfficeSceneContext } from "./buildScene-types";
-import { buildCeoAndHallway } from "./buildScene-ceo-hallway";
-import { buildDepartmentRooms } from "./buildScene-departments";
 import { buildBreakRoom } from "./buildScene-break-room";
-import { buildFinalLayers } from "./buildScene-final-layers";
-import { buildOfficeFloorPlan, estimateOfficeSceneWidth } from "./officeFloorPlan";
-import { buildFloorAccessLayer } from "./buildScene-floor-access";
+import { buildCeoAndHallway } from "./buildScene-ceo-hallway";
 import { buildCloudLabLayer } from "./buildScene-cloud-lab";
+import { buildDepartmentRooms } from "./buildScene-departments";
+import { buildFinalLayers } from "./buildScene-final-layers";
+import { buildFloorAccessLayer } from "./buildScene-floor-access";
+import { buildOfficeFloorPlan, estimateOfficeSceneWidth } from "./officeFloorPlan";
 
 export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   const {
@@ -52,7 +51,7 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   const textures = texturesRef.current;
   if (!app) return;
 
-  const preservedDeliverySprites = new Set<Container>();
+  const preservedDeliverySprites = new Set<import("pixi.js").Container>();
   for (const delivery of deliveriesRef.current) {
     if (delivery.sprite.destroyed) continue;
     preservedDeliverySprites.add(delivery.sprite);
@@ -98,11 +97,11 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   }
 
   const removedSubBurstsByParent = new Map<string, Array<{ x: number; y: number }>>();
-  for (const [subId, prev] of previousSubSnapshot.entries()) {
+  for (const [subId, previous] of previousSubSnapshot.entries()) {
     if (currentWorkingSubIds.has(subId)) continue;
-    const list = removedSubBurstsByParent.get(prev.parentAgentId) ?? [];
-    list.push({ x: prev.x, y: prev.y });
-    removedSubBurstsByParent.set(prev.parentAgentId, list);
+    const list = removedSubBurstsByParent.get(previous.parentAgentId) ?? [];
+    list.push({ x: previous.x, y: previous.y });
+    removedSubBurstsByParent.set(previous.parentAgentId, list);
   }
   const nextSubSnapshot = new Map<string, { parentAgentId: string; x: number; y: number }>();
 
@@ -118,16 +117,18 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
   const OFFICE_W = estimateOfficeSceneWidth({ viewportW: officeWRef.current, departments });
   officeWRef.current = OFFICE_W;
   const floorPlan = buildOfficeFloorPlan({ officeW: OFFICE_W, departments, agents });
-  const deptCount = departments.length || 1;
+  const departmentCount = departments.length || 1;
   const baseRoomW = COLS_PER_ROW * SLOT_W + ROOM_PAD * 2;
   const roomGap = 12;
-  let gridCols = Math.min(deptCount, 3);
+  let gridCols = Math.min(departmentCount, 3);
   while (gridCols > 1 && gridCols * baseRoomW + (gridCols - 1) * roomGap + 24 > OFFICE_W) {
     gridCols -= 1;
   }
 
-  const agentsPerDept = departments.map((dept) => agents.filter((agent) => agent.department_id === dept.id));
-  const maxAgents = Math.max(1, ...agentsPerDept.map((deptAgents) => deptAgents.length));
+  const agentsPerDepartment = departments.map((department) =>
+    agents.filter((agent) => agent.department_id === department.id),
+  );
+  const maxAgents = Math.max(1, ...agentsPerDepartment.map((departmentAgents) => departmentAgents.length));
   const agentRows = Math.ceil(maxAgents / COLS_PER_ROW);
 
   const totalRoomSpace = OFFICE_W - 24 - (gridCols - 1) * roomGap;

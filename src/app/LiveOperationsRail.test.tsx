@@ -7,7 +7,7 @@ import { getTaskStatusKoLabel } from "./task-status-display";
 const agent: Agent = {
   id: "agent-1",
   name: "Builder",
-  name_ko: "개발 리드",
+  name_ko: "개발 담당",
   department_id: "dev",
   role: "senior",
   cli_provider: "codex",
@@ -23,7 +23,7 @@ const agent: Agent = {
 
 const task: Task = {
   id: "task-123456",
-  title: "앱 셸 리디자인",
+  title: "사무실 화면 복구",
   description: null,
   department_id: "dev",
   assigned_agent_id: "agent-1",
@@ -39,17 +39,20 @@ const task: Task = {
 };
 
 describe("LiveOperationsRail", () => {
-  it("실시간 업무, 시스템 상태, 최근 로그를 한국어로 표시한다", () => {
+  it("shows operating status, system status, and recent logs in Korean", () => {
     render(<LiveOperationsRail agents={[agent]} tasks={[task]} connected />);
 
-    expect(screen.getByRole("complementary", { name: "실시간 업무 현황" })).toBeInTheDocument();
-    expect(screen.getByText("라이브")).toBeInTheDocument();
-    expect(screen.getByText("근무 직원")).toBeInTheDocument();
-    expect(screen.getAllByText("앱 셸 리디자인")).toHaveLength(2);
+    expect(screen.getByRole("complementary", { name: "운영 현황" })).toBeInTheDocument();
+    expect(screen.getByText("온라인")).toBeInTheDocument();
+    expect(screen.getByText("실시간 운영 신호")).toBeInTheDocument();
+    expect(screen.getByText("실행 중")).toBeInTheDocument();
+    expect(screen.getAllByText("사무실 화면 복구")).toHaveLength(2);
     expect(screen.getByText(getTaskStatusKoLabel(task.status))).toBeInTheDocument();
     expect(screen.getByText("시스템 상태")).toBeInTheDocument();
     expect(screen.getByText("서버 연결")).toBeInTheDocument();
-    expect(screen.getByText("최근 시스템 로그")).toBeInTheDocument();
+    expect(screen.getByText("최근 실행 로그")).toBeInTheDocument();
     expect(screen.getByText("Task #task-1")).toBeInTheDocument();
+    expect(screen.queryByText("Live Ops")).not.toBeInTheDocument();
+    expect(screen.queryByText("Department rooms")).not.toBeInTheDocument();
   });
 });

@@ -1,11 +1,8 @@
 # Design Master_skills
 
 ## Active Skills
-- design-system
-- interaction
-- accessibility
-- visual-qa
-- korean-ui-copy
+- learned snapshot: none
+- installed snapshot: none
 
 ## Learned Skills History
 - No durable skill usage history yet.

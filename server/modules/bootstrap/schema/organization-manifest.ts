@@ -33,6 +33,8 @@ export interface OrganizationDepartmentManifest {
   sort_order: number;
 }
 
+export const ORGANIZATION_MANIFEST_SCOPE = "business-staffing-projection-not-sdd-department-agents" as const;
+
 export interface AgentVisualProfileSeed {
   agent_visual_profile_key: string;
   label_ko: string;

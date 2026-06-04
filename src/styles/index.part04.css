@@ -1085,6 +1085,55 @@
     0 22px 48px rgba(2, 6, 23, 0.22);
 }
 
+[data-theme="light"] .dongri-sidebar {
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.98), rgba(244, 247, 251, 0.95)),
+    radial-gradient(circle at 44% 0%, rgba(20, 184, 166, 0.11), transparent 32%);
+}
+
+[data-theme="light"] .dongri-sidebar .sidebar-nav-item {
+  border-color: rgba(148, 134, 112, 0.16);
+  background: rgba(255, 255, 255, 0.54);
+  color: #4b5563;
+}
+
+[data-theme="light"] .dongri-sidebar .sidebar-nav-item:hover {
+  border-color: rgba(20, 184, 166, 0.34);
+  background: rgba(255, 255, 255, 0.86);
+  color: #111827;
+}
+
+[data-theme="light"] .dongri-sidebar .sidebar-nav-item.active {
+  background: linear-gradient(90deg, rgba(20, 184, 166, 0.22), rgba(255, 255, 255, 0.92));
+  box-shadow: inset 3px 0 0 #0f766e;
+  color: #0f172a;
+}
+
+[data-theme="light"] .dongri-sidebar .sidebar-nav-icon {
+  border-color: rgba(20, 184, 166, 0.24);
+  background: rgba(20, 184, 166, 0.09);
+  color: #0f766e;
+}
+
+[data-theme="light"] .command-panel {
+  border-color: rgba(148, 134, 112, 0.26);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme="light"] .header-action-btn-ghost,
+[data-theme="light"] .header-action-btn-secondary {
+  color: #334155;
+}
+
+[data-theme="light"] .live-status-pill.is-online {
+  color: #065f46;
+}
+
+[data-theme="light"] .live-status-pill.is-offline {
+  color: #9f1239;
+}
+
 .manual-shell {
   display: flex;
   flex-direction: column;
@@ -1374,5 +1423,1746 @@
   .manual-search {
     margin-left: 0;
     min-width: 0;
+  }
+}
+
+.cloudops-shell {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 0.85rem;
+  color: var(--th-text-primary);
+}
+
+.cloudops-hero,
+.cloudops-map-shell,
+.cloudops-status-panel,
+.cloudops-kpi-card,
+.cloudops-safety-ribbon {
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--th-bg-surface) 92%, transparent), color-mix(in srgb, var(--th-bg) 86%, transparent)),
+    var(--th-bg-surface);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 32px rgba(15, 23, 42, 0.12);
+}
+
+.cloudops-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.cloudops-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #0891b2;
+  font-family: var(--th-font-mono);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.cloudops-hero h1 {
+  margin-top: 0.35rem;
+  font-size: clamp(1.65rem, 3vw, 2.75rem);
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.cloudops-hero p {
+  margin-top: 0.45rem;
+  max-width: 52rem;
+  color: var(--th-text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.cloudops-filter-group {
+  display: flex;
+  max-width: 34rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.cloudops-filter-button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: var(--th-bg-surface);
+  padding: 0 0.7rem;
+  color: var(--th-text-secondary);
+  font-size: 0.74rem;
+  font-weight: 800;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.cloudops-filter-button:hover,
+.cloudops-filter-button.is-selected {
+  border-color: rgba(34, 211, 238, 0.56);
+  background: rgba(34, 211, 238, 0.12);
+  color: #0e7490;
+}
+
+.dark .cloudops-filter-button:hover,
+.dark .cloudops-filter-button.is-selected {
+  color: #a5f3fc;
+}
+
+.cloudops-filter-button:active {
+  transform: translateY(1px);
+}
+
+.cloudops-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.cloudops-kpi-card {
+  padding: 0.78rem;
+}
+
+.cloudops-kpi-card span,
+.cloudops-panel-eyebrow,
+.cloudops-zone-topline {
+  color: var(--th-text-muted);
+  font-family: var(--th-font-mono);
+  font-size: 0.63rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.cloudops-kpi-card strong {
+  display: block;
+  margin-top: 0.28rem;
+  color: #0891b2;
+  font-family: var(--th-font-mono);
+  font-size: 1.45rem;
+  font-weight: 950;
+}
+
+.dark .cloudops-kpi-card strong {
+  color: #67e8f9;
+}
+
+.cloudops-kpi-card small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--th-text-secondary);
+  font-size: 0.68rem;
+}
+
+.cloudops-map-shell {
+  position: relative;
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.cloudops-map-grid {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.4;
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.12) 1px, transparent 1px);
+  background-size: 18px 18px;
+  image-rendering: pixelated;
+}
+
+.cloudops-core-panel,
+.cloudops-pipeline,
+.cloudops-service-stage,
+.cloudops-bottom-grid,
+.cloudops-safety-ribbon {
+  position: relative;
+  z-index: 1;
+}
+
+.cloudops-core-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 8px;
+  background: rgba(14, 165, 233, 0.08);
+  padding: 0.85rem;
+}
+
+.cloudops-core-mark {
+  display: flex;
+  height: 2.6rem;
+  width: 2.6rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(34, 211, 238, 0.42);
+  border-radius: 8px;
+  background: rgba(34, 211, 238, 0.14);
+  color: #0891b2;
+}
+
+.cloudops-core-panel h2,
+.cloudops-status-panel h2 {
+  margin-top: 0.2rem;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.cloudops-core-panel p,
+.cloudops-status-panel p {
+  margin-top: 0.2rem;
+  color: var(--th-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.cloudops-pipeline {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.cloudops-pipeline-node {
+  position: relative;
+  min-height: 4.4rem;
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--th-bg-surface) 88%, transparent);
+  padding: 0.55rem;
+}
+
+.cloudops-pipeline-node::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -0.48rem;
+  width: 0.48rem;
+  height: 2px;
+  background: rgba(34, 211, 238, 0.42);
+}
+
+.cloudops-pipeline-node:last-child::after {
+  display: none;
+}
+
+.cloudops-pipeline-node.is-active {
+  border-color: rgba(34, 197, 94, 0.46);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.cloudops-pipeline-node.is-gate {
+  border-color: rgba(245, 158, 11, 0.52);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.cloudops-node-index {
+  color: var(--th-text-muted);
+  font-family: var(--th-font-mono);
+  font-size: 0.58rem;
+}
+
+.cloudops-pipeline-node strong,
+.cloudops-pipeline-node small {
+  display: block;
+}
+
+.cloudops-pipeline-node strong {
+  margin-top: 0.25rem;
+  font-family: var(--th-font-mono);
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.cloudops-pipeline-node small {
+  margin-top: 0.1rem;
+  color: var(--th-text-secondary);
+  font-size: 0.68rem;
+}
+
+.cloudops-gate-dot {
+  position: absolute;
+  right: 0.55rem;
+  top: 0.55rem;
+  height: 0.45rem;
+  width: 0.45rem;
+  border-radius: 999px;
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
+}
+
+.cloudops-service-stage {
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.54fr);
+  gap: 0.8rem;
+  align-items: stretch;
+}
+
+.cloudops-service-zones {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.cloudops-service-zone,
+.cloudops-control-tower,
+.cloudops-satellite {
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--th-bg-surface) 94%, transparent), color-mix(in srgb, var(--th-bg) 82%, transparent)),
+    var(--th-bg-surface);
+  text-align: left;
+}
+
+.cloudops-service-zone {
+  position: relative;
+  min-height: 9.4rem;
+  padding: 0.75rem;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
+
+.cloudops-service-zone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border-top: 3px solid var(--zone-accent);
+  opacity: 0.86;
+}
+
+.cloudops-service-zone:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--zone-accent) 60%, var(--th-border));
+}
+
+.cloudops-led {
+  display: block;
+  height: 0.56rem;
+  width: 0.56rem;
+  border-radius: 999px;
+  background: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.14);
+}
+
+.cloudops-service-zone.is-active .cloudops-led {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+}
+
+.cloudops-service-zone.is-watch .cloudops-led {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
+}
+
+.cloudops-zone-topline {
+  display: block;
+  margin-top: 0.8rem;
+}
+
+.cloudops-service-zone strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.cloudops-zone-status,
+.cloudops-zone-metrics {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--th-text-secondary);
+  font-size: 0.72rem;
+}
+
+.cloudops-zone-metrics {
+  font-family: var(--th-font-mono);
+  font-size: 0.66rem;
+}
+
+.cloudops-ops-cluster {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.55rem;
+}
+
+.cloudops-control-tower {
+  display: grid;
+  min-height: 4.25rem;
+  align-content: center;
+  gap: 0.08rem;
+  border-color: rgba(45, 212, 191, 0.42);
+  background: rgba(45, 212, 191, 0.1);
+  padding: 0.42rem 0.5rem;
+  color: var(--th-text-primary);
+}
+
+.cloudops-control-tower span {
+  color: #0f766e;
+  font-family: var(--th-font-mono);
+  font-size: 0.67rem;
+  line-height: 1.1;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dark .cloudops-control-tower span {
+  color: #99f6e4;
+}
+
+.cloudops-control-tower strong {
+  font-size: 0.95rem;
+  line-height: 1.15;
+  font-weight: 950;
+}
+
+.cloudops-control-tower small {
+  color: var(--th-text-secondary);
+  font-size: 0.58rem;
+  line-height: 1.15;
+}
+
+.cloudops-satellite-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.cloudops-satellite {
+  min-height: 6.6rem;
+  padding: 0.65rem;
+}
+
+.cloudops-satellite svg {
+  color: #0891b2;
+}
+
+.cloudops-satellite strong,
+.cloudops-satellite span,
+.cloudops-satellite small {
+  display: block;
+}
+
+.cloudops-satellite strong {
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.cloudops-satellite span {
+  margin-top: 0.18rem;
+  color: var(--th-text-secondary);
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.cloudops-satellite small {
+  margin-top: 0.4rem;
+  color: var(--th-text-muted);
+  font-family: var(--th-font-mono);
+  font-size: 0.6rem;
+}
+
+.cloudops-satellite.is-online {
+  border-color: rgba(34, 197, 94, 0.34);
+}
+
+.cloudops-bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.cloudops-status-panel {
+  min-height: 9.2rem;
+  padding: 0.85rem;
+}
+
+.cloudops-agent-strip {
+  margin-top: 0.65rem;
+  display: flex;
+  min-height: 2rem;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.cloudops-agent-strip span {
+  color: var(--th-text-muted);
+  font-size: 0.76rem;
+}
+
+.cloudops-agent-strip button {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(34, 211, 238, 0.32);
+  border-radius: 8px;
+  background: rgba(34, 211, 238, 0.1);
+  font-size: 0.74rem;
+  font-weight: 900;
+  image-rendering: pixelated;
+}
+
+.cloudops-safety-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  color: var(--th-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 1280px) {
+  .cloudops-bottom-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cloudops-service-zones {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .cloudops-service-stage,
+  .cloudops-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cloudops-service-zones {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .cloudops-hero {
+    flex-direction: column;
+  }
+
+  .cloudops-filter-group {
+    max-width: none;
+    justify-content: flex-start;
+  }
+
+  .cloudops-kpi-grid,
+  .cloudops-pipeline,
+  .cloudops-service-zones {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cloudops-satellite-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .cloudops-hero,
+  .cloudops-map-shell,
+  .cloudops-status-panel,
+  .cloudops-kpi-card {
+    padding: 0.7rem;
+  }
+
+  .cloudops-kpi-grid,
+  .cloudops-pipeline,
+  .cloudops-service-zones,
+  .cloudops-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cloudops-filter-button {
+    flex: 1 1 calc(50% - 0.45rem);
+    justify-content: center;
+  }
+
+  .cloudops-pipeline-node::after {
+    display: none;
+  }
+}
+
+.cloudops-office-shell {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 0.65rem;
+  color: var(--th-text-primary);
+}
+
+.cloudops-office-header,
+.cloudops-pixi-card,
+.cloudops-function-panel,
+.cloudops-office-ribbon,
+.cloudops-office-kpis article {
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--th-bg-surface) 94%, transparent), color-mix(in srgb, var(--th-bg) 86%, transparent)),
+    var(--th-bg-surface);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 34px rgba(15, 23, 42, 0.12);
+}
+
+.cloudops-office-header {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 0.55rem;
+  padding: 0.75rem 0.85rem;
+}
+
+.cloudops-office-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #0891b2;
+  font-family: var(--th-font-mono);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.cloudops-office-header h1 {
+  margin-top: 0.22rem;
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.cloudops-office-header p {
+  margin-top: 0.25rem;
+  max-width: 62rem;
+  color: var(--th-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.cloudops-office-actions {
+  display: flex;
+  max-width: none;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.35rem;
+}
+
+.cloudops-office-action {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: var(--th-bg-surface);
+  padding: 0 0.58rem;
+  color: var(--th-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 850;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.cloudops-office-action:hover,
+.cloudops-office-action.is-selected {
+  border-color: rgba(34, 211, 238, 0.56);
+  background: rgba(34, 211, 238, 0.12);
+  color: #0e7490;
+}
+
+.dark .cloudops-office-action:hover,
+.dark .cloudops-office-action.is-selected {
+  color: #a5f3fc;
+}
+
+.cloudops-office-action:active,
+.cloudops-panel-action:active {
+  transform: translateY(1px);
+}
+
+.cloudops-office-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.cloudops-office-kpis article {
+  padding: 0.78rem;
+}
+
+.cloudops-office-kpis span,
+.cloudops-panel-eyebrow {
+  color: var(--th-text-muted);
+  font-family: var(--th-font-mono);
+  font-size: 0.63rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.cloudops-office-kpis strong {
+  display: block;
+  margin-top: 0.28rem;
+  color: #0891b2;
+  font-family: var(--th-font-mono);
+  font-size: 1.45rem;
+  font-weight: 950;
+}
+
+.dark .cloudops-office-kpis strong {
+  color: #67e8f9;
+}
+
+.cloudops-office-kpis small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--th-text-secondary);
+  font-size: 0.68rem;
+}
+
+.cloudops-office-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  gap: 0.85rem;
+  align-items: stretch;
+}
+
+.cloudops-pixi-card {
+  overflow: hidden;
+}
+
+.cloudops-pixi-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--th-border);
+  padding: 0.55rem 0.75rem;
+  color: var(--th-text-secondary);
+  font-family: var(--th-font-mono);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.cloudops-pixi-map {
+  min-height: min(56vh, 520px);
+  overflow: auto;
+  line-height: 0;
+  outline: none;
+  background:
+    linear-gradient(rgba(34, 211, 238, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.cloudops-pixi-map canvas {
+  display: block;
+  max-width: 100%;
+  image-rendering: pixelated;
+}
+
+.cloudops-function-panel {
+  display: flex;
+  min-height: min(56vh, 520px);
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 0.95rem;
+}
+
+.cloudops-function-panel h2 {
+  font-size: 1.05rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.cloudops-function-panel p {
+  color: var(--th-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.cloudops-panel-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+}
+
+.cloudops-panel-action {
+  display: inline-flex;
+  min-height: 2.3rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(34, 211, 238, 0.38);
+  border-radius: 8px;
+  background: rgba(34, 211, 238, 0.1);
+  color: #0e7490;
+  font-size: 0.78rem;
+  font-weight: 900;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
+
+.dark .cloudops-panel-action {
+  color: #a5f3fc;
+}
+
+.cloudops-panel-action:hover {
+  border-color: rgba(34, 211, 238, 0.62);
+  background: rgba(34, 211, 238, 0.16);
+}
+
+.cloudops-panel-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.cloudops-zone-list,
+.cloudops-scope-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.cloudops-zone-list button,
+.cloudops-scope-list button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem 0.6rem;
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--th-bg-surface) 88%, transparent);
+  padding: 0.55rem 0.6rem;
+  text-align: left;
+}
+
+.cloudops-zone-list button:hover,
+.cloudops-scope-list button:hover {
+  border-color: rgba(34, 211, 238, 0.38);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.cloudops-zone-list span {
+  grid-row: span 2;
+  height: 0.7rem;
+  width: 0.7rem;
+  border-radius: 999px;
+}
+
+.cloudops-zone-list strong,
+.cloudops-scope-list strong {
+  min-width: 0;
+  color: var(--th-text-primary);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.cloudops-zone-list small,
+.cloudops-scope-list small {
+  min-width: 0;
+  color: var(--th-text-secondary);
+  font-size: 0.68rem;
+}
+
+.cloudops-scope-list button {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cloudops-office-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  color: var(--th-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 1180px) {
+  .cloudops-office-body {
+    grid-template-columns: 1fr;
+  }
+
+  .cloudops-function-panel {
+    min-height: auto;
+  }
+
+  .cloudops-zone-list,
+  .cloudops-scope-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .cloudops-office-header {
+    grid-template-columns: 1fr;
+  }
+
+  .cloudops-office-actions {
+    max-width: none;
+    justify-content: flex-start;
+  }
+
+  .cloudops-office-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .cloudops-office-header,
+  .cloudops-function-panel,
+  .cloudops-office-kpis article,
+  .cloudops-office-ribbon {
+    padding: 0.7rem;
+  }
+
+  .cloudops-office-action {
+    flex: 1 1 calc(50% - 0.45rem);
+    justify-content: center;
+  }
+
+  .cloudops-office-kpis,
+  .cloudops-zone-list,
+  .cloudops-scope-list {
+    grid-template-columns: 1fr;
+  }
+
+  .cloudops-pixi-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
+.rpg-command-shell {
+  display: grid;
+  min-height: calc(100dvh - 112px);
+  gap: 0.7rem;
+  color: var(--th-text-primary);
+}
+
+.rpg-command-topbar,
+.rpg-stage-panel,
+.rpg-hud-panel,
+.rpg-status-strip {
+  border: 1px solid color-mix(in srgb, var(--th-border) 82%, #22d3ee 18%);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--th-bg-elevated) 88%, transparent), color-mix(in srgb, var(--th-bg) 92%, transparent)),
+    var(--th-bg-surface);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 32px rgba(2, 6, 23, 0.18);
+}
+
+.rpg-command-topbar {
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.75fr) minmax(0, 1.8fr);
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+}
+
+.rpg-command-title {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.rpg-command-title span,
+.rpg-hud-eyebrow,
+.rpg-status-strip span {
+  color: #06b6d4;
+  font-family: var(--th-font-mono);
+  font-size: 0.65rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.rpg-command-title strong {
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.rpg-command-actions {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.38rem;
+}
+
+.rpg-command-action {
+  display: grid;
+  min-height: 3rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 0.35rem;
+  align-items: center;
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--th-bg-surface) 88%, #0e7490 12%);
+  padding: 0.38rem 0.5rem;
+  color: var(--th-text-secondary);
+  text-align: left;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.rpg-command-action span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rpg-command-action small {
+  grid-column: 2;
+  color: var(--th-text-muted);
+  font-family: var(--th-font-mono);
+  font-size: 0.56rem;
+  font-weight: 900;
+}
+
+.rpg-command-action:hover,
+.rpg-command-action.is-selected {
+  border-color: rgba(34, 211, 238, 0.68);
+  background: rgba(34, 211, 238, 0.13);
+  color: var(--th-text-primary);
+  transform: translateY(-1px);
+}
+
+.rpg-command-action:active,
+.rpg-hud-action:active,
+.rpg-hud-section button:active {
+  transform: translateY(1px);
+}
+
+.rpg-command-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: 0.7rem;
+  align-items: stretch;
+}
+
+.rpg-stage-panel {
+  position: relative;
+  min-height: min(64dvh, 640px);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 22% 14%, rgba(34, 211, 238, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.52), rgba(2, 6, 23, 0.3));
+}
+
+[data-theme="light"] .rpg-stage-panel {
+  background:
+    radial-gradient(circle at 22% 14%, rgba(14, 116, 144, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(236, 253, 245, 0.88), rgba(224, 242, 254, 0.72));
+}
+
+.rpg-stage-overlay {
+  position: absolute;
+  z-index: 1;
+  top: 0.65rem;
+  left: 0.65rem;
+  display: grid;
+  max-width: min(26rem, calc(100% - 1.3rem));
+  gap: 0.28rem;
+  border: 1px solid rgba(34, 211, 238, 0.32);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.58);
+  padding: 0.55rem 0.65rem;
+  pointer-events: none;
+}
+
+[data-theme="light"] .rpg-stage-overlay {
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.rpg-stage-overlay span {
+  color: #67e8f9;
+  font-family: var(--th-font-mono);
+  font-size: 0.62rem;
+  font-weight: 950;
+}
+
+[data-theme="light"] .rpg-stage-overlay span {
+  color: #0e7490;
+}
+
+.rpg-stage-overlay strong {
+  font-size: 0.95rem;
+  font-weight: 950;
+}
+
+.rpg-stage-overlay div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rpg-stage-overlay b {
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 6px;
+  padding: 0.15rem 0.35rem;
+  color: var(--th-text-secondary);
+  font-family: var(--th-font-mono);
+  font-size: 0.62rem;
+}
+
+.rpg-command-map {
+  min-height: min(64dvh, 640px);
+  outline: none;
+  line-height: 0;
+}
+
+.rpg-command-map canvas {
+  display: block;
+  width: 100%;
+  image-rendering: pixelated;
+}
+
+.rpg-hud-panel {
+  display: flex;
+  min-height: min(64dvh, 640px);
+  flex-direction: column;
+  gap: 0.72rem;
+  padding: 0.82rem;
+}
+
+.rpg-hud-panel h2 {
+  font-size: 1.12rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.rpg-hud-panel p {
+  color: var(--th-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.rpg-hud-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.rpg-hud-stat {
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--th-bg-surface) 82%, transparent);
+  padding: 0.48rem;
+}
+
+.rpg-hud-stat span {
+  display: block;
+  color: var(--th-text-muted);
+  font-size: 0.62rem;
+  font-weight: 850;
+}
+
+.rpg-hud-stat strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-family: var(--th-font-mono);
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.rpg-hud-stat.is-green strong {
+  color: #22c55e;
+}
+
+.rpg-hud-stat.is-cyan strong {
+  color: #06b6d4;
+}
+
+.rpg-hud-stat.is-amber strong {
+  color: #f59e0b;
+}
+
+.rpg-hud-stat.is-rose strong {
+  color: #f43f5e;
+}
+
+.rpg-hud-actions {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.rpg-hud-action {
+  min-height: 2.25rem;
+  border: 1px solid rgba(34, 211, 238, 0.46);
+  border-radius: 8px;
+  background: rgba(34, 211, 238, 0.12);
+  color: #67e8f9;
+  font-size: 0.78rem;
+  font-weight: 950;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+[data-theme="light"] .rpg-hud-action {
+  color: #0e7490;
+}
+
+.rpg-hud-action:hover {
+  border-color: rgba(34, 211, 238, 0.72);
+  background: rgba(34, 211, 238, 0.18);
+}
+
+.rpg-hud-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rpg-hud-section {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.rpg-hud-section h3 {
+  color: var(--th-text-muted);
+  font-family: var(--th-font-mono);
+  font-size: 0.65rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.rpg-hud-section button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.08rem 0.45rem;
+  align-items: center;
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--th-bg-surface) 86%, transparent);
+  padding: 0.42rem 0.5rem;
+  text-align: left;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+.rpg-hud-section button:hover {
+  border-color: rgba(34, 211, 238, 0.42);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.rpg-hud-section button > span {
+  grid-row: span 2;
+  width: 0.64rem;
+  height: 0.64rem;
+  border-radius: 3px;
+}
+
+.rpg-hud-section strong {
+  min-width: 0;
+  color: var(--th-text-primary);
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.rpg-hud-section small {
+  min-width: 0;
+  color: var(--th-text-secondary);
+  font-size: 0.66rem;
+}
+
+.rpg-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.52rem 0.65rem;
+}
+
+.rpg-status-strip span {
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  border-radius: 7px;
+  background: rgba(34, 211, 238, 0.08);
+  padding: 0.22rem 0.45rem;
+}
+
+@media (max-width: 1180px) {
+  .rpg-command-frame {
+    grid-template-columns: 1fr;
+  }
+
+  .rpg-hud-panel {
+    min-height: auto;
+  }
+
+  .rpg-hud-section {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rpg-hud-section h3 {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .rpg-command-shell {
+    min-height: auto;
+  }
+
+  .rpg-command-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .rpg-command-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rpg-stage-panel,
+  .rpg-command-map {
+    min-height: 420px;
+  }
+
+  .rpg-hud-stats,
+  .rpg-hud-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tycoon-office-shell {
+  display: grid;
+  min-height: calc(100dvh - 112px);
+  gap: 0.7rem;
+  color: var(--th-text-primary);
+}
+
+.tycoon-command-bar,
+.tycoon-stage-panel,
+.tycoon-hud-panel,
+.tycoon-status-strip {
+  border: 1px solid color-mix(in srgb, var(--th-border) 82%, #22c55e 18%);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--th-bg-elevated) 88%, transparent), color-mix(in srgb, var(--th-bg) 92%, transparent)),
+    var(--th-bg-surface);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 32px rgba(2, 6, 23, 0.16);
+}
+
+.tycoon-command-bar {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.58fr) minmax(0, 1.9fr);
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+}
+
+.tycoon-command-title {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.tycoon-command-title span,
+.tycoon-hud-eyebrow,
+.tycoon-status-strip span {
+  color: #16a34a;
+  font-family: var(--th-font-mono);
+  font-size: 0.65rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.dark .tycoon-command-title span,
+.dark .tycoon-hud-eyebrow,
+.dark .tycoon-status-strip span {
+  color: #86efac;
+}
+
+.tycoon-command-title strong {
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.tycoon-command-actions {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.38rem;
+}
+
+.tycoon-command-action {
+  display: grid;
+  min-height: 3rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 0.35rem;
+  align-items: center;
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--th-bg-surface) 88%, #16a34a 12%);
+  padding: 0.38rem 0.5rem;
+  color: var(--th-text-secondary);
+  text-align: left;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.tycoon-command-action span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tycoon-command-action small {
+  grid-column: 2;
+  color: var(--th-text-muted);
+  font-family: var(--th-font-mono);
+  font-size: 0.56rem;
+  font-weight: 900;
+}
+
+.tycoon-command-action:hover,
+.tycoon-command-action.is-selected {
+  border-color: rgba(34, 197, 94, 0.62);
+  background: rgba(34, 197, 94, 0.13);
+  color: var(--th-text-primary);
+  transform: translateY(-1px);
+}
+
+.tycoon-command-action:active,
+.tycoon-hud-action:active,
+.tycoon-hud-section button:active {
+  transform: translateY(1px);
+}
+
+.tycoon-office-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  gap: 0.7rem;
+  align-items: stretch;
+}
+
+.tycoon-stage-panel {
+  position: relative;
+  min-height: min(66dvh, 660px);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(34, 197, 94, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.52), rgba(2, 6, 23, 0.3));
+}
+
+[data-theme="light"] .tycoon-stage-panel {
+  background:
+    radial-gradient(circle at 18% 14%, rgba(22, 163, 74, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(236, 253, 245, 0.88), rgba(224, 242, 254, 0.72));
+}
+
+.tycoon-stage-overlay {
+  position: absolute;
+  z-index: 1;
+  top: 0.65rem;
+  left: 0.65rem;
+  display: grid;
+  max-width: min(27rem, calc(100% - 1.3rem));
+  gap: 0.28rem;
+  border: 1px solid rgba(34, 197, 94, 0.32);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.58);
+  padding: 0.55rem 0.65rem;
+  pointer-events: none;
+}
+
+[data-theme="light"] .tycoon-stage-overlay {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.tycoon-stage-overlay span {
+  color: #86efac;
+  font-family: var(--th-font-mono);
+  font-size: 0.62rem;
+  font-weight: 950;
+}
+
+[data-theme="light"] .tycoon-stage-overlay span {
+  color: #15803d;
+}
+
+.tycoon-stage-overlay strong {
+  font-size: 0.95rem;
+  font-weight: 950;
+}
+
+.tycoon-stage-overlay div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tycoon-stage-overlay b {
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 6px;
+  padding: 0.15rem 0.35rem;
+  color: var(--th-text-secondary);
+  font-family: var(--th-font-mono);
+  font-size: 0.62rem;
+}
+
+.tycoon-office-map {
+  min-height: min(66dvh, 660px);
+  outline: none;
+  line-height: 0;
+}
+
+.tycoon-office-map canvas {
+  display: block;
+  width: 100%;
+  image-rendering: pixelated;
+}
+
+.tycoon-hud-panel {
+  display: flex;
+  min-height: min(66dvh, 660px);
+  flex-direction: column;
+  gap: 0.72rem;
+  padding: 0.82rem;
+}
+
+.tycoon-hud-panel h2 {
+  font-size: 1.12rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.tycoon-hud-panel p {
+  color: var(--th-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.tycoon-hud-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.tycoon-hud-stat {
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--th-bg-surface) 82%, transparent);
+  padding: 0.48rem;
+}
+
+.tycoon-hud-stat span {
+  display: block;
+  color: var(--th-text-muted);
+  font-size: 0.62rem;
+  font-weight: 850;
+}
+
+.tycoon-hud-stat strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-family: var(--th-font-mono);
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.tycoon-hud-stat.is-green strong {
+  color: #22c55e;
+}
+
+.tycoon-hud-stat.is-cyan strong {
+  color: #06b6d4;
+}
+
+.tycoon-hud-stat.is-amber strong {
+  color: #f59e0b;
+}
+
+.tycoon-hud-stat.is-rose strong {
+  color: #f43f5e;
+}
+
+.tycoon-hud-actions {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.tycoon-hud-action {
+  min-height: 2.25rem;
+  border: 1px solid rgba(34, 197, 94, 0.46);
+  border-radius: 8px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+  font-size: 0.78rem;
+  font-weight: 950;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+[data-theme="light"] .tycoon-hud-action {
+  color: #15803d;
+}
+
+.tycoon-hud-action:hover {
+  border-color: rgba(34, 197, 94, 0.72);
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.tycoon-hud-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.tycoon-hud-section {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.tycoon-hud-section h3 {
+  color: var(--th-text-muted);
+  font-family: var(--th-font-mono);
+  font-size: 0.65rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.tycoon-hud-section button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.08rem 0.45rem;
+  align-items: center;
+  border: 1px solid var(--th-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--th-bg-surface) 86%, transparent);
+  padding: 0.42rem 0.5rem;
+  text-align: left;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+.tycoon-hud-section button:hover {
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.tycoon-hud-section button > span {
+  grid-row: span 2;
+  width: 0.64rem;
+  height: 0.64rem;
+  border-radius: 3px;
+}
+
+.tycoon-hud-section strong {
+  min-width: 0;
+  color: var(--th-text-primary);
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.tycoon-hud-section small {
+  min-width: 0;
+  color: var(--th-text-secondary);
+  font-size: 0.66rem;
+}
+
+.tycoon-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.52rem 0.65rem;
+}
+
+.tycoon-status-strip span {
+  border: 1px solid rgba(34, 197, 94, 0.24);
+  border-radius: 7px;
+  background: rgba(34, 197, 94, 0.08);
+  padding: 0.22rem 0.45rem;
+}
+
+@media (max-width: 1180px) {
+  .tycoon-office-frame {
+    grid-template-columns: 1fr;
+  }
+
+  .tycoon-hud-panel {
+    min-height: auto;
+  }
+
+  .tycoon-hud-section {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tycoon-hud-section h3 {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .tycoon-office-shell {
+    min-height: auto;
+  }
+
+  .tycoon-command-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .tycoon-command-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tycoon-stage-panel,
+  .tycoon-office-map {
+    min-height: 430px;
+  }
+
+  .tycoon-hud-stats,
+  .tycoon-hud-section {
+    grid-template-columns: 1fr;
   }
 }

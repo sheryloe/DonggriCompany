@@ -66,16 +66,22 @@ export default function ControlPlaneSummaryCard({ onOpen }: ControlPlaneSummaryC
           <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>
               <FolderKanban className="h-3.5 w-3.5" />
-              Repos root
+              작업 루트
             </div>
             <div className="mt-1 truncate font-mono text-xs" style={{ color: "var(--th-text-primary)" }}>
-              {state?.root.repo_estate_root.path ?? "loading"}
+              {state?.root.repo_estate_root.path ?? "불러오는 중"}
             </div>
           </div>
           <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>Active Spec</div>
-            <div className="mt-1 truncate font-mono text-xs" style={{ color: "var(--th-text-primary)" }}>{state?.active_spec.id ?? "loading"}</div>
-            <div className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>{formatStatus(state?.active_spec.phase)}</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>
+              현재 스펙
+            </div>
+            <div className="mt-1 truncate font-mono text-xs" style={{ color: "var(--th-text-primary)" }}>
+              {state?.active_spec.id ?? "불러오는 중"}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>
+              {formatStatus(state?.active_spec.phase)}
+            </div>
           </div>
           <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>
@@ -83,17 +89,19 @@ export default function ControlPlaneSummaryCard({ onOpen }: ControlPlaneSummaryC
               마스터 에이전트
             </div>
             <div className="mt-1 text-sm font-semibold" style={{ color: "var(--th-text-primary)" }}>
-              {state ? `${masterCount}개 부서` : "loading"}
+              {state ? `${masterCount}개 부서` : "불러오는 중"}
             </div>
-            <div className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>서브에이전트는 작업마다 생성</div>
+            <div className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>
+              업무마다 필요한 persona를 생성
+            </div>
           </div>
           <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>
               <Brain className="h-3.5 w-3.5" />
-              Memory / Scope
+              기억 / 프로젝트
             </div>
             <div className="mt-1 text-sm font-semibold" style={{ color: "var(--th-text-primary)" }}>
-              {state ? `${enabledScopes}개 프로젝트` : "loading"}
+              {state ? `${enabledScopes}개 프로젝트` : "불러오는 중"}
             </div>
             <div className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>
               {state?.memory.health.available ? "AgentMemory online" : "AgentMemory 대기"}

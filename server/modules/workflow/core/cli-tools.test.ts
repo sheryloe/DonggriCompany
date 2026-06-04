@@ -9,6 +9,28 @@ function createTools() {
 }
 
 describe("buildAgentArgs", () => {
+  it("does not enable unsafe approval-bypass flags by default", () => {
+    const tools = createTools();
+
+    expect(tools.buildAgentArgs("codex", "gpt-5.3-codex", "high")).not.toContain("--yolo");
+    expect(tools.buildAgentArgs("gemini", "gemini-3-pro-preview")).not.toContain("--yolo");
+    expect(tools.buildAgentArgs("claude", "claude-opus-4-6")).not.toContain("--dangerously-skip-permissions");
+  });
+
+  it("uses non-interactive safe approval modes instead of hanging for headless runs", () => {
+    const tools = createTools();
+
+    expect(tools.buildAgentArgs("codex", "gpt-5.3-codex", "high")).toEqual(
+      expect.arrayContaining(["--ask-for-approval", "never", "--sandbox", "workspace-write"]),
+    );
+    expect(tools.buildAgentArgs("gemini", "gemini-3-pro-preview")).toEqual(
+      expect.arrayContaining(["--approval-mode", "plan"]),
+    );
+    expect(tools.buildAgentArgs("claude", "claude-opus-4-6")).toEqual(
+      expect.arrayContaining(["--permission-mode", "plan"]),
+    );
+  });
+
   it("claude noTools mode uses --tools= without empty argv", () => {
     const tools = createTools();
     const args = tools.buildAgentArgs("claude", "claude-opus-4-6", undefined, { noTools: true });

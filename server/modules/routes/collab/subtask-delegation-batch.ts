@@ -571,7 +571,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
             defaultProvider: execProvider,
             policyVersion: executionSession.policyVersion,
           });
-          const worktreeNote = `\nNOTE: You are working in an isolated Git worktree branch (climpire/${delegatedTaskId.slice(0, 8)}). Commit your changes normally.`;
+          const worktreeNote = `\nNOTE: You are working in an isolated Git worktree branch (climpire/${delegatedTaskId.slice(0, 8)}). Do not commit, push, merge, reset, clean, stash, or rewrite history. Leave edits in the worktree; approved Git mutation is handled by the Donggri Ver.1 review gate.`;
 
           // Build sibling worktree reference block so agents can read prior departments' work
           let siblingWorktreeBlock = "";

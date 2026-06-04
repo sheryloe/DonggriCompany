@@ -208,7 +208,7 @@ type ControlPlaneSyncPreview = {
   ok: true;
   mode: "preview";
   writes: false;
-  approved_for_apply: true;
+  approved_for_apply: boolean;
   snapshot: {
     id: string;
     root_path: string;
@@ -270,6 +270,38 @@ type RunnerStatus = {
   recent_personas: Record<string, unknown>[];
   recent_events: Record<string, unknown>[];
 };
+
+type HarnessCheckStatus = "pass" | "warn" | "blocked" | "planned";
+
+type HarnessCheck = {
+  key: string;
+  label: string;
+  status: HarnessCheckStatus;
+  detail: string;
+  next_safe_action: string;
+};
+
+type HarnessBlueprintTargetMode = "department" | "project" | "both";
+type HarnessBlueprintPattern = "auto" | "pipeline" | "fan-out-fan-in" | "expert-pool" | "producer-reviewer" | "supervisor" | "hierarchical-delegation";
+
+type HarnessBlueprintStatus = {
+  tables_exist: boolean;
+  draft_count: number;
+  department_draft_count: number;
+  project_draft_count: number;
+  evidence_backed_count: number;
+  latest_blueprints: Record<string, unknown>[];
+};
+
+type CodexThreadScopeType = "root" | "project" | "spec";
+type ControlPlaneMutationOperationClass =
+  | "harness-run"
+  | "harness-meta"
+  | "harness-apply"
+  | "persona-evidence"
+  | "agentmemory-remember-non-destructive"
+  | "db-write-non-destructive"
+  | "agentmemory-runtime-connect";
 
 function toIso(ms: number): string {
   return new Date(ms).toISOString();
@@ -559,6 +591,54 @@ function inspectGit(projectPath: string): RegistryProject["git"] {
   }
 }
 
+function readGitShortStatus(projectPath: string): Array<{ raw: string; path: string; status: string; group: string }> {
+  if (!fs.existsSync(projectPath)) return [];
+  try {
+    const output = execFileSync("git", ["status", "--short"], {
+      cwd: projectPath,
+      timeout: 8000,
+      stdio: "pipe",
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+    })
+      .toString("utf8")
+      .replace(/\s+$/, "");
+    if (!output) return [];
+    return output.split(/\r?\n/).map((line) => {
+      const status = line.slice(0, 2).trim() || "modified";
+      const rawPath = line.slice(3).trim();
+      const normalized = rawPath.replace(/\\/g, "/");
+      return {
+        raw: line,
+        path: rawPath,
+        status,
+        group: classifyHygienePath(normalized),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+function classifyHygienePath(relativePath: string): string {
+  if (/^\.tmp-|\/\.tmp-|\.png$/i.test(relativePath)) return "generated-artifacts/screenshots";
+  if (/^server\/modules\/routes\/ops\/control-plane/i.test(relativePath) || /^src\/api\/control-plane/i.test(relativePath)) return "harness-candidate";
+  if (/^src\/components\/ControlPlanePage/i.test(relativePath) || /^src\/app\//i.test(relativePath) || /^src\/styles\//i.test(relativePath)) return "ui-candidate";
+  if (/^agents\//i.test(relativePath) || /^AGENTS\.md$/i.test(relativePath)) return "agent-directory-migration";
+  if (/^docs\//i.test(relativePath)) return "docs-candidate";
+  return "unrelated-unknown";
+}
+
+function summarizeHygieneGroups(changes: ReturnType<typeof readGitShortStatus>) {
+  const grouped = new Map<string, { count: number; samples: string[] }>();
+  for (const change of changes) {
+    const current = grouped.get(change.group) ?? { count: 0, samples: [] };
+    current.count += 1;
+    if (current.samples.length < 5) current.samples.push(change.path);
+    grouped.set(change.group, current);
+  }
+  return Array.from(grouped.entries()).map(([group, value]) => ({ group, ...value }));
+}
+
 function readDbProjectRows(db: RuntimeContext["db"]) {
   try {
     return db.prepare("SELECT id, name, project_path FROM projects").all() as Array<{
@@ -817,6 +897,43 @@ function ensureControlRunnerTables(db: RuntimeContext["db"]): void {
   `);
 }
 
+function ensureHarnessBlueprintTables(db: RuntimeContext["db"]): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS control_plane_harness_blueprints (
+      id TEXT PRIMARY KEY,
+      spec_id TEXT,
+      target_scope_type TEXT NOT NULL,
+      target_scope_key TEXT,
+      source_description TEXT NOT NULL,
+      pattern TEXT NOT NULL,
+      status TEXT NOT NULL,
+      blueprint_json TEXT NOT NULL DEFAULT '{}',
+      approval_refs_json TEXT NOT NULL DEFAULT '[]',
+      evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_harness_blueprint_events (
+      id TEXT PRIMARY KEY,
+      blueprint_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      decision TEXT,
+      evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (blueprint_id) REFERENCES control_plane_harness_blueprints(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_control_plane_harness_blueprints_scope
+      ON control_plane_harness_blueprints(target_scope_type, target_scope_key);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_harness_blueprints_updated
+      ON control_plane_harness_blueprints(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_harness_blueprint_events_blueprint
+      ON control_plane_harness_blueprint_events(blueprint_id);
+  `);
+}
+
 function ensureProjectOperatorTables(db: RuntimeContext["db"]): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS control_plane_project_operators (
@@ -913,7 +1030,9 @@ function readControlRunnerStatus(db: RuntimeContext["db"]): RunnerStatus {
     .prepare("SELECT status, COUNT(*) AS count FROM control_plane_persona_runs GROUP BY status")
     .all() as Array<{ status: string; count: number }>;
   const recentRuns = db
-    .prepare("SELECT id, spec_id, task_id, department_agent, status, objective, created_at, updated_at FROM control_plane_agent_runs ORDER BY updated_at DESC LIMIT 8")
+    .prepare(
+      "SELECT id, spec_id, task_id, department_agent, status, objective, context_pack_json, approval_refs_json, hook_decisions_json, created_at, updated_at FROM control_plane_agent_runs ORDER BY updated_at DESC LIMIT 8",
+    )
     .all() as Record<string, unknown>[];
   const recentPersonas = db
     .prepare("SELECT persona_id, run_id, parent_agent, status, objective, write_policy, recreate_count, updated_at FROM control_plane_persona_runs ORDER BY updated_at DESC LIMIT 10")
@@ -929,6 +1048,40 @@ function readControlRunnerStatus(db: RuntimeContext["db"]): RunnerStatus {
     recent_runs: recentRuns,
     recent_personas: recentPersonas,
     recent_events: recentEvents,
+  };
+}
+
+function readHarnessBlueprintStatus(db: RuntimeContext["db"]): HarnessBlueprintStatus {
+  const tablesExist =
+    tableExists(db, "control_plane_harness_blueprints") && tableExists(db, "control_plane_harness_blueprint_events");
+  if (!tablesExist) {
+    return {
+      tables_exist: false,
+      draft_count: 0,
+      department_draft_count: 0,
+      project_draft_count: 0,
+      evidence_backed_count: 0,
+      latest_blueprints: [],
+    };
+  }
+  const rows = db
+    .prepare(
+      "SELECT id, spec_id, target_scope_type, target_scope_key, source_description, pattern, status, evidence_refs_json, created_at, updated_at FROM control_plane_harness_blueprints ORDER BY updated_at DESC LIMIT 8",
+    )
+    .all() as Record<string, unknown>[];
+  return {
+    tables_exist: true,
+    draft_count: Number((db.prepare("SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE status = 'draft'").get() as { count?: number })?.count ?? 0),
+    department_draft_count: Number(
+      (db.prepare("SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE status = 'draft' AND target_scope_type IN ('department', 'both')").get() as { count?: number })?.count ?? 0,
+    ),
+    project_draft_count: Number(
+      (db.prepare("SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE status = 'draft' AND target_scope_type IN ('project', 'both')").get() as { count?: number })?.count ?? 0,
+    ),
+    evidence_backed_count: Number(
+      (db.prepare("SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE evidence_refs_json IS NOT NULL AND evidence_refs_json != '[]'").get() as { count?: number })?.count ?? 0,
+    ),
+    latest_blueprints: rows,
   };
 }
 
@@ -1152,7 +1305,7 @@ function buildControlSyncPreview(db: RuntimeContext["db"]): ControlPlaneSyncPrev
     ok: true,
     mode: "preview",
     writes: false,
-    approved_for_apply: true,
+    approved_for_apply: hasApprovedDbSync(activeSpec.id),
     snapshot: {
       id: `control:${rootHash}:${projectsHash}:${activeHash}`,
       root_path: CONTROL_ROOT,
@@ -1318,7 +1471,7 @@ function buildProjectOperatorSyncPreview(db: RuntimeContext["db"]) {
     ok: true,
     mode: "preview" as const,
     writes: false,
-    approved_for_apply: true,
+    approved_for_apply: hasApprovedDbSync(activeSpec.id),
     active_spec_id: activeSpec.id,
     counts: {
       operators: operators.length,
@@ -1610,7 +1763,7 @@ function parseApprovalLedger(specId: string | null) {
       headers = cells.map((cell) => cell.toLowerCase().replace(/\s+/g, "_"));
       return [];
     }
-    if (!/^APR-[A-Z]+-\d{3}$/.test(cells[0])) return [];
+    if (!/^APR-[A-Z]+(?:-[A-Z]+)*-\d{3}$/.test(cells[0])) return [];
     const byHeader = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""]));
     return [
       {
@@ -2155,9 +2308,42 @@ function parseMaybeJsonArray(value: unknown): string[] {
   }
 }
 
+function parseMaybeJsonObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== "string" || !value.trim()) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 function formatEventTime(value: unknown): string | null {
   const numeric = Number(value ?? 0);
   return Number.isFinite(numeric) && numeric > 0 ? new Date(numeric).toISOString() : null;
+}
+
+function buildRunChatMessage(run: Record<string, unknown>) {
+  const context = parseMaybeJsonObject(run.context_pack_json);
+  if (context.source === "codex_thread_activation") {
+    const status = String(run.status ?? "unknown");
+    const threadId = String(context.codex_thread_id ?? "");
+    const scopeKey = String(context.scope_key ?? "project:DonggriCompany");
+    const handoffPath = typeof context.handoff_path === "string" ? ` · handoff: ${context.handoff_path}` : "";
+    return {
+      title: status === "completed" || status === "cancelled" ? "Codex thread 종료됨" : "Codex thread 연결됨",
+      detail: `${threadId || "thread 미감지"} · ${scopeKey} · ${status}${handoffPath}`,
+      evidence_refs: parseMaybeJsonArray(context.evidence_refs),
+      source: "codex_thread_activation",
+    };
+  }
+  return {
+    title: `Run ${String(run.status ?? "unknown")}`,
+    detail: String(run.objective ?? "Control Plane run"),
+    evidence_refs: [] as string[],
+    source: "control_plane_agent_runs",
+  };
 }
 
 function buildDepartmentMemorySummaries(
@@ -2274,14 +2460,12 @@ function buildDepartmentChatRooms(runner: RunnerStatus) {
   for (const run of runner.recent_runs) {
     const department = asDepartmentId(run.department_agent);
     if (!department) continue;
+    const message = buildRunChatMessage(run);
     byDepartment.get(department)?.messages.push({
       id: String(run.id ?? `run-${run.updated_at ?? ""}`),
       at: formatEventTime(run.updated_at),
       kind: "run",
-      title: `Run ${String(run.status ?? "unknown")}`,
-      detail: String(run.objective ?? "Control Plane run"),
-      evidence_refs: [],
-      source: "control_plane_agent_runs",
+      ...message,
     });
   }
 
@@ -2350,14 +2534,12 @@ function buildMasterDepartmentChatRooms(runner: RunnerStatus) {
   for (const run of runner.recent_runs) {
     const role = asDepartmentId(run.department_agent);
     if (!role) continue;
+    const message = buildRunChatMessage(run);
     byDepartment.get(roleToMasterDepartment(role))?.messages.push({
       id: String(run.id ?? `run-${run.updated_at ?? ""}`),
       at: formatEventTime(run.updated_at),
       kind: "run",
-      title: `Run ${String(run.status ?? "unknown")}`,
-      detail: String(run.objective ?? "Control Plane run"),
-      evidence_refs: [],
-      source: "control_plane_agent_runs",
+      ...message,
     });
   }
 
@@ -2466,7 +2648,7 @@ function hasApprovedApproval(
 function hasApprovedDbSync(specId: string | null): boolean {
   return hasApprovedApproval(
     specId,
-    /^APR-DB-\d+$/,
+    /^APR-DB(?:-[A-Z]+)*-\d+$/,
     (entry) =>
       entry.operation_class === "db-write-non-destructive" &&
       entry.policy_decision === "allow" &&
@@ -2483,14 +2665,127 @@ function hasApprovedAgentMemoryRemember(specId: string | null): boolean {
     (entry) =>
       entry.operation_class === "agentmemory-remember-non-destructive" &&
       entry.policy_decision === "allow" &&
-      !/delete|forget|bulk|import|hook|mcp/i.test(entry.command_digest ?? ""),
+      /non-destructive/i.test(entry.scope ?? ""),
   );
 }
 
-function isAllowedControlPlaneMutationOrigin(req: { get?: (name: string) => string | undefined }): boolean {
-  const origin = req.get?.("origin");
-  if (!origin) return true;
-  return /^https?:\/\/(127\.0\.0\.1|localhost):8800$/i.test(origin);
+const MUTATION_APPROVAL_POLICY: Record<
+  ControlPlaneMutationOperationClass,
+  { pattern: RegExp; required_approval: string; blocked_message: string }
+> = {
+  "harness-run": {
+    pattern: /^APR-HARNESS(?:-[A-Z]+)*-\d{3}$/,
+    required_approval: "APR-HARNESS-*",
+    blocked_message: "Control Plane run mutations require an approved active-spec harness approval.",
+  },
+  "harness-meta": {
+    pattern: /^APR-HARNESS(?:-[A-Z]+)*-\d{3}$/,
+    required_approval: "APR-HARNESS-META-*",
+    blocked_message: "Harness blueprint draft mutations require an approved active-spec meta-harness approval.",
+  },
+  "harness-apply": {
+    pattern: /^APR-HARNESS-APPLY-\d{3}$/,
+    required_approval: "APR-HARNESS-APPLY-*",
+    blocked_message: "Applying generated harness blueprints requires separate explicit approval.",
+  },
+  "persona-evidence": {
+    pattern: /^APR-HARNESS(?:-[A-Z]+)*-\d{3}$/,
+    required_approval: "APR-HARNESS-*",
+    blocked_message: "Persona evidence mutations require an approved active-spec harness approval.",
+  },
+  "agentmemory-remember-non-destructive": {
+    pattern: /^APR-MEM(?:-[A-Z]+)*-\d{3}$/,
+    required_approval: "APR-MEM-*",
+    blocked_message: "AgentMemory remember requires an approved non-destructive APR-MEM approval.",
+  },
+  "db-write-non-destructive": {
+    pattern: /^APR-DB(?:-[A-Z]+)*-\d{3}$/,
+    required_approval: "APR-DB-*",
+    blocked_message: "Control Plane DB writes require an approved non-destructive APR-DB approval.",
+  },
+  "agentmemory-runtime-connect": {
+    pattern: /^APR-MEM-RUNTIME-\d{3}$/,
+    required_approval: "APR-MEM-RUNTIME-*",
+    blocked_message: "AgentMemory runtime start/connect requires separate OPS approval.",
+  },
+};
+
+function approvalAllowsOperation(entry: Record<string, string>, operationClass: ControlPlaneMutationOperationClass): boolean {
+  const policyDecision = String(entry.policy_decision ?? "").toLowerCase();
+  const operationClasses = String(entry.operation_class ?? "")
+    .split(/[\s,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return (policyDecision === "allow" || policyDecision === "approved") && operationClasses.includes(operationClass);
+}
+
+function getApprovedOperationApprovals(specId: string | null, operationClass: ControlPlaneMutationOperationClass) {
+  if (!isSafeSpecId(specId)) return [];
+  const policy = MUTATION_APPROVAL_POLICY[operationClass];
+  const now = Date.now();
+  return parseApprovalLedger(specId).entries.filter((entry) => {
+    const expiresAt = entry.expires_at ? Date.parse(entry.expires_at) : Number.NaN;
+    const notExpired = Number.isNaN(expiresAt) || expiresAt >= now;
+    return (
+      entry.status === "approved" &&
+      policy.pattern.test(entry.id) &&
+      notExpired &&
+      approvalAllowsOperation(entry as Record<string, string>, operationClass)
+    );
+  });
+}
+
+function getApprovedOperationApprovalIds(specId: string | null, operationClass: ControlPlaneMutationOperationClass): string[] {
+  return getApprovedOperationApprovals(specId, operationClass).map((entry) => entry.id);
+}
+
+function getHeader(req: { get?: (name: string) => string | undefined; headers?: Record<string, unknown> }, name: string): string | null {
+  const fromGetter = req.get?.(name) ?? req.get?.(name.toLowerCase());
+  if (fromGetter) return fromGetter;
+  const value = req.headers?.[name.toLowerCase()] ?? req.headers?.[name];
+  if (Array.isArray(value)) return typeof value[0] === "string" ? value[0] : null;
+  return typeof value === "string" ? value : null;
+}
+
+function isAllowedControlPlaneMutationOrigin(req: { get?: (name: string) => string | undefined; headers?: Record<string, unknown> }): boolean {
+  const hasExpressHeaders = typeof req.get === "function" || Boolean(req.headers);
+  if (!hasExpressHeaders) return true;
+  const origin = getHeader(req, "origin");
+  if (!origin) return false;
+  return /^https?:\/\/(127\.0\.0\.1|localhost):(8800|8810)$/i.test(origin);
+}
+
+function guardControlPlaneMutation(
+  req: { get?: (name: string) => string | undefined; headers?: Record<string, unknown> },
+  operationClass: ControlPlaneMutationOperationClass,
+) {
+  if (!isAllowedControlPlaneMutationOrigin(req)) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "control_plane_origin_blocked",
+      message: "Control Plane mutations require the local Dongri-grigri app origin.",
+    };
+  }
+  const activeSpec = buildActiveSpecStatus();
+  const approvals = getApprovedOperationApprovals(activeSpec.id, operationClass);
+  if (approvals.length === 0) {
+    const policy = MUTATION_APPROVAL_POLICY[operationClass];
+    return {
+      ok: false as const,
+      status: 403,
+      error: "approval_required",
+      message: policy.blocked_message,
+      operation_class: operationClass,
+      active_spec_id: activeSpec.id,
+      required_approval: policy.required_approval,
+    };
+  }
+  return {
+    ok: true as const,
+    active_spec_id: activeSpec.id,
+    approval_refs: approvals.map((entry) => entry.id),
+  };
 }
 
 function buildContextPackPayload(specId: string | null, department: string, objective: string) {
@@ -2511,6 +2806,526 @@ function buildContextPackPayload(specId: string | null, department: string, obje
   };
 }
 
+function isSafeThreadId(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function listCodexSessionCandidates(limit = 5) {
+  const sessionsRoot = path.join(os.homedir(), ".codex", "sessions");
+  if (!fs.existsSync(sessionsRoot)) return [];
+  const candidates: Array<{ thread_id: string | null; source: string; path: string; size: number; mtime: string; started_at: string | null; sort_time: number }> = [];
+  const visit = (dir: string, depth: number) => {
+    if (depth > 4 || candidates.length > 200) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        visit(fullPath, depth + 1);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+      const stat = fs.statSync(fullPath);
+      const match = entry.name.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+      const startedMatch = entry.name.match(/rollout-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-/i);
+      const startedAt = startedMatch
+        ? `${startedMatch[1]}-${startedMatch[2]}-${startedMatch[3]}T${startedMatch[4]}:${startedMatch[5]}:${startedMatch[6]}.000Z`
+        : null;
+      candidates.push({
+        thread_id: match?.[1] ?? null,
+        source: "session-file",
+        path: fullPath,
+        size: stat.size,
+        mtime: toIso(stat.mtimeMs),
+        started_at: startedAt,
+        sort_time: startedAt ? Date.parse(startedAt) : stat.mtimeMs,
+      });
+    }
+  };
+  visit(sessionsRoot, 0);
+  return candidates
+    .sort((a, b) => b.sort_time - a.sort_time || Date.parse(b.mtime) - Date.parse(a.mtime))
+    .slice(0, limit)
+    .map(({ sort_time: _sortTime, ...candidate }) => candidate);
+}
+
+function detectCodexThread() {
+  const envThreadId = process.env.CODEX_THREAD_ID;
+  const sessionCandidates = listCodexSessionCandidates(5);
+  if (isSafeThreadId(envThreadId)) {
+    return {
+      thread_id: envThreadId,
+      source: "env:CODEX_THREAD_ID",
+      session_candidates: sessionCandidates,
+    };
+  }
+  return {
+    thread_id: null,
+    source: "none",
+    session_candidates: sessionCandidates,
+  };
+}
+
+function currentCodexThreadId(threadState: ReturnType<typeof buildCodexThreadCurrent>): string | null {
+  return threadState.detected_thread.thread_id ?? null;
+}
+
+function makeScopeKey(scopeType: CodexThreadScopeType, scopeValue: string | null) {
+  return scopeType === "root" ? "root" : `${scopeType}:${scopeValue ?? ""}`;
+}
+
+function validateCodexThreadScope(db: RuntimeContext["db"], scopeTypeRaw: unknown, scopeValueRaw: unknown) {
+  const scopeType = String(scopeTypeRaw ?? "project").toLowerCase() as CodexThreadScopeType;
+  if (!["root", "project", "spec"].includes(scopeType)) {
+    return { ok: false as const, error: "invalid_scope_type" };
+  }
+  if (scopeType === "root") {
+    return { ok: true as const, scope_type: scopeType, scope_value: null, scope_key: "root", selected_repo: null };
+  }
+  const scopeValue = typeof scopeValueRaw === "string" && scopeValueRaw.trim() ? scopeValueRaw.trim() : "DonggriCompany";
+  if (scopeType === "project") {
+    const registry = buildRegistryProjects(db);
+    if (!registry.projects.some((project) => project.key === scopeValue)) {
+      return { ok: false as const, error: "invalid_project_scope" };
+    }
+    return {
+      ok: true as const,
+      scope_type: scopeType,
+      scope_value: scopeValue,
+      scope_key: makeScopeKey(scopeType, scopeValue),
+      selected_repo: scopeValue,
+    };
+  }
+  if (!isSafeSpecId(scopeValue)) {
+    return { ok: false as const, error: "invalid_spec_scope" };
+  }
+  const specDir = path.join(CODEX_CONTROL_ROOT, "specs", scopeValue);
+  if (!fs.existsSync(specDir) || !fs.statSync(specDir).isDirectory()) {
+    return { ok: false as const, error: "spec_scope_not_found" };
+  }
+  return {
+    ok: true as const,
+    scope_type: scopeType,
+    scope_value: scopeValue,
+    scope_key: makeScopeKey(scopeType, scopeValue),
+    selected_repo: null,
+  };
+}
+
+function findCodexThreadActivation(
+  db: RuntimeContext["db"],
+  threadId?: string | null,
+  scopeKey?: string | null,
+  includeFinished = false,
+) {
+  if (!tableExists(db, "control_plane_agent_runs")) return null;
+  const statuses = includeFinished ? ["observing", "active", "completed", "cancelled"] : ["observing", "active"];
+  const rows = db
+    .prepare(`SELECT * FROM control_plane_agent_runs WHERE status IN (${statuses.map(() => "?").join(",")}) ORDER BY updated_at DESC LIMIT 100`)
+    .all(...statuses) as Record<string, unknown>[];
+  return (
+    rows.find((row) => {
+      const context = parseMaybeJsonObject(row.context_pack_json);
+      if (context.source !== "codex_thread_activation") return false;
+      if (threadId && context.codex_thread_id !== threadId) return false;
+      if (scopeKey && context.scope_key !== scopeKey) return false;
+      return true;
+    }) ?? null
+  );
+}
+
+function buildCodexThreadCurrent(db: RuntimeContext["db"]) {
+  const detected = detectCodexThread();
+  const currentActivation = findCodexThreadActivation(db, detected.thread_id);
+  return {
+    ok: true,
+    detected_thread: {
+      thread_id: detected.thread_id,
+      source: detected.source,
+    },
+    session_candidates: detected.session_candidates,
+    default_scope: {
+      scope_type: "project",
+      scope_value: "DonggriCompany",
+      scope_key: "project:DonggriCompany",
+    },
+    active_activation: currentActivation,
+  };
+}
+
+function activateCodexThread(db: RuntimeContext["db"], body: Record<string, unknown>) {
+  ensureControlRunnerTables(db);
+  if (body.confirm !== "activate-codex-thread") {
+    return { ok: false, status: 400, error: "confirmation_required" };
+  }
+  const detected = detectCodexThread();
+  const threadId = typeof body.thread_id === "string" && body.thread_id.trim() ? body.thread_id.trim() : detected.thread_id;
+  if (!isSafeThreadId(threadId)) {
+    return { ok: false, status: 400, error: "invalid_thread_id" };
+  }
+  const scope = validateCodexThreadScope(db, body.scope_type, body.scope_value);
+  if (!scope.ok) return { ok: false, status: 400, error: scope.error };
+  const requestedStatus = typeof body.status === "string" ? body.status : "observing";
+  const status = requestedStatus === "active" ? "active" : "observing";
+  const activeSpec = buildActiveSpecStatus();
+  const approvalRefs = getApprovedOperationApprovalIds(activeSpec.id, "harness-run");
+  const objective =
+    typeof body.objective === "string" && body.objective.trim()
+      ? body.objective.trim()
+      : "현재 Codex Desktop thread를 Dongri-grigri 운영실에 연결";
+  const existing = findCodexThreadActivation(db, threadId, scope.scope_key);
+  const now = Date.now();
+  const contextPack = {
+    ...buildContextPackPayload(activeSpec.id, "OPS", objective),
+    source: "codex_thread_activation",
+    codex_thread_id: threadId,
+    codex_thread_source: typeof body.thread_id === "string" && body.thread_id.trim() ? "manual" : detected.source,
+    scope_type: scope.scope_type,
+    scope_value: scope.scope_value,
+    scope_key: scope.scope_key,
+    active_spec_snapshot: {
+      id: activeSpec.id,
+      status: activeSpec.status,
+      phase: activeSpec.phase,
+      related_repo: activeSpec.related_repo,
+    },
+    evidence_refs: parseJsonArray(body.evidence_refs),
+  };
+  const hookDecisions = [
+    {
+      hook: "pre-task",
+      decision: "allow",
+      reason_code: "CODEX_THREAD_ACTIVATION_OBSERVE_ONLY",
+      operation_class: "control-plane-runner-state",
+    },
+  ];
+  if (existing) {
+    db.prepare("UPDATE control_plane_agent_runs SET status = ?, objective = ?, context_pack_json = ?, hook_decisions_json = ?, updated_at = ? WHERE id = ?").run(
+      status,
+      objective,
+      JSON.stringify(contextPack),
+      JSON.stringify(hookDecisions),
+      now,
+      String(existing.id),
+    );
+    return { ok: true, status: 200, duplicate: true, ...readControlRun(db, String(existing.id)) };
+  }
+  const runId = `cprun-thread-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const routingId = `cproute-thread-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  db.prepare(
+    `INSERT INTO control_plane_agent_runs (
+      id, spec_id, task_id, department_agent, status, objective, context_pack_json,
+      approval_refs_json, hook_decisions_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    runId,
+    activeSpec.id,
+    "T-THREAD",
+    "OPS",
+    status,
+    objective,
+    JSON.stringify(contextPack),
+    JSON.stringify(approvalRefs),
+    JSON.stringify(hookDecisions),
+    now,
+    now,
+  );
+  db.prepare(
+    `INSERT INTO control_plane_routing_decisions (
+      id, run_id, spec_id, selected_department, selected_repo, persona_needed, confidence,
+      evidence_json, rejection_reason, approval_refs_json, next_safe_action, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    routingId,
+    runId,
+    activeSpec.id,
+    "OPS",
+    scope.selected_repo,
+    0,
+    "high",
+    JSON.stringify([
+      {
+        kind: "codex_thread_activation",
+        thread_id: threadId,
+        scope: scope.scope_key,
+        source: contextPack.codex_thread_source,
+      },
+    ]),
+    null,
+    JSON.stringify(approvalRefs),
+    "thread handoff/evidence update",
+    now,
+  );
+  return { ok: true, status: 200, duplicate: false, ...readControlRun(db, runId) };
+}
+
+function finishCodexThread(db: RuntimeContext["db"], runId: string, body: Record<string, unknown>) {
+  ensureControlRunnerTables(db);
+  if (body.confirm !== "finish-codex-thread") {
+    return { ok: false, status: 400, error: "confirmation_required" };
+  }
+  const existing = readControlRun(db, runId);
+  if (!existing) return { ok: false, status: 404, error: "run_not_found" };
+  const context = parseMaybeJsonObject(existing.run.context_pack_json);
+  if (context.source !== "codex_thread_activation") {
+    return { ok: false, status: 400, error: "not_codex_thread_activation" };
+  }
+  const finalStatus = body.final_status === "cancelled" ? "cancelled" : "completed";
+  const evidenceRefs = parseJsonArray(body.evidence_refs).slice(0, 20);
+  const handoffPath = typeof body.handoff_path === "string" ? body.handoff_path.trim() : "";
+  if (finalStatus === "completed" && evidenceRefs.length === 0) {
+    return { ok: false, status: 400, error: "evidence_refs_required" };
+  }
+  if (finalStatus === "completed" && !handoffPath) {
+    return { ok: false, status: 400, error: "handoff_path_required" };
+  }
+  if (handoffPath) {
+    const resolved = path.isAbsolute(handoffPath) ? path.resolve(handoffPath) : path.resolve(CONTROL_ROOT, handoffPath);
+    if (!isInside(CONTROL_ROOT, resolved)) {
+      return { ok: false, status: 400, error: "handoff_path_outside_root" };
+    }
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      return { ok: false, status: 400, error: "handoff_path_not_found" };
+    }
+  }
+  const now = Date.now();
+  const updatedContext = {
+    ...context,
+    evidence_refs: evidenceRefs,
+    handoff_path: handoffPath || null,
+    finished_at: toIso(now),
+  };
+  db.prepare("UPDATE control_plane_agent_runs SET status = ?, context_pack_json = ?, updated_at = ? WHERE id = ?").run(
+    finalStatus,
+    JSON.stringify(updatedContext),
+    now,
+    runId,
+  );
+  const routeRows = db
+    .prepare("SELECT id, evidence_json FROM control_plane_routing_decisions WHERE run_id = ?")
+    .all(runId) as Array<{ id: string; evidence_json: string }>;
+  for (const route of routeRows) {
+    const evidence = [
+      ...parseMaybeJsonArray(route.evidence_json),
+      ...evidenceRefs,
+      ...(handoffPath ? [handoffPath] : []),
+    ];
+    db.prepare("UPDATE control_plane_routing_decisions SET evidence_json = ?, next_safe_action = ? WHERE id = ?").run(
+      JSON.stringify(evidence),
+      "thread closed; review evidence and handoff links",
+      route.id,
+    );
+  }
+  return { ok: true, status: 200, ...readControlRun(db, runId) };
+}
+
+const HARNESS_PATTERNS: Record<Exclude<HarnessBlueprintPattern, "auto">, { label: string; summary: string }> = {
+  pipeline: {
+    label: "Pipeline",
+    summary: "Sequential SDD phases with explicit handoff and evidence gates.",
+  },
+  "fan-out-fan-in": {
+    label: "Fan-out/Fan-in",
+    summary: "Parallel read-only investigations merged through REVIEW evidence.",
+  },
+  "expert-pool": {
+    label: "Expert Pool",
+    summary: "Select disposable personas by task context instead of permanent teams.",
+  },
+  "producer-reviewer": {
+    label: "Producer-Reviewer",
+    summary: "IMPLEMENT produces only inside approval scope and REVIEW validates before acceptance.",
+  },
+  supervisor: {
+    label: "Supervisor",
+    summary: "CONTROL and OPS coordinate routing, approvals, and QMS state.",
+  },
+  "hierarchical-delegation": {
+    label: "Hierarchical Delegation",
+    summary: "Represented as a blocked pattern because Donggri Ver.1 forbids nested personas.",
+  },
+};
+
+function normalizeHarnessTargetMode(value: unknown): HarnessBlueprintTargetMode | null {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "both";
+  if (raw === "department" || raw === "project" || raw === "both") return raw;
+  return null;
+}
+
+function normalizeHarnessPattern(value: unknown): HarnessBlueprintPattern | null {
+  const raw = typeof value === "string" && value.trim() ? value.trim().toLowerCase() : "auto";
+  if (
+    raw === "auto" ||
+    raw === "pipeline" ||
+    raw === "fan-out-fan-in" ||
+    raw === "expert-pool" ||
+    raw === "producer-reviewer" ||
+    raw === "supervisor" ||
+    raw === "hierarchical-delegation"
+  ) {
+    return raw;
+  }
+  return null;
+}
+
+function chooseHarnessPattern(objective: string, preferred: HarnessBlueprintPattern): Exclude<HarnessBlueprintPattern, "auto"> {
+  if (preferred !== "auto") return preferred;
+  const lower = objective.toLowerCase();
+  if (/review|검토|qa|quality|품질/.test(lower)) return "producer-reviewer";
+  if (/audit|감사|parallel|fan|조사|분석/.test(lower)) return "fan-out-fan-in";
+  if (/ops|운영|supervisor|routing|승인|approval/.test(lower)) return "supervisor";
+  if (/expert|전문|pool|선택/.test(lower)) return "expert-pool";
+  return "pipeline";
+}
+
+function buildDepartmentWorkflow() {
+  return [
+    { phase: "intake", owner_department: "CONTROL", output: "approved objective, risk class, and run boundary" },
+    { phase: "spec", owner_department: "SPEC", output: "requirements, design, tasks, repo-map, approvals" },
+    { phase: "explore", owner_department: "EXPLORE", output: "read-only fan-out findings with evidence refs" },
+    { phase: "implement", owner_department: "IMPLEMENT", output: "approved code or document changes only" },
+    { phase: "review", owner_department: "REVIEW", output: "producer-reviewer acceptance, hashes, and regression evidence" },
+    { phase: "ops-handoff", owner_department: "OPS", output: "runtime/evidence/handoff and QMS ledger updates" },
+  ];
+}
+
+function buildHarnessBlueprintPreview(db: RuntimeContext["db"], body: Record<string, unknown>) {
+  const targetMode = normalizeHarnessTargetMode(body.target_mode);
+  if (!targetMode) return { ok: false, status: 400, error: "invalid_target_mode" };
+  const preferredPattern = normalizeHarnessPattern(body.preferred_pattern);
+  if (!preferredPattern) return { ok: false, status: 400, error: "invalid_preferred_pattern" };
+  const objective = typeof body.objective === "string" && body.objective.trim() ? body.objective.trim() : "";
+  if (!objective) return { ok: false, status: 400, error: "objective_required" };
+
+  const registry = buildRegistryProjects(db);
+  const projectKey = typeof body.project_key === "string" && body.project_key.trim() ? body.project_key.trim() : "DonggriCompany";
+  const project = registry.projects.find((item) => item.key === projectKey) ?? null;
+  if ((targetMode === "project" || targetMode === "both") && !project) {
+    return { ok: false, status: 400, error: "invalid_project_key" };
+  }
+
+  const pattern = chooseHarnessPattern(objective, preferredPattern);
+  const stableInput = JSON.stringify({ targetMode, projectKey, objective, preferredPattern, pattern });
+  const previewId = `harness-preview-${crypto.createHash("sha256").update(stableInput).digest("hex").slice(0, 12)}`;
+  const departmentWorkflow = targetMode === "department" || targetMode === "both" ? buildDepartmentWorkflow() : [];
+  const projectWorkflow =
+    targetMode === "project" || targetMode === "both"
+      ? {
+          project_key: projectKey,
+          owner_department: "OPS",
+          operation_scope: `project:${projectKey}`,
+          repo_path: project?.absolute_path ?? null,
+          worktree_hint: projectKey === "BloggerGent" ? "Use registered blog role worktrees from projects.yaml." : "Use baseline repo only for inspection unless a registered worktree exists.",
+          implementation_delegate: "IMPLEMENT",
+        }
+      : null;
+  const phases = [
+    ...departmentWorkflow,
+    ...(projectWorkflow
+      ? [
+          { phase: "project-scope", owner_department: "OPS", output: `OPS opens ${projectWorkflow.operation_scope} and routes implementation to IMPLEMENT.` },
+          { phase: "project-review", owner_department: "REVIEW", output: "Project-specific evidence, hashes, and QMS findings are merged." },
+        ]
+      : []),
+  ];
+  const blueprint = {
+    id: previewId,
+    target_mode: targetMode,
+    target_scope_type: targetMode,
+    target_scope_key: targetMode === "department" ? "department-standard" : projectKey,
+    source_description: objective,
+    preferred_pattern: preferredPattern,
+    pattern,
+    pattern_label: HARNESS_PATTERNS[pattern].label,
+    pattern_summary: HARNESS_PATTERNS[pattern].summary,
+    source: {
+      description: objective,
+      references: ["https://github.com/revfactory/harness", "https://raw.githubusercontent.com/revfactory/harness/main/skills/harness/SKILL.md"],
+      absorption_mode: "donggri-native-patterns-only",
+    },
+    department_workflow: departmentWorkflow,
+    project_workflow: projectWorkflow,
+    phases,
+    suggested_personas: [
+      { persona_id: "explore-readonly-scout", parent_agent: "EXPLORE", write_policy: "read-only", purpose: "Parallel source and repo investigation.", disposable: true },
+      { persona_id: "review-evidence-checker", parent_agent: "REVIEW", write_policy: "read-only", purpose: "Boundary comparison, regression risk, and evidence density check.", disposable: true },
+      { persona_id: "ops-handoff-recorder", parent_agent: "OPS", write_policy: "evidence-and-approved-ops", purpose: "Evidence, handoff, and QMS ledger summary.", disposable: true },
+    ],
+    evidence_plan: ["EV-HARNESS-PREVIEW", "EV-HARNESS-DRAFT", "EV-HARNESS-QMS"],
+    approval_map: [
+      { operation: "preview", required_approval: null, writes: false },
+      { operation: "save_draft", required_approval: "APR-HARNESS-META-001", writes: true },
+      { operation: "apply", required_approval: "APR-HARNESS-APPLY-*", writes: true, default_status: "blocked" },
+    ],
+    qms_checks: [
+      "No permanent staff or nested personas.",
+      "No .claude, .kiro, plugin install, or external runtime dependency.",
+      "Evidence refs required before applied status.",
+      "Apply stays blocked until explicit APR-HARNESS-APPLY approval.",
+    ],
+    blocked_outputs: [".claude/*", ".kiro/*", "plugin install", "permanent staff", "nested personas", "raw transcript capture", "AgentMemory hooks"],
+    apply_gate: { status: "blocked", required_approval: "APR-HARNESS-APPLY-*" },
+  };
+  return { ok: true, status: 200, writes: false, blueprint };
+}
+
+function saveHarnessBlueprintDraft(db: RuntimeContext["db"], body: Record<string, unknown>) {
+  ensureHarnessBlueprintTables(db);
+  const activeSpec = buildActiveSpecStatus();
+  const preview = buildHarnessBlueprintPreview(db, body);
+  if (!preview.ok) return preview;
+  const blueprint = preview.blueprint as Record<string, unknown>;
+  const now = Date.now();
+  const id = `harness-blueprint-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const approvalRefs = getApprovedOperationApprovalIds(activeSpec.id, "harness-meta");
+  const evidenceRefs = parseJsonArray(body.evidence_refs);
+  db.prepare(
+    `INSERT INTO control_plane_harness_blueprints (
+      id, spec_id, target_scope_type, target_scope_key, source_description, pattern, status,
+      blueprint_json, approval_refs_json, evidence_refs_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    activeSpec.id,
+    String(blueprint.target_scope_type ?? "both"),
+    String(blueprint.target_scope_key ?? ""),
+    String(blueprint.source_description ?? ""),
+    String(blueprint.pattern ?? "pipeline"),
+    "draft",
+    JSON.stringify(blueprint),
+    JSON.stringify(approvalRefs),
+    JSON.stringify(evidenceRefs),
+    now,
+    now,
+  );
+  db.prepare(
+    `INSERT INTO control_plane_harness_blueprint_events (
+      id, blueprint_id, event_type, decision, evidence_refs_json, payload_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    `harness-blueprint-event-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
+    id,
+    "draft_saved",
+    "draft",
+    JSON.stringify(evidenceRefs),
+    JSON.stringify({ approval_refs: approvalRefs, preview_id: blueprint.id }),
+    now,
+  );
+  const row = db.prepare("SELECT * FROM control_plane_harness_blueprints WHERE id = ?").get(id);
+  return { ok: true, status: 200, writes: true, blueprint_id: id, blueprint, draft: row, harness_blueprints: readHarnessBlueprintStatus(db) };
+}
+
+function applyHarnessBlueprint(db: RuntimeContext["db"], blueprintId: string) {
+  ensureHarnessBlueprintTables(db);
+  const existing = db.prepare("SELECT * FROM control_plane_harness_blueprints WHERE id = ?").get(blueprintId) as Record<string, unknown> | undefined;
+  if (!existing) return { ok: false, status: 404, error: "blueprint_not_found" };
+  return {
+    ok: false,
+    status: 409,
+    error: "harness_apply_blocked_in_v1",
+    message: "Generated blueprint application is intentionally blocked in v1; implement a separate apply spec first.",
+    draft: existing,
+  };
+}
+
 function createControlRun(db: RuntimeContext["db"], body: Record<string, unknown>) {
   ensureControlRunnerTables(db);
   const activeSpec = buildActiveSpecStatus();
@@ -2525,7 +3340,7 @@ function createControlRun(db: RuntimeContext["db"], body: Record<string, unknown
   const runId = `cprun-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   const routingId = `cproute-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   const now = Date.now();
-  const approvalRefs = parseJsonArray(body.approval_refs);
+  const approvalRefs = [...new Set([...parseJsonArray(body.approval_refs), ...getApprovedOperationApprovalIds(activeSpec.id, "harness-run")])];
   const contextPack = buildContextPackPayload(activeSpec.id, department, objective);
   const hookDecisions = [
     {
@@ -2612,9 +3427,23 @@ function validatePersonaInput(run: Record<string, unknown>, body: Record<string,
   const allowedWritePolicies = new Set(["read-only", "control-plane-docs", "evidence-handoff", "approved-task-files", "approved-db-sync"]);
   if (!allowedWritePolicies.has(writePolicy)) return "invalid_write_policy";
   const allowedPaths = parseAllowedPaths(body.allowed_paths);
+  const taskId =
+    typeof body.task_id === "string" && body.task_id.trim()
+      ? body.task_id.trim()
+      : typeof run.task_id === "string" && run.task_id.trim()
+        ? run.task_id.trim()
+        : "";
+  const evidenceRefs = parseJsonArray(body.evidence_refs);
+  const specId = typeof run.spec_id === "string" ? run.spec_id : null;
   if (writePolicy === "approved-task-files" && parentAgent !== "IMPLEMENT") return "repo_write_requires_implement_parent";
   if (writePolicy === "approved-task-files" && allowedPaths.write.length === 0) return "repo_write_requires_allowed_paths";
-  if (writePolicy !== "read-only" && !String(body.approval_ref ?? "").trim()) return "write_persona_requires_approval_ref";
+  if (!taskId) return "task_ref_required";
+  if (evidenceRefs.length === 0) return "evidence_refs_required";
+  if (writePolicy !== "read-only") {
+    const approvalRef = String(body.approval_ref ?? "").trim();
+    if (!approvalRef) return "write_persona_requires_approval_ref";
+    if (!getApprovedOperationApprovalIds(specId, "persona-evidence").includes(approvalRef)) return "invalid_persona_approval_ref";
+  }
   if (!String(body.objective ?? "").trim()) return "objective_required";
   return null;
 }
@@ -2641,6 +3470,16 @@ function createPersonaRun(db: RuntimeContext["db"], runId: string, body: Record<
       : typeof existing.run.task_id === "string"
         ? existing.run.task_id
         : null;
+  const evidenceRefs = parseJsonArray(body.evidence_refs);
+  const qualityBarResult = typeof body.quality_bar_result === "string" ? body.quality_bar_result.trim() : "pending";
+  const payload = {
+    source: "control-plane-runner",
+    task_ref: taskId,
+    evidence_refs: evidenceRefs,
+    quality_bar_result: qualityBarResult,
+    approval_ref: typeof body.approval_ref === "string" ? body.approval_ref : null,
+  };
+  const sourceHash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
   db.prepare(
     `INSERT INTO control_plane_persona_runs (
       id, run_id, spec_id, task_id, parent_agent, persona_id, status, objective, input_docs_json,
@@ -2665,8 +3504,8 @@ function createPersonaRun(db: RuntimeContext["db"], runId: string, body: Record<
     typeof body.recreate_policy === "string" ? body.recreate_policy : "recreate if missing evidence or unclear conclusion",
     2,
     typeof body.approval_ref === "string" ? body.approval_ref : null,
-    JSON.stringify(parseJsonArray(body.evidence_refs)),
-    JSON.stringify({ source: "control-plane-runner" }),
+    JSON.stringify(evidenceRefs),
+    JSON.stringify(payload),
     now,
     now,
   );
@@ -2681,13 +3520,17 @@ function createPersonaRun(db: RuntimeContext["db"], runId: string, body: Record<
     "created",
     "created",
     "persona created by parent department agent",
-    JSON.stringify([]),
+    JSON.stringify(evidenceRefs),
+    sourceHash,
     null,
-    null,
-    JSON.stringify({ write_policy: writePolicy }),
+    JSON.stringify({ write_policy: writePolicy, task_ref: taskId, quality_bar_result: qualityBarResult }),
     now,
   );
   return { ok: true, status: 200, ...readControlRun(db, runId) };
+}
+
+function normalizeEvidenceHash(value: unknown): string {
+  return typeof value === "string" && /^[a-zA-Z0-9:_./-]{12,128}$/.test(value.trim()) ? value.trim() : "";
 }
 
 function decidePersona(db: RuntimeContext["db"], personaId: string, body: Record<string, unknown>) {
@@ -2704,6 +3547,28 @@ function decidePersona(db: RuntimeContext["db"], personaId: string, body: Record
   if (decision === "recreate" && recreateCount >= maxRecreate) {
     return { ok: false, status: 400, error: "max_recreate_attempts_reached" };
   }
+  const evidenceRefs = parseJsonArray(body.evidence_refs);
+  const payload = body.payload && typeof body.payload === "object" && !Array.isArray(body.payload) ? (body.payload as Record<string, unknown>) : {};
+  const outputHash = normalizeEvidenceHash(body.output_hash ?? payload.output_hash);
+  const sourceHash = normalizeEvidenceHash(body.source_hash ?? payload.source_hash);
+  const qualityBarResult =
+    typeof body.quality_bar_result === "string" && body.quality_bar_result.trim()
+      ? body.quality_bar_result.trim()
+      : typeof payload.quality_bar_result === "string" && payload.quality_bar_result.trim()
+        ? payload.quality_bar_result.trim()
+        : "";
+  if ((decision === "accept" || decision === "merge") && evidenceRefs.length === 0) {
+    return { ok: false, status: 400, error: "evidence_refs_required" };
+  }
+  if ((decision === "accept" || decision === "merge") && !outputHash) {
+    return { ok: false, status: 400, error: "output_hash_required" };
+  }
+  if ((decision === "accept" || decision === "merge") && !sourceHash) {
+    return { ok: false, status: 400, error: "source_hash_required" };
+  }
+  if ((decision === "accept" || decision === "merge") && !qualityBarResult) {
+    return { ok: false, status: 400, error: "quality_bar_result_required" };
+  }
   const statusMap: Record<string, string> = {
     accept: "accepted",
     reject: "rejected",
@@ -2715,11 +3580,11 @@ function decidePersona(db: RuntimeContext["db"], personaId: string, body: Record
   db.prepare("UPDATE control_plane_persona_runs SET status = ?, recreate_count = ?, evidence_refs_json = ?, updated_at = ? WHERE persona_id = ?").run(
     statusMap[decision],
     decision === "recreate" ? recreateCount + 1 : recreateCount,
-    JSON.stringify(parseJsonArray(body.evidence_refs)),
+    JSON.stringify(evidenceRefs),
     now,
     personaId,
   );
-  const sourceHash = crypto.createHash("sha256").update(JSON.stringify(body.payload ?? {})).digest("hex");
+  const eventPayload = { ...payload, output_hash: outputHash || null, quality_bar_result: qualityBarResult || null };
   db.prepare(
     `INSERT INTO control_plane_persona_events (
       id, persona_id, run_id, event_type, decision, reason, evidence_refs_json, source_hash, merged_into, payload_json, created_at
@@ -2731,10 +3596,10 @@ function decidePersona(db: RuntimeContext["db"], personaId: string, body: Record
     "decision",
     decision,
     typeof body.reason === "string" ? body.reason : null,
-    JSON.stringify(parseJsonArray(body.evidence_refs)),
+    JSON.stringify(evidenceRefs),
     sourceHash,
     typeof body.merged_into === "string" ? body.merged_into : null,
-    JSON.stringify(body.payload ?? {}),
+    JSON.stringify(eventPayload),
     now,
   );
   return { ok: true, status: 200, ...readControlRun(db, runId) };
@@ -2850,16 +3715,23 @@ function buildCodexAssetsStatus() {
 async function fetchJson(
   url: string,
   init?: RequestInit,
-): Promise<{ ok: boolean; status: number | null; body: unknown; error: string | null }> {
+): Promise<{ ok: boolean; status: number | null; body: unknown; error: string | null; reason: "ok" | "http_error" | "timeout" | "network_error" }> {
   try {
     const response = await fetch(url, {
       ...init,
       signal: AbortSignal.timeout(1200),
     });
     const body = await response.json().catch(() => null);
-    return { ok: response.ok, status: response.status, body, error: null };
+    return { ok: response.ok, status: response.status, body, error: null, reason: response.ok ? "ok" : "http_error" };
   } catch (error) {
-    return { ok: false, status: null, body: null, error: safeError(error) };
+    const message = safeError(error);
+    return {
+      ok: false,
+      status: null,
+      body: null,
+      error: message,
+      reason: /abort|timeout/i.test(message) ? "timeout" : "network_error",
+    };
   }
 }
 
@@ -2963,13 +3835,38 @@ function readAgentMemoryConfigStatus() {
 async function buildAgentMemoryStatus() {
   const health = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/health`);
   const livez = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/livez`);
-  const configFlags = health.ok ? await fetchJson(`${AGENTMEMORY_URL}/agentmemory/config/flags`) : { ok: false, status: null, body: null, error: "health_unavailable" };
+  const viewer = await fetchJson(AGENTMEMORY_VIEWER_URL);
+  const configFlags = health.ok
+    ? await fetchJson(`${AGENTMEMORY_URL}/agentmemory/config/flags`)
+    : { ok: false, status: null, body: null, error: "health_unavailable", reason: "network_error" as const };
   const serverAvailable = health.ok || livez.ok;
+  const viewerReachable = viewer.ok;
   const config = readAgentMemoryConfigStatus();
+  const activeSpec = buildActiveSpecStatus();
+  const runtimeApprovalRefs = getApprovedOperationApprovalIds(activeSpec.id, "agentmemory-runtime-connect");
+  const runtimeConnectAllowed = runtimeApprovalRefs.length > 0;
   return {
     runtime_path: AGENTMEMORY_RUNTIME_PATH,
     server_url: AGENTMEMORY_URL,
     viewer_url: AGENTMEMORY_VIEWER_URL,
+    runtime_preflight: {
+      runtime_path_exists: fs.existsSync(AGENTMEMORY_RUNTIME_PATH),
+      server_port: 3111,
+      viewer_port: 3113,
+      health_url: `${AGENTMEMORY_URL}/agentmemory/health`,
+      livez_url: `${AGENTMEMORY_URL}/agentmemory/livez`,
+      approved_runtime_connect: runtimeConnectAllowed,
+      approval_refs: runtimeApprovalRefs,
+    },
+    viewer_preflight: {
+      viewer_url: AGENTMEMORY_VIEWER_URL,
+      viewer_port: 3113,
+      reachable: viewerReachable,
+      status_code: viewer.status,
+      embed_mode: viewerReachable ? "iframe" : "fallback",
+      error: viewer.error,
+      reason: viewerReachable ? "ok" : viewer.reason,
+    },
     health: {
       available: health.ok,
       status_code: health.status,
@@ -3000,9 +3897,286 @@ async function buildAgentMemoryStatus() {
       hook_auto_capture_enabled: false,
       delete_forget_enabled: false,
     },
+    approval_gate: {
+      runtime_connect_allowed: runtimeConnectAllowed,
+      runtime_connect_required_approval: "APR-MEM-RUNTIME-*",
+      remember_policy_approval: "APR-MEM-001",
+      blocked_operations: ["install/start", "MCP wiring", "global hooks", "transcript capture", "delete", "forget", "import"],
+      next_safe_action: serverAvailable
+        ? "Use safe search/context/remember only inside approved scope."
+        : "Record approval first, then start AgentMemory runtime in a separate OPS step.",
+    },
     integration_mode: "functional-safe-proxy",
     install_required_approval: !serverAvailable,
     safe_proxy_available: serverAvailable,
+  };
+}
+
+function buildQualityHarnessStatus(
+  db: RuntimeContext["db"],
+  registry: ReturnType<typeof buildRegistryProjects>,
+  activeSpec: ReturnType<typeof buildActiveSpecStatus>,
+  runner: RunnerStatus,
+  memory: Awaited<ReturnType<typeof buildAgentMemoryStatus>>,
+  textIntegrity: ReturnType<typeof buildKoreanTextIntegrityStatus>,
+  harnessBlueprints: HarnessBlueprintStatus,
+) {
+  const changes = readGitShortStatus(RUNTIME_PROJECTION_APP);
+  const donggriProject = registry.projects.find((project) => project.key === "DonggriCompany") ?? null;
+  const threadState = buildCodexThreadCurrent(db);
+  const currentThreadId = currentCodexThreadId(threadState);
+  const currentActivation = currentThreadId ? findCodexThreadActivation(db, currentThreadId, null, true) : null;
+  const latestActivation = findCodexThreadActivation(db, null, "project:DonggriCompany", true);
+  const currentActivationContext = parseMaybeJsonObject(currentActivation?.context_pack_json);
+  const latestActivationContext = parseMaybeJsonObject(latestActivation?.context_pack_json);
+  const previousActivation =
+    latestActivation &&
+    latestActivationContext.codex_thread_id &&
+    currentThreadId &&
+    latestActivationContext.codex_thread_id !== currentThreadId
+      ? latestActivation
+      : null;
+  const personaTotal = Object.values(runner.persona_counts).reduce((sum, value) => sum + Number(value || 0), 0);
+  const eventTotal = runner.recent_events.length;
+  const sourceDocsReady = activeSpec.missing_docs.length === 0 && registry.doc.exists;
+  const releaseDirty = changes.length > 0 || donggriProject?.git.status === "dirty";
+  const memoryServerAvailable = Boolean(memory.readiness?.server_available);
+  const rememberApproved = hasApprovedAgentMemoryRemember(activeSpec.id);
+  const personaEvidenceThin = personaTotal < 3 || eventTotal < 6;
+  const qmsHasOpenWork = releaseDirty || personaEvidenceThin;
+  const blueprintCoveragePass =
+    harnessBlueprints.department_draft_count > 0 &&
+    harnessBlueprints.project_draft_count > 0 &&
+    harnessBlueprints.evidence_backed_count > 0;
+  const blueprintCoverageStatus: HarnessCheckStatus = blueprintCoveragePass ? "pass" : harnessBlueprints.draft_count > 0 ? "warn" : "planned";
+
+  const checks: HarnessCheck[] = [
+    {
+      key: "source_of_truth",
+      label: "Source of truth",
+      status: sourceDocsReady ? "pass" : "warn",
+      detail: sourceDocsReady ? "Root docs and active spec are readable." : "Some active spec documents are missing.",
+      next_safe_action: sourceDocsReady ? "Continue evidence-backed work." : "Repair the missing SDD documents before implementation.",
+    },
+    {
+      key: "thread_relationship",
+      label: "Codex thread relationship",
+      status: currentActivation ? "pass" : previousActivation ? "warn" : currentThreadId ? "warn" : "blocked",
+      detail: currentActivation
+        ? "Current/latest Codex thread has a Control Plane activation."
+        : previousActivation
+          ? "Previous thread remains connected while the detected current thread is not activated yet."
+          : currentThreadId
+            ? "Detected Codex thread is not connected yet."
+            : "No current Codex thread was detected. Session-file candidates require manual selection.",
+      next_safe_action: currentActivation ? "Close with evidence/handoff when done." : "Activate the current thread with project:DonggriCompany scope.",
+    },
+    {
+      key: "agentmemory_runtime",
+      label: "AgentMemory runtime gate",
+      status: memoryServerAvailable ? "pass" : "warn",
+      detail: memoryServerAvailable
+        ? "AgentMemory safe proxy can reach the runtime."
+        : "AgentMemory safe proxy is configured, but runtime is offline or not approved for start/connect in this spec.",
+      next_safe_action: memoryServerAvailable
+        ? "Use safe search/context and confirmed remember only."
+        : "Get separate OPS approval before runtime start/connect or MCP wiring.",
+    },
+    {
+      key: "agentmemory_approval",
+      label: "Memory approval",
+      status: rememberApproved ? "pass" : "warn",
+      detail: rememberApproved ? "Non-destructive remember approval is present." : "Remember writes need APR-MEM approval in the active spec.",
+      next_safe_action: rememberApproved ? "Keep storing summaries only." : "Add/confirm APR-MEM scope before memory capture.",
+    },
+    {
+      key: "persona_evidence",
+      label: "Persona evidence",
+      status: personaTotal > 0 && eventTotal > 0 ? "pass" : "warn",
+      detail:
+        personaTotal > 0 && eventTotal > 0
+          ? "Persona runs and events exist as harness evidence."
+          : "Persona tables exist, but operational persona evidence is still thin.",
+      next_safe_action: "Create read-only persona records for investigation/review tasks and decide accept/reject with evidence.",
+    },
+    {
+      key: "release_hygiene",
+      label: "Release hygiene",
+      status: releaseDirty ? "warn" : "pass",
+      detail: releaseDirty
+        ? "DonggriCompany has dirty or untracked files that must be grouped before release."
+        : "DonggriCompany worktree is clean.",
+      next_safe_action: releaseDirty ? "Review groups and split commit-ready changes only after explicit Git approval." : "Continue verification.",
+    },
+    {
+      key: "korean_integrity",
+      label: "Korean text integrity",
+      status: textIntegrity.pass ? "pass" : "warn",
+      detail: textIntegrity.pass ? "Configured mojibake patterns are absent." : "Visible Korean integrity issues need targeted repair.",
+      next_safe_action: textIntegrity.pass ? "Keep checking rendered UI." : "Fix only verified source/rendered text issues.",
+    },
+    {
+      key: "capa_audit",
+      label: "CAPA/internal audit",
+      status: qmsHasOpenWork ? "warn" : "pass",
+      detail: qmsHasOpenWork
+        ? "QMS ledgers are active and contain open release/persona findings."
+        : "QMS ledgers are active with no open harness findings.",
+      next_safe_action: qmsHasOpenWork ? "Close NC/CAPA records with evidence and effectiveness checks." : "Keep recurring internal audit review active.",
+    },
+    {
+      key: "harness_blueprint_coverage",
+      label: "Harness blueprint coverage",
+      status: blueprintCoverageStatus,
+      detail: blueprintCoveragePass
+        ? "Department and project-scope harness blueprint drafts are evidence-backed."
+        : harnessBlueprints.draft_count > 0
+          ? "Harness blueprint draft exists, but department/project/evidence coverage is incomplete."
+          : "Harness Meta Generator has no saved blueprint draft yet.",
+      next_safe_action: blueprintCoveragePass
+        ? "Use the draft as an approval-gated pipeline skeleton."
+        : "Preview and save an evidence-backed department plus project blueprint draft.",
+    },
+  ];
+  const qmsLedgers = {
+    nonconformances: [
+      {
+        id: "NC-REL-001",
+        source: "release-hygiene-classifier",
+        severity: releaseDirty ? "major" : "minor",
+        owner_department: "OPS",
+        related_spec: activeSpec.id,
+        related_run: typeof runner.latest_run?.id === "string" ? runner.latest_run.id : null,
+        root_cause: releaseDirty ? "Mixed tracked/untracked changes are present in the baseline repo." : "No current release hygiene drift.",
+        containment: "Classify files and block clean/stash/commit until explicit Git approval.",
+        corrective_action: "Split harness, UI, agent migration, generated artifact, and unrelated groups before release.",
+        preventive_action: "Keep release hygiene classifier visible in Control Plane quality checks.",
+        due_at: "2026-05-28",
+        effectiveness_check: "Git status groups reviewed and generated artifacts excluded from release candidates.",
+        status: releaseDirty ? "open" : "closed",
+        evidence_refs: ["EV-REL-HYGIENE"],
+      },
+      {
+        id: "NC-PER-001",
+        source: "persona-evidence-telemetry",
+        severity: personaEvidenceThin ? "minor" : "informational",
+        owner_department: "REVIEW",
+        related_spec: activeSpec.id,
+        related_run: typeof runner.latest_run?.id === "string" ? runner.latest_run.id : null,
+        root_cause: personaEvidenceThin ? "Persona run/event history is below the operational evidence threshold." : "Persona evidence threshold is met.",
+        containment: "Require task refs, evidence refs, output hash, source hash, and quality bar result on accept/merge.",
+        corrective_action: "Record persona decisions for real investigation and review tasks.",
+        preventive_action: "Reject accept/merge without evidence hash metadata.",
+        due_at: "2026-05-28",
+        effectiveness_check: "Recent persona timeline contains at least three personas and six events or the finding remains open.",
+        status: personaEvidenceThin ? "open" : "closed",
+        evidence_refs: ["EV-PERSONA-EVIDENCE"],
+      },
+    ],
+    capas: [
+      {
+        id: "CAPA-HARNESS-001",
+        source: "717-of-1000 harness assessment",
+        severity: qmsHasOpenWork ? "major" : "minor",
+        owner_department: "CONTROL",
+        related_spec: activeSpec.id,
+        root_cause: "Agent harness controls existed as dashboard checks before this spec, but approval/QMS loops were incomplete.",
+        containment: "Central mutation guard, safe memory validation, persona evidence enforcement, and QMS ledgers.",
+        corrective_action: "Implement this hardening spec and verify API/UI/OpenAPI behavior.",
+        preventive_action: "Keep approval class validation and QMS ledger checks in regression tests.",
+        due_at: "2026-05-28",
+        effectiveness_check: "Target score is 830/1000 or higher after dirty worktree and persona evidence records are closed.",
+        status: qmsHasOpenWork ? "in_progress" : "effectiveness_check",
+        evidence_refs: ["EV-QMS-HARDENING"],
+      },
+    ],
+    internal_audits: [
+      {
+        id: "AUD-HARNESS-001",
+        source: "Dongri Agent Harness Hardening Ver.1",
+        severity: "medium",
+        owner_department: "REVIEW",
+        related_spec: activeSpec.id,
+        scope: "API approvals, AgentMemory, persona evidence, QMS, release hygiene",
+        findings: [
+          ...(releaseDirty ? ["NC-REL-001"] : []),
+          ...(personaEvidenceThin ? ["NC-PER-001"] : []),
+        ],
+        due_at: "2026-05-28",
+        effectiveness_check: "Run tsc, API/web tests, OpenAPI check, build, spec-quality, and browser smoke.",
+        status: qmsHasOpenWork ? "in_progress" : "closed",
+        evidence_refs: ["EV-AUD-HARNESS"],
+      },
+    ],
+  };
+  const qmsCounts = {
+    open_nonconformances: qmsLedgers.nonconformances.filter((item) => item.status === "open").length,
+    open_capas: qmsLedgers.capas.filter((item) => item.status === "in_progress").length,
+    open_audits: qmsLedgers.internal_audits.filter((item) => item.status === "in_progress").length,
+  };
+  const qmsScoreImpact = qmsCounts.open_nonconformances * 30 + qmsCounts.open_capas * 20 + qmsCounts.open_audits * 10;
+  const scoreMap: Record<HarnessCheckStatus, number> = { pass: 100, warn: 70, planned: 55, blocked: 30 };
+  const score = Math.max(0, Math.min(1000, Math.round((checks.reduce((sum, check) => sum + scoreMap[check.status], 0) / checks.length) * 10) - qmsScoreImpact));
+  return {
+    level: score >= 900 ? "Level 4 - ISO 9001-inspired operating harness" : score >= 830 ? "Level 3 - release candidate harness" : "Level 2 - strong beta hardening",
+    score,
+    target_score: 1000,
+    target_release_score: 830,
+    certification_claim: "not-certified",
+    checks,
+    qms: {
+      ...qmsLedgers,
+      counts: qmsCounts,
+      score_impact: qmsScoreImpact,
+      policy: "ISO 9001-inspired evidence loop; no certification claim",
+    },
+    thread_relationship: {
+      current_thread_id: currentThreadId,
+      current_activation_id: typeof currentActivation?.id === "string" ? currentActivation.id : null,
+      current_activation_scope: typeof currentActivationContext.scope_key === "string" ? currentActivationContext.scope_key : null,
+      previous_activation_id: typeof previousActivation?.id === "string" ? previousActivation.id : null,
+      previous_thread_id: typeof latestActivationContext.codex_thread_id === "string" ? latestActivationContext.codex_thread_id : null,
+      shared_memory_scope: "project:DonggriCompany",
+      raw_transcript_capture: false,
+    },
+    agentmemory_gate: {
+      server_available: memoryServerAvailable,
+      safe_proxy_available: Boolean(memory.safe_proxy_available),
+      runtime_connect_allowed: false,
+      required_approval: "separate OPS approval",
+      blocked_operations: memory.approval_gate.blocked_operations,
+      remember_approved: rememberApproved,
+    },
+    persona_evidence: {
+      tables_exist: runner.tables_exist,
+      persona_total: personaTotal,
+      recent_event_count: eventTotal,
+      recent_personas: runner.recent_personas.slice(0, 5),
+      recent_events: runner.recent_events.slice(0, 5),
+    },
+    harness_blueprint_coverage: {
+      tables_exist: harnessBlueprints.tables_exist,
+      draft_count: harnessBlueprints.draft_count,
+      department_draft_count: harnessBlueprints.department_draft_count,
+      project_draft_count: harnessBlueprints.project_draft_count,
+      evidence_backed_count: harnessBlueprints.evidence_backed_count,
+      latest_blueprints: harnessBlueprints.latest_blueprints,
+      apply_requires_approval: "APR-HARNESS-APPLY-*",
+    },
+    release_hygiene: {
+      project_key: "DonggriCompany",
+      git_status: donggriProject?.git.status ?? "missing",
+      branch: donggriProject?.git.branch ?? null,
+      dirty_count: donggriProject?.git.dirty_count ?? changes.length,
+      untracked_count: donggriProject?.git.untracked_count ?? changes.filter((change) => change.status === "??").length,
+      grouped_changes: summarizeHygieneGroups(changes),
+      commit_exclusion_manifest: {
+        exclude_groups: ["generated-artifacts/screenshots", "unrelated-unknown"],
+        require_review_groups: ["harness-candidate", "ui-candidate", "agent-directory-migration", "docs-candidate"],
+        destructive_cleanup_allowed: false,
+      },
+      policy: "diagnostic-only; no clean/stash/commit without explicit approval",
+    },
   };
 }
 
@@ -3015,6 +4189,7 @@ export async function buildControlPlaneState(db: RuntimeContext["db"]) {
   const memoryDocs = buildMemoryDocs();
   const memory = await buildAgentMemoryStatus();
   const runner = readControlRunnerStatus(db);
+  const harnessBlueprints = readHarnessBlueprintStatus(db);
   const projectOperators = buildProjectOperators(registry.projects);
   const internalDepartmentMemory = buildDepartmentMemorySummaries(memory, memoryDocs, runner);
   const internalDepartmentChats = buildDepartmentChatRooms(runner);
@@ -3022,6 +4197,7 @@ export async function buildControlPlaneState(db: RuntimeContext["db"]) {
   const departmentMemory = buildMasterDepartmentMemorySummaries(memory, memoryDocs, runner);
   const departmentChats = buildMasterDepartmentChatRooms(runner);
   const textIntegrity = buildKoreanTextIntegrityStatus();
+  const qualityHarness = buildQualityHarnessStatus(db, registry, activeSpec, runner, memory, textIntegrity, harnessBlueprints);
 
   return {
     ok: true,
@@ -3052,9 +4228,11 @@ export async function buildControlPlaneState(db: RuntimeContext["db"]) {
     handoffs,
     memory_docs: memoryDocs,
     memory,
+    harness_blueprints: harnessBlueprints,
     codex_assets: buildCodexAssetsStatus(),
     sync: readControlSyncStatus(db),
     runner,
+    quality_harness: qualityHarness,
     dongri_grigri: {
       brand: "Dongri-grigri",
       reset_mode: "soft-reset-legacy-preserved",
@@ -3101,6 +4279,23 @@ function buildAgentMemoryMetadata(body: Record<string, unknown>) {
   };
 }
 
+function validateSafeMemorySummary(text: string, evidenceRefs: string[]) {
+  if (text.length > 1200) return "summary_too_long";
+  if (evidenceRefs.length === 0) return "evidence_refs_required";
+  const lineCount = text.split(/\r?\n/).filter((line) => line.trim()).length;
+  const transcriptMarkers = (text.match(/\b(user|assistant|system|tool|developer)\s*:/gi) ?? []).length;
+  if (lineCount > 18 || transcriptMarkers >= 3 || /"role"\s*:\s*"(user|assistant|system|tool)"/i.test(text)) {
+    return "raw_transcript_blocked";
+  }
+  if (/sk-[A-Za-z0-9_-]{20,}|api[_-]?key|access[_-]?token|refresh[_-]?token|password|private[_-]?key|-----BEGIN/i.test(text)) {
+    return "secret_like_payload_blocked";
+  }
+  if (/\b\d{3}-\d{2}-\d{4}\b|\b\d{6}-\d{7}\b/.test(text)) {
+    return "pii_like_payload_blocked";
+  }
+  return null;
+}
+
 export async function searchAgentMemory(query: string, scope = "root") {
   const normalized = query.trim().slice(0, 300);
   if (!normalized) {
@@ -3117,7 +4312,8 @@ export async function searchAgentMemory(query: string, scope = "root") {
       available: false,
       results: [],
       status_code: result.status,
-      error: result.error ?? "agentmemory_unavailable",
+      error: "agentmemory_unavailable",
+      reason: result.reason,
     };
   }
   return {
@@ -3153,7 +4349,8 @@ export async function getAgentMemoryContext(body: Record<string, unknown>) {
       available: false,
       context: null,
       status_code: result.status,
-      error: result.error ?? "agentmemory_unavailable",
+      error: "agentmemory_unavailable",
+      reason: result.reason,
     };
   }
   return {
@@ -3168,7 +4365,7 @@ export async function getAgentMemoryContext(body: Record<string, unknown>) {
 }
 
 export async function rememberAgentMemory(body: Record<string, unknown>) {
-  const text = normalizedMemoryString(body.text ?? body.content, 4000);
+  const text = normalizedMemoryString(body.text ?? body.content, 1201);
   if (!text) {
     return { ok: false, available: false, captured: false, error: "text_required" };
   }
@@ -3177,9 +4374,13 @@ export async function rememberAgentMemory(body: Record<string, unknown>) {
   }
   const activeSpec = buildActiveSpecStatus();
   if (!hasApprovedAgentMemoryRemember(activeSpec.id)) {
-    return { ok: false, available: false, captured: false, error: "approval_required", required_approval: "APR-MEM-001" };
+      return { ok: false, available: false, captured: false, error: "approval_required", required_approval: "APR-MEM-001" };
   }
   const metadata = buildAgentMemoryMetadata(body);
+  const safeSummaryError = validateSafeMemorySummary(text, metadata.evidence_refs);
+  if (safeSummaryError) {
+    return { ok: false, available: false, captured: false, error: safeSummaryError };
+  }
   const result = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/remember`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -3341,6 +4542,14 @@ export function registerControlPlaneRoutes(
     res.json({ ok: true, codex_assets: state.codex_assets });
   });
 
+  app.get("/api/control-plane/v1/codex/thread/current", async (_req, res) => {
+    try {
+      res.json(buildCodexThreadCurrent(db));
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "codex_thread_current_failed", message: safeError(error) });
+    }
+  });
+
   app.get("/api/control-plane/v1/project-operators", async (_req, res) => {
     const state = await buildControlPlaneState(db);
     const operators = state.dongri_grigri.project_operators;
@@ -3403,6 +4612,10 @@ export function registerControlPlaneRoutes(
     res.json({ ok: true, runner: readControlRunnerStatus(db) });
   });
 
+  app.get("/api/control-plane/v1/harness/blueprints/status", async (_req, res) => {
+    res.json({ ok: true, harness_blueprints: readHarnessBlueprintStatus(db) });
+  });
+
   app.get("/api/control-plane/v1/runs/:runId", async (req, res) => {
     const runId = typeof req.params?.runId === "string" ? req.params.runId : "";
     const result = readControlRun(db, runId);
@@ -3417,27 +4630,74 @@ export function registerControlPlaneRoutes(
     post?: (path: string, handler: (req: any, res: any) => unknown) => unknown;
   }).post;
   if (typeof post === "function") {
+    post.call(app, "/api/control-plane/v1/harness/blueprints/preview", async (req, res) => {
+      try {
+        const result = buildHarnessBlueprintPreview(db, req.body ?? {});
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "harness_blueprint_preview_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/harness/blueprints/drafts", async (req, res) => {
+      const guard = guardControlPlaneMutation(req, "harness-meta");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
+        return;
+      }
+      try {
+        const result = saveHarnessBlueprintDraft(db, req.body ?? {});
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "harness_blueprint_draft_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/harness/blueprints/:id/apply", async (req, res) => {
+      const guard = guardControlPlaneMutation(req, "harness-apply");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
+        return;
+      }
+      try {
+        const blueprintId = typeof req.params?.id === "string" ? req.params.id : "";
+        const result = applyHarnessBlueprint(db, blueprintId);
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "harness_blueprint_apply_failed", message: safeError(error) });
+      }
+    });
+
     post.call(app, "/api/control-plane/v1/memory/agentmemory/search", async (req, res) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const result = await searchAgentMemory(
         normalizedMemoryString(body.query, 300),
         normalizedMemoryScope(body.scope),
       );
-      res.status(result.ok || result.error === "query_required" ? 200 : 503).json(result);
+      res.status(result.ok || result.error === "query_required" || result.error === "agentmemory_unavailable" ? 200 : 503).json(result);
     });
 
     post.call(app, "/api/control-plane/v1/memory/agentmemory/context", async (req, res) => {
       const result = await getAgentMemoryContext((req.body ?? {}) as Record<string, unknown>);
-      res.status(result.ok || result.error === "query_required" ? 200 : 503).json(result);
+      res.status(result.ok || result.error === "query_required" || result.error === "agentmemory_unavailable" ? 200 : 503).json(result);
     });
 
     post.call(app, "/api/control-plane/v1/memory/agentmemory/remember", async (req, res) => {
-      if (!isAllowedControlPlaneMutationOrigin(req)) {
-        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+      const guard = guardControlPlaneMutation(req, "agentmemory-remember-non-destructive");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
         return;
       }
       const result = await rememberAgentMemory((req.body ?? {}) as Record<string, unknown>);
-      if (result.error === "text_required" || result.error === "confirmation_required") {
+      if (
+        result.error === "text_required" ||
+        result.error === "confirmation_required" ||
+        result.error === "summary_too_long" ||
+        result.error === "evidence_refs_required" ||
+        result.error === "raw_transcript_blocked" ||
+        result.error === "secret_like_payload_blocked" ||
+        result.error === "pii_like_payload_blocked"
+      ) {
         res.status(400).json(result);
         return;
       }
@@ -3457,20 +4717,17 @@ export function registerControlPlaneRoutes(
     });
 
     post.call(app, "/api/control-plane/v1/sync/apply", async (req, res) => {
-      if (!isAllowedControlPlaneMutationOrigin(req)) {
-        res.status(403).json({
-          ok: false,
-          error: "control_plane_origin_blocked",
-          message: "Control Plane writes are only allowed from the local Dongri-grigri app origin.",
-        });
-        return;
-      }
       if (req.body?.confirm !== "apply-control-plane-sync") {
         res.status(400).json({
           ok: false,
           error: "confirmation_required",
           message: "confirm must be apply-control-plane-sync",
         });
+        return;
+      }
+      const guard = guardControlPlaneMutation(req, "db-write-non-destructive");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
         return;
       }
       const activeSpec = buildActiveSpecStatus();
@@ -3498,16 +4755,17 @@ export function registerControlPlaneRoutes(
     });
 
     post.call(app, "/api/control-plane/v1/project-operators/sync/apply", async (req, res) => {
-      if (!isAllowedControlPlaneMutationOrigin(req)) {
-        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
-        return;
-      }
       if (req.body?.confirm !== "apply-project-operators-sync") {
         res.status(400).json({
           ok: false,
           error: "confirmation_required",
           message: "confirm must be apply-project-operators-sync",
         });
+        return;
+      }
+      const guard = guardControlPlaneMutation(req, "db-write-non-destructive");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
         return;
       }
       const activeSpec = buildActiveSpecStatus();
@@ -3526,9 +4784,39 @@ export function registerControlPlaneRoutes(
       }
     });
 
+    post.call(app, "/api/control-plane/v1/codex/thread/activate", async (req, res) => {
+      const guard = guardControlPlaneMutation(req, "harness-run");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
+        return;
+      }
+      try {
+        const result = activateCodexThread(db, req.body ?? {});
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "codex_thread_activate_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/codex/thread/:runId/finish", async (req, res) => {
+      const guard = guardControlPlaneMutation(req, "harness-run");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
+        return;
+      }
+      try {
+        const runId = typeof req.params?.runId === "string" ? req.params.runId : "";
+        const result = finishCodexThread(db, runId, req.body ?? {});
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "codex_thread_finish_failed", message: safeError(error) });
+      }
+    });
+
     post.call(app, "/api/control-plane/v1/runs/prepare", async (req, res) => {
-      if (!isAllowedControlPlaneMutationOrigin(req)) {
-        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+      const guard = guardControlPlaneMutation(req, "harness-run");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
         return;
       }
       try {
@@ -3540,8 +4828,9 @@ export function registerControlPlaneRoutes(
     });
 
     post.call(app, "/api/control-plane/v1/runs/:runId/start", async (req, res) => {
-      if (!isAllowedControlPlaneMutationOrigin(req)) {
-        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+      const guard = guardControlPlaneMutation(req, "harness-run");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
         return;
       }
       try {
@@ -3554,8 +4843,9 @@ export function registerControlPlaneRoutes(
     });
 
     post.call(app, "/api/control-plane/v1/runs/:runId/personas", async (req, res) => {
-      if (!isAllowedControlPlaneMutationOrigin(req)) {
-        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+      const guard = guardControlPlaneMutation(req, "persona-evidence");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
         return;
       }
       try {
@@ -3568,8 +4858,9 @@ export function registerControlPlaneRoutes(
     });
 
     post.call(app, "/api/control-plane/v1/personas/:personaId/decision", async (req, res) => {
-      if (!isAllowedControlPlaneMutationOrigin(req)) {
-        res.status(403).json({ ok: false, error: "control_plane_origin_blocked" });
+      const guard = guardControlPlaneMutation(req, "persona-evidence");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
         return;
       }
       try {

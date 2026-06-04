@@ -1,12 +1,8 @@
 # Development Master_skills
 
 ## Active Skills
-- typescript
-- react
-- node
-- database
-- refactor
-- test
+- learned snapshot: none
+- installed snapshot: none
 
 ## Learned Skills History
 - No durable skill usage history yet.

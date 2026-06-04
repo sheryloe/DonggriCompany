@@ -91,7 +91,8 @@ export function createCliTools(deps: CreateCliToolsDeps) {
         if (!noTools) args.push("--enable", "multi_agent");
         if (model) args.push("-m", model);
         if (reasoningLevel) args.push("-c", `model_reasoning_effort="${reasoningLevel}"`);
-        if (!noTools) args.push("--yolo");
+        args.push("--ask-for-approval", "never");
+        if (!noTools) args.push("--sandbox", "workspace-write");
         args.push("exec", "--json");
         if (noTools) args.push("--sandbox", "read-only");
         return args;
@@ -99,7 +100,8 @@ export function createCliTools(deps: CreateCliToolsDeps) {
       case "claude": {
         const args = [
           "claude",
-          "--dangerously-skip-permissions",
+          "--permission-mode",
+          "plan",
           "--print",
           "--verbose",
           "--output-format=stream-json",
@@ -117,7 +119,7 @@ export function createCliTools(deps: CreateCliToolsDeps) {
         if (noTools) {
           args.push("--approval-mode", "plan", "--output-format=stream-json");
         } else {
-          args.push("--yolo", "--output-format=stream-json");
+          args.push("--approval-mode", "plan", "--output-format=stream-json");
         }
         return args;
       }

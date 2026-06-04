@@ -1,11 +1,8 @@
 # Quality Master_skills
 
 ## Active Skills
-- test-strategy
-- regression
-- contract-check
-- browser-smoke
-- evidence
+- learned snapshot: none
+- installed snapshot: none
 
 ## Learned Skills History
 - No durable skill usage history yet.

@@ -580,7 +580,7 @@ Whenever you complete a subtask, report it in this format:
         agentProfileBlock,
         deptConstraint,
         departmentPromptBlock,
-        `NOTE: You are working in an isolated Git worktree branch (climpire/${id.slice(0, 8)}). Commit your changes normally.`,
+        `NOTE: You are working in an isolated Git worktree branch (climpire/${id.slice(0, 8)}). Do not commit, push, merge, reset, clean, stash, or rewrite history. Leave edits in the worktree; approved Git mutation is handled by the Donggri Ver.1 review gate.`,
         interruptPromptBlock,
         subtaskInstruction,
         subModelHint,

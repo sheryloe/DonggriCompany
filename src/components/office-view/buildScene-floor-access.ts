@@ -11,6 +11,7 @@ type FloorVisual = {
 
 const FLOOR_VISUALS: Record<string, FloorVisual> = {
   shared: { base: 0x3c2f18, panel: 0xf4c15d, trim: 0xf8e0a2, text: 0x2f2108 },
+  activity: { base: 0x0b2a3a, panel: 0x38bdf8, trim: 0x93c5fd, text: 0xf0f9ff },
   rooftop: { base: 0x12331f, panel: 0x22c55e, trim: 0x86efac, text: 0xeffdf4 },
   strategy: { base: 0x0b2e2a, panel: 0x14b8a6, trim: 0x7dd3c7, text: 0xeafffb },
   production: { base: 0x0b2341, panel: 0x3b82f6, trim: 0x93c5fd, text: 0xf3f8ff },

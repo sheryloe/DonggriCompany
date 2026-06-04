@@ -223,6 +223,8 @@ export interface ControlPlaneState {
   };
   sync: ControlPlaneSyncStatus;
   runner: ControlPlaneRunnerStatus;
+  harness_blueprints?: ControlPlaneHarnessBlueprintStatus;
+  quality_harness: ControlPlaneQualityHarness;
   dongri_grigri: {
     brand: string;
     reset_mode: string;
@@ -308,6 +310,140 @@ export interface ControlPlaneRunnerStatus {
   recent_events: Record<string, unknown>[];
 }
 
+export interface ControlPlaneQualityHarnessCheck {
+  key: string;
+  label: string;
+  status: "pass" | "warn" | "blocked" | "planned";
+  detail: string;
+  next_safe_action: string;
+}
+
+export interface ControlPlaneQualityHarness {
+  level: string;
+  score: number;
+  target_score: number;
+  target_release_score?: number;
+  certification_claim: string;
+  checks: ControlPlaneQualityHarnessCheck[];
+  qms?: {
+    nonconformances: ControlPlaneQmsRecord[];
+    capas: ControlPlaneQmsRecord[];
+    internal_audits: ControlPlaneQmsRecord[];
+    counts: {
+      open_nonconformances: number;
+      open_capas: number;
+      open_audits: number;
+    };
+    score_impact: number;
+    policy: string;
+  };
+  thread_relationship: {
+    current_thread_id: string | null;
+    current_activation_id: string | null;
+    current_activation_scope: string | null;
+    previous_activation_id: string | null;
+    previous_thread_id: string | null;
+    shared_memory_scope: string;
+    raw_transcript_capture: boolean;
+  };
+  agentmemory_gate: {
+    server_available: boolean;
+    safe_proxy_available: boolean;
+    runtime_connect_allowed: boolean;
+    required_approval: string;
+    blocked_operations: string[];
+    remember_approved: boolean;
+  };
+  persona_evidence: {
+    tables_exist: boolean;
+    persona_total: number;
+    recent_event_count: number;
+    recent_personas: Record<string, unknown>[];
+    recent_events: Record<string, unknown>[];
+  };
+  harness_blueprint_coverage?: {
+    tables_exist: boolean;
+    draft_count: number;
+    department_draft_count: number;
+    project_draft_count: number;
+    evidence_backed_count: number;
+    latest_blueprints: Record<string, unknown>[];
+    apply_requires_approval: string;
+  };
+  release_hygiene: {
+    project_key: string;
+    git_status: string;
+    branch: string | null;
+    dirty_count: number;
+    untracked_count: number;
+    grouped_changes: Array<{ group: string; count: number; samples: string[] }>;
+    commit_exclusion_manifest?: {
+      exclude_groups: string[];
+      require_review_groups: string[];
+      destructive_cleanup_allowed: boolean;
+    };
+    policy: string;
+  };
+}
+
+export interface ControlPlaneHarnessBlueprintStatus {
+  tables_exist: boolean;
+  draft_count: number;
+  department_draft_count: number;
+  project_draft_count: number;
+  evidence_backed_count: number;
+  latest_blueprints: Record<string, unknown>[];
+}
+
+export type HarnessBlueprintTargetMode = "department" | "project" | "both";
+export type HarnessBlueprintPattern =
+  | "auto"
+  | "pipeline"
+  | "fan-out-fan-in"
+  | "expert-pool"
+  | "producer-reviewer"
+  | "supervisor"
+  | "hierarchical-delegation";
+
+export interface HarnessBlueprintBody {
+  target_mode: HarnessBlueprintTargetMode;
+  project_key?: string;
+  objective: string;
+  preferred_pattern?: HarnessBlueprintPattern;
+  evidence_refs?: string[];
+}
+
+export interface HarnessBlueprintResult {
+  ok: boolean;
+  status?: number;
+  writes?: boolean;
+  error?: string;
+  message?: string;
+  blueprint_id?: string;
+  blueprint?: Record<string, unknown>;
+  draft?: Record<string, unknown>;
+  harness_blueprints?: ControlPlaneHarnessBlueprintStatus;
+}
+
+export interface ControlPlaneQmsRecord {
+  id: string;
+  source: string;
+  severity: string;
+  owner_department: string;
+  related_spec?: string | null;
+  related_run?: string | null;
+  root_cause?: string;
+  containment?: string;
+  corrective_action?: string;
+  preventive_action?: string;
+  due_at?: string;
+  effectiveness_check?: string;
+  status: string;
+  evidence_refs: string[];
+  scope?: string;
+  findings?: string[];
+}
+
 export interface ControlPlaneDepartmentMemory {
   department: string;
   label: string;
@@ -365,6 +501,40 @@ export interface ControlPlaneRunResult {
   events?: Record<string, unknown>[];
 }
 
+export interface CodexThreadCandidate {
+  thread_id: string | null;
+  source: string;
+  path: string;
+  size: number;
+  mtime: string;
+  started_at?: string | null;
+}
+
+export interface CodexThreadCurrentResult {
+  ok: boolean;
+  detected_thread: {
+    thread_id: string | null;
+    source: string;
+  };
+  session_candidates: CodexThreadCandidate[];
+  default_scope: {
+    scope_type: "root" | "project" | "spec";
+    scope_value: string | null;
+    scope_key: string;
+  };
+  active_activation: Record<string, unknown> | null;
+  error?: string;
+}
+
+export interface CodexThreadActivationBody {
+  thread_id?: string;
+  scope_type?: "root" | "project" | "spec";
+  scope_value?: string | null;
+  status?: "observing" | "active";
+  objective?: string;
+  evidence_refs?: string[];
+}
+
 export interface ControlPlaneSyncStatus {
   tables_exist: boolean;
   tables: Record<string, boolean>;
@@ -411,7 +581,7 @@ export interface ControlPlaneSyncResult {
   ok: true;
   mode: "preview" | "apply";
   writes: boolean;
-  approved_for_apply?: true;
+  approved_for_apply?: boolean;
   snapshot: {
     id: string;
     root_path: string;
@@ -441,7 +611,7 @@ export interface ControlPlaneProjectOperatorSyncResult {
   ok: true;
   mode: "preview" | "apply";
   writes: boolean;
-  approved_for_apply?: true;
+  approved_for_apply?: boolean;
   active_spec_id: string | null;
   counts: {
     operators: number;
@@ -464,6 +634,24 @@ export interface ControlPlaneMemoryStatus {
   runtime_path: string;
   server_url: string;
   viewer_url: string;
+  runtime_preflight?: {
+    runtime_path_exists: boolean;
+    server_port: number;
+    viewer_port: number;
+    health_url: string;
+    livez_url: string;
+    approved_runtime_connect: boolean;
+    approval_refs: string[];
+  };
+  viewer_preflight?: {
+    viewer_url: string;
+    viewer_port: number;
+    reachable: boolean;
+    status_code: number | null;
+    embed_mode: "iframe" | "fallback";
+    error: string | null;
+    reason?: "ok" | "http_error" | "timeout" | "network_error" | "embed_not_checked";
+  };
   health: {
     available: boolean;
     status_code: number | null;
@@ -501,6 +689,13 @@ export interface ControlPlaneMemoryStatus {
     hook_auto_capture_enabled: boolean;
     delete_forget_enabled: boolean;
   };
+  approval_gate: {
+    runtime_connect_allowed: boolean;
+    runtime_connect_required_approval: string;
+    remember_policy_approval: string;
+    blocked_operations: string[];
+    next_safe_action: string;
+  };
   integration_mode: string;
   install_required_approval: boolean;
   safe_proxy_available?: boolean;
@@ -536,6 +731,7 @@ export interface ControlPlaneMemorySearchResult {
   results: unknown;
   status_code?: number | null;
   error: string | null;
+  reason?: "ok" | "http_error" | "timeout" | "network_error";
 }
 
 export interface ControlPlaneMemoryContextResult {
@@ -546,6 +742,7 @@ export interface ControlPlaneMemoryContextResult {
   context: unknown;
   status_code?: number | null;
   error: string | null;
+  reason?: "ok" | "http_error" | "timeout" | "network_error";
 }
 
 export interface ControlPlaneMemoryRememberResult {
@@ -663,6 +860,45 @@ export function applyProjectOperatorSync(): Promise<ControlPlaneProjectOperatorS
   });
 }
 
+export function getCodexThreadCurrent(): Promise<CodexThreadCurrentResult> {
+  return request<CodexThreadCurrentResult>("/api/control-plane/v1/codex/thread/current");
+}
+
+export function activateCodexThread(body: CodexThreadActivationBody): Promise<ControlPlaneRunResult> {
+  return post<ControlPlaneRunResult>("/api/control-plane/v1/codex/thread/activate", {
+    confirm: "activate-codex-thread",
+    ...body,
+  });
+}
+
+export function finishCodexThread(
+  runId: string,
+  body: {
+    final_status?: "completed" | "cancelled";
+    evidence_refs?: string[];
+    handoff_path?: string;
+  },
+): Promise<ControlPlaneRunResult> {
+  return post<ControlPlaneRunResult>(`/api/control-plane/v1/codex/thread/${encodeURIComponent(runId)}/finish`, {
+    confirm: "finish-codex-thread",
+    final_status: body.final_status ?? "completed",
+    evidence_refs: body.evidence_refs ?? [],
+    handoff_path: body.handoff_path,
+  });
+}
+
+export function previewHarnessBlueprint(body: HarnessBlueprintBody): Promise<HarnessBlueprintResult> {
+  return post<HarnessBlueprintResult>("/api/control-plane/v1/harness/blueprints/preview", body);
+}
+
+export function saveHarnessBlueprintDraft(body: HarnessBlueprintBody): Promise<HarnessBlueprintResult> {
+  return post<HarnessBlueprintResult>("/api/control-plane/v1/harness/blueprints/drafts", body);
+}
+
+export function applyHarnessBlueprint(blueprintId: string): Promise<HarnessBlueprintResult> {
+  return post<HarnessBlueprintResult>(`/api/control-plane/v1/harness/blueprints/${encodeURIComponent(blueprintId)}/apply`, {});
+}
+
 export function prepareControlPlaneRun(body: {
   department_agent: string;
   objective: string;
@@ -686,11 +922,13 @@ export function createControlPlanePersona(
     parent_agent: string;
     persona_id?: string;
     objective: string;
+    task_id?: string;
     input_docs?: string[];
     allowed_paths?: { read?: string[]; write?: string[] };
     write_policy?: string;
     return_schema?: string[];
     quality_bar?: string;
+    quality_bar_result?: string;
     approval_ref?: string;
     evidence_refs?: string[];
   },
@@ -705,6 +943,9 @@ export function decideControlPlanePersona(
     reason?: string;
     evidence_refs?: string[];
     merged_into?: string;
+    source_hash?: string;
+    output_hash?: string;
+    quality_bar_result?: string;
     payload?: Record<string, unknown>;
   },
 ): Promise<ControlPlaneRunResult> {

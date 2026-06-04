@@ -1,12 +1,8 @@
 # Operations Master_skills
 
 ## Active Skills
-- runtime-ops
-- git-safety
-- agentmemory
-- gemini-review
-- handoff
-- status-log
+- learned snapshot: none
+- installed snapshot: none
 
 ## Learned Skills History
 - No durable skill usage history yet.

@@ -4,12 +4,25 @@ import {
   LEGACY_DEPARTMENT_ID_MAP,
   ORGANIZATION_AGENT_SEEDS,
   ORGANIZATION_DEPARTMENTS,
+  ORGANIZATION_MANIFEST_SCOPE,
   RESERVE_VISUAL_PROFILE_POLICY,
   buildSeedAgentProfile,
   mapLegacyDepartmentId,
 } from "./organization-manifest.ts";
 
 describe("organization manifest v5", () => {
+  it("labels organization staffing as separate from Ver.1 SDD department agents", () => {
+    expect(ORGANIZATION_MANIFEST_SCOPE).toBe("business-staffing-projection-not-sdd-department-agents");
+    expect(ORGANIZATION_DEPARTMENTS.map((department) => department.id)).not.toEqual([
+      "CONTROL",
+      "SPEC",
+      "EXPLORE",
+      "IMPLEMENT",
+      "REVIEW",
+      "OPS",
+    ]);
+  });
+
   it("uses exactly eight canonical departments with PMO one-person command and three staff elsewhere", () => {
     expect(ORGANIZATION_DEPARTMENTS.map((department) => department.id)).toEqual([
       "pmo",

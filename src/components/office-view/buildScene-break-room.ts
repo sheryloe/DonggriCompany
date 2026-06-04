@@ -13,7 +13,6 @@ import {
   drawCeilingLight,
   drawPictureFrame,
   drawRoomAtmosphere,
-  drawRug,
   drawTiledFloor,
   drawTrashCan,
   drawWallClock,
@@ -30,6 +29,8 @@ import {
   drawWallMonitor,
 } from "./drawing-furniture-b";
 import type { OfficeFloorBand, SharedFacilityLayout } from "./officeFloorPlan";
+import { addOfficePropSprite, type OfficeAssetKey } from "./officePropAtlas";
+import { getSharedFacilityWorkplaceDensity, isLoungeFurnitureAllowed } from "./officeWorkplaceDensity";
 
 interface BuildBreakRoomParams {
   app: Application;
@@ -102,7 +103,7 @@ export function buildBreakRoom({
   breakRoom.addChild(brBorder);
 
   drawSharedFloorHeader(breakRoom, brx, bry, brw, breakTheme.accent, floorBands);
-  drawSharedFacilities(breakRoom, sharedFacilities ?? [], breakTheme);
+  drawSharedFacilities(breakRoom, sharedFacilities ?? [], breakTheme, textures, cbRef);
 
   drawAmbientGlow(breakRoom, brx + brw / 2, bry + brh / 2, brw * 0.3, breakTheme.accent, 0.05);
   drawCeilingLight(breakRoom, brx + brw / 3, bry + 6, breakTheme.accent);
@@ -117,21 +118,11 @@ export function buildBreakRoom({
     0.64,
   );
 
-  const furnitureBaseX = brx + 16;
-  drawCoffeeMachine(breakRoom, furnitureBaseX, bry + 20);
-  drawPlant(breakRoom, furnitureBaseX + 30, bry + 38, 1);
-  drawSofa(breakRoom, furnitureBaseX + 50, bry + 56, 0xc89da6);
-  drawCoffeeTable(breakRoom, furnitureBaseX + 140, bry + 58);
-
-  const furnitureRightX = brx + brw - 16;
-  drawVendingMachine(breakRoom, furnitureRightX - 26, bry + 20);
-  drawPlant(breakRoom, furnitureRightX - 36, bry + 38, 2);
-  drawSofa(breakRoom, furnitureRightX - 120, bry + 56, 0x91bcae);
-  drawHighTable(breakRoom, furnitureRightX - 170, bry + 24);
+  drawOfficeReceptionSpine(breakRoom, brx + 16, bry + 22, brw - 32, breakTheme.accent);
 
   drawPictureFrame(breakRoom, brx + brw / 2 - 8, bry + 14);
   wallClocksRef.current.push(drawWallClock(breakRoom, brx + brw / 2 + 30, bry + 18));
-  drawTrashCan(breakRoom, furnitureBaseX + 24, bry + brh - 14);
+  drawTrashCan(breakRoom, brx + 40, bry + brh - 14);
 
   const brSignW = 84;
   const brSignBg = new Graphics();
@@ -153,7 +144,7 @@ export function buildBreakRoom({
   brSignTxt.position.set(brx + brw / 2, bry + 5);
   breakRoom.addChild(brSignTxt);
 
-  drawRug(breakRoom, brx + brw / 2, bry + brh / 2 + 10, brw * 0.5, brh * 0.45, breakTheme.accent);
+  drawOfficeCirculationPath(breakRoom, brx + 28, bry + brh / 2 + 10, brw - 56, breakTheme.accent);
 
   const steamContainer = new Container();
   breakRoom.addChild(steamContainer);
@@ -331,9 +322,16 @@ function drawFloorSectionHeader(
   breakRoom.addChild(header);
 }
 
-function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLayout[], breakTheme: RoomTheme): void {
+function drawSharedFacilities(
+  breakRoom: Container,
+  facilities: SharedFacilityLayout[],
+  breakTheme: RoomTheme,
+  textures: Record<string, Texture>,
+  cbRef: MutableRefObject<CallbackSnapshot>,
+): void {
   for (const facility of facilities) {
     const zone = new Graphics();
+    const density = getSharedFacilityWorkplaceDensity(facility.id);
     const zoneColor =
       facility.id === "lobby"
         ? 0xf4ead8
@@ -355,6 +353,16 @@ function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLa
       color: breakTheme.accent,
       alpha: 0.36,
     });
+    if (facility.id === "memory") {
+      zone.eventMode = "static";
+      zone.cursor = "pointer";
+      zone.on("pointerdown", () => cbRef.current.onOpenMemory?.());
+    }
+    if (facility.id === "project-board") {
+      zone.eventMode = "static";
+      zone.cursor = "pointer";
+      zone.on("pointerdown", () => cbRef.current.onOpenProjects?.());
+    }
     breakRoom.addChild(zone);
 
     const label = new Text({
@@ -372,7 +380,7 @@ function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLa
     if (facility.id === "lobby") {
       drawWallMonitor(breakRoom, facility.x + facility.w - 70, facility.y + 12, breakTheme.accent, 52, 26);
       drawPlant(breakRoom, facility.x + 18, facility.y + facility.h - 20, 1);
-      drawHighTable(breakRoom, facility.x + 46, facility.y + facility.h - 42);
+      drawReceptionDesk(breakRoom, facility.x + 46, facility.y + facility.h - 48, Math.min(96, facility.w - 126), breakTheme.accent);
       drawFacilityWindowRow(
         breakRoom,
         facility.x + 82,
@@ -380,20 +388,35 @@ function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLa
         Math.max(42, facility.w - 164),
         breakTheme.accent,
       );
-    } else if (facility.id === "break") {
-      drawSofa(breakRoom, facility.x + 14, facility.y + facility.h - 28, 0xd49aa4);
-      drawCoffeeTable(breakRoom, facility.x + 100, facility.y + facility.h - 32);
-      drawCoffeeMachine(breakRoom, facility.x + facility.w - 44, facility.y + 18);
+    } else if (facility.id === "break" && density.loungeAllowed) {
+      addFacilityPropOrFallback(breakRoom, textures, "lounge", facility.x + 82, facility.y + facility.h - 30, 92, 58, () => {
+        drawSofa(breakRoom, facility.x + 14, facility.y + facility.h - 28, 0xd49aa4);
+        drawCoffeeTable(breakRoom, facility.x + 100, facility.y + facility.h - 32);
+      });
+      addFacilityPropOrFallback(breakRoom, textures, "coffee", facility.x + facility.w - 50, facility.y + 52, 58, 56, () =>
+        drawCoffeeMachine(breakRoom, facility.x + facility.w - 44, facility.y + 18),
+      );
       drawVendingMachine(breakRoom, facility.x + facility.w - 74, facility.y + 18);
       drawMiniPendantLights(breakRoom, facility.x + 24, facility.y + 10, facility.w - 48, 0xf8d488);
     } else if (facility.id === "memory") {
-      drawBookshelf(breakRoom, facility.x + 12, facility.y + 22);
-      drawWhiteboard(breakRoom, facility.x + facility.w - 58, facility.y + 18);
+      addFacilityPropOrFallback(breakRoom, textures, "archiveCabinet", facility.x + 34, facility.y + 62, 48, 74, () =>
+        drawBookshelf(breakRoom, facility.x + 12, facility.y + 22),
+      );
+      addFacilityPropOrFallback(breakRoom, textures, "memoryBoxes", facility.x + facility.w - 58, facility.y + facility.h - 32, 72, 48, () =>
+        drawWhiteboard(breakRoom, facility.x + facility.w - 58, facility.y + 18),
+      );
       drawHighTable(breakRoom, facility.x + Math.max(46, facility.w / 2 - 18), facility.y + facility.h - 44);
+      drawFacilityStatusBadge(breakRoom, facility.x + facility.w - 74, facility.y + 18, "기억 준비", 0x22c55e);
       drawMiniPendantLights(breakRoom, facility.x + 24, facility.y + 10, facility.w - 48, 0x93c5fd);
     } else if (facility.id === "project-board") {
-      drawSofa(breakRoom, facility.x + 14, facility.y + facility.h - 26, 0x8fa0cf);
-      drawWallMonitor(breakRoom, facility.x + facility.w - 66, facility.y + 14, 0x8192c8, 48, 24);
+      drawProjectWarDesk(breakRoom, facility.x + 14, facility.y + facility.h - 48, Math.min(104, facility.w - 134), 0x8192c8);
+      addFacilityPropOrFallback(breakRoom, textures, "projectBoard", facility.x + facility.w - 72, facility.y + 50, 72, 52, () =>
+        drawWallMonitor(breakRoom, facility.x + facility.w - 66, facility.y + 14, 0x8192c8, 48, 24),
+      );
+      addFacilityPropOrFallback(breakRoom, textures, "serverRack", facility.x + 70, facility.y + facility.h - 38, 38, 48, () =>
+        drawProjectScopePins(breakRoom, facility.x + 64, facility.y + 26),
+      );
+      drawProjectScopePins(breakRoom, facility.x + facility.w - 118, facility.y + 20);
       drawPlant(breakRoom, facility.x + facility.w - 24, facility.y + facility.h - 20, 2);
       drawFacilityWindowRow(breakRoom, facility.x + 74, facility.y + 17, Math.max(36, facility.w - 154), 0x8192c8);
     } else if (facility.id === "smoking") {
@@ -404,6 +427,125 @@ function drawSharedFacilities(breakRoom: Container, facilities: SharedFacilityLa
       drawRoofLounge(breakRoom, facility, breakTheme.accent);
     }
   }
+}
+
+function addFacilityPropOrFallback(
+  parent: Container,
+  textures: Record<string, Texture>,
+  assetKey: OfficeAssetKey,
+  x: number,
+  y: number,
+  maxW: number,
+  maxH: number,
+  fallback: () => void,
+): void {
+  const sprite = addOfficePropSprite(parent, textures, assetKey, { x, y, maxW, maxH });
+  if (!sprite) fallback();
+}
+
+function drawOfficeReceptionSpine(parent: Container, x: number, y: number, w: number, accent: number): void {
+  const g = new Graphics();
+  g.roundRect(x, y + 4, Math.min(150, w * 0.34), 28, 4).fill(0xd6b984).stroke({
+    width: 1,
+    color: 0x8b7358,
+    alpha: 0.32,
+  });
+  g.roundRect(x + 10, y + 10, 38, 12, 2).fill(0x172033);
+  g.roundRect(x + 13, y + 12, 32, 7, 1).fill({ color: blendColor(accent, 0xffffff, 0.44), alpha: 0.85 });
+  g.rect(x + 26, y + 22, 5, 7).fill(0x475569);
+  g.roundRect(x + 70, y + 12, 54, 8, 2).fill({ color: 0xffffff, alpha: 0.86 });
+  g.rect(x + 76, y + 15, 34, 1.4).fill({ color: accent, alpha: 0.55 });
+
+  const rackX = x + w - 132;
+  g.roundRect(rackX, y, 118, 40, 5).fill({ color: 0x172033, alpha: 0.92 }).stroke({
+    width: 1,
+    color: accent,
+    alpha: 0.44,
+  });
+  for (let i = 0; i < 4; i += 1) {
+    const mx = rackX + 8 + i * 26;
+    g.roundRect(mx, y + 8, 20, 14, 2).fill({ color: blendColor(accent, 0xffffff, 0.32), alpha: 0.72 });
+    g.circle(mx + 15, y + 27, 2).fill(i % 2 === 0 ? 0x22c55e : 0xf59e0b);
+  }
+  parent.addChild(g);
+}
+
+function drawOfficeCirculationPath(parent: Container, x: number, y: number, w: number, accent: number): void {
+  const g = new Graphics();
+  g.roundRect(x, y, w, 18, 5).fill({ color: 0x64748b, alpha: 0.08 });
+  for (let i = 0; i < 14; i += 1) {
+    const px = x + 12 + i * Math.max(18, w / 15);
+    g.rect(px, y + 8, 10, 2).fill({ color: accent, alpha: 0.18 });
+  }
+  parent.addChild(g);
+}
+
+function drawReceptionDesk(parent: Container, x: number, y: number, w: number, accent: number): void {
+  const g = new Graphics();
+  const safeW = Math.max(56, w);
+  g.roundRect(x + 2, y + 4, safeW, 30, 4).fill({ color: 0x000000, alpha: 0.08 });
+  g.roundRect(x, y, safeW, 30, 4).fill(0xd6b984).stroke({ width: 1, color: 0x8b7358, alpha: 0.34 });
+  g.roundRect(x + 8, y + 7, 28, 12, 2).fill(0x172033);
+  g.roundRect(x + 11, y + 9, 22, 7, 1).fill({ color: blendColor(accent, 0xffffff, 0.44), alpha: 0.82 });
+  g.roundRect(x + safeW - 42, y + 9, 28, 12, 2).fill(0xffffff);
+  g.rect(x + safeW - 37, y + 13, 17, 1.5).fill({ color: accent, alpha: 0.5 });
+  g.roundRect(x + safeW / 2 - 14, y + 34, 28, 9, 4).fill({ color: 0x64748b, alpha: 0.48 });
+  parent.addChild(g);
+}
+
+function drawProjectWarDesk(parent: Container, x: number, y: number, w: number, accent: number): void {
+  const g = new Graphics();
+  const safeW = Math.max(72, w);
+  g.roundRect(x, y, safeW, 28, 4).fill(0xd6b984).stroke({ width: 1, color: 0x334155, alpha: 0.24 });
+  for (let i = 0; i < 3; i += 1) {
+    const px = x + 10 + i * 27;
+    g.roundRect(px, y + 6, 20, 10, 2).fill(0x172033);
+    g.rect(px + 4, y + 9, 12, 1.4).fill({ color: accent, alpha: 0.64 });
+    g.circle(px + 16, y + 19, 2).fill(i === 1 ? 0xf59e0b : 0x22c55e);
+  }
+  g.roundRect(x + safeW / 2 - 16, y + 32, 32, 8, 4).fill({ color: 0x64748b, alpha: 0.46 });
+  parent.addChild(g);
+}
+
+function drawFacilityStatusBadge(parent: Container, x: number, y: number, label: string, color: number): void {
+  const text = new Text({
+    text: label,
+    style: new TextStyle({
+      fontSize: 7,
+      fill: 0xffffff,
+      fontWeight: "bold",
+      fontFamily: "system-ui, sans-serif",
+    }),
+  });
+  text.anchor.set(0.5, 0.5);
+  const badge = new Graphics();
+  badge.roundRect(x, y, Math.max(52, text.width + 12), 16, 5).fill({ color, alpha: 0.82 });
+  badge.circle(x + 8, y + 8, 3).fill(0xffffff);
+  parent.addChild(badge);
+  text.position.set(x + Math.max(52, text.width + 12) / 2 + 2, y + 8);
+  parent.addChild(text);
+}
+
+function drawProjectScopePins(parent: Container, x: number, y: number): void {
+  const projects = [
+    { label: "BG", color: 0x14b8a6 },
+    { label: "DG", color: 0x38bdf8 },
+    { label: "JS", color: 0xa78bfa },
+  ];
+  projects.forEach((project, index) => {
+    const px = x + index * 24;
+    const pin = new Graphics();
+    pin.roundRect(px, y, 20, 16, 4).fill({ color: project.color, alpha: 0.86 });
+    pin.rect(px + 8, y + 14, 4, 9).fill({ color: project.color, alpha: 0.72 });
+    parent.addChild(pin);
+    const label = new Text({
+      text: project.label,
+      style: new TextStyle({ fontSize: 7, fill: 0xffffff, fontWeight: "bold", fontFamily: "monospace" }),
+    });
+    label.anchor.set(0.5, 0.5);
+    label.position.set(px + 10, y + 8);
+    parent.addChild(label);
+  });
 }
 
 function drawFacilityShell(parent: Container, facility: SharedFacilityLayout, zoneColor: number, accent: number): void {
@@ -496,8 +638,12 @@ function drawRoofGarden(parent: Container, facility: SharedFacilityLayout): void
 }
 
 function drawRoofLounge(parent: Container, facility: SharedFacilityLayout, accent: number): void {
-  drawSofa(parent, facility.x + 16, facility.y + facility.h - 26, 0xd4bd83);
-  drawCoffeeTable(parent, facility.x + 104, facility.y + facility.h - 30);
+  if (isLoungeFurnitureAllowed(facility.id)) {
+    drawSofa(parent, facility.x + 16, facility.y + facility.h - 26, 0xd4bd83);
+    drawCoffeeTable(parent, facility.x + 104, facility.y + facility.h - 30);
+  } else {
+    drawProjectWarDesk(parent, facility.x + 16, facility.y + facility.h - 48, Math.min(110, facility.w - 114), accent);
+  }
   drawHighTable(parent, facility.x + facility.w - 82, facility.y + facility.h - 46);
   drawPlant(parent, facility.x + facility.w - 28, facility.y + facility.h - 20, 2);
   drawMiniPendantLights(parent, facility.x + 26, facility.y + 12, facility.w - 52, accent);

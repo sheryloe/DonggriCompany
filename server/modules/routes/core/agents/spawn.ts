@@ -248,7 +248,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
         task.description ? `\n${task.description}` : "",
         workflowPackGuidance ? `\n[Workflow Pack Execution Rules]\n${workflowPackGuidance}` : "",
         `\n[Canonical Policy]\nversion=${canonicalExecutionPolicy.policyVersion}\nfamily=${canonicalExecutionPolicy.family}\nstage=${canonicalExecutionPolicy.stage}\ntier=${canonicalExecutionPolicy.tier}\nspecialization=${canonicalExecutionPolicy.specialization ?? "none"}`,
-        `NOTE: You are working in an isolated Git worktree branch (climpire/${taskId.slice(0, 8)}). Commit your changes normally.`,
+        `NOTE: You are working in an isolated Git worktree branch (climpire/${taskId.slice(0, 8)}). Do not commit, push, merge, reset, clean, stash, or rewrite history. Leave edits in the worktree; approved Git mutation is handled by the Donggri Ver.1 review gate.`,
         `Agent: ${agent.name} (${roleLabel}, ${agent.department_name || "Unassigned"})`,
         agentProfileBlock,
         deptConstraint,

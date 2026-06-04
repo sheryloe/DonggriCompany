@@ -56,12 +56,13 @@ describe("8bit office floor plan", () => {
     expect(layout.roomLayouts.get("instructor")?.floorId).toBe("quality");
   });
 
-  it("uses office area labels instead of literal floor codes", () => {
+  it("uses readable office area labels and role activity spaces", () => {
     const layout = buildOfficeFloorPlan({ officeW: 1280, departments, agents });
     const visibleText = [
       ...layout.floorBands.flatMap((band) => [band.level, band.label]),
       ...Array.from(layout.roomLayouts.values()).map((room) => room.floorLabel),
       ...layout.sharedFacilities.map((facility) => facility.label),
+      ...layout.roleSpaces.flatMap((space) => [space.label, space.caption]),
     ].join(" ");
 
     for (const removedLabel of ["1F", "RF", "2F", "3F", "4F"]) {
@@ -70,6 +71,11 @@ describe("8bit office floor plan", () => {
     expect(visibleText).toContain("기억 서고");
     expect(visibleText).toContain("프로젝트 보드");
     expect(visibleText).toContain("검토/운영 구역");
+    expect(visibleText).toContain("역할 활동 구역");
+    expect(visibleText).toContain("업무 좌석");
+    expect(visibleText).toContain("회의실");
+    expect(visibleText).toContain("운영 코너");
+    expect(visibleText).toContain("학습실");
   });
 
   it("keeps the office scene wide enough for pixel rooms and props", () => {

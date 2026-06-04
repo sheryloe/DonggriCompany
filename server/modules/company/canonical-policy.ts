@@ -869,18 +869,18 @@ const COMPILED_PROVIDER_DEFAULTS: Record<CanonicalTierKey, CompiledProviderDefau
   "tier-1": {
     provider: "codex",
     model: "gpt-5.3-codex",
+    reasoningLevel: "xhigh",
+    subProvider: "codex",
+    subModel: "gpt-5.3-codex",
+    subReasoningLevel: "xhigh",
+  },
+  "tier-2": {
+    provider: "codex",
+    model: "gpt-5.3-codex",
     reasoningLevel: "high",
     subProvider: "codex",
     subModel: "gpt-5.3-codex",
     subReasoningLevel: "high",
-  },
-  "tier-2": {
-    provider: "claude",
-    model: "claude-sonnet-4-6",
-    reasoningLevel: null,
-    subProvider: "claude",
-    subModel: "claude-sonnet-4-6",
-    subReasoningLevel: null,
   },
   "tier-3": {
     provider: "codex",
@@ -891,12 +891,12 @@ const COMPILED_PROVIDER_DEFAULTS: Record<CanonicalTierKey, CompiledProviderDefau
     subReasoningLevel: "medium",
   },
   "tier-4": {
-    provider: "claude",
-    model: "claude-sonnet-4-6",
-    reasoningLevel: null,
-    subProvider: "claude",
-    subModel: "claude-sonnet-4-6",
-    subReasoningLevel: null,
+    provider: "codex",
+    model: "gpt-5.3-codex",
+    reasoningLevel: "low",
+    subProvider: "codex",
+    subModel: "gpt-5.3-codex",
+    subReasoningLevel: "low",
   },
 };
 
@@ -1077,14 +1077,27 @@ function pickApprovalGates(text: string, artifactBlocking: boolean): string[] {
   return gates;
 }
 
-function chooseCanonicalProvider(tier: CanonicalTierKey, defaultProvider?: string | null): CompiledProviderDefault {
+function chooseCanonicalProvider(
+  tier: CanonicalTierKey,
+  defaultProvider?: string | null,
+  providerModelConfig?: Record<string, ProviderModelConfig> | null,
+): CompiledProviderDefault {
   const selected = COMPILED_PROVIDER_DEFAULTS[tier];
-  if (selected.provider) return selected;
+  const config = normalizeProviderConfig(providerModelConfig);
+  if (selected.provider) {
+    const providerConfig = config[selected.provider] ?? {};
+    const subProviderConfig = config[selected.subProvider ?? selected.provider] ?? {};
+    return {
+      ...selected,
+      model: providerConfig.model ?? selected.model,
+      subModel: subProviderConfig.subModel ?? subProviderConfig.model ?? selected.subModel,
+    };
+  }
   const fallbackProvider =
     String(defaultProvider ?? DEFAULT_PROVIDER)
       .trim()
       .toLowerCase() || DEFAULT_PROVIDER;
-  const fallbackConfig = normalizeProviderConfig(null)[fallbackProvider] ?? {};
+  const fallbackConfig = config[fallbackProvider] ?? {};
   return {
     provider: fallbackProvider,
     model: fallbackConfig.model ?? null,
@@ -1170,7 +1183,7 @@ export function previewCanonicalRouting(input: {
   const tier = tierResolution.tier;
   const stage = resolveStage(family, tier, text);
   const specialization = pickSpecialization(text, family, snapshot.registry);
-  const providerDefaults = chooseCanonicalProvider(tier, input.defaultProvider);
+  const providerDefaults = chooseCanonicalProvider(tier, input.defaultProvider, input.providerModelConfig);
   const artifactState = (() => {
     if (!input.projectPath) return null;
     try {
@@ -1189,8 +1202,8 @@ export function previewCanonicalRouting(input: {
     specialization ? `specialization=${specialization}` : "specialization=none",
     `provider/model tier=${tier} -> ${providerDefaults.provider}`,
     input.providerModelConfig
-      ? "providerModelConfig treated as projection-only"
-      : "providerModelConfig projection absent",
+      ? "providerModelConfig applied as model fallback"
+      : "providerModelConfig fallback absent",
   ];
   const blockedBy = [
     ...constrainedFamily.blockedBy,

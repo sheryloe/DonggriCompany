@@ -34,6 +34,15 @@ import { drawChair, drawDesk, drawPlant, drawWhiteboard } from "./drawing-furnit
 import { drawBookshelf, drawWallMonitor } from "./drawing-furniture-b";
 import { renderDeskAgentAndSubClones } from "./buildScene-department-agent";
 import type { OfficeRoomLayout } from "./officeFloorPlan";
+import { addOfficePropSprite, type OfficeAssetKey } from "./officePropAtlas";
+
+export interface OfficeSignalCounts {
+  waiting: number;
+  active: number;
+  review: number;
+  done: number;
+  blocked: number;
+}
 
 interface BuildDepartmentRoomsParams {
   app: Application;
@@ -77,6 +86,22 @@ function normalizeOfficeDepartmentVisualId(departmentId: string): string {
 function isOperationsDepartment(departmentId: string): boolean {
   const normalized = normalizeOfficeDepartmentVisualId(departmentId);
   return normalized === "operations" || normalized === "devsecops";
+}
+
+function countDepartmentSignals(tasks: Task[], departmentId: string, departmentAgents: Agent[]): OfficeSignalCounts {
+  const agentIds = new Set(departmentAgents.map((agent) => agent.id));
+  const relevantTasks = tasks.filter(
+    (task) => task.department_id === departmentId || (task.assigned_agent_id ? agentIds.has(task.assigned_agent_id) : false),
+  );
+
+  return {
+    waiting: relevantTasks.filter((task) => task.status === "inbox" || task.status === "pending" || task.status === "planned")
+      .length,
+    active: relevantTasks.filter((task) => task.status === "collaborating" || task.status === "in_progress").length,
+    review: relevantTasks.filter((task) => task.status === "review").length,
+    done: relevantTasks.filter((task) => task.status === "done").length,
+    blocked: relevantTasks.filter((task) => task.status === "cancelled").length,
+  };
 }
 
 export function buildDepartmentRooms({
@@ -125,6 +150,7 @@ export function buildDepartmentRooms({
     const fallbackTheme = DEPT_THEME[dept.id] || DEPT_THEME[visualDepartmentId] || DEPT_THEME.dev;
     const theme = ensureVisibleRoomTheme(customThemes?.[dept.id] || fallbackTheme, fallbackTheme);
     const deptAgents = agents.filter((agent) => agent.department_id === dept.id);
+    const signalCounts = countDepartmentSignals(tasks, dept.id, deptAgents);
     const currentAgentRows = Math.max(1, Math.ceil(deptAgents.length / COLS_PER_ROW));
     roomRectsRef.current.push({ dept, x: rx, y: ry, w: currentRoomW, h: currentRoomH });
 
@@ -176,7 +202,8 @@ export function buildDepartmentRooms({
 
     drawFloorLabel(room, layout?.floorLabel, rx, ry, currentRoomW, theme.accent);
     drawCeilingAndDecor(room, rx, ry, currentRoomW, currentRoomH, theme, deptIdx, wallClocksRef);
-    drawDepartmentFeatureWall(room, visualDepartmentId, rx, ry, currentRoomW, currentRoomH, theme);
+    drawDepartmentFeatureWall(room, textures, visualDepartmentId, rx, ry, currentRoomW, currentRoomH, theme);
+    drawDepartmentPropCluster(room, textures, visualDepartmentId, rx, ry, currentRoomW, currentRoomH, theme, signalCounts);
 
     if (deptAgents.length > 0) {
       drawRug(
@@ -314,6 +341,7 @@ function drawRoomDepthDetails(
 
 function drawDepartmentFeatureWall(
   room: Container,
+  textures: Record<string, Texture>,
   departmentId: string,
   rx: number,
   ry: number,
@@ -327,6 +355,27 @@ function drawDepartmentFeatureWall(
   const w = Math.min(88, Math.max(64, roomW * 0.24));
   const h = 34;
   const darkPanel = blendColor(theme.wall, 0x020617, 0.72);
+  const atlasPanel: OfficeAssetKey =
+    departmentId === "dev"
+      ? "workstation"
+      : departmentId === "design"
+        ? "designBoard"
+        : departmentId === "qa"
+          ? "reviewGate"
+          : departmentId === "operations" || departmentId === "devsecops"
+            ? "serverRack"
+            : departmentId === "strategic_maintenance"
+              ? "lectureBoard"
+              : "stickyBoard";
+  const prop = addOfficePropSprite(room, textures, atlasPanel, {
+    x: x + w / 2,
+    y: y + h / 2 + 1,
+    maxW: w + 4,
+    maxH: h + 10,
+    alpha: 0.95,
+  });
+  if (prop) return;
+
   panel.roundRect(x + 2, y + 2, w, h, 5).fill({ color: 0x000000, alpha: 0.16 });
   panel.roundRect(x, y, w, h, 5).fill({ color: darkPanel, alpha: 0.88 });
   panel.roundRect(x, y, w, h, 5).stroke({ width: 1, color: blendColor(theme.accent, 0xffffff, 0.35), alpha: 0.55 });
@@ -376,6 +425,210 @@ function drawDepartmentFeatureWall(
   }
 
   room.addChild(panel);
+}
+
+function drawDepartmentPropCluster(
+  room: Container,
+  textures: Record<string, Texture>,
+  departmentId: string,
+  rx: number,
+  ry: number,
+  roomW: number,
+  roomH: number,
+  theme: { accent: number; wall: number },
+  signalCounts: OfficeSignalCounts,
+): void {
+  const isOps = departmentId === "operations" || departmentId === "devsecops";
+  const rightX = rx + roomW - 34;
+  const bottomY = ry + roomH - 28;
+  const leftX = rx + 34;
+  const topY = ry + 72;
+
+  if (departmentId === "dev") {
+    addPropOrFallback(room, textures, "workstation", rightX, topY + 10, 62, 42, () =>
+      drawMiniMonitorCluster(room, rightX - 26, topY - 6, theme.accent),
+    );
+    addPropOrFallback(room, textures, "documents", leftX, bottomY, 44, 32, () =>
+      drawPaperStack(room, leftX - 18, bottomY - 16, 5, theme.accent),
+    );
+  } else if (departmentId === "design") {
+    addPropOrFallback(room, textures, "designBoard", rightX - 2, topY + 8, 60, 50, () =>
+      drawColorSwatches(room, rightX - 34, topY - 8),
+    );
+    addPropOrFallback(room, textures, "plant", leftX, bottomY - 2, 34, 42, () => drawPlant(room, leftX, bottomY, 3));
+  } else if (departmentId === "qa") {
+    addPropOrFallback(room, textures, "reviewGate", rightX - 4, topY + 12, 58, 46, () =>
+      drawChecklistPanel(room, rightX - 34, topY - 10, theme.accent),
+    );
+    if (signalCounts.review > 0 || signalCounts.blocked > 0) {
+      addPropOrFallback(room, textures, "warningBeacon", leftX, bottomY - 6, 34, 34, () =>
+        drawStatusBeacon(room, leftX, bottomY - 8, 0xfb7185),
+      );
+    }
+  } else if (isOps) {
+    addPropOrFallback(room, textures, "serverRack", leftX + 6, topY + 18, 46, 58, () =>
+      drawServerStack(room, leftX - 12, topY - 8, theme.accent),
+    );
+    addPropOrFallback(room, textures, "projectBoard", rightX - 2, topY + 16, 64, 46, () =>
+      drawProjectMiniBoard(room, rightX - 40, topY - 4, theme.accent),
+    );
+  } else if (departmentId === "strategic_maintenance") {
+    addPropOrFallback(room, textures, "lectureBoard", rightX - 4, topY + 10, 64, 44, () =>
+      drawLessonBoard(room, rightX - 40, topY - 10, theme.accent),
+    );
+    addPropOrFallback(room, textures, "documents", leftX, bottomY, 42, 32, () =>
+      drawPaperStack(room, leftX - 17, bottomY - 16, 4, theme.accent),
+    );
+  } else {
+    addPropOrFallback(room, textures, "stickyBoard", rightX - 2, topY + 12, 58, 44, () =>
+      drawProjectMiniBoard(room, rightX - 38, topY - 6, theme.accent),
+    );
+    addPropOrFallback(room, textures, "desk", leftX + 4, bottomY, 54, 40, () =>
+      drawDesk(room, leftX - 22, bottomY - 26, false),
+    );
+  }
+
+  drawSignalRail(room, rx + 16, ry + roomH - 20, roomW - 32, signalCounts, theme.accent);
+}
+
+function addPropOrFallback(
+  room: Container,
+  textures: Record<string, Texture>,
+  assetKey: OfficeAssetKey,
+  x: number,
+  y: number,
+  maxW: number,
+  maxH: number,
+  fallback: () => void,
+): void {
+  const sprite = addOfficePropSprite(room, textures, assetKey, { x, y, maxW, maxH });
+  if (!sprite) fallback();
+}
+
+function drawSignalRail(
+  room: Container,
+  x: number,
+  y: number,
+  w: number,
+  counts: OfficeSignalCounts,
+  accent: number,
+): void {
+  const total = counts.waiting + counts.active + counts.review + counts.done + counts.blocked;
+  const g = new Graphics();
+  g.roundRect(x, y, w, 8, 3).fill({ color: 0x000000, alpha: 0.12 });
+  const signals = [
+    { count: counts.waiting, color: 0xfbbf24 },
+    { count: counts.active, color: 0x22c55e },
+    { count: counts.review, color: 0x60a5fa },
+    { count: counts.done, color: 0x94a3b8 },
+    { count: counts.blocked, color: 0xfb7185 },
+  ];
+  let cursor = x + 4;
+  for (const signal of signals) {
+    const width = total > 0 ? Math.max(4, Math.round(((w - 8) * signal.count) / total)) : 4;
+    if (signal.count > 0 || total === 0) {
+      g.roundRect(cursor, y + 2, width, 4, 2).fill({ color: signal.count > 0 ? signal.color : accent, alpha: 0.75 });
+      cursor += width + 2;
+    }
+  }
+  room.addChild(g);
+
+  if (counts.waiting + counts.review + counts.blocked <= 0) return;
+  const label = new Text({
+    text: counts.blocked > 0 ? "품질 경고" : counts.review > 0 ? "검토 필요" : "승인 대기",
+    style: new TextStyle({
+      fontSize: 6,
+      fill: contrastTextColor(accent),
+      fontFamily: "system-ui, sans-serif",
+      fontWeight: "bold",
+    }),
+  });
+  label.anchor.set(1, 1);
+  const badgeW = Math.min(58, label.width + 8);
+  const badge = new Graphics();
+  badge.roundRect(x + w - badgeW, y - 11, badgeW, 10, 3).fill({ color: accent, alpha: 0.82 });
+  room.addChild(badge);
+  label.position.set(x + w - 4, y - 2);
+  room.addChild(label);
+}
+
+function drawMiniMonitorCluster(room: Container, x: number, y: number, accent: number): void {
+  const g = new Graphics();
+  g.roundRect(x, y, 26, 16, 2).fill(0x111827);
+  g.roundRect(x + 3, y + 3, 20, 9, 1).fill({ color: blendColor(accent, 0xffffff, 0.56), alpha: 0.75 });
+  g.rect(x + 12, y + 16, 2, 5).fill(0x334155);
+  g.rect(x + 8, y + 20, 10, 2).fill(0x334155);
+  g.roundRect(x + 30, y + 4, 22, 13, 2).fill(0x111827);
+  g.roundRect(x + 33, y + 7, 16, 7, 1).fill({ color: 0x38bdf8, alpha: 0.6 });
+  room.addChild(g);
+}
+
+function drawPaperStack(room: Container, x: number, y: number, count: number, accent: number): void {
+  const g = new Graphics();
+  for (let i = 0; i < count; i += 1) {
+    g.roundRect(x + i * 2, y - i * 2, 22, 14, 2).fill({ color: 0xffffff, alpha: 0.9 });
+    g.rect(x + 4 + i * 2, y + 4 - i * 2, 11, 1).fill({ color: accent, alpha: 0.45 });
+  }
+  room.addChild(g);
+}
+
+function drawColorSwatches(room: Container, x: number, y: number): void {
+  const g = new Graphics();
+  const colors = [0xf472b6, 0xc084fc, 0x60a5fa, 0x34d399, 0xfacc15, 0xfb923c];
+  colors.forEach((color, index) => {
+    g.roundRect(x + (index % 3) * 11, y + Math.floor(index / 3) * 11, 8, 8, 2).fill(color);
+  });
+  room.addChild(g);
+}
+
+function drawChecklistPanel(room: Container, x: number, y: number, accent: number): void {
+  const g = new Graphics();
+  g.roundRect(x, y, 42, 30, 4).fill(0xffffff).stroke({ width: 1, color: accent, alpha: 0.45 });
+  for (let i = 0; i < 3; i += 1) {
+    g.roundRect(x + 6, y + 6 + i * 8, 5, 5, 1).stroke({ width: 1, color: 0x22c55e, alpha: 0.8 });
+    g.rect(x + 16, y + 8 + i * 8, 17, 1).fill({ color: 0x64748b, alpha: 0.5 });
+  }
+  room.addChild(g);
+}
+
+function drawStatusBeacon(room: Container, x: number, y: number, color: number): void {
+  const g = new Graphics();
+  g.circle(x, y, 7).fill({ color, alpha: 0.95 });
+  g.circle(x, y, 12).stroke({ width: 2, color, alpha: 0.22 });
+  g.rect(x - 8, y + 8, 16, 4).fill(0x334155);
+  room.addChild(g);
+}
+
+function drawServerStack(room: Container, x: number, y: number, accent: number): void {
+  const g = new Graphics();
+  g.roundRect(x, y, 28, 38, 3).fill(0x1e293b).stroke({ width: 1, color: accent, alpha: 0.45 });
+  for (let i = 0; i < 4; i += 1) {
+    g.rect(x + 4, y + 5 + i * 8, 18, 3).fill(0x0f172a);
+    g.circle(x + 23, y + 6.5 + i * 8, 1.5).fill(i % 2 === 0 ? 0x22c55e : 0x38bdf8);
+  }
+  room.addChild(g);
+}
+
+function drawProjectMiniBoard(room: Container, x: number, y: number, accent: number): void {
+  const g = new Graphics();
+  g.roundRect(x, y, 48, 30, 4).fill(0xf8fafc).stroke({ width: 1, color: accent, alpha: 0.46 });
+  const colors = [0x38bdf8, 0xfbbf24, 0x22c55e, 0xfb7185, 0xa78bfa, 0x94a3b8];
+  colors.forEach((color, index) => {
+    g.roundRect(x + 6 + (index % 3) * 13, y + 7 + Math.floor(index / 3) * 10, 9, 6, 1.5).fill({
+      color,
+      alpha: 0.76,
+    });
+  });
+  room.addChild(g);
+}
+
+function drawLessonBoard(room: Container, x: number, y: number, accent: number): void {
+  const g = new Graphics();
+  g.roundRect(x, y, 54, 32, 3).fill(0xf8fafc).stroke({ width: 1, color: accent, alpha: 0.5 });
+  g.circle(x + 12, y + 16, 7).stroke({ width: 1.5, color: accent, alpha: 0.72 });
+  g.rect(x + 26, y + 10, 18, 2).fill({ color: 0x64748b, alpha: 0.5 });
+  g.rect(x + 26, y + 17, 14, 2).fill({ color: 0x64748b, alpha: 0.34 });
+  room.addChild(g);
 }
 
 function colorLuma(color: number): number {

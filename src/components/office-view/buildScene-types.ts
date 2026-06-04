@@ -1,9 +1,12 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { Application, AnimatedSprite, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
-import type { Agent, Department, PixelAgentModeSettings, SubAgent, Task } from "../../types";
+import type { Agent, Department, MeetingPresence, PixelAgentModeSettings, SubAgent, Task } from "../../types";
 import type { ThemeMode } from "../../ThemeContext";
 import type { Delivery, RoomRect, SubCloneBurstParticle, WallClockVisual } from "./model";
 import type { SupportedLocale } from "./themes-locale";
+import type { CloudOpsPanelMode } from "./cloudOpsLayout";
+import type { RpgCommandMapMode } from "./rpgCommandMapLayout";
+import type { TycoonMapMode } from "./tycoonOfficeLayout";
 
 export interface DataSnapshot {
   departments: Department[];
@@ -11,14 +14,21 @@ export interface DataSnapshot {
   tasks: Task[];
   subAgents: SubAgent[];
   unreadAgentIds?: Set<string>;
-  meetingPresence?: Array<{ agent_id: string; until: number }>;
+  meetingPresence?: MeetingPresence[];
   customDeptThemes?: Record<string, { floor1: number; floor2: number; wall: number; accent: number }>;
   pixelAgentMode?: PixelAgentModeSettings;
+  cloudOpsFocusMode?: CloudOpsPanelMode;
+  rpgFocusMode?: RpgCommandMapMode;
+  tycoonFocusMode?: TycoonMapMode;
 }
 
 export interface CallbackSnapshot {
   onSelectAgent: (agent: Agent) => void;
   onSelectDepartment: (dept: Department) => void;
+  onOpenTasks?: () => void;
+  onOpenProjects?: () => void;
+  onOpenMemory?: () => void;
+  onOpenControlPlane?: () => void;
 }
 
 export interface AnimItem {

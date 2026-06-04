@@ -1,10 +1,8 @@
 # External Instructor Master_skills
 
 ## Active Skills
-- open-source-scout
-- skill-candidate
-- trend-analysis
-- license-check
+- learned snapshot: none
+- installed snapshot: none
 
 ## Learned Skills History
 - No durable skill usage history yet.

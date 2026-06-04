@@ -45,7 +45,7 @@
 - Preferred Subagent: risk-modeler
 
 ## Latest Snapshot
-- 2026-05-23T04:13:35.248Z | tasks_done=0 | xp=0 | role=master_agent
+- 2026-05-28T08:48:07.617Z | tasks_done=0 | xp=0 | role=master_agent
 
 ## Workflow Profile
 - Raw: {"role":"primary_author","review_lenses":["scope","risk","traceability"],"two_pass_required":true,"max_review_rounds":2}

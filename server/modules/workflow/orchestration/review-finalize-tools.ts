@@ -73,6 +73,39 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
     }
   }
 
+  function normalizeApprovalRef(value: unknown): string {
+    return typeof value === "string" ? value.trim() : "";
+  }
+
+  function hasGitMutationApproval(rawWorkflowMeta: unknown): boolean {
+    const meta = parseWorkflowMeta(rawWorkflowMeta);
+    const candidates: unknown[] = [
+      meta.git_mutation_approval_ref,
+      meta.gitMutationApprovalRef,
+      meta.git_mutation_approval,
+      meta.gitMutationApproval,
+    ];
+    if (Array.isArray(meta.git_mutation_approval_refs)) candidates.push(...meta.git_mutation_approval_refs);
+    if (Array.isArray(meta.gitMutationApprovalRefs)) candidates.push(...meta.gitMutationApprovalRefs);
+    if (Array.isArray(meta.approval_refs)) candidates.push(...meta.approval_refs);
+
+    const refs: string[] = [];
+    for (const candidate of candidates) {
+      if (candidate && typeof candidate === "object") {
+        const record = candidate as Record<string, unknown>;
+        refs.push(
+          normalizeApprovalRef(record.approval_id),
+          normalizeApprovalRef(record.approvalId),
+          normalizeApprovalRef(record.approval_ref),
+          normalizeApprovalRef(record.approvalRef),
+        );
+        continue;
+      }
+      refs.push(normalizeApprovalRef(candidate));
+    }
+    return refs.some((ref) => /^APR-GIT-[A-Z0-9-]+$/i.test(ref));
+  }
+
   function mergeWorkflowMeta(taskId: string, mutate: (meta: Record<string, unknown>) => void): void {
     const row = db.prepare("SELECT workflow_meta_json FROM tasks WHERE id = ?").get(taskId) as
       | { workflow_meta_json: string | null }
@@ -250,7 +283,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
     const lang = resolveLang(taskTitle);
     const currentTask = db
       .prepare(
-        "SELECT status, department_id, source_task_id, project_id, workflow_pack_key, project_path FROM tasks WHERE id = ?",
+        "SELECT status, department_id, source_task_id, project_id, workflow_pack_key, workflow_meta_json, project_path FROM tasks WHERE id = ?",
       )
       .get(taskId) as
       | {
@@ -259,6 +292,7 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
           source_task_id: string | null;
           project_id: string | null;
           workflow_pack_key: string | null;
+          workflow_meta_json: string | null;
           project_path: string | null;
         }
       | undefined;
@@ -648,6 +682,19 @@ export function createReviewFinalizeTools(deps: CreateReviewFinalizeToolsDeps) {
       let mergeBlocked = false;
       let mergeBlockedReasons: string[] = [];
       if (wtInfo) {
+        if (!hasGitMutationApproval(currentTask.workflow_meta_json)) {
+          mergeBlocked = true;
+          mergeBlockedReasons = ["git_mutation_approval_required"];
+          markReviewConsentBlocked(taskId, mergeBlockedReasons);
+          appendTaskLog(
+            taskId,
+            "system",
+            "Review hold: Git mutation approval is required before worktree merge/PR finalization.",
+          );
+          broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId));
+          notifyTaskStatus(taskId, taskTitle, "review", lang);
+          return;
+        }
         // Check if this is a GitHub project - merge to dev + PR flow
         const projectRow = currentTask.project_id
           ? (db.prepare("SELECT github_repo FROM projects WHERE id = ?").get(currentTask.project_id) as

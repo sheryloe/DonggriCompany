@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import {
+  activateCodexThread,
   applyControlPlaneSync,
+  applyHarnessBlueprint,
   createControlPlanePersona,
   decideControlPlanePersona,
+  finishCodexThread,
   getAgentMemoryContext,
+  getCodexThreadCurrent,
   getControlPlaneState,
   rememberAgentMemory,
   prepareControlPlaneRun,
   previewControlPlaneSync,
+  previewHarnessBlueprint,
   searchAgentMemoryFunctional,
+  saveHarnessBlueprintDraft,
   startControlPlaneRun,
+  type CodexThreadCurrentResult,
   type ControlPlaneDepartmentMemory,
   type ControlPlaneMasterDepartment,
   type ControlPlaneMemoryContextResult,
@@ -20,6 +27,9 @@ import {
   type ControlPlaneRunResult,
   type ControlPlaneState,
   type ControlPlaneSyncResult,
+  type HarnessBlueprintPattern,
+  type HarnessBlueprintResult,
+  type HarnessBlueprintTargetMode,
 } from "../api/control-plane";
 
 type TabKey = "root" | "departments" | "operators" | "runner" | "memory" | "tasks" | "safety";
@@ -67,18 +77,177 @@ function Panel({ title, eyebrow, children }: { title: string; eyebrow?: string; 
 }
 
 function Metric({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+  const valueText = String(value);
+  const compactValue = valueText.length > 18;
   return (
-    <div className="rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+    <div className="min-w-0 rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
       <div className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>{label}</div>
-      <div className="mt-1 text-lg font-bold" style={{ color: "var(--th-text-primary)" }}>{value}</div>
-      {hint && <div className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>{hint}</div>}
+      <div
+        className={`mt-1 font-bold leading-tight ${compactValue ? "text-sm" : "text-lg"}`}
+        style={{ color: "var(--th-text-primary)", overflowWrap: "anywhere", wordBreak: "break-word" }}
+        title={valueText}
+      >
+        {value}
+      </div>
+      {hint && <div className="mt-1 break-words text-xs" style={{ color: "var(--th-text-muted)" }}>{hint}</div>}
     </div>
   );
 }
 
+function formatMemoryScopeLabel(scope: string): string {
+  if (scope === "root") return "Root 전체";
+  if (scope.startsWith("department:")) return `부서: ${scope.slice("department:".length)}`;
+  if (scope.startsWith("project:")) return `프로젝트: ${scope.slice("project:".length)}`;
+  if (scope.startsWith("spec:")) return `Spec: ${scope.slice("spec:".length)}`;
+  if (scope.startsWith("run:")) return "최근 Run";
+  if (scope.startsWith("persona:")) return "최근 Persona";
+  return scope;
+}
+
+function summarizeMemoryPayload(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return ["요약 가능한 결과가 아직 없습니다."];
+  const record = value as Record<string, unknown>;
+  const lines: string[] = [];
+  if (typeof record.result_count === "number") lines.push(`결과 ${record.result_count}건`);
+  if (typeof record.result_container === "string") lines.push(`컨테이너: ${record.result_container}`);
+  if (Array.isArray(record.sample_keys) && record.sample_keys.length > 0) lines.push(`샘플 키: ${record.sample_keys.slice(0, 5).join(", ")}`);
+  if (Array.isArray(record.top_level_keys) && record.top_level_keys.length > 0) lines.push(`상위 키: ${record.top_level_keys.slice(0, 5).join(", ")}`);
+  if (record.raw_payload_omitted === true) lines.push("원문 payload는 표시하지 않음");
+  return lines.length > 0 ? lines : ["요약 결과를 카드로 표시할 수 없습니다."];
+}
+
+function formatMemoryUnavailable(error: string | null | undefined): string {
+  if (error === "query_required") return "검색어를 입력하면 작업대가 결과를 확인합니다.";
+  if (error === "agentmemory_unavailable") return "AgentMemory 미실행 상태입니다. 검색은 runtime 연결 후 가능합니다.";
+  if (error === "approval_required") return "승인 항목이 없어 저장을 막았습니다.";
+  return error ?? "AgentMemory 응답을 기다리는 중입니다.";
+}
+
+function formatBlockedOperation(operation: string): string {
+  const labels: Record<string, string> = {
+    "runtime connect": "런타임 연결",
+    "install/start": "설치/시작",
+    "MCP wiring": "MCP 연결",
+    "global hooks": "전역 hooks",
+    "transcript capture": "대화 원문 수집",
+    "delete/forget": "삭제/망각",
+    import: "가져오기",
+  };
+  return labels[operation] ?? operation;
+}
+
+function MemoryResultCard({
+  title,
+  result,
+  payloadKey,
+}: {
+  title: string;
+  result: ControlPlaneMemorySearchResult | ControlPlaneMemoryContextResult | ControlPlaneMemoryRememberResult | null;
+  payloadKey: "results" | "context" | "result";
+}) {
+  if (!result) return null;
+  const payload = result[payloadKey as keyof typeof result];
+  const lines = result.available ? summarizeMemoryPayload(payload) : [formatMemoryUnavailable(result.error)];
+  return (
+    <article className="rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-bold" style={{ color: "var(--th-text-primary)" }}>{title}</h4>
+          <div className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>
+            {result.available ? "AgentMemory 응답 수신" : "AgentMemory 미실행"}
+          </div>
+        </div>
+        <Pill ok={result.ok}>{result.ok ? "정상" : "대기"}</Pill>
+      </div>
+      <div className="mt-3 grid gap-1 text-xs" style={{ color: "var(--th-text-secondary)" }}>
+        {lines.map((line) => (
+          <div key={line} className="rounded-md border px-2 py-1" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-muted)" }}>
+            {line}
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+type MemoryViewerFrameState = "loading" | "embedded" | "fallback";
+
 function getRunId(result: ControlPlaneRunResult | null): string | null {
   const id = result?.run?.id;
   return typeof id === "string" ? id : null;
+}
+
+function getRecordId(record: Record<string, unknown> | null | undefined): string | null {
+  const id = record?.id;
+  return typeof id === "string" ? id : null;
+}
+
+function asRecordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function getHarnessBlueprintId(result: HarnessBlueprintResult | null): string | null {
+  if (!result) return null;
+  if (typeof result.blueprint_id === "string") return result.blueprint_id;
+  const draftId = result.draft?.id;
+  if (typeof draftId === "string") return draftId;
+  const previewId = result.blueprint?.preview_id;
+  return typeof previewId === "string" ? previewId : null;
+}
+
+function parseRunContext(record: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const raw = record?.context_pack_json;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function getActivationThreadId(record: Record<string, unknown> | null | undefined): string | null {
+  const value = parseRunContext(record).codex_thread_id;
+  return typeof value === "string" ? value : null;
+}
+
+function getActivationScopeKey(record: Record<string, unknown> | null | undefined): string | null {
+  const value = parseRunContext(record).scope_key;
+  return typeof value === "string" ? value : null;
+}
+
+function getActivationSpecId(record: Record<string, unknown> | null | undefined): string | null {
+  const context = parseRunContext(record);
+  const snapshot = context.active_spec_snapshot;
+  if (snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)) {
+    const id = (snapshot as Record<string, unknown>).id;
+    if (typeof id === "string") return id;
+  }
+  return typeof record?.spec_id === "string" ? record.spec_id : null;
+}
+
+function shortThreadId(threadId: string | null | undefined): string {
+  if (!threadId) return "-";
+  return threadId.length > 13 ? `${threadId.slice(0, 8)}...${threadId.slice(-4)}` : threadId;
+}
+
+function activeSpecRelativePath(specId: string | null | undefined, fileName: "evidence.md" | "handoff.md"): string | null {
+  if (!specId) return null;
+  return `storage/codex-control/specs/${specId}/${fileName}`;
+}
+
+function stableEvidenceHash(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `ui-${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 function getLatestPersonaId(result: ControlPlaneRunResult | null): string | null {
@@ -173,13 +342,24 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
   const [error, setError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<ControlPlaneSyncResult | null>(null);
   const [runnerResult, setRunnerResult] = useState<ControlPlaneRunResult | null>(null);
+  const [threadInfo, setThreadInfo] = useState<CodexThreadCurrentResult | null>(null);
+  const [threadResult, setThreadResult] = useState<ControlPlaneRunResult | null>(null);
+  const [threadScope, setThreadScope] = useState<"root" | "project" | "spec">("project");
+  const [manualThreadId, setManualThreadId] = useState("");
   const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null);
   const [memoryQuery, setMemoryQuery] = useState("");
   const [memoryScope, setMemoryScope] = useState("root");
   const [memoryCaptureText, setMemoryCaptureText] = useState("");
+  const [memoryEvidenceRef, setMemoryEvidenceRef] = useState("EV-MEM-SUMMARY");
   const [memoryResult, setMemoryResult] = useState<ControlPlaneMemorySearchResult | null>(null);
   const [memoryContextResult, setMemoryContextResult] = useState<ControlPlaneMemoryContextResult | null>(null);
   const [memoryRememberResult, setMemoryRememberResult] = useState<ControlPlaneMemoryRememberResult | null>(null);
+  const [memoryViewerState, setMemoryViewerState] = useState<MemoryViewerFrameState>("fallback");
+  const [harnessTargetMode, setHarnessTargetMode] = useState<HarnessBlueprintTargetMode>("both");
+  const [harnessProjectKey, setHarnessProjectKey] = useState("DonggriCompany");
+  const [harnessPattern, setHarnessPattern] = useState<HarnessBlueprintPattern>("auto");
+  const [harnessObjective, setHarnessObjective] = useState("Dongri-grigri 제품급 에이전트 하네스와 QMS 증거 루프 설계");
+  const [harnessResult, setHarnessResult] = useState<HarnessBlueprintResult | null>(null);
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -189,7 +369,9 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
     setLoading(true);
     setError(null);
     try {
-      setState(await getControlPlaneState());
+      const [nextState, nextThreadInfo] = await Promise.all([getControlPlaneState(), getCodexThreadCurrent()]);
+      setState(nextState);
+      setThreadInfo(nextThreadInfo);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -200,6 +382,18 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
   useEffect(() => {
     void load();
   }, []);
+
+  const memoryViewerReachableForState = Boolean(state?.memory.viewer_preflight?.reachable);
+
+  useEffect(() => {
+    setMemoryViewerState(memoryViewerReachableForState ? "loading" : "fallback");
+  }, [memoryViewerReachableForState, state?.memory.viewer_preflight?.viewer_url]);
+
+  useEffect(() => {
+    if (memoryViewerState !== "loading") return undefined;
+    const timer = window.setTimeout(() => setMemoryViewerState("fallback"), 2500);
+    return () => window.clearTimeout(timer);
+  }, [memoryViewerState, state?.memory.viewer_preflight?.viewer_url]);
 
   const runAction = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -241,11 +435,58 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
   const scopes = state.dongri_grigri.project_scopes ?? state.dongri_grigri.project_operators ?? [];
   const enabledScopes = scopes.filter((scope) => scope.enabled);
   const candidateScopes = scopes.filter((scope) => !scope.enabled);
+  const projectKeys = Array.from(new Set(scopes.map((scope) => scope.project_key).filter(Boolean))).sort();
   const selectedScope =
     scopes.find((scope) => scope.operator_id === selectedScopeId) ?? enabledScopes[0] ?? scopes[0] ?? null;
   const linkedScopeCount = scopes.filter((scope) => scope.link_status === "linked").length;
   const runId = getRunId(runnerResult);
   const personaId = getLatestPersonaId(runnerResult);
+  const detectedThreadId = threadInfo?.detected_thread.thread_id ?? "";
+  const latestSessionThreadId = threadInfo?.session_candidates.find((candidate) => candidate.thread_id)?.thread_id ?? "";
+  const currentThreadId = manualThreadId.trim() || detectedThreadId;
+  const sessionCandidateHint =
+    !detectedThreadId && latestSessionThreadId
+      ? `session 후보 ${shortThreadId(latestSessionThreadId)} · 수동 입력 후 연결`
+      : null;
+  const activeActivation = threadInfo?.active_activation ?? null;
+  const resultActivation = threadResult?.run ?? null;
+  const activeActivationThreadId = getActivationThreadId(activeActivation);
+  const resultActivationThreadId = getActivationThreadId(resultActivation);
+  const sameThreadActivation =
+    resultActivationThreadId && resultActivationThreadId === currentThreadId
+      ? resultActivation
+      : activeActivationThreadId && activeActivationThreadId === currentThreadId
+        ? activeActivation
+        : null;
+  const previousThreadActivation =
+    activeActivation && activeActivationThreadId && currentThreadId && activeActivationThreadId !== currentThreadId ? activeActivation : null;
+  const activeThreadRunId = getRecordId(sameThreadActivation);
+  const threadConnectionLabel = sameThreadActivation
+    ? "현재 thread 연결됨"
+    : previousThreadActivation
+      ? "이전 thread 연결됨"
+      : currentThreadId
+        ? "현재 thread 진행 중"
+        : "대기";
+  const threadScopeValue =
+    threadScope === "root" ? null : threadScope === "spec" ? state.active_spec.id ?? null : "DonggriCompany";
+  const finishSpecId = getActivationSpecId(sameThreadActivation) ?? state.active_spec.id;
+  const activeSpecEvidencePath = activeSpecRelativePath(finishSpecId, "evidence.md");
+  const activeSpecHandoffPath = activeSpecRelativePath(finishSpecId, "handoff.md");
+  const harnessBlueprint = harnessResult?.blueprint ?? null;
+  const harnessPhases = asRecordArray(harnessBlueprint?.phases);
+  const harnessPersonas = asRecordArray(harnessBlueprint?.suggested_personas);
+  const harnessEvidencePlan = asStringArray(harnessBlueprint?.evidence_plan);
+  const harnessApprovalMap = asRecordArray(harnessBlueprint?.approval_map);
+  const harnessQmsChecks = asStringArray(harnessBlueprint?.qms_checks);
+  const harnessDraftId = getHarnessBlueprintId(harnessResult);
+  const harnessSavedDraftId =
+    typeof harnessResult?.draft?.id === "string"
+      ? harnessResult.draft.id
+      : harnessResult?.writes && typeof harnessResult.blueprint_id === "string"
+        ? harnessResult.blueprint_id
+        : null;
+  const harnessBlueprintStatus = harnessResult?.harness_blueprints ?? state.harness_blueprints ?? state.quality_harness.harness_blueprint_coverage ?? null;
   const memoryScopes = Array.from(
     new Set([
       "root",
@@ -255,6 +496,16 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
       "persona:latest",
     ]),
   );
+  const memoryViewerReachable = Boolean(state.memory.viewer_preflight?.reachable);
+  const showMemoryViewer = memoryViewerReachable && memoryViewerState !== "fallback";
+  const memoryRememberAllowed = Boolean(state.quality_harness.agentmemory_gate.remember_approved);
+  const memoryRememberDisabledReason = !memoryRememberAllowed
+    ? "APR-MEM-001 승인이 없어 기억 저장을 막았습니다."
+    : !memoryCaptureText.trim()
+      ? "기록할 운영 메모를 입력하면 저장 준비가 됩니다."
+      : !memoryEvidenceRef.trim()
+        ? "증거 ID가 필요합니다. 예: EV-MEM-SUMMARY"
+        : null;
 
   return (
     <section className="space-y-4" style={{ color: "var(--th-text-primary)" }}>
@@ -394,6 +645,298 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
       {activeTab === "runner" && (
         <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
           <Panel title="마스터/서브에이전트 Runner" eyebrow="orchestrator">
+            <div className="mb-4 rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-600">Codex Desktop Thread</div>
+                  <h3 className="mt-1 font-bold" style={{ color: "var(--th-text-primary)" }}>현재 Codex thread 연결</h3>
+                  <p className="mt-1 text-sm" style={{ color: "var(--th-text-secondary)" }}>
+                    이전 thread 연결은 관찰 이력으로 유지하고, 현재 thread는 별도 run으로 이어갑니다. memory scope는 공유하고 transcript 본문은 저장하지 않습니다.
+                  </p>
+                </div>
+                <Pill ok={Boolean(sameThreadActivation)}>{threadConnectionLabel}</Pill>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <div className="rounded-lg border p-2" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-muted)" }}>
+                  <div className="text-[11px] font-semibold uppercase" style={{ color: "var(--th-text-muted)" }}>현재 thread</div>
+                  <div className="mt-1 font-mono text-xs" style={{ color: "var(--th-text-primary)" }}>{shortThreadId(currentThreadId)}</div>
+                  <div className="mt-1 text-xs" style={{ color: "var(--th-text-secondary)" }}>
+                    {sameThreadActivation ? "운영실에 연결됨" : "현재 thread 진행 중 / 연결 준비"}
+                  </div>
+                </div>
+                <div className="rounded-lg border p-2" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-muted)" }}>
+                  <div className="text-[11px] font-semibold uppercase" style={{ color: "var(--th-text-muted)" }}>이전 thread</div>
+                  <div className="mt-1 font-mono text-xs" style={{ color: "var(--th-text-primary)" }}>
+                    {shortThreadId(getActivationThreadId(previousThreadActivation))}
+                  </div>
+                  <div className="mt-1 text-xs" style={{ color: "var(--th-text-secondary)" }}>
+                    {previousThreadActivation ? `${String(previousThreadActivation.status ?? "observing")} / ${getActivationScopeKey(previousThreadActivation) ?? "scope"}` : "이전 연결 없음"}
+                  </div>
+                </div>
+                <div className="rounded-lg border p-2" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-muted)" }}>
+                  <div className="text-[11px] font-semibold uppercase" style={{ color: "var(--th-text-muted)" }}>Memory</div>
+                  <div className="mt-1 text-xs font-semibold" style={{ color: "var(--th-text-primary)" }}>scope 공유</div>
+                  <div className="mt-1 text-xs" style={{ color: "var(--th-text-secondary)" }}>raw transcript 미수집</div>
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-[1fr_220px]">
+                <input
+                  value={manualThreadId}
+                  onChange={(event) => setManualThreadId(event.target.value)}
+                  placeholder={currentThreadId || latestSessionThreadId || "thread id 수동 입력"}
+                  className="min-w-0 rounded-lg border px-3 py-2 font-mono text-xs outline-none focus:border-cyan-400/60"
+                  style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                />
+                <select
+                  value={threadScope}
+                  onChange={(event) => setThreadScope(event.target.value as "root" | "project" | "spec")}
+                  className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+                  style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                >
+                  <option value="project">project:DonggriCompany</option>
+                  <option value="root">root</option>
+                  <option value="spec">spec:{state.active_spec.id ?? "active"}</option>
+                </select>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy || !currentThreadId}
+                  onClick={() =>
+                    void runAction(async () => {
+                      const result = await activateCodexThread({
+                        thread_id: currentThreadId,
+                        scope_type: threadScope,
+                        scope_value: threadScopeValue,
+                        status: "observing",
+                        objective: "현재 Codex Desktop thread를 Dongri-grigri 운영실에 연결",
+                      });
+                      setThreadResult(result);
+                    })
+                  }
+                  className="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-700 disabled:opacity-50 dark:text-cyan-100"
+                >
+                  현재 thread 연결
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !activeThreadRunId}
+                  onClick={() =>
+                    void runAction(async () => {
+                      if (!activeThreadRunId) return;
+                      if (!activeSpecEvidencePath || !activeSpecHandoffPath) throw new Error("active_spec_finish_docs_missing");
+                      const result = await finishCodexThread(activeThreadRunId, {
+                        final_status: "completed",
+                        evidence_refs: [activeSpecEvidencePath],
+                        handoff_path: activeSpecHandoffPath,
+                      });
+                      setThreadResult(result);
+                    })
+                  }
+                  className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  style={{ borderColor: "var(--th-border)", color: "var(--th-text-primary)" }}
+                >
+                  evidence/handoff 후 종료
+                </button>
+                <span className="font-mono text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                  {currentThreadId || "감지된 thread 없음"} · {threadScope === "root" ? "root" : `${threadScope}:${threadScopeValue ?? "-"}`}
+                </span>
+                {sessionCandidateHint && (
+                  <span className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                    {sessionCandidateHint}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="mb-4 rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-600">Harness Factory</div>
+                  <h3 className="mt-1 font-bold" style={{ color: "var(--th-text-primary)" }}>하네스 메타 생성기</h3>
+                  <p className="mt-1 text-sm" style={{ color: "var(--th-text-secondary)" }}>
+                    revfactory/harness의 팀 아키텍처 패턴만 Donggri SDD, 부서 에이전트, persona evidence, QMS ledger로 흡수합니다. `.claude` 파일 생성과 플러그인 설치는 제안하지 않습니다.
+                  </p>
+                </div>
+                <Pill ok={Boolean(harnessSavedDraftId)}>
+                  {harnessSavedDraftId ? "draft saved" : "preview first"}
+                </Pill>
+              </div>
+
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <label className="text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                  대상
+                  <select
+                    value={harnessTargetMode}
+                    onChange={(event) => setHarnessTargetMode(event.target.value as HarnessBlueprintTargetMode)}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+                    style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                  >
+                    <option value="both">둘 다</option>
+                    <option value="department">부서 표준</option>
+                    <option value="project">프로젝트 scope</option>
+                  </select>
+                </label>
+                <label className="text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                  프로젝트
+                  <select
+                    value={harnessProjectKey}
+                    onChange={(event) => setHarnessProjectKey(event.target.value)}
+                    disabled={harnessTargetMode === "department"}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60 disabled:opacity-50"
+                    style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                  >
+                    {(projectKeys.length > 0 ? projectKeys : ["DonggriCompany"]).map((projectKey) => (
+                      <option key={projectKey} value={projectKey}>{projectKey}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                  패턴
+                  <select
+                    value={harnessPattern}
+                    onChange={(event) => setHarnessPattern(event.target.value as HarnessBlueprintPattern)}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+                    style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="pipeline">Pipeline</option>
+                    <option value="fan-out-fan-in">Fan-out/Fan-in</option>
+                    <option value="expert-pool">Expert Pool</option>
+                    <option value="producer-reviewer">Producer-Reviewer</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="hierarchical-delegation">Hierarchical Delegation</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="mt-3 block text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                목적
+                <textarea
+                  value={harnessObjective}
+                  onChange={(event) => setHarnessObjective(event.target.value)}
+                  rows={3}
+                  className="mt-1 w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+                  style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                />
+              </label>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void runAction(async () => {
+                      const result = await previewHarnessBlueprint({
+                        target_mode: harnessTargetMode,
+                        project_key: harnessTargetMode === "department" ? undefined : harnessProjectKey,
+                        objective: harnessObjective,
+                        preferred_pattern: harnessPattern,
+                      });
+                      setHarnessResult(result);
+                    })
+                  }
+                  className="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-700 disabled:opacity-50 dark:text-cyan-100"
+                >
+                  Preview
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void runAction(async () => {
+                      const result = await saveHarnessBlueprintDraft({
+                        target_mode: harnessTargetMode,
+                        project_key: harnessTargetMode === "department" ? undefined : harnessProjectKey,
+                        objective: harnessObjective,
+                        preferred_pattern: harnessPattern,
+                        evidence_refs: ["EV-HARNESS-META-002"],
+                      });
+                      setHarnessResult(result);
+                    })
+                  }
+                  className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  style={{ borderColor: "var(--th-border)", color: "var(--th-text-primary)" }}
+                >
+                  Draft 저장
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !harnessSavedDraftId}
+                  onClick={() =>
+                    void runAction(async () => {
+                      if (!harnessSavedDraftId) return;
+                      setHarnessResult(await applyHarnessBlueprint(harnessSavedDraftId));
+                    })
+                  }
+                  className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm font-semibold text-amber-700 disabled:opacity-50 dark:text-amber-100"
+                >
+                  Apply 차단 확인
+                </button>
+                <span className="text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                  적용은 APR-HARNESS-APPLY-* 승인 전 v1에서 차단됩니다.
+                </span>
+              </div>
+
+              <div className="mt-3 grid gap-2 md:grid-cols-4">
+                <Metric label="Draft" value={harnessBlueprintStatus?.draft_count ?? 0} hint="저장된 blueprint" />
+                <Metric label="Department" value={harnessBlueprintStatus?.department_draft_count ?? 0} hint="부서 표준 coverage" />
+                <Metric label="Project" value={harnessBlueprintStatus?.project_draft_count ?? 0} hint="프로젝트 scope coverage" />
+                <Metric label="Evidence" value={harnessBlueprintStatus?.evidence_backed_count ?? 0} hint="증거 ref 포함" />
+              </div>
+
+              {harnessResult && (
+                <div className="mt-3 rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-muted)" }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-semibold" style={{ color: "var(--th-text-primary)" }}>
+                        {harnessResult.ok ? "Blueprint 준비됨" : "Blueprint 차단됨"}
+                      </div>
+                      <div className="mt-1 font-mono text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                        {harnessResult.ok ? (harnessDraftId ?? "-") : (harnessResult.error ?? harnessDraftId ?? "-")}
+                      </div>
+                    </div>
+                    <Pill ok={harnessResult.ok}>{harnessResult.writes ? "write" : "preview"}</Pill>
+                  </div>
+                  {harnessResult.message && <div className="mt-2 text-xs" style={{ color: "var(--th-text-secondary)" }}>{harnessResult.message}</div>}
+                  {harnessPhases.length > 0 && (
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      {harnessPhases.map((phase) => (
+                        <div key={String(phase.id ?? phase.phase ?? phase.owner_department ?? phase.owner)} className="rounded-md border p-2 text-xs" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+                          <div className="font-semibold" style={{ color: "var(--th-text-primary)" }}>{String(phase.owner_department ?? phase.owner ?? phase.department ?? "phase")}</div>
+                          <div className="mt-1" style={{ color: "var(--th-text-secondary)" }}>{String(phase.name ?? phase.output ?? phase.phase ?? phase.summary ?? "-")}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {harnessPersonas.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-xs font-semibold" style={{ color: "var(--th-text-primary)" }}>추천 disposable persona</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {harnessPersonas.map((persona) => (
+                          <Pill key={String(persona.persona_id ?? persona.id ?? persona.name)} ok>{String(persona.persona_id ?? persona.id ?? persona.name)} · {String(persona.write_policy ?? persona.policy ?? "single-task")}</Pill>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(harnessEvidencePlan.length > 0 || harnessApprovalMap.length > 0 || harnessQmsChecks.length > 0) && (
+                    <div className="mt-3 grid gap-2 md:grid-cols-3">
+                      <div className="rounded-md border p-2 text-xs" style={{ borderColor: "var(--th-border)" }}>
+                        <div className="font-semibold" style={{ color: "var(--th-text-primary)" }}>Evidence plan</div>
+                        <div className="mt-1" style={{ color: "var(--th-text-secondary)" }}>{harnessEvidencePlan.slice(0, 3).join(" / ") || "-"}</div>
+                      </div>
+                      <div className="rounded-md border p-2 text-xs" style={{ borderColor: "var(--th-border)" }}>
+                        <div className="font-semibold" style={{ color: "var(--th-text-primary)" }}>Approval map</div>
+                        <div className="mt-1" style={{ color: "var(--th-text-secondary)" }}>{harnessApprovalMap.map((item) => String(item.approval_class ?? item.id ?? "approval")).slice(0, 3).join(" / ") || "-"}</div>
+                      </div>
+                      <div className="rounded-md border p-2 text-xs" style={{ borderColor: "var(--th-border)" }}>
+                        <div className="font-semibold" style={{ color: "var(--th-text-primary)" }}>QMS checks</div>
+                        <div className="mt-1" style={{ color: "var(--th-text-secondary)" }}>{harnessQmsChecks.slice(0, 3).join(" / ") || "-"}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <p className="mb-3 text-sm" style={{ color: "var(--th-text-secondary)" }}>
               runner는 context-pack, hook gate, approval ledger를 확인한 뒤 실제 run/persona 이벤트만 기록합니다.
             </p>
@@ -405,11 +948,12 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
                   void runAction(async () => {
                     const result = await prepareControlPlaneRun({
                       department_agent: "OPS",
-                      objective: "Dongri-grigri office control read-only smoke run",
+                      objective: "Dongri-grigri office control operational evidence run",
+                      task_id: "T-004",
                       selected_repo: "DonggriCompany",
                       persona_needed: true,
                       confidence: "high",
-                      evidence: ["EV-20260523-001"],
+                      evidence: ["EV-HARNESS-RUN"],
                     });
                     setRunnerResult(result);
                   })
@@ -443,9 +987,12 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
                         parent_agent: "OPS",
                         persona_id: `ops-scope-${Date.now()}`,
                         objective: "Read-only project scope and memory status check",
+                        task_id: "T-004",
                         write_policy: "read-only",
                         allowed_paths: { read: ["G:/Donggri_DevDrive/storage/codex-control"], write: [] },
                         return_schema: ["summary", "evidence_path", "risk"],
+                        evidence_refs: ["EV-PERSONA-EVIDENCE"],
+                        quality_bar_result: "pending-review",
                       }),
                     );
                   })
@@ -464,8 +1011,16 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
                     setRunnerResult(
                       await decideControlPlanePersona(personaId, {
                         decision: "accept",
-                        reason: "Read-only smoke persona returned an evidence-backed result.",
-                        evidence_refs: ["EV-20260523-001"],
+                        reason: "Read-only persona returned evidence-backed operational findings.",
+                        evidence_refs: ["EV-PERSONA-EVIDENCE"],
+                        source_hash: stableEvidenceHash(`${personaId}:source`),
+                        output_hash: stableEvidenceHash(`${personaId}:output`),
+                        quality_bar_result: "accepted-with-evidence",
+                        payload: {
+                          source_hash: stableEvidenceHash(`${personaId}:source`),
+                          output_hash: stableEvidenceHash(`${personaId}:output`),
+                          quality_bar_result: "accepted-with-evidence",
+                        },
                       }),
                     );
                   })
@@ -476,112 +1031,273 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
               </button>
             </div>
           </Panel>
-          <Panel title="최근 run" eyebrow="actual events only">
-            {runnerResult ? (
-              <pre className="max-h-80 overflow-auto rounded-lg border p-3 text-xs" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-secondary)" }}>
-                {JSON.stringify(runnerResult, null, 2)}
-              </pre>
-            ) : (
-              <div className="rounded-lg border border-dashed p-4 text-sm" style={{ borderColor: "var(--th-border)", color: "var(--th-text-muted)" }}>
-                아직 현재 화면에서 실행한 run이 없습니다.
+          <div className="grid gap-4">
+            <Panel title="품질 하네스 현재 수준" eyebrow="ISO 9001-inspired, not certified">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Metric label="Harness score" value={`${state.quality_harness.score}/${state.quality_harness.target_score}`} hint={state.quality_harness.level} />
+                <Metric label="Certification" value={state.quality_harness.certification_claim} hint="인증 주장 없음" />
+                <Metric label="Persona evidence" value={state.quality_harness.persona_evidence.persona_total} hint={`${state.quality_harness.persona_evidence.recent_event_count} recent events`} />
               </div>
-            )}
-          </Panel>
+              <div className="mt-3 grid gap-2">
+                {state.quality_harness.checks.map((check) => (
+                  <div key={check.key} className="rounded-lg border p-2" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-muted)" }}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-semibold" style={{ color: "var(--th-text-primary)" }}>{check.label}</div>
+                      <Pill ok={check.status === "pass"}>{check.status}</Pill>
+                    </div>
+                    <div className="mt-1 text-xs" style={{ color: "var(--th-text-secondary)" }}>{check.detail}</div>
+                    <div className="mt-1 text-[11px]" style={{ color: "var(--th-text-muted)" }}>{check.next_safe_action}</div>
+                  </div>
+                ))}
+              </div>
+              {state.quality_harness.qms && (
+                <div className="mt-3 rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs font-semibold" style={{ color: "var(--th-text-primary)" }}>QMS ledger</div>
+                    <Pill ok={state.quality_harness.qms.counts.open_nonconformances === 0}>
+                      NC {state.quality_harness.qms.counts.open_nonconformances} / CAPA {state.quality_harness.qms.counts.open_capas}
+                    </Pill>
+                  </div>
+                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                    {[...state.quality_harness.qms.nonconformances, ...state.quality_harness.qms.capas, ...state.quality_harness.qms.internal_audits]
+                      .slice(0, 6)
+                      .map((record) => (
+                        <div key={record.id} className="rounded-md border p-2 text-xs" style={{ borderColor: "var(--th-border)", color: "var(--th-text-secondary)" }}>
+                          <div className="font-semibold" style={{ color: "var(--th-text-primary)" }}>{record.id}</div>
+                          <div>{record.status} · {record.owner_department}</div>
+                          <div className="mt-1 line-clamp-2">{record.effectiveness_check ?? record.source}</div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+              <div className="mt-3 rounded-lg border p-2" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+                <div className="text-xs font-semibold" style={{ color: "var(--th-text-primary)" }}>Release hygiene groups</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {state.quality_harness.release_hygiene.grouped_changes.length > 0 ? (
+                    state.quality_harness.release_hygiene.grouped_changes.map((group) => (
+                      <Pill key={group.group} ok={!state.quality_harness.release_hygiene.commit_exclusion_manifest?.exclude_groups.includes(group.group)}>{group.group}: {group.count}</Pill>
+                    ))
+                  ) : (
+                    <Pill ok>clean</Pill>
+                  )}
+                </div>
+                {state.quality_harness.release_hygiene.commit_exclusion_manifest && (
+                  <div className="mt-2 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
+                    Exclude: {state.quality_harness.release_hygiene.commit_exclusion_manifest.exclude_groups.join(", ")}
+                  </div>
+                )}
+              </div>
+            </Panel>
+
+            <Panel title="최근 run" eyebrow="actual events only">
+              {runnerResult ? (
+                <pre className="max-h-80 overflow-auto rounded-lg border p-3 text-xs" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-secondary)" }}>
+                  {JSON.stringify(runnerResult, null, 2)}
+                </pre>
+              ) : (
+                <div className="rounded-lg border border-dashed p-4 text-sm" style={{ borderColor: "var(--th-border)", color: "var(--th-text-muted)" }}>
+                  아직 현재 화면에서 실행한 run이 없습니다.
+                </div>
+              )}
+            </Panel>
+          </div>
         </div>
       )}
 
       {activeTab === "memory" && (
-        <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-          <Panel title="AgentMemory 상태" eyebrow="safe memory layer">
-            <div className="grid gap-3 md:grid-cols-2">
-              <Metric label="Server" value={state.memory.server_url} hint={state.memory.health.available ? "online" : "offline 또는 미실행"} />
-              <Metric label="Viewer" value={state.memory.viewer_url} hint={state.memory.livez?.available ? "livez ok" : "viewer 대기"} />
-              <Metric label="Runtime" value={state.memory.runtime_path} />
-              <Metric label="Mode" value={state.memory.integration_mode} hint={state.memory.safe_proxy_available ? "safe proxy on" : "offline fallback"} />
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_430px]">
+          <Panel title="AgentMemory Workbench" eyebrow="내부 Viewer + 안전 작업대">
+            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+              <Metric label="Server 3111" value={state.memory.server_url} hint={state.memory.health.available ? "online" : "offline 또는 미실행"} />
+              <Metric
+                label="Viewer 3113"
+                value={state.memory.viewer_preflight?.viewer_url ?? state.memory.viewer_url}
+                hint={state.memory.viewer_preflight?.reachable ? "내부 Viewer 준비" : "Viewer 미실행"}
+              />
+              <Metric label="Runtime path" value={state.memory.runtime_path} hint={state.memory.runtime_preflight?.runtime_path_exists ? "path 확인" : "runtime path 없음"} />
+              <Metric label="승인 게이트" value={state.memory.approval_gate.runtime_connect_allowed ? "허용" : "차단"} hint={state.memory.approval_gate.runtime_connect_required_approval} />
             </div>
+
             <div className="mt-3 flex flex-wrap gap-2">
-              <Pill ok={state.memory.health.available}>health</Pill>
-              <Pill ok={state.memory.readiness?.smart_search_available}>smart search</Pill>
-              <Pill ok={state.memory.readiness?.context_available}>context</Pill>
-              <Pill ok={!state.memory.readiness?.delete_forget_enabled}>delete/forget blocked</Pill>
-              <Pill ok={!state.memory.readiness?.hook_auto_capture_enabled}>auto hooks off</Pill>
+              <Pill ok={state.memory.health.available}>서버 상태</Pill>
+              <Pill ok={state.memory.viewer_preflight?.reachable}>Viewer 점검</Pill>
+              <Pill ok={state.memory.safe_proxy_available}>안전 작업대</Pill>
+              <Pill ok={state.memory.readiness?.smart_search_available}>스마트 검색</Pill>
+              <Pill ok={state.memory.readiness?.context_available}>컨텍스트 회수</Pill>
+              <Pill ok={state.memory.runtime_preflight?.approved_runtime_connect}>런타임 승인</Pill>
+              <Pill ok={!state.memory.readiness?.delete_forget_enabled}>삭제/망각 차단</Pill>
+              <Pill ok={!state.memory.readiness?.hook_auto_capture_enabled}>자동 hooks 꺼짐</Pill>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-xl border" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b px-3 py-2" style={{ borderColor: "var(--th-border)" }}>
+                <div>
+                  <div className="text-sm font-bold" style={{ color: "var(--th-text-primary)" }}>내부 Viewer</div>
+                  <div className="text-xs" style={{ color: "var(--th-text-muted)" }}>
+                    {showMemoryViewer ? "AgentMemory Viewer를 내부 창으로 표시합니다." : "Viewer 미실행 또는 내부 표시 차단 상태입니다. 안전 작업대를 사용합니다."}
+                  </div>
+                </div>
+                <Pill ok={showMemoryViewer}>{showMemoryViewer ? (memoryViewerState === "loading" ? "불러오는 중" : "내부 창 활성") : "안전 작업대 활성"}</Pill>
+              </div>
+
+              {showMemoryViewer ? (
+                <iframe
+                  title="AgentMemory Viewer"
+                  src={state.memory.viewer_preflight?.viewer_url ?? state.memory.viewer_url}
+                  sandbox="allow-scripts allow-forms allow-same-origin"
+                  className="h-[520px] w-full bg-white"
+                  onError={() => setMemoryViewerState("fallback")}
+                  onLoad={() => setMemoryViewerState("embedded")}
+                />
+              ) : (
+                <div className="grid min-h-[360px] place-items-center p-6 text-center">
+                  <div className="max-w-xl">
+                    <div className="text-lg font-black" style={{ color: "var(--th-text-primary)" }}>AgentMemory Viewer 대기 중</div>
+                    <p className="mt-2 text-sm leading-6" style={{ color: "var(--th-text-secondary)" }}>
+                      현재 `3111/3113` 런타임이 연결되지 않았거나 Viewer 내부 표시가 차단되어 있습니다. 이 화면은 비워두지 않고 아래 안전 작업대로 검색, 컨텍스트 회수, 승인 기반 기억 저장을 처리합니다.
+                    </p>
+                    <div className="mt-4 flex flex-wrap justify-center gap-2">
+                      <Pill ok={false}>설치/시작 차단</Pill>
+                      <Pill ok={false}>MCP 연결 차단</Pill>
+                      <Pill ok={false}>전역 hooks 차단</Pill>
+                      <Pill ok={false}>대화 원문 수집 차단</Pill>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </Panel>
 
-          <Panel title="Search / Context / Remember" eyebrow="department and project scopes">
+          <Panel title="안전 작업대" eyebrow="검색 / 컨텍스트 / 기억 저장">
             <div className="grid gap-3">
-              <div className="grid gap-2 md:grid-cols-[1fr_260px]">
+              <div className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-muted)", color: "var(--th-text-secondary)" }}>
+                <div className="font-semibold" style={{ color: "var(--th-text-primary)" }}>Runtime 연결 게이트</div>
+                <div className="mt-1">AgentMemory runtime start/connect는 {state.memory.approval_gate.runtime_connect_required_approval} 없이는 실행하지 않습니다.</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Pill ok={state.memory.approval_gate.runtime_connect_allowed}>런타임 연결</Pill>
+                  <Pill ok={memoryRememberAllowed}>기억 저장 승인</Pill>
+                  {state.memory.approval_gate.blocked_operations.slice(0, 4).map((operation) => (
+                    <Pill key={operation} ok={false}>{formatBlockedOperation(operation)} 차단</Pill>
+                  ))}
+                </div>
+              </div>
+
+              <label className="grid gap-1 text-sm font-semibold" style={{ color: "var(--th-text-primary)" }}>
+                검색어 또는 컨텍스트 질문
                 <input
                   value={memoryQuery}
                   onChange={(event) => setMemoryQuery(event.target.value)}
-                  placeholder="메모리 검색어 또는 context 질문"
-                  className="min-w-0 rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+                  placeholder="예: active spec memory policy"
+                  className="min-w-0 rounded-lg border px-3 py-2 text-sm font-normal outline-none focus:border-cyan-400/60"
                   style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
                 />
+              </label>
+
+              <label className="grid gap-1 text-sm font-semibold" style={{ color: "var(--th-text-primary)" }}>
+                범위
                 <select
                   value={memoryScope}
                   onChange={(event) => setMemoryScope(event.target.value)}
-                  className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+                  className="rounded-lg border px-3 py-2 text-sm font-normal outline-none focus:border-cyan-400/60"
                   style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
                 >
                   {memoryScopes.map((scope) => (
-                    <option key={scope} value={scope}>{scope}</option>
+                    <option key={scope} value={scope}>{formatMemoryScopeLabel(scope)}</option>
                   ))}
                 </select>
-              </div>
-              <div className="flex flex-wrap gap-2">
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void runAction(async () => setMemoryResult(await searchAgentMemoryFunctional({ query: memoryQuery, scope: memoryScope })))}
-                  className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  className="rounded-lg border px-3 py-2 text-sm font-semibold transition active:translate-y-px disabled:opacity-50"
                   style={{ borderColor: "var(--th-border)", color: "var(--th-text-primary)" }}
                 >
-                  Smart Search
+                  스마트 검색
                 </button>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void runAction(async () => setMemoryContextResult(await getAgentMemoryContext({ query: memoryQuery, scope: memoryScope })))}
-                  className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  className="rounded-lg border px-3 py-2 text-sm font-semibold transition active:translate-y-px disabled:opacity-50"
                   style={{ borderColor: "var(--th-border)", color: "var(--th-text-primary)" }}
                 >
-                  Context Recall
+                  컨텍스트 회수
                 </button>
               </div>
-              <textarea
-                value={memoryCaptureText}
-                onChange={(event) => setMemoryCaptureText(event.target.value)}
-                placeholder="승인된 범위 안에서 기록할 운영 메모를 입력하세요."
-                rows={4}
-                className="min-h-24 rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
-                style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
-              />
+
+              <label className="grid gap-1 text-sm font-semibold" style={{ color: "var(--th-text-primary)" }}>
+                승인된 운영 메모
+                <textarea
+                  value={memoryCaptureText}
+                  onChange={(event) => setMemoryCaptureText(event.target.value)}
+                  placeholder="승인된 범위 안에서 기록할 운영 메모를 입력하세요."
+                  rows={4}
+                  className="min-h-24 rounded-lg border px-3 py-2 text-sm font-normal outline-none focus:border-cyan-400/60"
+                  style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                />
+              </label>
+
+              <label className="grid gap-1 text-sm font-semibold" style={{ color: "var(--th-text-primary)" }}>
+                증거 ID
+                <input
+                  value={memoryEvidenceRef}
+                  onChange={(event) => setMemoryEvidenceRef(event.target.value)}
+                  placeholder="예: EV-MEM-SUMMARY"
+                  className="min-w-0 rounded-lg border px-3 py-2 text-sm font-normal outline-none focus:border-cyan-400/60"
+                  style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                />
+              </label>
+
               <button
                 type="button"
-                disabled={busy || !memoryCaptureText.trim()}
+                disabled={busy || !memoryRememberAllowed || !memoryCaptureText.trim() || !memoryEvidenceRef.trim()}
                 onClick={() =>
                   void runAction(async () => {
                     if (!window.confirm("APR-MEM-001 범위 안에서만 메모리를 저장합니다. delete/forget/import/hook 작업은 실행하지 않습니다.")) return;
+                    const evidenceRefs = memoryEvidenceRef
+                      .split(/[,;]/)
+                      .map((item) => item.trim())
+                      .filter(Boolean);
                     setMemoryRememberResult(
                       await rememberAgentMemory({
                         text: memoryCaptureText,
                         scope: memoryScope,
                         spec_id: state.active_spec.id ?? undefined,
                         source_ref: "Dongri-grigri Office Control Platform",
+                        evidence_refs: evidenceRefs,
                         confirm: "remember-to-agentmemory",
                       }),
                     );
                   })
                 }
-                className="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-700 disabled:opacity-50 dark:text-cyan-100"
+                className="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-700 transition active:translate-y-px disabled:opacity-50 dark:text-cyan-100"
               >
-                Remember 저장
+                기억 저장
               </button>
+
+              {memoryRememberDisabledReason && (
+                <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-100">
+                  {memoryRememberDisabledReason} 필요한 승인: `APR-MEM-001`. 증거 ID 예시: `EV-MEM-SUMMARY`.
+                </div>
+              )}
+
+              <div className="grid gap-2">
+                <MemoryResultCard title="검색 결과" result={memoryResult} payloadKey="results" />
+                <MemoryResultCard title="컨텍스트 요약" result={memoryContextResult} payloadKey="context" />
+                <MemoryResultCard title="기억 저장 결과" result={memoryRememberResult} payloadKey="result" />
+              </div>
+
               {(memoryResult || memoryContextResult || memoryRememberResult) && (
-                <pre className="max-h-72 overflow-auto rounded-lg border p-3 text-xs" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-secondary)" }}>
-                  {JSON.stringify({ search: memoryResult, context: memoryContextResult, remember: memoryRememberResult }, null, 2)}
-                </pre>
+                <details className="rounded-lg border p-3 text-xs" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-secondary)" }}>
+                  <summary className="cursor-pointer font-semibold" style={{ color: "var(--th-text-primary)" }}>디버그 응답 보기</summary>
+                  <pre className="mt-3 max-h-72 overflow-auto">
+                    {JSON.stringify({ search: memoryResult, context: memoryContextResult, remember: memoryRememberResult }, null, 2)}
+                  </pre>
+                </details>
               )}
             </div>
           </Panel>

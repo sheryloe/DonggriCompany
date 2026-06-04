@@ -1,10 +1,16 @@
 import type { Agent, Department } from "../../types";
+import {
+  OFFICE_ROLE_SPACE_LABELS,
+  type OfficeRoleSpaceId,
+  type OfficeRoleSpaceLayout,
+} from "./officeActivitySpaces";
 
 const CEO_ZONE_H = 110;
 const HALLWAY_H = 32;
 const COLS_PER_ROW = 3;
 const SLOT_H = 120;
-const SHARED_FLOOR_H = 176;
+const SHARED_FLOOR_H = 142;
+const ACTIVITY_FLOOR_H = 214;
 const ROOFTOP_FLOOR_H = 132;
 const BREAK_ROOM_GAP = 32;
 const FLOOR_GAP = 24;
@@ -15,7 +21,7 @@ const MIN_ROOM_W = 304;
 const DESKTOP_TRANSPORT_CORE_W = 112;
 const MIN_WIDE_OFFICE_W = 1180;
 
-export type OfficeFloorId = "shared" | "rooftop" | "strategy" | "production" | "quality";
+export type OfficeFloorId = "shared" | "activity" | "rooftop" | "strategy" | "production" | "quality";
 
 export interface OfficeRoomLayout {
   deptId: string;
@@ -62,14 +68,16 @@ export interface OfficeTransportCoreLayout {
 export interface OfficeFloorPlan {
   totalH: number;
   sharedFloorY: number;
+  activityFloorY: number;
   transportCore: OfficeTransportCoreLayout | null;
   roomLayouts: Map<string, OfficeRoomLayout>;
   sharedFacilities: SharedFacilityLayout[];
+  roleSpaces: OfficeRoleSpaceLayout[];
   floorBands: OfficeFloorBand[];
 }
 
 const FLOOR_DEPARTMENTS: Array<{
-  id: Exclude<OfficeFloorId, "shared" | "rooftop">;
+  id: Exclude<OfficeFloorId, "shared" | "activity" | "rooftop">;
   label: string;
   level: string;
   departments: string[];
@@ -154,6 +162,32 @@ function createFacilityLayouts(
   });
 }
 
+function createRoleSpaceLayouts(params: { usableW: number; floorY: number; floorH: number }): OfficeRoleSpaceLayout[] {
+  const { usableW, floorY, floorH } = params;
+  const roleSpaceIds: OfficeRoleSpaceId[] = ["work-bay", "meeting-room", "ops-corner", "study-room"];
+  const cols = usableW >= 940 ? 4 : 2;
+  const rows = countRows(roleSpaceIds.length, cols);
+  const gap = 14;
+  const spaceW = Math.floor((usableW - SIDE_PAD * 2 - (cols - 1) * gap) / cols);
+  const spaceH = Math.floor((floorH - FLOOR_LABEL_H - 16 - (rows - 1) * gap) / rows);
+
+  return roleSpaceIds.map((id, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const meta = OFFICE_ROLE_SPACE_LABELS[id];
+    return {
+      id,
+      label: meta.label,
+      caption: meta.caption,
+      x: SIDE_PAD + col * (spaceW + gap),
+      y: floorY + FLOOR_LABEL_H + 10 + row * (spaceH + gap),
+      w: spaceW,
+      h: spaceH,
+      accent: meta.accent,
+    };
+  });
+}
+
 export function buildOfficeFloorPlan(params: {
   officeW: number;
   departments: Department[];
@@ -166,18 +200,20 @@ export function buildOfficeFloorPlan(params: {
   const floorBands: OfficeFloorBand[] = [];
   const sharedFloorY = CEO_ZONE_H + HALLWAY_H + 4;
   const sharedFloorH = SHARED_FLOOR_H;
-  const rooftopFloorY = sharedFloorY + sharedFloorH + 18;
+  const activityFloorY = sharedFloorY + sharedFloorH + 18;
+  const activityFloorH = ACTIVITY_FLOOR_H;
+  const rooftopFloorY = activityFloorY + activityFloorH + 18;
   const rooftopFloorH = ROOFTOP_FLOOR_H;
   const baseSharedFacilities: Array<Pick<SharedFacilityLayout, "id" | "label">> = [
     { id: "lobby", label: "입구" },
-    { id: "break", label: "휴게실" },
-    { id: "memory", label: "기억 서고" },
     { id: "project-board", label: "프로젝트 보드" },
+    { id: "memory", label: "기억 서고" },
+    { id: "break", label: "휴게 구역" },
   ];
   const baseRooftopFacilities: Array<Pick<SharedFacilityLayout, "id" | "label">> = [
     { id: "smoking", label: "전망 휴게" },
-    { id: "roof-garden", label: "식물 정원" },
-    { id: "roof-lounge", label: "리뷰 테라스" },
+    { id: "roof-garden", label: "옥상 정원" },
+    { id: "roof-lounge", label: "리뷰 라운지" },
   ];
   const sharedFacilities: SharedFacilityLayout[] = [
     ...createFacilityLayouts(baseSharedFacilities, {
@@ -193,6 +229,7 @@ export function buildOfficeFloorPlan(params: {
       columns: usableW >= 720 ? 3 : 1,
     }),
   ];
+  const roleSpaces = createRoleSpaceLayouts({ usableW, floorY: activityFloorY, floorH: activityFloorH });
 
   floorBands.push({
     id: "shared",
@@ -201,6 +238,14 @@ export function buildOfficeFloorPlan(params: {
     y: sharedFloorY,
     h: sharedFloorH,
     accent: 0xf59e0b,
+  });
+  floorBands.push({
+    id: "activity",
+    label: "역할 활동 구역",
+    level: "활동",
+    y: activityFloorY,
+    h: activityFloorH,
+    accent: 0x38bdf8,
   });
   floorBands.push({
     id: "rooftop",
@@ -307,9 +352,11 @@ export function buildOfficeFloorPlan(params: {
   return {
     totalH: cursorY + 20,
     sharedFloorY,
+    activityFloorY,
     transportCore,
     roomLayouts,
     sharedFacilities,
+    roleSpaces,
     floorBands,
   };
 }

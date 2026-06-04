@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" shape-rendering="crispEdges">
+  <rect width="256" height="256" fill="#0b1f24"/>
+  <g id="tile-grass">
+    <rect x="8" y="8" width="32" height="32" fill="#1f5f3b"/>
+    <rect x="8" y="8" width="16" height="16" fill="#267348"/>
+    <rect x="28" y="18" width="4" height="4" fill="#8bd17c"/>
+  </g>
+  <g id="tile-road">
+    <rect x="48" y="8" width="32" height="32" fill="#8b6b3f"/>
+    <rect x="48" y="12" width="32" height="4" fill="#b7833d"/>
+    <rect x="60" y="24" width="8" height="4" fill="#d6a24a"/>
+  </g>
+  <g id="castle">
+    <rect x="16" y="64" width="48" height="36" fill="#9aa8ba"/>
+    <rect x="8" y="76" width="16" height="28" fill="#7f8da0"/>
+    <rect x="56" y="76" width="16" height="28" fill="#7f8da0"/>
+    <polygon points="16,56 8,72 24,72" fill="#2563eb"/>
+    <polygon points="64,56 56,72 72,72" fill="#2563eb"/>
+    <rect x="34" y="84" width="12" height="20" fill="#172554"/>
+  </g>
+  <g id="guild">
+    <rect x="96" y="72" width="44" height="32" fill="#256f8a"/>
+    <polygon points="90,72 118,48 146,72" fill="#38bdf8"/>
+    <rect x="112" y="88" width="12" height="16" fill="#0f172a"/>
+  </g>
+  <g id="forge">
+    <rect x="160" y="72" width="44" height="32" fill="#1f7a45"/>
+    <polygon points="154,72 182,48 210,72" fill="#22c55e"/>
+    <rect x="172" y="88" width="12" height="16" fill="#0f172a"/>
+    <rect x="196" y="56" width="8" height="16" fill="#334155"/>
+  </g>
+  <g id="tower">
+    <rect x="24" y="144" width="24" height="56" fill="#0f766e"/>
+    <circle cx="36" cy="132" r="10" fill="none" stroke="#2dd4bf" stroke-width="4"/>
+    <path d="M36 144 L16 204 L56 204 Z" fill="none" stroke="#2dd4bf" stroke-width="3"/>
+  </g>
+  <g id="archive">
+    <rect x="88" y="152" width="52" height="40" fill="#4f46e5"/>
+    <rect x="96" y="160" width="36" height="6" fill="#c4b5fd"/>
+    <rect x="96" y="174" width="36" height="6" fill="#c4b5fd"/>
+    <rect x="96" y="188" width="36" height="6" fill="#c4b5fd"/>
+  </g>
+  <g id="flag">
+    <rect x="176" y="144" width="4" height="48" fill="#334155"/>
+    <rect x="180" y="148" width="28" height="16" fill="#f59e0b"/>
+    <rect x="200" y="164" width="8" height="8" fill="#fbbf24"/>
+  </g>
+</svg>

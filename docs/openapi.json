@@ -59,6 +59,17 @@
         "type": "apiKey",
         "in": "header",
         "name": "x-inbox-secret"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sid"
+      },
+      "csrfHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-csrf-token",
+        "description": "Required for cookie-authenticated mutation requests."
       }
     },
     "schemas": {
@@ -700,6 +711,18 @@
           }
         }
       }
+    },
+    "parameters": {
+      "LocalControlPlaneMutationOrigin": {
+        "name": "Origin",
+        "in": "header",
+        "required": true,
+        "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+        "schema": {
+          "type": "string",
+          "enum": ["http://127.0.0.1:8800", "http://localhost:8800", "http://127.0.0.1:8810", "http://localhost:8810"]
+        }
+      }
     }
   },
   "paths": {
@@ -861,6 +884,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -1190,6 +1217,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -1379,6 +1410,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -1542,6 +1577,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -1976,6 +2015,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -2159,6 +2202,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -2468,6 +2515,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -2639,6 +2690,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -2814,6 +2869,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -3168,6 +3227,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -3951,6 +4014,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -4730,6 +4797,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -5094,6 +5165,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -5398,6 +5473,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -5585,6 +5664,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -5748,6 +5831,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -5933,6 +6020,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -6176,6 +6267,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -7479,6 +7574,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -7642,6 +7741,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -7789,6 +7892,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -8345,6 +8452,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -8700,6 +8811,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -8891,6 +9006,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -9067,6 +9186,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -9377,6 +9500,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -9847,6 +9974,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -10198,6 +10329,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -10380,6 +10515,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -11042,6 +11181,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -11464,6 +11607,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -12030,6 +12177,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -12206,6 +12357,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -12640,6 +12795,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -12953,6 +13112,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -13125,6 +13288,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -13296,6 +13463,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -13744,6 +13915,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -14217,6 +14392,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -14522,6 +14701,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -14823,6 +15006,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -14993,6 +15180,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -15150,6 +15341,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -15510,6 +15705,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -15692,6 +15891,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -16080,6 +16283,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -16263,6 +16470,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -16444,6 +16655,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -16601,6 +16816,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -16778,6 +16997,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -17187,6 +17410,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -17387,6 +17614,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -17554,6 +17785,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -18129,6 +18364,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -18363,6 +18602,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -18916,6 +19159,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -19139,6 +19386,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -19356,6 +19607,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "parameters": [
@@ -20345,6 +20600,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ]
       }
@@ -20502,6 +20761,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ]
       }
@@ -22491,6 +22754,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -22640,7 +22907,25 @@
               "example": {}
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/sync/apply": {
@@ -22650,6 +22935,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -22801,7 +23090,25 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/runs/prepare": {
@@ -22811,6 +23118,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -22963,7 +23274,25 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/runs/{runId}/start": {
@@ -22973,6 +23302,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -23119,6 +23452,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -23132,7 +23480,8 @@
               "example": {}
             }
           }
-        }
+        },
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/runs/{runId}/personas": {
@@ -23142,6 +23491,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -23288,6 +23641,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -23305,7 +23673,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/personas/{personaId}/decision": {
@@ -23315,6 +23684,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -23461,6 +23834,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -23477,7 +23865,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/hooks/evaluate": {
@@ -23487,6 +23876,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "responses": {
@@ -23638,7 +24031,25 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/project-operators": {
@@ -24173,6 +24584,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -24322,7 +24737,25 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/project-operators/sync/apply": {
@@ -24332,6 +24765,10 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
         ],
         "requestBody": {
@@ -24483,7 +24920,25 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/memory/agentmemory/capabilities": {
@@ -24991,8 +25446,30 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/memory/agentmemory/context": {
@@ -25227,8 +25704,30 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     },
     "/api/control-plane/v1/memory/agentmemory/remember": {
@@ -25503,8 +26002,764 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
+      }
+    },
+    "/api/control-plane/v1/harness/blueprints/status": {
+      "get": {
+        "tags": ["control-plane"],
+        "summary": "Read Harness blueprint draft status",
+        "responses": {
+          "200": {
+            "description": "Read Harness blueprint draft status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
           }
         ]
+      }
+    },
+    "/api/control-plane/v1/harness/blueprints/preview": {
+      "post": {
+        "tags": ["control-plane"],
+        "summary": "Preview a Donggri-native Harness blueprint without writes",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target_mode": {
+                    "type": "string",
+                    "enum": ["department", "project", "both"]
+                  },
+                  "project_key": {
+                    "type": "string"
+                  },
+                  "objective": {
+                    "type": "string"
+                  },
+                  "preferred_pattern": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "pipeline",
+                      "fan-out-fan-in",
+                      "expert-pool",
+                      "producer-reviewer",
+                      "supervisor",
+                      "hierarchical-delegation"
+                    ]
+                  },
+                  "evidence_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["target_mode", "objective"],
+                "additionalProperties": false
+              },
+              "example": {
+                "target_mode": "both",
+                "project_key": "DonggriCompany",
+                "objective": "Design a Donggri-native agent harness blueprint",
+                "preferred_pattern": "auto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preview a Harness blueprint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
+      }
+    },
+    "/api/control-plane/v1/harness/blueprints/drafts": {
+      "post": {
+        "tags": ["control-plane"],
+        "summary": "Save a Harness blueprint draft with meta approval",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target_mode": {
+                    "type": "string",
+                    "enum": ["department", "project", "both"]
+                  },
+                  "project_key": {
+                    "type": "string"
+                  },
+                  "objective": {
+                    "type": "string"
+                  },
+                  "preferred_pattern": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "pipeline",
+                      "fan-out-fan-in",
+                      "expert-pool",
+                      "producer-reviewer",
+                      "supervisor",
+                      "hierarchical-delegation"
+                    ]
+                  },
+                  "evidence_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["target_mode", "objective"],
+                "additionalProperties": false
+              },
+              "example": {
+                "target_mode": "both",
+                "project_key": "DonggriCompany",
+                "objective": "Design a Donggri-native agent harness blueprint",
+                "preferred_pattern": "auto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Save a Harness blueprint draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
+      }
+    },
+    "/api/control-plane/v1/harness/blueprints/{id}/apply": {
+      "post": {
+        "tags": ["control-plane"],
+        "summary": "Attempt to apply a Harness blueprint after explicit apply approval",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http://127.0.0.1:8800",
+                "http://localhost:8800",
+                "http://127.0.0.1:8810",
+                "http://localhost:8810"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Apply a Harness blueprint when separately approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "description": "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header."
       }
     }
   }

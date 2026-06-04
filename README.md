@@ -1,51 +1,62 @@
 # Dongri-grigri
 
-Dongri-grigri는 `G:\Donggri_DevDrive` 전체 프로젝트 포트폴리오를 한 화면에서 운영하기 위한 local-first 오피스 Control Platform입니다. 개별 repo를 각각 Codex 프로젝트처럼 흩어서 다루지 않고, root Control Plane 문서와 Codex 앱 상태를 기준으로 `G:\Donggri_DevDrive\repos` 아래 저장소들을 함께 관리합니다.
+Dongri-grigri is the local-first operating console for the Donggri DevDrive Control Plane.
 
-첫 화면은 8bit 오피스 운영실입니다. Control Plane, Kiro식 SDD 구조, AgentMemory, Skill 후보, 프로젝트 scope, 업무 실행 기록은 별도 앱처럼 분리되지 않고 이 운영실 안에서 투영됩니다.
+It turns the root workspace at `G:\Donggri_DevDrive` into a visible office: specs, approvals, project scopes, Codex runner state, AgentMemory readiness, review gates, and operational evidence are shown in one app instead of being scattered across files and terminals.
 
-## 기준
+The important boundary is simple:
 
-| 항목 | 값 |
-|---|---|
-| Control root | `G:\Donggri_DevDrive` |
-| Repo estate root | `G:\Donggri_DevDrive\repos` |
-| Runtime app repo | `G:\Donggri_DevDrive\repos\DonggriCompany` |
-| Control docs | `G:\Donggri_DevDrive\storage\codex-control` |
-| Runtime DB | `data\claw-empire.sqlite` |
-| Web | `http://127.0.0.1:8800` |
-| API | `http://127.0.0.1:8790` |
+- `G:\Donggri_DevDrive\storage\codex-control` is the source of truth.
+- Dongri-grigri reads and projects that source of truth into an operator UI.
+- Codex app settings, OAuth state, tokens, secrets, and raw transcripts are not owned or replaced by Dongri-grigri.
+- Git, Docker, database resets, deploys, and secret changes require explicit approval.
 
-## Ver.1 운영 모델
+## What This App Is
 
-Dongri-grigri Ver.1은 6개 마스터 부서 에이전트를 기본 단위로 사용합니다.
+Dongri-grigri is not a separate project root. It is a runtime and projection layer for the single Donggri Control Plane.
 
-| 부서 | 역할 |
-|---|---|
-| 기획 | 요구사항, 설계, task, 승인 체크리스트 작성 |
-| 개발 | 승인된 task와 repo-map 범위 안에서 구현 |
-| 디자인 | 운영실 UX, 한글 가독성, 테마, 접근성 관리 |
-| 품질 | 테스트, 회귀 검증, evidence, release gate 관리 |
-| 운영 | 단일 프로젝트 운영 에이전트. project scope를 바꿔 각 repo를 운영 |
-| 외부강사 | GitHub 고 star 오픈소스와 Skill 후보를 읽기 전용으로 조사 |
+The first screen is an office-style operations dashboard. The goal is to make the system feel like a working company floor:
 
-서브에이전트는 permanent 직원이 아닙니다. 각 마스터 부서 에이전트가 작업 단위로 만들고, 결과를 회수한 뒤 accept/reject/recreate/merge를 결정합니다. repo code write는 개발 부서가 승인된 task와 allowed files 안에서만 수행합니다.
+- department zones for planning, development, design, quality, operations, and instructor work
+- role activity spaces for focused work, meetings, operations, study, memory, and breaks
+- a small OPS control corner with project scope boards
+- Codex runner and account-pool status surfaced as operational state, not hidden shell trivia
+- AgentMemory shown as a safe workbench with approval gates
+- Control Plane specs, evidence, handoff, and quality checks visible without opening raw files
 
-## Root Control SDD
+## Operating Model
 
-Dongri-grigri는 Kiro식 SDD 구조를 Donggri native 구조로 재구성합니다. `.kiro` 폴더나 Kiro runtime은 사용하지 않습니다.
+Donggri Root Control SDD Ver.1 uses six persistent department agents:
 
-| SDD 축 | Dongri-grigri 위치 |
-|---|---|
-| Specs | `storage\codex-control\specs` |
-| Steering | `storage\codex-control\steering` |
-| Hooks | `storage\codex-control\hooks` |
-| Orchestrator | `storage\codex-control\orchestrator` |
-| Context Pack | `storage\codex-control\context-packs` |
-| Quality Gate | `storage\codex-control\quality` |
-| App Projection | DonggriCompany office UI/API |
+| Department | Responsibility |
+| --- | --- |
+| CONTROL | root state, routing, approval ledger, quality gate |
+| SPEC | requirements, design, tasks, repo map, approval documents |
+| EXPLORE | read-only investigation and context recovery |
+| IMPLEMENT | approved code and document changes inside allowed paths |
+| REVIEW | findings-first review, risk checks, test gaps |
+| OPS | runtime, Git, Docker, account pools, evidence, handoff |
 
-비 trivial 작업은 다음 문서로 관리합니다.
+OPS is the single persistent project operations agent. Projects such as `DonggriCompany`, `BloggerGent`, `JasoSul`, and `dangyang_ssaju` are OPS project scopes, not separate permanent operations agents.
+
+Persona subagents may be created for one bounded task, but they are disposable helpers. They do not become permanent staff, cannot spawn other personas, and their outputs must be accepted, rejected, recreated, or merged by the parent department agent.
+
+## Control Plane Layout
+
+The source-of-truth documents live outside this repository:
+
+| Area | Path |
+| --- | --- |
+| Registry | `G:\Donggri_DevDrive\storage\codex-control\registry` |
+| Active specs | `G:\Donggri_DevDrive\storage\codex-control\specs` |
+| Steering | `G:\Donggri_DevDrive\storage\codex-control\steering` |
+| Hooks policy | `G:\Donggri_DevDrive\storage\codex-control\hooks` |
+| Orchestrator policy | `G:\Donggri_DevDrive\storage\codex-control\orchestrator` |
+| Context packs | `G:\Donggri_DevDrive\storage\codex-control\context-packs` |
+| Quality gates | `G:\Donggri_DevDrive\storage\codex-control\quality` |
+| Integrations | `G:\Donggri_DevDrive\storage\codex-control\integrations` |
+
+Non-trivial work is tracked with SDD documents:
 
 - `metadata.md`
 - `requirements.md`
@@ -57,20 +68,78 @@ Dongri-grigri는 Kiro식 SDD 구조를 Donggri native 구조로 재구성합니�
 - `handoff.md`
 - `learnings.md`
 
-## AgentMemory
+Dongri-grigri may display these documents and their projections. It must not replace them as the source of truth.
 
-AgentMemory는 플랫폼 메모리 계층입니다. Ver.1에서는 안전하게 read-only status/search/context 중심으로 연결합니다.
+## Main Features
 
-| 항목 | 기준 |
-|---|---|
-| Runtime candidate | `G:\Donggr_Runtime\agentmemory` |
-| Server | `127.0.0.1:3111` |
-| Viewer | `127.0.0.1:3113` |
-| Scope | `root`, `department:<id>`, `project:<key>`, `run:<id>`, `persona:<id>` |
+### Office Operations Dashboard
 
-`remember`, hook 연결, MCP/plugin 설치, delete/forget/import는 별도 OPS 승인 전에는 실행하지 않습니다.
+The `office` route is the main experience. It is a 2D office dashboard with practical work areas rather than a raw data table.
 
-## 시작
+Current office concepts include:
+
+- master department zones
+- work seats with monitors, tickets, and desk islands
+- meeting room with agenda and attendance signals
+- OPS corner with server racks, monitor wall, and project boards
+- learning and memory areas
+- reduced lounge footprint so the screen reads as a working office
+
+### Control Plane Console
+
+The Control Plane view exposes the root operating state:
+
+- active spec and previous specs
+- approval ledger status
+- project registry projection
+- department agent model
+- run and persona evidence
+- quality/audit signals
+- harness blueprint previews and draft gating
+- stale/current Codex thread relationship state
+
+Mutation routes are guarded and should require the appropriate approval class.
+
+### Codex Runtime and Account Pools
+
+Dongri-grigri can show Codex-oriented CLI account pools and runner readiness. This is an operational view over local execution state.
+
+It does not replace the Codex app's own settings. Codex app login, model choice, native settings, plugins, MCP configuration, and local app state remain Codex app concerns.
+
+Docker mode mounts Codex multi-auth storage read-only when configured:
+
+```text
+${USERPROFILE}/.codex/multi-auth:/home/app/.codex/multi-auth:ro
+```
+
+Per-run account profiles are stored under the runtime account directory, not inside source code:
+
+```text
+${DONGGRI_RUNTIME_ROOT}/office-accounts
+```
+
+### AgentMemory Workbench
+
+AgentMemory is a memory layer, not the source of truth.
+
+The Memory tab is designed as an internal workbench:
+
+- embeds the AgentMemory Viewer at `127.0.0.1:3113` when available
+- falls back to a safe proxy workbench when the Viewer is offline or blocked
+- keeps search/context/remember flows scoped and approval-aware
+- blocks runtime start/connect, MCP hooks, global capture, delete, forget, import, and raw transcript capture unless separately approved
+
+Runtime candidates:
+
+| Item | Candidate |
+| --- | --- |
+| Runtime path | `G:\Donggr_Runtime\agentmemory` |
+| Server | `http://127.0.0.1:3111` |
+| Viewer | `http://127.0.0.1:3113` |
+
+## Local Development
+
+Use PowerShell from the repository root:
 
 ```powershell
 Set-Location G:\Donggri_DevDrive\repos\DonggriCompany
@@ -78,87 +147,130 @@ corepack pnpm install
 corepack pnpm run dev:local
 ```
 
-상태 확인:
+Default local development endpoints:
+
+| Surface | URL |
+| --- | --- |
+| Web | `http://127.0.0.1:8800` |
+| API | `http://127.0.0.1:8790` |
+
+Health check:
 
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8790/api/health" | ConvertTo-Json -Compress
 ```
 
-## DB 초기화
+## Docker
 
-앱 내부 운영 이력을 Ver.1 시작점으로 비울 때 사용합니다. 이 명령은 repo 파일이나 저장소를 삭제하지 않습니다. 실행 전 SQLite DB/WAL/SHM 백업을 `data\backups\` 아래에 만듭니다.
+Docker is available for local operation, but it is not the default safe action.
+
+Before starting Docker, inspect the generated compose configuration:
 
 ```powershell
-corepack pnpm run db:reset:dongri
+Set-Location G:\Donggri_DevDrive\repos\DonggriCompany
+docker compose config
 ```
 
-초기화 범위:
+Start the container only when Docker execution is approved:
 
-- 비움: app domain `projects`, `tasks`, messages, meeting minutes, task logs, local app memories, previous `control_plane_*` projection
-- 재생성: 6개 마스터 부서, 6개 마스터 에이전트, root registry projection snapshot
-- 보존: `settings`, OAuth tables, API provider rows, CLI account pools, workflow packs, repo source files
+```powershell
+docker compose up -d --build
+```
 
-## 검증
+Docker endpoint:
+
+```text
+http://127.0.0.1:8900
+```
+
+Docker runtime state is mounted outside the source tree through `DONGGRI_RUNTIME_ROOT`:
+
+```text
+data/
+office-accounts/
+worktrees/
+```
+
+Do not commit runtime data, logs, DB files, OAuth material, token files, or generated account profiles.
+
+## Verification
+
+Recommended checks after meaningful changes:
 
 ```powershell
 corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false
-corepack pnpm run test:web -- ControlPlanePage Sidebar.app-shell
 corepack pnpm run test:api -- control-plane seeds
+corepack pnpm run test:web -- ControlPlanePage Sidebar.app-shell ManualLibrary TaskBoard SkillsLibrary
 corepack pnpm run openapi:check
 corepack pnpm run build
 ```
 
-Root SDD 품질 게이트:
+Office dashboard focused checks:
+
+```powershell
+corepack pnpm run test:web -- OfficeView officeFloorPlan officeTextIntegrity officeActivitySpaces
+```
+
+Root Control Plane quality check:
 
 ```powershell
 node G:\Donggri_DevDrive\tools\control-plane\spec-quality.mjs score --control-root G:\Donggri_DevDrive\storage\codex-control --min-score 95 --fail-on-hard-gate
 ```
 
-## API 요약
+## Important Safety Rules
 
-| 영역 | Endpoint |
-|---|---|
-| Health | `GET /api/health` |
-| Control Plane state | `GET /api/control-plane/v1/state` |
-| 마스터 부서 | `GET /api/control-plane/v1/agents/departments` |
-| Context pack | `GET /api/control-plane/v1/context-pack` |
-| Runner | `POST /api/control-plane/v1/runs/prepare` |
-| Persona | `POST /api/control-plane/v1/runs/:runId/personas` |
-| Memory | `GET /api/control-plane/v1/memory/status`, `GET /api/control-plane/v1/memory/search` |
-| Skills | `GET /api/control-plane/v1/instructor/open-source/candidates` |
-| Tasks | `GET /api/tasks`, `POST /api/tasks` |
-| Projects | `GET /api/projects`, `POST /api/projects` |
+- Do not use `D:` for project work.
+- Do not treat `repos\DonggriCompany` as the root Control Plane.
+- Do not create `.kiro` or depend on Kiro runtime.
+- Do not expose `.env`, auth files, OAuth tokens, refresh tokens, API keys, private keys, passwords, or raw transcripts.
+- Do not run DB resets, Docker up/down/restart/build, deploys, Git history operations, cleanup, or deletes without explicit approval.
+- Preserve unrelated dirty worktree changes.
+- Keep generated screenshots, logs, DB files, coverage, `dist`, `.tmp`, and runtime artifacts out of commits.
 
-보호 API는 session 또는 token 인증이 필요합니다. `.env`, DB, 로그, token/key/credential 파일은 저장소에 포함하지 않습니다.
+## Repository Map
 
-## 저장소 구조
+| Path | Purpose |
+| --- | --- |
+| `server/` | Express API, SQLite schema, runner services, Control Plane projection |
+| `src/` | React/Vite frontend |
+| `src/components/OfficeView.tsx` | main office dashboard shell |
+| `src/components/office-view/` | Pixi office scene, layout, activity, density, and text integrity models |
+| `src/components/ControlPlanePage.tsx` | Control Plane detail console |
+| `src/components/settings/` | OAuth, CLI pool, provider, and runtime settings UI |
+| `scripts/` | verification, OpenAPI, reset, and operational helper scripts |
+| `docs/` | architecture, API, operations, security, release, and analysis notes |
+| `public/` | static app assets and office sprites |
 
-| 경로 | 설명 |
-|---|---|
-| `server/` | Node/Express API, SQLite runtime, Control Plane projection |
-| `src/` | React/Vite UI |
-| `src/components/OfficeView.tsx` | 8bit office main surface |
-| `src/components/ControlPlanePage.tsx` | root Control Plane 상세 투영 |
-| `scripts/reset-dongri-grigri-runtime-db.mjs` | Ver.1 DB soft reset tool |
-| `docs/` | architecture, API, 품질 기록 |
-| `public/dongri-grigri.svg` | app icon asset |
+## Reset Policy
 
-커밋 제외:
+When the app state must be reset, use the approved soft reset script only:
 
-- `.env`
-- `data/`
-- `logs/`
-- `dist/`
-- `coverage/`
-- `.tmp/`
-- `test-results/`
-- token, key, credential, password, private auth material
+```powershell
+corepack pnpm run db:reset:dongri
+```
 
-## Git 운영
+The reset is intended for application DB state, not source files.
 
-기본 원칙은 검증 후 commit/push입니다. reset, rebase, force push, clean, stash, history rewrite는 명시 승인 없이는 하지 않습니다.
+Preserve unless explicitly approved otherwise:
 
-이번 Ver.1 시작점 정리에서는 사용자가 정상 commit/push를 승인했습니다.
+- repo files
+- Git history
+- settings required to run the app
+- OAuth/API provider/CLI account configuration
+- root Control Plane documents
+- secrets and auth material
+
+## Git Policy
+
+Commit and push only after:
+
+1. the user explicitly approves Git operations,
+2. relevant checks pass or skipped checks are clearly explained,
+3. staged files are reviewed,
+4. secret-pattern scan is clean,
+5. generated/runtime artifacts are excluded.
+
+Never run `reset`, `rebase`, `stash`, `clean`, `restore`, force push, or history rewrite without explicit approval.
 
 ## License
 

@@ -90,20 +90,28 @@ export default function AppHeaderBar({
   };
 
   return (
-    <header className="app-topbar sticky top-0 z-30 flex items-center justify-between px-3 py-2 sm:px-4 lg:px-6">
-      <div className="flex min-w-0 items-center gap-2">
+    <header className="app-topbar sticky top-0 z-30 flex items-center justify-between gap-3 px-3 py-2 sm:px-4 lg:px-6">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <button
           onClick={onOpenMobileNav}
           className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border transition lg:hidden"
-          style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+          style={{
+            borderColor: "var(--th-border)",
+            background: "var(--th-bg-surface)",
+            color: "var(--th-text-primary)",
+          }}
           aria-label="내비게이션 열기"
         >
           <Menu className="h-4 w-4" />
         </button>
-        <h1 className="flex min-w-0 items-center gap-3 truncate text-base font-bold sm:text-lg">
+        <h1 className="flex min-w-[160px] flex-1 items-center gap-2 overflow-hidden text-base font-bold sm:min-w-[220px] sm:text-lg">
           <span
             className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border font-mono text-sm sm:inline-flex"
-            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+            style={{
+              borderColor: "var(--th-border)",
+              background: "var(--th-bg-surface)",
+              color: "var(--th-text-primary)",
+            }}
           >
             {viewMark}
           </span>
@@ -114,13 +122,19 @@ export default function AppHeaderBar({
         {currentView === "manual" && (
           <button type="button" onClick={focusManualSearch} className="manual-header-search">
             <Search className="h-4 w-4" />
-            <span>도움말 검색</span>
+            <span>매뉴얼 검색</span>
             <kbd>Ctrl K</kbd>
           </button>
         )}
         {officePackControl && (
-          <label className="hidden items-center gap-2 rounded-xl border px-3 py-2 xl:flex" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--th-text-muted)" }}>
+          <label
+            className="hidden items-center gap-2 rounded-xl border px-3 py-2 2xl:flex"
+            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+          >
+            <span
+              className="text-[10px] font-semibold uppercase tracking-[0.18em]"
+              style={{ color: "var(--th-text-muted)" }}
+            >
               {officePackControl.label}
             </span>
             <select
@@ -139,11 +153,15 @@ export default function AppHeaderBar({
         )}
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <div className="hidden items-center gap-2 md:flex">
-          <button onClick={onOpenTasks} className="header-action-btn header-action-btn-primary" aria-label={tasksPrimaryLabel}>
+          <button
+            onClick={onOpenTasks}
+            className="header-action-btn header-action-btn-primary"
+            aria-label={tasksPrimaryLabel}
+          >
             <CheckSquare className="h-4 w-4" />
-            <span>업무</span>
+            <span>{tasksPrimaryLabel}</span>
           </button>
           <button
             onClick={onOpenDecisionInbox}
@@ -153,7 +171,7 @@ export default function AppHeaderBar({
             }`}
             aria-label={decisionLabel}
           >
-            <span>{decisionInboxLoading ? "확인 중" : "승인"}</span>
+            <span>{decisionInboxLoading ? "확인 중" : decisionLabel}</span>
             {decisionInboxCount > 0 && <span className="header-decision-badge">{decisionInboxCount}</span>}
           </button>
           <button onClick={onOpenAgentStatus} className="header-action-btn header-action-btn-secondary">
@@ -161,7 +179,7 @@ export default function AppHeaderBar({
             {agentStatusLabel}
           </button>
         </div>
-        <div className="hidden items-center gap-2 xl:flex">
+        <div className="hidden items-center gap-2 2xl:flex">
           <button onClick={onOpenReportHistory} className="header-action-btn header-action-btn-ghost">
             <FileText className="h-4 w-4" />
             {reportLabel}
@@ -174,8 +192,12 @@ export default function AppHeaderBar({
             {roomManagerLabel}
           </button>
         </div>
-        <button onClick={onOpenTasks} className="header-action-btn header-action-btn-primary header-mobile-action" aria-label={tasksPrimaryLabel}>
-          업무
+        <button
+          onClick={onOpenTasks}
+          className="header-action-btn header-action-btn-primary header-mobile-action"
+          aria-label={tasksPrimaryLabel}
+        >
+          {tasksPrimaryLabel}
         </button>
         <button
           onClick={onOpenDecisionInbox}
@@ -185,7 +207,7 @@ export default function AppHeaderBar({
           }`}
           aria-label={decisionLabel}
         >
-          {decisionInboxLoading ? "확인" : "승인"}
+          {decisionInboxLoading ? "확인" : decisionLabel}
           {decisionInboxCount > 0 && <span className="header-decision-badge">{decisionInboxCount}</span>}
         </button>
         <button
@@ -194,13 +216,19 @@ export default function AppHeaderBar({
           aria-label={theme === "dark" ? "주간 테마로 전환" : "야간 테마로 전환"}
           title={theme === "dark" ? "주간 테마" : "야간 테마"}
         >
-          <span className="theme-toggle-icon">{theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</span>
+          <span className="theme-toggle-icon">
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </span>
         </button>
         <div className="relative sm:hidden">
           <button
             onClick={onToggleMobileHeaderMenu}
             className="inline-flex h-9 w-9 items-center justify-center rounded-xl border transition"
-            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+            style={{
+              borderColor: "var(--th-border)",
+              background: "var(--th-bg-surface)",
+              color: "var(--th-text-primary)",
+            }}
             aria-label="추가 메뉴"
           >
             {mobileHeaderMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -208,10 +236,17 @@ export default function AppHeaderBar({
           {mobileHeaderMenuOpen && (
             <>
               <button className="fixed inset-0 z-40" onClick={onCloseMobileHeaderMenu} aria-label="메뉴 닫기" />
-              <div className="absolute right-0 top-full z-50 mt-2 min-w-[210px] rounded-2xl border py-1 shadow-2xl" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-elevated)" }}>
+              <div
+                className="absolute right-0 top-full z-50 mt-2 min-w-[210px] rounded-2xl border py-1 shadow-2xl"
+                style={{ borderColor: "var(--th-border)", background: "var(--th-bg-elevated)" }}
+              >
                 {officePackControl && (
                   <div className="border-b px-3 py-2" style={{ borderColor: "var(--th-border)" }}>
-                    <label htmlFor="mobile-office-pack-selector" className="mb-1 block text-[10px] uppercase tracking-wider" style={{ color: "var(--th-text-muted)" }}>
+                    <label
+                      htmlFor="mobile-office-pack-selector"
+                      className="mb-1 block text-[10px] uppercase tracking-wider"
+                      style={{ color: "var(--th-text-muted)" }}
+                    >
                       {officePackControl.label}
                     </label>
                     <select
@@ -222,7 +257,11 @@ export default function AppHeaderBar({
                         onCloseMobileHeaderMenu();
                       }}
                       className="w-full rounded-md border px-2 py-1.5 text-xs focus:outline-none"
-                      style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                      style={{
+                        borderColor: "var(--th-border)",
+                        background: "var(--th-bg-surface)",
+                        color: "var(--th-text-primary)",
+                      }}
                     >
                       {officePackControl.options.map((option) => (
                         <option key={option.key} value={option.key}>
@@ -254,7 +293,10 @@ export default function AppHeaderBar({
             </>
           )}
         </div>
-        <div className="hidden items-center gap-2 rounded-xl border px-2.5 py-2 text-xs sm:flex" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}>
+        <div
+          className="hidden items-center gap-2 rounded-xl border px-2.5 py-2 text-xs sm:flex"
+          style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-muted)" }}
+        >
           <div className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500" : "bg-rose-500"}`} />
           <span>{connected ? "연결됨" : "오프라인"}</span>
         </div>

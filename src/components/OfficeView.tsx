@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Brain, BriefcaseBusiness, Building2, FolderKanban, Gauge, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Brain, BriefcaseBusiness, Building2, FolderKanban, Gauge, ShieldCheck, UsersRound, type LucideIcon } from "lucide-react";
 import {
   type AnimatedSprite,
   type Application,
@@ -26,6 +26,16 @@ import {
   MIN_OFFICE_W,
   MOBILE_MOVE_CODES,
 } from "./office-view/model";
+import {
+  countOfficeActivitySignals,
+  deriveOfficeAgentActivityPlacements,
+  type OfficeActivitySignals,
+} from "./office-view/officeActivitySpaces";
+import {
+  deriveOfficeOpsDashboardSnapshot,
+  type OfficeOpsDashboardSnapshot,
+  type OfficeOpsTone,
+} from "./office-view/officeOperationalRealism";
 import { type SupportedLocale } from "./office-view/themes-locale";
 import { useCliUsage } from "./office-view/useCliUsage";
 import {
@@ -37,14 +47,25 @@ import { useOfficePixiRuntime } from "./office-view/useOfficePixiRuntime";
 import { buildOfficeScene } from "./office-view/buildScene";
 
 type OfficeFocusMode = "overview" | "pipeline" | "build" | "review" | "ops" | "memory";
-type OfficeMoveArea = "shared" | "rooftop" | "strategy" | "production" | "quality";
-type StatTone = "cyan" | "green" | "amber" | "rose";
+type OfficeMoveArea = "shared" | "activity" | "rooftop" | "strategy" | "production" | "quality";
+type OfficeFocusTarget =
+  | "whole-office"
+  | "workflow-line"
+  | "work-bay"
+  | "meeting-room"
+  | "review-room"
+  | "ops-corner"
+  | "study-room"
+  | "memory-archive";
+type StatTone = "cyan" | "green" | "amber" | "rose" | "violet";
 
 interface OfficeCommand {
   mode: OfficeFocusMode;
   label: string;
   caption: string;
   camera: OfficeMoveArea;
+  target: OfficeFocusTarget;
+  highlightTargetId?: string;
   icon: LucideIcon;
 }
 
@@ -58,12 +79,52 @@ interface HudPanel {
 }
 
 const OFFICE_COMMANDS: OfficeCommand[] = [
-  { mode: "overview", label: "요약", caption: "전체 사무실", camera: "shared", icon: Building2 },
-  { mode: "pipeline", label: "업무 흐름", caption: "기획-구현-검토", camera: "strategy", icon: BriefcaseBusiness },
-  { mode: "build", label: "구현", caption: "개발 구역", camera: "production", icon: Gauge },
-  { mode: "review", label: "검토", caption: "품질 구역", camera: "quality", icon: ShieldCheck },
-  { mode: "ops", label: "운영", caption: "OPS 관제 코너", camera: "quality", icon: FolderKanban },
-  { mode: "memory", label: "기억", caption: "기억 서고", camera: "shared", icon: Brain },
+  { mode: "overview", label: "요약", caption: "전체 사무실", camera: "shared", target: "whole-office", icon: Building2 },
+  {
+    mode: "pipeline",
+    label: "업무 흐름",
+    caption: "작업 라인",
+    camera: "activity",
+    target: "workflow-line",
+    highlightTargetId: "planning",
+    icon: BriefcaseBusiness,
+  },
+  {
+    mode: "build",
+    label: "구현",
+    caption: "업무 좌석",
+    camera: "activity",
+    target: "work-bay",
+    highlightTargetId: "development",
+    icon: Gauge,
+  },
+  {
+    mode: "review",
+    label: "검토",
+    caption: "회의와 품질",
+    camera: "quality",
+    target: "review-room",
+    highlightTargetId: "quality",
+    icon: ShieldCheck,
+  },
+  {
+    mode: "ops",
+    label: "운영",
+    caption: "운영 코너",
+    camera: "activity",
+    target: "ops-corner",
+    highlightTargetId: "operations",
+    icon: FolderKanban,
+  },
+  {
+    mode: "memory",
+    label: "기억",
+    caption: "학습실과 서고",
+    camera: "activity",
+    target: "memory-archive",
+    highlightTargetId: "breakRoom",
+    icon: Brain,
+  },
 ];
 
 const PROJECT_SCOPES = ["BloggerGent", "DonggriCompany", "JasoSul"];
@@ -76,88 +137,115 @@ function countTasksByStatus(tasks: OfficeViewProps["tasks"], status: string): nu
   return tasks.filter((task) => task.status === status).length;
 }
 
-function buildHudPanel(mode: OfficeFocusMode, params: { tasks: OfficeViewProps["tasks"]; agents: OfficeViewProps["agents"]; subAgents: OfficeViewProps["subAgents"] }): HudPanel {
-  const { tasks, agents, subAgents } = params;
-  const activeTasks = countTasksByStatus(tasks, "in_progress");
-  const reviewTasks = countTasksByStatus(tasks, "review");
-  const doneTasks = countTasksByStatus(tasks, "done");
-  const waitingTasks = tasks.filter((task) => task.status === "pending" || task.status === "inbox").length;
+function buildActivitySignals(params: {
+  agents: OfficeViewProps["agents"];
+  tasks: OfficeViewProps["tasks"];
+  subAgents: OfficeViewProps["subAgents"];
+  meetingPresence?: OfficeViewProps["meetingPresence"];
+}): OfficeActivitySignals {
+  const placements = deriveOfficeAgentActivityPlacements({
+    agents: params.agents,
+    tasks: params.tasks,
+    meetingPresence: params.meetingPresence,
+  });
+  return countOfficeActivitySignals({ placements, subAgents: params.subAgents });
+}
+
+function buildHudPanel(
+  mode: OfficeFocusMode,
+  params: {
+    tasks: OfficeViewProps["tasks"];
+    agents: OfficeViewProps["agents"];
+    subAgents: OfficeViewProps["subAgents"];
+    meetingPresence?: OfficeViewProps["meetingPresence"];
+    opsSnapshot: OfficeOpsDashboardSnapshot;
+  },
+): HudPanel {
+  const { tasks, agents, subAgents, meetingPresence, opsSnapshot } = params;
+  const activeTasks = opsSnapshot.counts.active;
+  const reviewTasks = opsSnapshot.counts.review;
+  const doneTasks = opsSnapshot.counts.done;
+  const waitingTasks = opsSnapshot.counts.waiting;
   const workingAgents = agents.filter((agent) => agent.status === "working").length;
-  const activeSubAgents = subAgents.filter((subAgent) => subAgent.status === "working").length;
+  const signals = buildActivitySignals({ agents, tasks, subAgents, meetingPresence });
 
   const commonStats: HudPanel["stats"] = [
-    { label: "진행", value: compactCount(activeTasks), tone: "green" },
-    { label: "검토", value: compactCount(reviewTasks), tone: "amber" },
-    { label: "대기", value: compactCount(waitingTasks), tone: "cyan" },
+    { label: "작업 중", value: compactCount(signals.work), tone: "green" },
+    { label: "회의 중", value: compactCount(signals.meeting), tone: "amber" },
+    { label: "학습 중", value: compactCount(signals.study), tone: "violet" },
   ];
 
   if (mode === "pipeline") {
     return {
       eyebrow: "업무 흐름",
-      title: "작업 라인 점검",
-      body: "기획에서 구현, 검토, 운영, 기억 보관으로 이어지는 사무실 동선을 강조합니다.",
+      title: "업무가 움직이는 작업 동선",
+      body: "입구의 대기 문서가 업무 좌석, 회의실, 품질 게이트, 운영 코너로 이어지는 흐름을 강조합니다. 지금 막힌 곳은 티켓 더미와 상태등으로 바로 보입니다.",
       primary: "업무 보드 열기",
       secondary: "Control Plane 보기",
-      stats: commonStats,
+      stats: [
+        { label: "대기", value: compactCount(waitingTasks), tone: "cyan" },
+        { label: "진행", value: compactCount(activeTasks), tone: "green" },
+        { label: "검토", value: compactCount(reviewTasks), tone: reviewTasks > 0 ? "rose" : "amber" },
+      ],
     };
   }
   if (mode === "build") {
     return {
-      eyebrow: "구현 구역",
-      title: "개발 좌석과 구현 대기열",
-      body: "개발 구역의 모니터, 책상, 작업 문서가 현재 구현 상태를 보여줍니다.",
+      eyebrow: "업무 좌석",
+      title: "구현 워크스테이션",
+      body: "배정된 에이전트가 책상 섬에서 작업하고, 분신 흐름은 보조 모니터와 티켓 트레이로 표시됩니다. 빈 장식보다 실제 작업 상태를 먼저 보여줍니다.",
       primary: "업무 보드 열기",
       stats: [
-        { label: "구현 중", value: compactCount(activeTasks), tone: "green" },
-        { label: "서브", value: compactCount(activeSubAgents), tone: "cyan" },
+        { label: "작업 중", value: compactCount(signals.work), tone: "green" },
+        { label: "분신", value: compactCount(signals.activeSubAgents), tone: "cyan" },
         { label: "완료", value: compactCount(doneTasks), tone: "amber" },
       ],
     };
   }
   if (mode === "review") {
     return {
-      eyebrow: "품질 구역",
-      title: "검토 게이트와 증거 확인",
-      body: "품질 구역은 테스트, 리뷰, evidence, handoff가 막히는 지점을 빠르게 보게 합니다.",
+      eyebrow: "검토 공간",
+      title: "회의실과 품질 게이트",
+      body: "회의 중인 에이전트, 리뷰 대기 업무, 승인 대기 신호를 한 화면에 묶어 보여줍니다. 검토가 쌓이면 품질 구역과 HUD가 먼저 경고합니다.",
       primary: "Control Plane 보기",
       stats: [
+        { label: "회의 중", value: compactCount(signals.meeting), tone: "amber" },
         { label: "검토 필요", value: compactCount(reviewTasks), tone: reviewTasks > 0 ? "rose" : "green" },
-        { label: "완료", value: compactCount(doneTasks), tone: "green" },
-        { label: "승인", value: "준비", tone: "cyan" },
+        { label: "승인 대기", value: reviewTasks > 0 ? "확인" : "없음", tone: reviewTasks > 0 ? "amber" : "green" },
       ],
     };
   }
   if (mode === "ops") {
     return {
       eyebrow: "운영 연결",
-      title: "OPS 관제 코너와 프로젝트 보드",
-      body: "OPS는 큰 방이 아니라 작은 서버 데스크와 프로젝트 보드로 표현됩니다.",
+      title: "작은 운영 관제 데스크",
+      body: "OPS는 넓은 방이 아니라 모니터월, 서버랙, 프로젝트 보드를 갖춘 작은 관제 데스크입니다. 프로젝트 상태는 운영 보드와 신호등으로 읽힙니다.",
       primary: "프로젝트 열기",
-      secondary: "Control Plane 보기",
+      secondary: "업무 보드 열기",
       stats: [
+        { label: "운영", value: compactCount(signals.ops), tone: "green" },
         { label: "프로젝트", value: PROJECT_SCOPES.length, tone: "cyan" },
-        { label: "실행 중", value: compactCount(activeTasks), tone: "green" },
-        { label: "연결", value: "확인", tone: "amber" },
+        { label: "연결", value: "준비", tone: "amber" },
       ],
     };
   }
   if (mode === "memory") {
     return {
-      eyebrow: "기억 준비",
-      title: "AgentMemory 서고",
-      body: "기억은 승인 기반 요약과 evidence 링크만 다루며, runtime과 hooks는 별도 승인 전까지 막혀 있습니다.",
+      eyebrow: "학습과 기억",
+      title: "학습실과 기억 서고",
+      body: "학습 대기, 외부강사 세션, 기억 준비 상태를 자료 책상과 기억 서고로 보여줍니다. 실제 기억 저장은 승인 기반 요약만 허용됩니다.",
       primary: "Memory 열기",
       stats: [
-        { label: "모드", value: "안전", tone: "green" },
-        { label: "저장", value: "요약", tone: "cyan" },
-        { label: "런타임", value: "대기", tone: "amber" },
+        { label: "학습 중", value: compactCount(signals.study), tone: "violet" },
+        { label: "기억 준비", value: "안전", tone: "green" },
+        { label: "오프라인", value: compactCount(signals.offline), tone: "cyan" },
       ],
     };
   }
   return {
     eyebrow: "사무실 현황",
-    title: "Dongri-grigri 운영실",
-    body: "부서 좌석, 캐릭터, 업무 문서, 프로젝트 보드, 기억 서고가 한 화면에서 움직입니다.",
+    title: "Dongri-grigri 운영 사무실",
+    body: "캐릭터, 책상, 회의실, 운영 관제 데스크, 학습실, 기억 서고가 실제 업무 상태와 연결되어 돌아갑니다. 장식용 방보다 오늘의 운영 상태가 먼저 보이게 정리했습니다.",
     primary: "Control Plane 보기",
     secondary: "업무 보드 열기",
     stats: [
@@ -166,6 +254,15 @@ function buildHudPanel(mode: OfficeFocusMode, params: { tasks: OfficeViewProps["
       { label: "업무", value: compactCount(tasks.length), tone: "amber" },
     ],
   };
+}
+
+function toneClassName(tone: OfficeOpsTone): string {
+  if (tone === "green") return "border-emerald-300/40 bg-emerald-300/10";
+  if (tone === "amber") return "border-amber-300/40 bg-amber-300/10";
+  if (tone === "rose") return "border-rose-300/40 bg-rose-300/10";
+  if (tone === "violet") return "border-violet-300/40 bg-violet-300/10";
+  if (tone === "slate") return "border-slate-300/30 bg-slate-300/10";
+  return "border-cyan-300/40 bg-cyan-300/10";
 }
 
 function HudActionButton({ children, onClick }: { children: string; onClick?: () => void }) {
@@ -208,8 +305,20 @@ export default function OfficeView({
   const { language, t } = useI18n();
   const { theme: currentTheme } = useTheme();
   const [focusMode, setFocusMode] = useState<OfficeFocusMode>("overview");
+  const [focusTarget, setFocusTarget] = useState<OfficeFocusTarget>("whole-office");
   const selectedCommand = OFFICE_COMMANDS.find((command) => command.mode === focusMode) ?? OFFICE_COMMANDS[0];
-  const panel = useMemo(() => buildHudPanel(focusMode, { tasks, agents, subAgents }), [agents, focusMode, subAgents, tasks]);
+  const opsSnapshot = useMemo(
+    () => deriveOfficeOpsDashboardSnapshot({ agents, tasks, subAgents, meetingPresence }),
+    [agents, meetingPresence, subAgents, tasks],
+  );
+  const panel = useMemo(
+    () => buildHudPanel(focusMode, { tasks, agents, subAgents, meetingPresence, opsSnapshot }),
+    [agents, focusMode, meetingPresence, opsSnapshot, subAgents, tasks],
+  );
+  const activitySignals = useMemo(
+    () => buildActivitySignals({ agents, tasks, subAgents, meetingPresence }),
+    [agents, meetingPresence, subAgents, tasks],
+  );
 
   const themeRef = useRef<ThemeMode>(currentTheme);
   themeRef.current = currentTheme;
@@ -280,12 +389,10 @@ export default function OfficeView({
   const localeRef = useRef<SupportedLocale>(language);
   localeRef.current = language;
   const themeHighlightTargetIdRef = useRef<string | null>(themeHighlightTargetId ?? null);
-  themeHighlightTargetIdRef.current = themeHighlightTargetId ?? null;
+  themeHighlightTargetIdRef.current = themeHighlightTargetId ?? selectedCommand.highlightTargetId ?? null;
   const scrollHostXRef = useRef<HTMLElement | null>(null);
   const scrollHostYRef = useRef<HTMLElement | null>(null);
   const [showVirtualPad, setShowVirtualPad] = useState(false);
-  const showVirtualPadRef = useRef(showVirtualPad);
-  showVirtualPadRef.current = showVirtualPad;
 
   const dataRef = useRef({
     departments,
@@ -346,26 +453,29 @@ export default function OfficeView({
   }, [setMoveDirectionPressed]);
 
   const moveCeoToOfficeArea = useCallback((area: OfficeMoveArea, mode: "stairs" | "elevator") => {
-    const departmentGroups: Record<OfficeMoveArea, string[]> = {
-      shared: [],
-      rooftop: [],
+    const departmentGroups: Record<Exclude<OfficeMoveArea, "shared" | "activity" | "rooftop">, string[]> = {
       strategy: ["pmo", "planning"],
       production: ["dev", "development", "design"],
       quality: ["qa", "quality", "devsecops", "operations", "ops", "strategic_maintenance", "instructor"],
     };
     const breakRoomRect = breakRoomRectRef.current;
-    const roomTargets = roomRectsRef.current.filter((room) => departmentGroups[area].includes(room.dept.id));
+    const roomTargets =
+      area === "strategy" || area === "production" || area === "quality"
+        ? roomRectsRef.current.filter((room) => departmentGroups[area].includes(room.dept.id))
+        : [];
     const targetY =
       area === "shared"
         ? (breakRoomRect?.y ?? 0)
-        : area === "rooftop"
-          ? (breakRoomRect?.y ?? 0) + Math.max(190, Math.floor((breakRoomRect?.h ?? 320) * 0.58))
-          : Math.min(...roomTargets.map((room) => room.y));
+        : area === "activity"
+          ? (breakRoomRect?.y ?? 0) + Math.max(190, Math.floor((breakRoomRect?.h ?? 520) * 0.33))
+          : area === "rooftop"
+            ? (breakRoomRect?.y ?? 0) + Math.max(260, Math.floor((breakRoomRect?.h ?? 520) * 0.62))
+            : Math.min(...roomTargets.map((room) => room.y));
     if (!Number.isFinite(targetY)) return;
 
     const destinationRoom = roomTargets[0] ?? roomRectsRef.current[0];
     const destinationX =
-      area === "shared" || area === "rooftop"
+      area === "shared" || area === "activity" || area === "rooftop"
         ? Math.max(96, Math.min(officeWRef.current - 120, Math.floor(officeWRef.current * 0.28)))
         : destinationRoom
           ? destinationRoom.x + Math.min(destinationRoom.w - 42, 74)
@@ -609,17 +719,30 @@ export default function OfficeView({
     (mode: OfficeFocusMode) => {
       setFocusMode(mode);
       const command = OFFICE_COMMANDS.find((candidate) => candidate.mode === mode);
-      if (command) moveCeoToOfficeArea(command.camera, "elevator");
+      if (command) {
+        setFocusTarget(command.target);
+        moveCeoToOfficeArea(command.camera, "elevator");
+      }
     },
     [moveCeoToOfficeArea],
   );
 
+  const handleOpenProjects = useCallback(() => {
+    handleModeChange("ops");
+    onOpenProjects?.();
+  }, [handleModeChange, onOpenProjects]);
+
+  const handleOpenMemory = useCallback(() => {
+    handleModeChange("memory");
+    onOpenMemory?.();
+  }, [handleModeChange, onOpenMemory]);
+
   const primaryAction = useMemo(() => {
     if (focusMode === "pipeline" || focusMode === "build") return onOpenTasks;
-    if (focusMode === "ops") return onOpenProjects;
-    if (focusMode === "memory") return onOpenMemory;
+    if (focusMode === "ops") return handleOpenProjects;
+    if (focusMode === "memory") return handleOpenMemory;
     return onOpenControlPlane;
-  }, [focusMode, onOpenControlPlane, onOpenMemory, onOpenProjects, onOpenTasks]);
+  }, [focusMode, handleOpenMemory, handleOpenProjects, onOpenControlPlane, onOpenTasks]);
 
   const secondaryAction = focusMode === "overview" || focusMode === "pipeline" || focusMode === "ops" ? onOpenTasks : undefined;
 
@@ -629,6 +752,7 @@ export default function OfficeView({
         pixelAgentMode?.enabled ? `pixel-agent-density-${pixelAgentMode.density}` : ""
       }`}
       data-focus={focusMode}
+      data-focus-target={focusTarget}
       data-camera={selectedCommand.camera}
       aria-label="Dongri-grigri 8bit 사무실"
       style={{ color: "var(--th-text-primary)" }}
@@ -646,7 +770,7 @@ export default function OfficeView({
               Dongri-grigri 사무실
             </h1>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" aria-label="사무실 렌즈">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" aria-label="사무실 명령">
             {OFFICE_COMMANDS.map((command) => {
               const Icon = command.icon;
               return (
@@ -683,7 +807,9 @@ export default function OfficeView({
             <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-300">
               <span>업무 {compactCount(tasks.length)}</span>
               <span>근무 {compactCount(agents.filter((agent) => agent.status === "working").length)}</span>
-              <span>검토 {compactCount(countTasksByStatus(tasks, "review"))}</span>
+              <span>검토 {compactCount(opsSnapshot.counts.review)}</span>
+              <span>회의 {compactCount(opsSnapshot.counts.meetingAgents)}</span>
+              <span>초점 {selectedCommand.label}</span>
             </div>
           </div>
           <div
@@ -726,7 +852,9 @@ export default function OfficeView({
                       ? "border-amber-300/40 bg-amber-300/10"
                       : stat.tone === "rose"
                         ? "border-rose-300/40 bg-rose-300/10"
-                        : "border-cyan-300/40 bg-cyan-300/10"
+                        : stat.tone === "violet"
+                          ? "border-violet-300/40 bg-violet-300/10"
+                          : "border-cyan-300/40 bg-cyan-300/10"
                 }`}
               >
                 <div className="text-[10px] font-semibold" style={{ color: "var(--th-text-muted)" }}>
@@ -743,19 +871,70 @@ export default function OfficeView({
 
           <div className="mt-5 space-y-3">
             <section>
+              <h3 className="text-sm font-black">운영 실황</h3>
+              <div className="mt-2 grid gap-2">
+                {opsSnapshot.liveRows.length > 0 ? (
+                  opsSnapshot.liveRows.map((row) => (
+                    <div key={row.id} className={`rounded-lg border px-3 py-2 text-left ${toneClassName(row.tone)}`}>
+                      <div className="text-[11px] font-black" style={{ color: "var(--th-text-heading)" }}>
+                        {row.label}
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-xs leading-5" style={{ color: "var(--th-text-secondary)" }}>
+                        {row.detail}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div
+                    className="rounded-lg border px-3 py-2 text-xs"
+                    style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+                  >
+                    지금은 긴급한 운영 신호가 없습니다.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="flex items-center gap-2 text-sm font-black">
+                <UsersRound className="h-4 w-4" aria-hidden="true" />
+                활동 공간
+              </h3>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                {[
+                  ["작업 중", activitySignals.work],
+                  ["회의 중", activitySignals.meeting],
+                  ["운영 연결", activitySignals.ops],
+                  ["학습 중", activitySignals.study],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-lg border px-2 py-2"
+                    style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+                  >
+                    <div className="font-semibold" style={{ color: "var(--th-text-muted)" }}>
+                      {label}
+                    </div>
+                    <div className="mt-1 font-mono text-base font-black">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section>
               <h3 className="text-sm font-black">프로젝트 보드</h3>
               <div className="mt-2 grid gap-2">
                 {PROJECT_SCOPES.map((project) => (
                   <button
                     key={project}
                     type="button"
-                    onClick={onOpenProjects}
+                    onClick={handleOpenProjects}
                     className="rounded-lg border px-3 py-2 text-left text-sm font-bold transition hover:border-cyan-300 hover:bg-cyan-300/10 active:translate-y-px"
                     style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
                   >
                     {project}
                     <span className="ml-2 text-[11px] font-medium" style={{ color: "var(--th-text-muted)" }}>
-                      scope
+                      운영 보드
                     </span>
                   </button>
                 ))}
@@ -766,7 +945,7 @@ export default function OfficeView({
               <h3 className="text-sm font-black">기억 서고</h3>
               <button
                 type="button"
-                onClick={onOpenMemory}
+                onClick={handleOpenMemory}
                 className="mt-2 w-full rounded-lg border border-emerald-300/40 bg-emerald-300/10 px-3 py-2 text-left text-sm font-bold transition hover:bg-emerald-300/20 active:translate-y-px"
               >
                 승인 기반 기억 상태 보기
@@ -777,9 +956,11 @@ export default function OfficeView({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2 rounded-xl border border-slate-700/50 bg-slate-950/45 px-3 py-2 text-xs text-slate-100">
-        <span>진행 업무 {compactCount(countTasksByStatus(tasks, "in_progress"))}</span>
-        <span>승인 대기 {compactCount(countTasksByStatus(tasks, "review"))}</span>
-        <span>프로젝트 보드 {PROJECT_SCOPES.length}</span>
+        <span>진행 업무 {compactCount(opsSnapshot.counts.active)}</span>
+        <span>검토 대기 {compactCount(opsSnapshot.counts.review)}</span>
+        <span>회의 중 {compactCount(opsSnapshot.counts.meetingAgents)}</span>
+        <span>운영 감시 {compactCount(opsSnapshot.counts.opsAgents)}</span>
+        <span>학습 준비 {compactCount(opsSnapshot.counts.learningAgents)}</span>
         <span>기억 준비 안전 모드</span>
         <span>WASD/방향키 이동, Enter 상호작용</span>
       </div>

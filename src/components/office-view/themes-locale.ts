@@ -64,9 +64,11 @@ let DEFAULT_BREAK_THEME = DEFAULT_BREAK_THEME_LIGHT;
 
 type SupportedLocale = UiLanguage;
 
+type LocaleMap<T> = Record<SupportedLocale, T>;
+
 const LOCALE_TEXT = {
   ceoOffice: {
-    ko: "CEO 오피스",
+    ko: "대표실",
     en: "CEO Office",
     ja: "CEO Office",
     zh: "CEO Office",
@@ -82,10 +84,10 @@ const LOCALE_TEXT = {
   statsProgress: { ko: "진행", en: "In Progress", ja: "In Progress", zh: "In Progress" },
   statsDone: { ko: "완료", en: "Done", ja: "Done", zh: "Done" },
   hint: {
-    ko: "WASD/방향키/가상패드: CEO 이동  |  Enter: 상호작용",
-    en: "WASD/Arrow/Virtual Pad: CEO Move  |  Enter: Interact",
-    ja: "WASD/Arrow/Virtual Pad: CEO Move  |  Enter: Interact",
-    zh: "WASD/Arrow/Virtual Pad: CEO Move  |  Enter: Interact",
+    ko: "WASD/방향키/가상패드: 이동 | Enter: 상호작용",
+    en: "WASD/Arrow/Virtual Pad: Move | Enter: Interact",
+    ja: "WASD/Arrow/Virtual Pad: Move | Enter: Interact",
+    zh: "WASD/Arrow/Virtual Pad: Move | Enter: Interact",
   },
   mobileEnter: {
     ko: "상호작용",
@@ -100,13 +102,13 @@ const LOCALE_TEXT = {
     zh: "No assigned staff",
   },
   breakRoom: {
-    ko: "휴게실",
-    en: "Break Room",
-    ja: "Break Room",
-    zh: "Break Room",
+    ko: "휴게 중",
+    en: "Break",
+    ja: "Break",
+    zh: "Break",
   },
   role: {
-    team_leader: { ko: "팀장", en: "Lead", ja: "Lead", zh: "Lead" },
+    team_leader: { ko: "리드", en: "Lead", ja: "Lead", zh: "Lead" },
     senior: { ko: "시니어", en: "Senior", ja: "Senior", zh: "Senior" },
     junior: { ko: "주니어", en: "Junior", ja: "Junior", zh: "Junior" },
     intern: { ko: "인턴", en: "Intern", ja: "Intern", zh: "Intern" },
@@ -149,7 +151,7 @@ const LOCALE_TEXT = {
     zh: "Hold",
   },
   kickoffLines: {
-    ko: ["영향 범위 확인 중", "리스크와 의존성 공유 중", "일정과 우선순위 조율 중", "담당 경계 정의 중"],
+    ko: ["영향 범위 확인 중", "위험과 의존성 공유 중", "일정과 우선순위 조율 중", "담당 경계 정리 중"],
     en: [
       "Checking cross-team impact",
       "Sharing risks and dependencies",
@@ -191,7 +193,7 @@ const LOCALE_TEXT = {
     ],
   },
   meetingTableHint: {
-    ko: "회의 중: 테이블 클릭으로 회의록 보기",
+    ko: "회의 중: 테이블을 눌러 회의록 보기",
     en: "Meeting live: click table for minutes",
     ja: "Meeting live: click table for minutes",
     zh: "Meeting live: click table for minutes",
@@ -251,7 +253,7 @@ const LOCALE_TEXT = {
     zh: "no data",
   },
   cliRetry: {
-    ko: "재시도",
+    ko: "다시 시도",
     en: "Retry",
     ja: "Retry",
     zh: "Retry",
@@ -264,13 +266,13 @@ const LOCALE_TEXT = {
   },
 };
 
-const BREAK_CHAT_MESSAGES = {
+const BREAK_CHAT_MESSAGES: LocaleMap<string[]> = {
   ko: [
     "잠깐 쉬고 다시 합시다.",
     "커피 한 잔 하고 복귀합니다.",
-    "리뷰 포인트 정리했어요.",
+    "리뷰 포인트는 정리해뒀어요.",
     "다음 실행 전에 로그 확인해요.",
-    "오늘 빌드 흐름 괜찮네요.",
+    "오늘 빌드 흐름 괜찮아요.",
     "회의 전 핵심만 압축합시다.",
   ],
   en: [
@@ -299,7 +301,7 @@ const BREAK_CHAT_MESSAGES = {
   ],
 };
 
-function pickLocale<T>(locale: SupportedLocale, map: Record<SupportedLocale, T>): T {
+function pickLocale<T>(locale: SupportedLocale, map: LocaleMap<T>): T {
   return map[locale] ?? map.ko;
 }
 
@@ -307,7 +309,7 @@ function inferReviewDecision(line?: string | null): MeetingReviewDecision {
   const cleaned = line?.replace(/\s+/g, " ").trim();
   if (!cleaned) return "reviewing";
   if (
-    /(보류|보완|수정|미완|리스크|중단|hold|revise|revision|required|pending|risk|block|missing|incomplete|not\s+ready)/i.test(
+    /(보류|보완|수정|미완료|중단|hold|revise|revision|required|pending|risk|block|missing|incomplete|not\s+ready)/i.test(
       cleaned,
     )
   ) {
@@ -391,21 +393,29 @@ const DEPT_THEME_LIGHT: Record<string, RoomTheme> = {
   pmo: { floor1: 0xd2f4ec, floor2: 0xbfeee3, wall: 0x3c9285, accent: 0x0ea58f },
   planning: { floor1: 0xffe6b8, floor2: 0xf8d89c, wall: 0xba8334, accent: 0xe0a53a },
   dev: { floor1: 0xcde7ff, floor2: 0xb9dcfb, wall: 0x4b86bd, accent: 0x2f8bd8 },
+  development: { floor1: 0xcde7ff, floor2: 0xb9dcfb, wall: 0x4b86bd, accent: 0x2f8bd8 },
   design: { floor1: 0xe6d5ff, floor2: 0xdcc7fb, wall: 0x8461b4, accent: 0x9a70d8 },
   qa: { floor1: 0xffd7d7, floor2: 0xf8c4c4, wall: 0xb85e64, accent: 0xe25d63 },
+  quality: { floor1: 0xffd7d7, floor2: 0xf8c4c4, wall: 0xb85e64, accent: 0xe25d63 },
   devsecops: { floor1: 0xffdec6, floor2: 0xf7c9ab, wall: 0xb56e41, accent: 0xe36f38 },
   operations: { floor1: 0xd3f4d6, floor2: 0xbff0c8, wall: 0x5d9a61, accent: 0x2eb86a },
+  ops: { floor1: 0xd3f4d6, floor2: 0xbff0c8, wall: 0x5d9a61, accent: 0x2eb86a },
   strategic_maintenance: { floor1: 0xd3f0ec, floor2: 0xc6ebe6, wall: 0x629e96, accent: 0x45b9aa },
+  instructor: { floor1: 0xd3f0ec, floor2: 0xc6ebe6, wall: 0x629e96, accent: 0x45b9aa },
 };
 const DEPT_THEME_DARK: Record<string, RoomTheme> = {
   pmo: { floor1: 0x59d0c1, floor2: 0x36afa0, wall: 0x18766c, accent: 0x2dd4bf },
   planning: { floor1: 0xffc96a, floor2: 0xe4a63e, wall: 0x9a6820, accent: 0xfbbf24 },
   dev: { floor1: 0x69bdf5, floor2: 0x3b91d1, wall: 0x276a9e, accent: 0x38bdf8 },
+  development: { floor1: 0x69bdf5, floor2: 0x3b91d1, wall: 0x276a9e, accent: 0x38bdf8 },
   design: { floor1: 0xc59bff, floor2: 0x9f72e6, wall: 0x6d4aa5, accent: 0xc084fc },
   qa: { floor1: 0xff8b96, floor2: 0xd86471, wall: 0x9c3e47, accent: 0xfb7185 },
+  quality: { floor1: 0xff8b96, floor2: 0xd86471, wall: 0x9c3e47, accent: 0xfb7185 },
   devsecops: { floor1: 0xffa060, floor2: 0xd8793b, wall: 0x9a4a20, accent: 0xfb923c },
   operations: { floor1: 0x71d88c, floor2: 0x45b765, wall: 0x2b7a43, accent: 0x4ade80 },
+  ops: { floor1: 0x71d88c, floor2: 0x45b765, wall: 0x2b7a43, accent: 0x4ade80 },
   strategic_maintenance: { floor1: 0x7ddbd0, floor2: 0x45b9aa, wall: 0x236f66, accent: 0x5eead4 },
+  instructor: { floor1: 0x7ddbd0, floor2: 0x45b9aa, wall: 0x236f66, accent: 0x5eead4 },
 };
 let DEPT_THEME = DEPT_THEME_LIGHT;
 

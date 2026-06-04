@@ -12,6 +12,7 @@ import type {
 } from "../../types";
 import type { AgentSpriteDirection } from "./spriteAssets";
 import type { AgentWalkSprites } from "./spriteActors";
+import type { CloudOpsPanelMode } from "./cloudOpsLayout";
 
 interface OfficeViewProps {
   departments: Department[];
@@ -29,6 +30,10 @@ interface OfficeViewProps {
   customDeptThemes?: Record<string, { floor1: number; floor2: number; wall: number; accent: number }>;
   themeHighlightTargetId?: string | null;
   pixelAgentMode?: PixelAgentModeSettings;
+  onOpenTasks?: () => void;
+  onOpenProjects?: () => void;
+  onOpenMemory?: () => void;
+  onOpenControlPlane?: () => void;
   onSelectAgent: (agent: Agent) => void;
   onSelectDepartment: (dept: Department) => void;
 }
@@ -65,7 +70,7 @@ interface RoomRect {
 }
 
 interface OfficeCeoTransit {
-  area: "shared" | "rooftop" | "strategy" | "production" | "quality";
+  area: "shared" | "activity" | "rooftop" | "strategy" | "production" | "quality";
   mode: "direct" | "stairs" | "elevator";
   phase: "walk_to_core" | "transfer" | "walk_to_destination";
   coreX: number;
@@ -74,6 +79,10 @@ interface OfficeCeoTransit {
   destinationY: number;
   pauseTicks: number;
   onArrive?: () => void;
+}
+
+interface CloudOpsFocusState {
+  mode: CloudOpsPanelMode;
 }
 
 interface WallClockVisual {
@@ -279,6 +288,7 @@ export {
   type Delivery,
   type RoomRect,
   type OfficeCeoTransit,
+  type CloudOpsFocusState,
   type WallClockVisual,
   detachNode,
   destroyNode,

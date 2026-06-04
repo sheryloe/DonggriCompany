@@ -10,6 +10,7 @@ import {
   buildAgentSpriteKey,
   buildAgentSpriteUrl,
 } from "./spriteAssets";
+import { OFFICE_PROP_ATLAS_TEXTURE_KEY, OFFICE_PROP_ATLAS_URL } from "./officePropAtlas";
 
 interface UseOfficePixiRuntimeParams {
   containerRef: MutableRefObject<HTMLDivElement | null>;
@@ -89,6 +90,7 @@ export function useOfficePixiRuntime({
         height: 600,
         backgroundAlpha: 0,
         antialias: false,
+        preserveDrawingBuffer: true,
         resolution: Math.min(window.devicePixelRatio || 1, 2),
         autoDensity: true,
       });
@@ -135,6 +137,14 @@ export function useOfficePixiRuntime({
         Assets.load<Texture>("/sprites/ceo-lobster.png")
           .then((texture) => {
             textures.ceo = texture;
+          })
+          .catch(() => {}),
+      );
+
+      loads.push(
+        Assets.load<Texture>(OFFICE_PROP_ATLAS_URL)
+          .then((texture) => {
+            textures[OFFICE_PROP_ATLAS_TEXTURE_KEY] = texture;
           })
           .catch(() => {}),
       );

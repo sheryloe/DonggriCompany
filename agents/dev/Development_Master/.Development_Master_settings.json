@@ -2,7 +2,7 @@
   "agent_id": "master-development",
   "agent_name": "Development Master",
   "role": "master_agent",
-  "department_id": "development",
+  "department_id": "dev",
   "workflow_profile": "{\"role\":\"primary_author\",\"review_lenses\":[\"correctness\",\"maintainability\",\"contract\"],\"two_pass_required\":true,\"max_review_rounds\":2}",
   "agent_profile_json": "{\"model\":\"dongri-grigri-master-agent\",\"role_label\":\"마스터 에이전트\",\"can_spawn_subagents\":true,\"subagent_policy\":{\"lifecycle\":\"single-task\",\"max_recreate_attempts\":2,\"parent_accepts_or_rejects\":true,\"subagents_cannot_spawn_subagents\":true},\"class_path\":[\"department-master\",\"development\",\"development.master\"],\"promotion_policy\":\"master_agent fixed role; no junior/senior ladder\",\"project_scope_policy\":\"Project operations are routed through OPS; implementation work still requires approved tasks.\",\"capabilities\":{\"execution\":5,\"review\":5,\"research\":3,\"memory\":3,\"leadership\":5},\"specialties\":[\"development.master\",\"frontend-developer\",\"backend-developer\",\"database-optimizer\",\"typescript-pro\"],\"preferred_subagents\":[\"frontend-developer\",\"backend-developer\",\"database-optimizer\",\"typescript-pro\"],\"visual_profile_key\":\"agent-visual-11\",\"sprite_number\":11}",
   "goal_command_policy": {
@@ -27,5 +27,5 @@
   "skill_growth_snapshot": [],
   "recent_lessons": [],
   "project_experience": [],
-  "updated_at": "2026-05-23T04:13:35.264Z"
+  "updated_at": "2026-05-28T08:48:07.624Z"
 }

@@ -29,8 +29,36 @@ describe("canonical policy", () => {
 
     expect(preview.family).toBe("qa");
     expect(preview.tier).toBe("tier-1");
+    expect(preview.reasoningLevel).toBe("xhigh");
     expect(preview.provider).toBeTruthy();
     expect(preview.explanation.length).toBeGreaterThan(0);
+  });
+
+  it("maps automatic model tiers to all Codex reasoning effort levels", () => {
+    expect(previewCanonicalRouting({ text: "Architecture review and security audit." }).reasoningLevel).toBe("xhigh");
+    expect(previewCanonicalRouting({ text: "Standard implementation build for a feature." }).reasoningLevel).toBe("high");
+    expect(previewCanonicalRouting({ text: "Small isolated quick fix." }).reasoningLevel).toBe("medium");
+    expect(previewCanonicalRouting({ text: "Documentation and research report with citations." }).reasoningLevel).toBe("low");
+  });
+
+  it("uses provider model config as a model fallback while keeping tier reasoning", () => {
+    const preview = previewCanonicalRouting({
+      text: "Standard implementation build for a feature.",
+      providerModelConfig: {
+        codex: {
+          model: "gpt-5.4-codex",
+          reasoningLevel: "low",
+          subModel: "gpt-5.4-codex-mini",
+          subModelReasoningLevel: "low",
+        },
+      },
+    });
+
+    expect(preview.tier).toBe("tier-2");
+    expect(preview.model).toBe("gpt-5.4-codex");
+    expect(preview.subModel).toBe("gpt-5.4-codex-mini");
+    expect(preview.reasoningLevel).toBe("high");
+    expect(preview.selectedBy).toContain("providerModelConfig applied as model fallback");
   });
 
   it("supports dry-run reload without applying a broken snapshot", () => {

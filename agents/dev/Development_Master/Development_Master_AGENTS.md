@@ -4,8 +4,8 @@
 - Agent Name: Development Master
 - Agent ID: master-development
 - Role: master_agent
-- Department ID: development
-- Bundle Path: agents/development/Development_Master
+- Department ID: dev
+- Bundle Path: agents/dev/Development_Master
 
 ## References
 - Policy Document: AgentSelectModels.md
@@ -46,7 +46,7 @@
 - Preferred Subagent: typescript-pro
 
 ## Latest Snapshot
-- 2026-05-23T04:13:35.264Z | tasks_done=0 | xp=0 | role=master_agent
+- 2026-05-28T08:48:07.624Z | tasks_done=0 | xp=0 | role=master_agent
 
 ## Workflow Profile
 - Raw: {"role":"primary_author","review_lenses":["correctness","maintainability","contract"],"two_pass_required":true,"max_review_rounds":2}

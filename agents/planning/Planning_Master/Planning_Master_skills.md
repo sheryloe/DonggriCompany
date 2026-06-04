@@ -1,11 +1,8 @@
 # Planning Master_skills
 
 ## Active Skills
-- requirements
-- design
-- task-planning
-- repo-map
-- approval-checklist
+- learned snapshot: none
+- installed snapshot: none
 
 ## Learned Skills History
 - No durable skill usage history yet.

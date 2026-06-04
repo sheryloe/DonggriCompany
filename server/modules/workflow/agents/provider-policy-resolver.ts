@@ -37,6 +37,7 @@ export function resolveProviderExecutionPolicy(input: ResolveProviderExecutionPo
   const provider = String(input.provider ?? "")
     .trim()
     .toLowerCase();
+  const providerConfig = provider ? input.providerModelConfig?.[provider] : undefined;
   const canonicalProvider = String(input.canonicalOverride?.provider ?? input.canonicalOverride?.subProvider ?? "")
     .trim()
     .toLowerCase();
@@ -45,9 +46,12 @@ export function resolveProviderExecutionPolicy(input: ResolveProviderExecutionPo
       ? input.canonicalOverride
       : null;
   return {
-    model: normalizeOptionalString(canonicalOverride?.model),
-    subModel: normalizeOptionalString(canonicalOverride?.subModel),
-    reasoningLevel: normalizeOptionalString(canonicalOverride?.reasoningLevel),
-    subModelReasoningLevel: normalizeOptionalString(canonicalOverride?.subReasoningLevel),
+    model: normalizeOptionalString(canonicalOverride?.model) ?? normalizeOptionalString(providerConfig?.model),
+    subModel: normalizeOptionalString(canonicalOverride?.subModel) ?? normalizeOptionalString(providerConfig?.subModel),
+    reasoningLevel:
+      normalizeOptionalString(canonicalOverride?.reasoningLevel) ?? normalizeOptionalString(providerConfig?.reasoningLevel),
+    subModelReasoningLevel:
+      normalizeOptionalString(canonicalOverride?.subReasoningLevel) ??
+      normalizeOptionalString(providerConfig?.subModelReasoningLevel),
   };
 }

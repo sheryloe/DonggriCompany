@@ -2,6 +2,7 @@ import type { BuildOfficeSceneContext } from "./buildScene-types";
 import { buildSpriteMap } from "../AgentAvatar";
 import { BREAK_ROOM_GAP, COLS_PER_ROW, ROOM_PAD, SLOT_H, SLOT_W, detachNode } from "./model";
 import { DEFAULT_BREAK_THEME, DEFAULT_CEO_THEME, applyOfficeThemeMode } from "./themes-locale";
+import { buildActivitySpaces } from "./buildScene-activity-spaces";
 import { buildBreakRoom } from "./buildScene-break-room";
 import { buildCeoAndHallway } from "./buildScene-ceo-hallway";
 import { buildCloudLabLayer } from "./buildScene-cloud-lab";
@@ -84,6 +85,7 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
     tasks,
     subAgents,
     unreadAgentIds: unread,
+    meetingPresence,
     customDeptThemes: customThemes,
     pixelAgentMode,
   } = dataRef.current;
@@ -233,6 +235,20 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
     agentPosRef,
   });
 
+  buildActivitySpaces({
+    app,
+    textures,
+    agents,
+    tasks,
+    subAgents,
+    meetingPresence,
+    roleSpaces: floorPlan.roleSpaces,
+    spriteMap,
+    cbRef,
+    activeMeetingTaskIdRef,
+    meetingMinutesOpenRef,
+  });
+
   buildFinalLayers({
     app,
     textures,
@@ -247,4 +263,6 @@ export function buildOfficeScene(context: BuildOfficeSceneContext): void {
     prevAssignRef,
     setSceneRevision,
   });
+
+  app.render();
 }

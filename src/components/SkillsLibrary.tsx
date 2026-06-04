@@ -57,42 +57,78 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
     <div className="space-y-4">
       <section className="command-panel p-4">
         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-600">Skill Library</div>
-        <h1 className="mt-1 text-xl font-bold tracking-normal" style={{ color: "var(--th-text-primary)" }}>Skill 선택과 부서 메모리</h1>
+        <h1 className="mt-1 text-xl font-bold tracking-normal" style={{ color: "var(--th-text-primary)" }}>
+          Skill 선택과 부서 메모리
+        </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--th-text-secondary)" }}>
-          Skill은 마스터 에이전트가 사용할 수 있는 작업 지침입니다. 검색, 카테고리, 학습 상태를 먼저 확인하고 필요한 Skill만 연결합니다.
+          Skill은 마스터 에이전트가 사용할 수 있는 작업 지침입니다. 검색, 카테고리, 학습 상태를 먼저 확인하고 필요한
+          Skill만 연결합니다.
         </p>
       </section>
 
-      <section className="command-panel p-4">
+      <section className="command-panel p-5">
         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-600">External Instructor</div>
-        <div className="mt-1 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <div className="mt-2 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)] xl:items-start">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-bold" style={{ color: "var(--th-text-primary)" }}>외부강사 마스터 · 오픈소스 Skill 후보</h2>
+            <h2 className="text-lg font-bold" style={{ color: "var(--th-text-primary)" }}>
+              외부강사 마스터 · 오픈소스 Skill 후보
+            </h2>
             <p className="mt-1 text-sm" style={{ color: "var(--th-text-secondary)" }}>
-              GitHub high-star 후보를 읽기 전용으로 가져와 Skill 후보를 제안합니다. 설치, hooks, MCP 연결은 OPS 승인 뒤에만 합니다.
+              GitHub high-star 후보를 읽기 전용으로 가져와 Skill 후보를 제안합니다. 설치, hooks, MCP 연결은 OPS 승인
+              뒤에만 합니다.
             </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {["읽기 전용", "고스타 후보", "OPS 승인 후 설치"].map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                  style={{
+                    borderColor: "var(--th-border)",
+                    background: "var(--th-bg-surface)",
+                    color: "var(--th-text-secondary)",
+                  }}
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="grid w-full gap-2 sm:grid-cols-[1fr_auto] xl:w-[520px]">
-            <input
-              value={candidateQuery}
-              onChange={(event) => setCandidateQuery(event.target.value)}
-              className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
-              style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
-              placeholder="예: agent memory, ai coding assistant, testing"
-            />
-            <button
-              type="button"
-              disabled={candidateLoading}
-              onClick={() => {
-                setCandidateLoading(true);
-                getOpenSourceSkillCandidates(candidateQuery, 6)
-                  .then(setCandidateResult)
-                  .finally(() => setCandidateLoading(false));
-              }}
-              className="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-700 disabled:opacity-50 dark:text-cyan-100"
-            >
-              후보 가져오기
-            </button>
+          <div
+            className="rounded-2xl border p-3"
+            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+          >
+            <label className="mb-2 block text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+              후보 검색
+            </label>
+            <div className="grid w-full gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                value={candidateQuery}
+                onChange={(event) => setCandidateQuery(event.target.value)}
+                className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+                style={{
+                  borderColor: "var(--th-border)",
+                  background: "var(--th-bg-elevated)",
+                  color: "var(--th-text-primary)",
+                }}
+                placeholder="예: agent memory, ai coding assistant, testing"
+              />
+              <button
+                type="button"
+                disabled={candidateLoading}
+                onClick={() => {
+                  setCandidateLoading(true);
+                  getOpenSourceSkillCandidates(candidateQuery, 6)
+                    .then(setCandidateResult)
+                    .finally(() => setCandidateLoading(false));
+                }}
+                className="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-800 disabled:opacity-50 dark:text-cyan-100"
+              >
+                {candidateLoading ? "가져오는 중" : "후보 가져오기"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs" style={{ color: "var(--th-text-muted)" }}>
+              검색 결과는 Skill 후보로만 표시하며, 설치나 실행은 별도 승인 뒤에 진행합니다.
+            </p>
           </div>
         </div>
         {candidateResult && (
@@ -109,15 +145,24 @@ export default function SkillsLibrary({ agents }: SkillsLibraryProps) {
                   target="_blank"
                   rel="noreferrer"
                   className="rounded-lg border p-3 transition hover:border-cyan-400/50"
-                  style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                  style={{
+                    borderColor: "var(--th-border)",
+                    background: "var(--th-bg-surface)",
+                    color: "var(--th-text-primary)",
+                  }}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 font-semibold">{candidate.name}</div>
-                    <div className="shrink-0 text-xs" style={{ color: "var(--th-text-muted)" }}>★ {candidate.stars.toLocaleString()}</div>
+                    <div className="shrink-0 text-xs" style={{ color: "var(--th-text-muted)" }}>
+                      ★ {candidate.stars.toLocaleString()}
+                    </div>
                   </div>
-                  <p className="mt-2 line-clamp-3 text-xs" style={{ color: "var(--th-text-secondary)" }}>{candidate.description}</p>
+                  <p className="mt-2 line-clamp-3 text-xs" style={{ color: "var(--th-text-secondary)" }}>
+                    {candidate.description}
+                  </p>
                   <div className="mt-2 text-[11px]" style={{ color: "var(--th-text-muted)" }}>
-                    {candidate.language ?? "unknown"} · {candidate.updated_at ? new Date(candidate.updated_at).toLocaleDateString("ko-KR") : "-"}
+                    {candidate.language ?? "unknown"} ·{" "}
+                    {candidate.updated_at ? new Date(candidate.updated_at).toLocaleDateString("ko-KR") : "-"}
                   </div>
                 </a>
               ))

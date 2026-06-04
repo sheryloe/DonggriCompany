@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { Agent, Department, Task } from "../types";
+import type { Agent, Department, MeetingPresence, Task } from "../types";
 import OfficeView from "./OfficeView";
 
 Object.defineProperty(window, "matchMedia", {
@@ -153,14 +153,26 @@ const tasks: Task[] = [
   },
 ];
 
-describe("OfficeView 8bit office restoration", () => {
-  it("renders a Pixi-backed office screen instead of tycoon or block-map copy", () => {
-    render(
+const meetingPresence: MeetingPresence[] = [
+  {
+    agent_id: "agent-planning",
+    seat_index: 0,
+    phase: "review",
+    task_id: "task-2",
+    decision: "reviewing",
+    until: Date.now() + 60_000,
+  },
+];
+
+describe("OfficeView 8bit office role activity spaces", () => {
+  it("renders the office screen with Korean role activity controls", () => {
+    const { container } = render(
       <OfficeView
         departments={departments}
         agents={agents}
         tasks={tasks}
         subAgents={[{ id: "sub-1", parentAgentId: "agent-development", task: "test", status: "working" }]}
+        meetingPresence={meetingPresence}
         onSelectAgent={vi.fn()}
         onSelectDepartment={vi.fn()}
       />,
@@ -168,20 +180,27 @@ describe("OfficeView 8bit office restoration", () => {
 
     expect(screen.getByRole("region", { name: "Dongri-grigri 8bit 사무실" })).toBeInTheDocument();
     expect(screen.getByTestId("pixel-office-map")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Dongri-grigri 사무실" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Dongri-grigri 사무실" })).toBeInTheDocument();
+    const shell = container.querySelector(".pixel-office-shell");
+    expect(shell).toHaveAttribute("data-focus", "overview");
+    expect(shell).toHaveAttribute("data-focus-target", "whole-office");
 
-    const commandGroup = screen.getByLabelText("사무실 렌즈");
+    const commandGroup = screen.getByLabelText("사무실 명령");
     for (const command of ["요약", "업무 흐름", "구현", "검토", "운영", "기억"]) {
-      expect(within(commandGroup).getAllByRole("button", { name: new RegExp(command) }).length).toBeGreaterThan(0);
+      expect(within(commandGroup).getByRole("button", { name: new RegExp(command) })).toBeInTheDocument();
+    }
+    for (const label of ["운영 실황", "활동 공간", "작업 중", "회의 중", "운영 연결", "학습 중", "검토 대기"]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
     for (const project of ["BloggerGent", "DonggriCompany", "JasoSul"]) {
       expect(screen.getByRole("button", { name: new RegExp(project) })).toBeInTheDocument();
     }
     expect(screen.getByRole("button", { name: "승인 기반 기억 상태 보기" })).toBeInTheDocument();
 
-    for (const removedLabel of ["타이쿤", "왕국", "CloudOps", "Pixel map", "Live Ops", "Department rooms", "RPG COMMAND MAP"]) {
+    for (const removedLabel of ["RPG", "왕국", "타이쿤", "CloudOps", "Pixel map", "Live Ops", "Department rooms"]) {
       expect(screen.queryByText(removedLabel)).not.toBeInTheDocument();
     }
+    expect(screen.queryByText("scope")).not.toBeInTheDocument();
   });
 
   it("changes focus and opens project and memory panels through real actions", () => {
@@ -193,6 +212,7 @@ describe("OfficeView 8bit office restoration", () => {
         agents={agents}
         tasks={tasks}
         subAgents={[]}
+        meetingPresence={meetingPresence}
         onSelectAgent={vi.fn()}
         onSelectDepartment={vi.fn()}
         onOpenProjects={onOpenProjects}
@@ -200,17 +220,20 @@ describe("OfficeView 8bit office restoration", () => {
       />,
     );
 
-    const commandGroup = screen.getByLabelText("사무실 렌즈");
+    const commandGroup = screen.getByLabelText("사무실 명령");
     fireEvent.click(within(commandGroup).getByRole("button", { name: /^운영/ }));
     const shell = container.querySelector(".pixel-office-shell");
     expect(shell).toHaveAttribute("data-focus", "ops");
-    expect(shell).toHaveAttribute("data-camera", "quality");
-    expect(screen.getByRole("heading", { name: "OPS 관제 코너와 프로젝트 보드" })).toBeInTheDocument();
+    expect(shell).toHaveAttribute("data-focus-target", "ops-corner");
+    expect(shell).toHaveAttribute("data-camera", "activity");
+    expect(screen.getByRole("heading", { name: "작은 운영 관제 데스크" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /DonggriCompany/ }));
     expect(onOpenProjects).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "승인 기반 기억 상태 보기" }));
     expect(onOpenMemory).toHaveBeenCalledTimes(1);
+    expect(shell).toHaveAttribute("data-focus", "memory");
+    expect(shell).toHaveAttribute("data-focus-target", "memory-archive");
   });
 });

@@ -372,6 +372,61 @@ function ensureStandardErrorResponses(doc) {
   addResponse("InternalServerError", "Internal Server Error", "internal_error", "Unexpected server error.");
 }
 
+function ensureSecuritySchemes(doc) {
+  doc.components ??= {};
+  doc.components.securitySchemes ??= {};
+  doc.components.securitySchemes.bearerAuth ??= {
+    type: "http",
+    scheme: "bearer",
+    bearerFormat: "JWT",
+  };
+  doc.components.securitySchemes.inboxSecret ??= {
+    type: "apiKey",
+    in: "header",
+    name: "x-inbox-secret",
+  };
+  doc.components.securitySchemes.cookieAuth ??= {
+    type: "apiKey",
+    in: "cookie",
+    name: "sid",
+  };
+  doc.components.securitySchemes.csrfHeader ??= {
+    type: "apiKey",
+    in: "header",
+    name: "x-csrf-token",
+    description: "Required for cookie-authenticated mutation requests.",
+  };
+}
+
+function ensureLocalMutationOriginContract(pathname, method, operation, doc) {
+  if (!pathname.startsWith("/api/control-plane/") || !MUTATING_METHODS.has(method)) return;
+  doc.components ??= {};
+  doc.components.parameters ??= {};
+  doc.components.parameters.LocalControlPlaneMutationOrigin ??= {
+    name: "Origin",
+    in: "header",
+    required: true,
+    description: "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+    schema: {
+      type: "string",
+      enum: ["http://127.0.0.1:8800", "http://localhost:8800", "http://127.0.0.1:8810", "http://localhost:8810"],
+    },
+  };
+  operation.parameters ??= [];
+  const hasOriginParameter = operation.parameters.some((parameter) => {
+    if (!parameter || typeof parameter !== "object") return false;
+    if (parameter.$ref === "#/components/parameters/LocalControlPlaneMutationOrigin") return true;
+    return String(parameter.name ?? "").toLowerCase() === "origin" && String(parameter.in ?? "").toLowerCase() === "header";
+  });
+  if (!hasOriginParameter) {
+    operation.parameters.push({ $ref: "#/components/parameters/LocalControlPlaneMutationOrigin" });
+  }
+  const note =
+    "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header.";
+  const currentDescription = typeof operation.description === "string" ? operation.description : "";
+  operation.description = currentDescription.includes(note) ? currentDescription : currentDescription ? `${currentDescription}\n\n${note}` : note;
+}
+
 function isProtectedOperation(pathname, method, operation, doc) {
   if (!pathname.startsWith("/api/")) return false;
   if (PUBLIC_API_PATHS.has(pathname)) return false;
@@ -381,11 +436,15 @@ function isProtectedOperation(pathname, method, operation, doc) {
   return true;
 }
 
-function ensureOperationSecurity(pathname, operation) {
+function ensureOperationSecurity(pathname, method, operation) {
   if (pathname === "/api/inbox") {
     if (!Array.isArray(operation.security) || operation.security.length === 0) {
       operation.security = [{ inboxSecret: [] }];
     }
+    return;
+  }
+  if (MUTATING_METHODS.has(method)) {
+    operation.security = [{ bearerAuth: [] }, { cookieAuth: [], csrfHeader: [] }];
     return;
   }
   if (!Array.isArray(operation.security)) {
@@ -484,6 +543,7 @@ function normalizeOpenApiDoc(doc) {
   normalizeNullableTypes(doc);
   ensureErrorResponseSchema(doc);
   ensureStandardErrorResponses(doc);
+  ensureSecuritySchemes(doc);
   doc.paths ??= {};
 
   for (const [pathname, pathItem] of Object.entries(doc.paths)) {
@@ -492,8 +552,9 @@ function normalizeOpenApiDoc(doc) {
       const operation = pathItem[method];
       if (!operation || typeof operation !== "object") continue;
       if (isProtectedOperation(pathname, method, operation, doc)) {
-        ensureOperationSecurity(pathname, operation);
+        ensureOperationSecurity(pathname, method, operation);
       }
+      ensureLocalMutationOriginContract(pathname, method, operation, doc);
       ensureOperationErrorResponses(pathname, method, operation, doc);
       ensureRequestExamples(pathname, method, operation, doc);
       ensureResponseExamples(pathname, method, operation, doc);

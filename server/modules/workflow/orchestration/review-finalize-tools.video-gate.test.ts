@@ -127,6 +127,224 @@ describe("review finalize video gate", () => {
       db.close();
     }
   });
+
+  it("blocks worktree merge finalization without APR-GIT approval metadata", () => {
+    const db = createDb();
+    try {
+      const taskId = "task-review-git-approval";
+      db.prepare(
+        `
+          INSERT INTO tasks (
+            id, title, status, department_id, source_task_id, project_id, workflow_pack_key, workflow_meta_json, project_path, created_at, updated_at
+          )
+          VALUES (?, ?, 'review', 'planning', NULL, NULL, 'general', ?, '/tmp/project', 1, 1)
+        `,
+      ).run(taskId, "Review Git approval gate", JSON.stringify({}));
+
+      const mergeWorktree = vi.fn(() => ({ success: true, message: "merged" }));
+      const notifyTaskStatus = vi.fn();
+      const tools = createReviewFinalizeTools({
+        db,
+        nowMs: () => 1700000000000,
+        broadcast: vi.fn(),
+        appendTaskLog: vi.fn(),
+        getPreferredLanguage: () => "en",
+        pickL: (pool: any) => (Array.isArray(pool?.en) ? pool.en[0] : ""),
+        l: (ko: string[], en: string[], ja: string[], zh: string[]) => ({ ko, en, ja, zh }),
+        resolveLang: () => "en",
+        getProjectReviewGateSnapshot: () => ({ activeReview: 1, activeTotal: 1, ready: true }),
+        projectReviewGateNotifiedAt: new Map<string, number>(),
+        notifyCeo: vi.fn(),
+        taskWorktrees: new Map<string, { worktreePath: string; projectPath: string; branchName: string }>([
+          [taskId, { worktreePath: "/tmp/project/.climpire-worktrees/task", projectPath: "/tmp/project", branchName: "climpire/task" }],
+        ]),
+        mergeToDevAndCreatePR: vi.fn(() => ({ success: true, message: "pr created" })),
+        mergeWorktree,
+        cleanupWorktree: vi.fn(),
+        findTeamLeader: vi.fn(() => null),
+        getAgentDisplayName: vi.fn(() => "Leader"),
+        setTaskCreationAuditCompletion: vi.fn(),
+        endTaskExecutionSession: vi.fn(),
+        notifyTaskStatus,
+        refreshCliUsageData: vi.fn(async () => ({ tasks: 0 })),
+        shouldDeferTaskReportUntilPlanningArchive: vi.fn(() => false),
+        emitTaskReportEvent: vi.fn(),
+        formatTaskSubtaskProgressSummary: vi.fn(() => ""),
+        reviewRoundState: new Map<string, number>(),
+        reviewInFlight: new Set<string>(),
+        archivePlanningConsolidatedReport: vi.fn(async () => undefined),
+        crossDeptNextCallbacks: new Map<string, () => void>(),
+        recoverCrossDeptQueueAfterMissingCallback: vi.fn(),
+        subtaskDelegationCallbacks: new Map<string, () => void>(),
+        startReviewConsensusMeeting: vi.fn((_taskId: string, _taskTitle: string, _departmentId: string | null, onApproved: () => void) => {
+          onApproved();
+        }),
+        processSubtaskDelegations: vi.fn(),
+      } as any);
+
+      tools.finishReview(taskId, "Review Git approval gate", {
+        bypassProjectDecisionGate: true,
+        trigger: "test-git-gate",
+      });
+
+      const updated = db.prepare("SELECT status, workflow_meta_json FROM tasks WHERE id = ?").get(taskId) as {
+        status: string;
+        workflow_meta_json: string | null;
+      };
+      const meta = updated.workflow_meta_json ? JSON.parse(updated.workflow_meta_json) : {};
+      expect(updated.status).toBe("review");
+      expect(mergeWorktree).not.toHaveBeenCalled();
+      expect(notifyTaskStatus).toHaveBeenCalledWith(taskId, "Review Git approval gate", "review", "en");
+      expect(meta.review_consent).toMatchObject({
+        blocked: true,
+        state: "blocked",
+        blocked_by: ["git_mutation_approval_required"],
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("treats null workflow_meta_json as no Git approval instead of throwing", () => {
+    const db = createDb();
+    try {
+      const taskId = "task-review-null-meta";
+      db.prepare(
+        `
+          INSERT INTO tasks (
+            id, title, status, department_id, source_task_id, project_id, workflow_pack_key, workflow_meta_json, project_path, created_at, updated_at
+          )
+          VALUES (?, ?, 'review', 'planning', NULL, NULL, 'general', NULL, '/tmp/project', 1, 1)
+        `,
+      ).run(taskId, "Review null workflow meta");
+
+      const mergeWorktree = vi.fn(() => ({ success: true, message: "merged" }));
+      const tools = createReviewFinalizeTools({
+        db,
+        nowMs: () => 1700000000000,
+        broadcast: vi.fn(),
+        appendTaskLog: vi.fn(),
+        getPreferredLanguage: () => "en",
+        pickL: (pool: any) => (Array.isArray(pool?.en) ? pool.en[0] : ""),
+        l: (ko: string[], en: string[], ja: string[], zh: string[]) => ({ ko, en, ja, zh }),
+        resolveLang: () => "en",
+        getProjectReviewGateSnapshot: () => ({ activeReview: 1, activeTotal: 1, ready: true }),
+        projectReviewGateNotifiedAt: new Map<string, number>(),
+        notifyCeo: vi.fn(),
+        taskWorktrees: new Map<string, { worktreePath: string; projectPath: string; branchName: string }>([
+          [taskId, { worktreePath: "/tmp/project/.climpire-worktrees/task", projectPath: "/tmp/project", branchName: "climpire/task" }],
+        ]),
+        mergeToDevAndCreatePR: vi.fn(() => ({ success: true, message: "pr created" })),
+        mergeWorktree,
+        cleanupWorktree: vi.fn(),
+        findTeamLeader: vi.fn(() => null),
+        getAgentDisplayName: vi.fn(() => "Leader"),
+        setTaskCreationAuditCompletion: vi.fn(),
+        endTaskExecutionSession: vi.fn(),
+        notifyTaskStatus: vi.fn(),
+        refreshCliUsageData: vi.fn(async () => ({ tasks: 0 })),
+        shouldDeferTaskReportUntilPlanningArchive: vi.fn(() => false),
+        emitTaskReportEvent: vi.fn(),
+        formatTaskSubtaskProgressSummary: vi.fn(() => ""),
+        reviewRoundState: new Map<string, number>(),
+        reviewInFlight: new Set<string>(),
+        archivePlanningConsolidatedReport: vi.fn(async () => undefined),
+        crossDeptNextCallbacks: new Map<string, () => void>(),
+        recoverCrossDeptQueueAfterMissingCallback: vi.fn(),
+        subtaskDelegationCallbacks: new Map<string, () => void>(),
+        startReviewConsensusMeeting: vi.fn((_taskId: string, _taskTitle: string, _departmentId: string | null, onApproved: () => void) => {
+          onApproved();
+        }),
+        processSubtaskDelegations: vi.fn(),
+      } as any);
+
+      expect(() =>
+        tools.finishReview(taskId, "Review null workflow meta", {
+          bypassProjectDecisionGate: true,
+          trigger: "test-null-meta",
+        }),
+      ).not.toThrow();
+
+      const updated = db.prepare("SELECT status, workflow_meta_json FROM tasks WHERE id = ?").get(taskId) as {
+        status: string;
+        workflow_meta_json: string | null;
+      };
+      const meta = updated.workflow_meta_json ? JSON.parse(updated.workflow_meta_json) : {};
+      expect(updated.status).toBe("review");
+      expect(mergeWorktree).not.toHaveBeenCalled();
+      expect(meta.review_consent.blocked_by).toEqual(["git_mutation_approval_required"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("allows worktree merge finalization with APR-GIT approval metadata", () => {
+    const db = createDb();
+    try {
+      const taskId = "task-review-git-approved";
+      db.prepare(
+        `
+          INSERT INTO tasks (
+            id, title, status, department_id, source_task_id, project_id, workflow_pack_key, workflow_meta_json, project_path, created_at, updated_at
+          )
+          VALUES (?, ?, 'review', 'planning', NULL, NULL, 'general', ?, '/tmp/project', 1, 1)
+        `,
+      ).run(taskId, "Review Git approval pass", JSON.stringify({ git_mutation_approval_ref: "APR-GIT-001" }));
+
+      const mergeWorktree = vi.fn(() => ({ success: true, message: "merged" }));
+      const cleanupWorktree = vi.fn();
+      const tools = createReviewFinalizeTools({
+        db,
+        nowMs: () => 1700000000000,
+        broadcast: vi.fn(),
+        appendTaskLog: vi.fn(),
+        getPreferredLanguage: () => "en",
+        pickL: (pool: any) => (Array.isArray(pool?.en) ? pool.en[0] : ""),
+        l: (ko: string[], en: string[], ja: string[], zh: string[]) => ({ ko, en, ja, zh }),
+        resolveLang: () => "en",
+        getProjectReviewGateSnapshot: () => ({ activeReview: 1, activeTotal: 1, ready: true }),
+        projectReviewGateNotifiedAt: new Map<string, number>(),
+        notifyCeo: vi.fn(),
+        taskWorktrees: new Map<string, { worktreePath: string; projectPath: string; branchName: string }>([
+          [taskId, { worktreePath: "/tmp/project/.climpire-worktrees/task", projectPath: "/tmp/project", branchName: "climpire/task" }],
+        ]),
+        mergeToDevAndCreatePR: vi.fn(() => ({ success: true, message: "pr created" })),
+        mergeWorktree,
+        cleanupWorktree,
+        findTeamLeader: vi.fn(() => null),
+        getAgentDisplayName: vi.fn(() => "Leader"),
+        setTaskCreationAuditCompletion: vi.fn(),
+        endTaskExecutionSession: vi.fn(),
+        notifyTaskStatus: vi.fn(),
+        refreshCliUsageData: vi.fn(async () => ({ tasks: 0 })),
+        shouldDeferTaskReportUntilPlanningArchive: vi.fn(() => false),
+        emitTaskReportEvent: vi.fn(),
+        formatTaskSubtaskProgressSummary: vi.fn(() => ""),
+        reviewRoundState: new Map<string, number>(),
+        reviewInFlight: new Set<string>(),
+        archivePlanningConsolidatedReport: vi.fn(async () => undefined),
+        crossDeptNextCallbacks: new Map<string, () => void>(),
+        recoverCrossDeptQueueAfterMissingCallback: vi.fn(),
+        subtaskDelegationCallbacks: new Map<string, () => void>(),
+        startReviewConsensusMeeting: vi.fn((_taskId: string, _taskTitle: string, _departmentId: string | null, onApproved: () => void) => {
+          onApproved();
+        }),
+        processSubtaskDelegations: vi.fn(),
+      } as any);
+
+      tools.finishReview(taskId, "Review Git approval pass", {
+        bypassProjectDecisionGate: true,
+        trigger: "test-git-approved",
+      });
+
+      const updated = db.prepare("SELECT status FROM tasks WHERE id = ?").get(taskId) as { status: string };
+      expect(updated.status).toBe("done");
+      expect(mergeWorktree).toHaveBeenCalledTimes(1);
+      expect(cleanupWorktree).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+    }
+  });
   it("video_preprod task는 final.mp4 확인 전 승인/머지를 진행하지 않는다", () => {
     const db = createDb();
     try {

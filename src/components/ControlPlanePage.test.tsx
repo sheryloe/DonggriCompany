@@ -1,17 +1,23 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  activateCodexThread,
   applyControlPlaneSync,
+  applyHarnessBlueprint,
   applyProjectOperatorSync,
   createControlPlanePersona,
   decideControlPlanePersona,
+  finishCodexThread,
   getAgentMemoryContext,
+  getCodexThreadCurrent,
   getControlPlaneState,
   rememberAgentMemory,
   prepareControlPlaneRun,
+  previewHarnessBlueprint,
   previewProjectOperatorSync,
   previewControlPlaneSync,
+  saveHarnessBlueprintDraft,
   searchAgentMemoryFunctional,
   searchControlPlaneMemory,
   startControlPlaneRun,
@@ -23,15 +29,21 @@ import ControlPlanePage from "./ControlPlanePage";
 vi.mock("../api/control-plane", async () => {
   return {
     applyControlPlaneSync: vi.fn(),
+    applyHarnessBlueprint: vi.fn(),
     applyProjectOperatorSync: vi.fn(),
+    activateCodexThread: vi.fn(),
     createControlPlanePersona: vi.fn(),
     decideControlPlanePersona: vi.fn(),
+    finishCodexThread: vi.fn(),
     getAgentMemoryContext: vi.fn(),
+    getCodexThreadCurrent: vi.fn(),
     getControlPlaneState: vi.fn(),
     rememberAgentMemory: vi.fn(),
     prepareControlPlaneRun: vi.fn(),
+    previewHarnessBlueprint: vi.fn(),
     previewProjectOperatorSync: vi.fn(),
     previewControlPlaneSync: vi.fn(),
+    saveHarnessBlueprintDraft: vi.fn(),
     searchAgentMemoryFunctional: vi.fn(),
     searchControlPlaneMemory: vi.fn(),
     startControlPlaneRun: vi.fn(),
@@ -333,6 +345,24 @@ function buildState(): ControlPlaneState {
       runtime_path: "G:\\Donggr_Runtime\\agentmemory",
       server_url: "http://127.0.0.1:3111",
       viewer_url: "http://127.0.0.1:3113",
+      runtime_preflight: {
+        runtime_path_exists: false,
+        server_port: 3111,
+        viewer_port: 3113,
+        health_url: "http://127.0.0.1:3111/agentmemory/health",
+        livez_url: "http://127.0.0.1:3111/agentmemory/livez",
+        approved_runtime_connect: false,
+        approval_refs: [],
+      },
+      viewer_preflight: {
+        viewer_url: "http://127.0.0.1:3113",
+        viewer_port: 3113,
+        reachable: false,
+        status_code: null,
+        embed_mode: "fallback",
+        error: "offline",
+        reason: "network_error",
+      },
       health: {
         available: false,
         status_code: null,
@@ -408,6 +438,13 @@ function buildState(): ControlPlaneState {
         hook_auto_capture_enabled: false,
         delete_forget_enabled: false,
       },
+      approval_gate: {
+        runtime_connect_allowed: false,
+        runtime_connect_required_approval: "APR-MEM-RUNTIME-*",
+        remember_policy_approval: "APR-MEM-001",
+        blocked_operations: ["install/start", "MCP wiring", "global hooks", "transcript capture", "delete", "forget", "import"],
+        next_safe_action: "Record approval first, then start AgentMemory runtime in a separate OPS step.",
+      },
       integration_mode: "functional-safe-proxy",
       install_required_approval: true,
       safe_proxy_available: false,
@@ -462,6 +499,146 @@ function buildState(): ControlPlaneState {
       recent_runs: [],
       recent_personas: [],
       recent_events: [],
+    },
+    harness_blueprints: {
+      tables_exist: true,
+      draft_count: 0,
+      department_draft_count: 0,
+      project_draft_count: 0,
+      evidence_backed_count: 0,
+      latest_blueprints: [],
+    },
+    quality_harness: {
+      level: "Level 2 - strong beta hardening",
+      score: 720,
+      target_score: 1000,
+      target_release_score: 830,
+      certification_claim: "not-certified",
+      checks: [
+        {
+          key: "thread_relationship",
+          label: "Codex thread relationship",
+          status: "warn",
+          detail: "Previous thread remains connected while current/latest thread is not activated yet.",
+          next_safe_action: "Activate the current thread with project:DonggriCompany scope.",
+        },
+        {
+          key: "agentmemory_runtime",
+          label: "AgentMemory runtime gate",
+          status: "warn",
+          detail: "AgentMemory runtime is offline or not approved for start/connect.",
+          next_safe_action: "Get separate OPS approval before runtime start/connect or MCP wiring.",
+        },
+        {
+          key: "release_hygiene",
+          label: "Release hygiene",
+          status: "warn",
+          detail: "DonggriCompany has dirty or untracked files that must be grouped before release.",
+          next_safe_action: "Review groups and split commit-ready changes only after explicit Git approval.",
+        },
+      ],
+      qms: {
+        nonconformances: [
+          {
+            id: "NC-REL-001",
+            source: "release-hygiene-classifier",
+            severity: "major",
+            owner_department: "OPS",
+            related_spec: "20260527-dongri-agent-harness-hardening-v1",
+            related_run: null,
+            root_cause: "Mixed tracked/untracked changes are present in the baseline repo.",
+            containment: "Classify files and block cleanup.",
+            corrective_action: "Split release groups.",
+            preventive_action: "Keep classifier visible.",
+            due_at: "2026-05-28",
+            effectiveness_check: "Generated artifacts excluded from release candidates.",
+            status: "open",
+            evidence_refs: ["EV-REL-HYGIENE"],
+          },
+        ],
+        capas: [
+          {
+            id: "CAPA-HARNESS-001",
+            source: "717-of-1000 harness assessment",
+            severity: "major",
+            owner_department: "CONTROL",
+            related_spec: "20260527-dongri-agent-harness-hardening-v1",
+            status: "in_progress",
+            evidence_refs: ["EV-QMS-HARDENING"],
+          },
+        ],
+        internal_audits: [
+          {
+            id: "AUD-HARNESS-001",
+            source: "Dongri Agent Harness Hardening Ver.1",
+            severity: "medium",
+            owner_department: "REVIEW",
+            related_spec: "20260527-dongri-agent-harness-hardening-v1",
+            scope: "API approvals, AgentMemory, persona evidence, QMS, release hygiene",
+            findings: ["NC-REL-001"],
+            status: "in_progress",
+            evidence_refs: ["EV-AUD-HARNESS"],
+          },
+        ],
+        counts: {
+          open_nonconformances: 1,
+          open_capas: 1,
+          open_audits: 1,
+        },
+        score_impact: 60,
+        policy: "ISO 9001-inspired evidence loop; no certification claim",
+      },
+      thread_relationship: {
+        current_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        current_activation_id: null,
+        current_activation_scope: null,
+        previous_activation_id: "cprun-thread-old",
+        previous_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        shared_memory_scope: "project:DonggriCompany",
+        raw_transcript_capture: false,
+      },
+      agentmemory_gate: {
+        server_available: false,
+        safe_proxy_available: false,
+        runtime_connect_allowed: false,
+        required_approval: "separate OPS approval",
+        blocked_operations: ["install/start", "MCP wiring", "global hooks", "transcript capture", "delete", "forget", "import"],
+        remember_approved: true,
+      },
+      persona_evidence: {
+        tables_exist: true,
+        persona_total: 0,
+        recent_event_count: 0,
+        recent_personas: [],
+        recent_events: [],
+      },
+      harness_blueprint_coverage: {
+        tables_exist: true,
+        draft_count: 0,
+        department_draft_count: 0,
+        project_draft_count: 0,
+        evidence_backed_count: 0,
+        latest_blueprints: [],
+        apply_requires_approval: "APR-HARNESS-APPLY-*",
+      },
+      release_hygiene: {
+        project_key: "DonggriCompany",
+        git_status: "dirty",
+        branch: "main",
+        dirty_count: 28,
+        untracked_count: 7,
+        grouped_changes: [
+          { group: "harness-candidate", count: 2, samples: ["server/modules/routes/ops/control-plane.ts"] },
+          { group: "ui-candidate", count: 2, samples: ["src/components/ControlPlanePage.tsx"] },
+          { group: "generated-artifacts/screenshots", count: 7, samples: [".tmp-dongri-control-hub-smoke.png"] },
+        ],
+        commit_exclusion_manifest: {
+          exclude_groups: ["generated-artifacts/screenshots", "unrelated-unknown"],
+          require_review_groups: ["harness-candidate", "ui-candidate", "agent-directory-migration", "docs-candidate"],
+          destructive_cleanup_allowed: false,
+        },
+        policy: "diagnostic-only; no clean/stash/commit without explicit approval",
+      },
     },
     dongri_grigri: {
       brand: "Dongri-grigri",
@@ -561,6 +738,20 @@ describe("ControlPlanePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getControlPlaneState).mockResolvedValue(buildState());
+    vi.mocked(getCodexThreadCurrent).mockResolvedValue({
+      ok: true,
+      detected_thread: {
+        thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        source: "env:CODEX_THREAD_ID",
+      },
+      session_candidates: [],
+      default_scope: {
+        scope_type: "project",
+        scope_value: "DonggriCompany",
+        scope_key: "project:DonggriCompany",
+      },
+      active_activation: null,
+    });
     vi.mocked(searchControlPlaneMemory).mockResolvedValue({
       ok: true,
       available: true,
@@ -718,6 +909,54 @@ describe("ControlPlanePage", () => {
         domain_tables_mutated: false,
       },
     });
+    const harnessBlueprint = {
+      preview_id: "harness-preview-test",
+      target_mode: "both",
+      target_scope_key: "project:DonggriCompany",
+      pattern: "producer-reviewer",
+      phases: [
+        { id: "control-intake", owner: "CONTROL", name: "접수와 승인" },
+        { id: "review-gate", owner: "REVIEW", name: "증거 기반 검토" },
+      ],
+      suggested_personas: [
+        { id: "explore-readonly", policy: "disposable-read-only" },
+        { id: "review-evidence", policy: "disposable-review-only" },
+      ],
+      evidence_plan: ["requirements.md", "design.md", "evidence.md"],
+      approval_map: [{ approval_class: "APR-HARNESS-META-*", status: "required-for-draft" }],
+      qms_checks: ["nonconformance trigger", "CAPA hook", "internal audit checklist"],
+    };
+    vi.mocked(previewHarnessBlueprint).mockResolvedValue({
+      ok: true,
+      status: 200,
+      writes: false,
+      blueprint_id: "harness-preview-test",
+      blueprint: harnessBlueprint,
+    });
+    vi.mocked(saveHarnessBlueprintDraft).mockResolvedValue({
+      ok: true,
+      status: 200,
+      writes: true,
+      blueprint_id: "harness-blueprint-test",
+      blueprint: harnessBlueprint,
+      draft: { id: "harness-blueprint-test", status: "draft" },
+      harness_blueprints: {
+        tables_exist: true,
+        draft_count: 1,
+        department_draft_count: 1,
+        project_draft_count: 1,
+        evidence_backed_count: 1,
+        latest_blueprints: [{ id: "harness-blueprint-test", status: "draft" }],
+      },
+    });
+    vi.mocked(applyHarnessBlueprint).mockResolvedValue({
+      ok: false,
+      status: 409,
+      writes: false,
+      error: "harness_apply_blocked_in_v1",
+      message: "APR-HARNESS-APPLY-* approval is required before applying a blueprint.",
+      blueprint_id: "harness-blueprint-test",
+    });
     const runPayload = {
       ok: true,
       status: 200,
@@ -745,6 +984,32 @@ describe("ControlPlanePage", () => {
       personas: [{ persona_id: "control-smoke", status: "accepted" }],
       events: [{ id: "event-2", persona_id: "control-smoke", event_type: "decision", decision: "accept" }],
     });
+    vi.mocked(activateCodexThread).mockResolvedValue({
+      ...runPayload,
+      run: {
+        id: "cprun-thread-test",
+        status: "observing",
+        department_agent: "OPS",
+        context_pack_json: JSON.stringify({
+          source: "codex_thread_activation",
+          codex_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+          scope_key: "project:DonggriCompany",
+        }),
+      },
+    });
+    vi.mocked(finishCodexThread).mockResolvedValue({
+      ...runPayload,
+      run: {
+        id: "cprun-thread-test",
+        status: "completed",
+        department_agent: "OPS",
+        context_pack_json: JSON.stringify({
+          source: "codex_thread_activation",
+          codex_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+          scope_key: "project:DonggriCompany",
+        }),
+      },
+    });
   });
 
   it("shows Dongri-grigri source-of-truth status inside the office platform", async () => {
@@ -761,22 +1026,96 @@ describe("ControlPlanePage", () => {
 
   it("runs a read-only AgentMemory search probe without rendering raw transcripts", async () => {
     const user = userEvent.setup();
+    vi.mocked(searchAgentMemoryFunctional).mockResolvedValue({
+      ok: false,
+      available: false,
+      query: "auth policy",
+      scope: "root",
+      results: [],
+      status_code: null,
+      error: "agentmemory_unavailable",
+      reason: "network_error",
+    });
+    vi.mocked(getAgentMemoryContext).mockResolvedValue({
+      ok: false,
+      available: false,
+      query: "auth policy",
+      scope: "root",
+      context: null,
+      status_code: null,
+      error: "agentmemory_unavailable",
+      reason: "network_error",
+    });
     render(<ControlPlanePage />);
 
     await screen.findByRole("heading", { name: "Office Control Platform" });
     await user.click(screen.getByRole("button", { name: "Memory" }));
-    expect(screen.getByText("AgentMemory 상태")).toBeInTheDocument();
-    expect(screen.getByText("Search / Context / Remember")).toBeInTheDocument();
-    expect(screen.getByText("Remember 저장")).toBeDisabled();
+    expect(screen.getByText("AgentMemory Workbench")).toBeInTheDocument();
+    expect(screen.getByText("내부 Viewer + 안전 작업대")).toBeInTheDocument();
+    expect(screen.getByText("내부 Viewer")).toBeInTheDocument();
+    expect(screen.getByText("AgentMemory Viewer 대기 중")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "안전 작업대" })).toBeInTheDocument();
+    expect(screen.getByText("Runtime 연결 게이트")).toBeInTheDocument();
+    expect(screen.getAllByText(/APR-MEM-RUNTIME/).length).toBeGreaterThan(0);
+    expect(screen.getByText("기억 저장")).toBeDisabled();
+    expect(screen.getByText(/기록할 운영 메모를 입력하면 저장 준비가 됩니다/)).toBeInTheDocument();
+    expect(screen.getAllByText("스마트 검색").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("컨텍스트 회수").length).toBeGreaterThan(0);
+    expect(screen.getByText("증거 ID")).toBeInTheDocument();
+    expect(screen.queryByText("hybrid viewer + safe proxy")).not.toBeInTheDocument();
+    expect(screen.queryByText("Context Recall")).not.toBeInTheDocument();
+    expect(screen.queryByText("Evidence ref")).not.toBeInTheDocument();
 
-    await user.type(screen.getByPlaceholderText("메모리 검색어 또는 context 질문"), "auth policy");
-    await user.click(screen.getByRole("button", { name: "Smart Search" }));
+    await user.type(screen.getByPlaceholderText("예: active spec memory policy"), "auth policy");
+    await user.click(screen.getByRole("button", { name: "스마트 검색" }));
 
-    expect(await screen.findByText(/raw_payload_omitted/)).toBeInTheDocument();
+    expect(await screen.findByText("검색 결과")).toBeInTheDocument();
+    expect(screen.getByText("AgentMemory 미실행 상태입니다. 검색은 runtime 연결 후 가능합니다.")).toBeInTheDocument();
     expect(searchAgentMemoryFunctional).toHaveBeenCalledWith({ query: "auth policy", scope: "root" });
 
-    await user.click(screen.getByRole("button", { name: "Context Recall" }));
+    await user.click(screen.getByRole("button", { name: "컨텍스트 회수" }));
     expect(getAgentMemoryContext).toHaveBeenCalledWith({ query: "auth policy", scope: "root" });
+    expect(await screen.findByText("컨텍스트 요약")).toBeInTheDocument();
+  });
+
+  it("falls back from a reachable AgentMemory iframe if the frame never settles", async () => {
+    const state = buildState();
+    state.memory.viewer_preflight = {
+      viewer_url: "http://127.0.0.1:3113",
+      viewer_port: 3113,
+      reachable: true,
+      status_code: 200,
+      embed_mode: "iframe",
+      error: null,
+      reason: "ok",
+    };
+    vi.mocked(getControlPlaneState).mockResolvedValue(state);
+    const user = userEvent.setup();
+    render(<ControlPlanePage />);
+
+    await screen.findByRole("heading", { name: "Office Control Platform" });
+    await user.click(screen.getByRole("button", { name: "Memory" }));
+    expect(await screen.findByText("불러오는 중")).toBeInTheDocument();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2600));
+    });
+    expect(await screen.findByText("AgentMemory Viewer 대기 중")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "안전 작업대" })).toBeInTheDocument();
+  });
+
+  it("explains the APR-MEM approval requirement before remember can run", async () => {
+    const state = buildState();
+    state.quality_harness.agentmemory_gate.remember_approved = false;
+    vi.mocked(getControlPlaneState).mockResolvedValue(state);
+    const user = userEvent.setup();
+    render(<ControlPlanePage />);
+
+    await screen.findByRole("heading", { name: "Office Control Platform" });
+    await user.click(screen.getByRole("button", { name: "Memory" }));
+
+    expect(screen.getByText("기억 저장")).toBeDisabled();
+    expect(screen.getByText(/APR-MEM-001 승인이 없어 기억 저장을 막았습니다/)).toBeInTheDocument();
   });
 
   it("runs the dedicated Control Plane runner smoke path", async () => {
@@ -785,6 +1124,30 @@ describe("ControlPlanePage", () => {
 
     await screen.findByRole("heading", { name: "Office Control Platform" });
     await user.click(screen.getByRole("button", { name: "Runner" }));
+    expect(screen.getByText("현재 Codex thread 연결")).toBeInTheDocument();
+    expect(screen.getByText("품질 하네스 현재 수준")).toBeInTheDocument();
+    expect(screen.getByText("Release hygiene groups")).toBeInTheDocument();
+    expect(screen.getByText(/019e4ad5-a24d-7711-924a-7fbf3f99ad88/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "현재 thread 연결" }));
+    expect(activateCodexThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        scope_type: "project",
+        scope_value: "DonggriCompany",
+        status: "observing",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "evidence/handoff 후 종료" }));
+    expect(finishCodexThread).toHaveBeenCalledWith(
+      "cprun-thread-test",
+      expect.objectContaining({
+        final_status: "completed",
+        evidence_refs: ["storage/codex-control/specs/20260522-dongri-grigri-control-hub-v1/evidence.md"],
+        handoff_path: "storage/codex-control/specs/20260522-dongri-grigri-control-hub-v1/handoff.md",
+      }),
+    );
+
     await user.click(screen.getByRole("button", { name: "운영 run 준비" }));
     expect(prepareControlPlaneRun).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -792,6 +1155,134 @@ describe("ControlPlanePage", () => {
       }),
     );
     expect(await screen.findByText(/cprun-test/)).toBeInTheDocument();
+  });
+
+  it("previews and saves a Donggri-native harness blueprint before apply is approved", async () => {
+    const user = userEvent.setup();
+    render(<ControlPlanePage />);
+
+    await screen.findByRole("heading", { name: "Office Control Platform" });
+    await user.click(screen.getByRole("button", { name: "Runner" }));
+
+    expect(screen.getByText("하네스 메타 생성기")).toBeInTheDocument();
+    expect(screen.getByText(/APR-HARNESS-APPLY-\*/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply 차단 확인" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    expect(previewHarnessBlueprint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_mode: "both",
+        project_key: "DonggriCompany",
+        preferred_pattern: "auto",
+      }),
+    );
+    expect(await screen.findByText("접수와 승인")).toBeInTheDocument();
+    expect(screen.getByText("추천 disposable persona")).toBeInTheDocument();
+    expect(screen.getByText(/requirements.md/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Draft 저장" }));
+    expect(saveHarnessBlueprintDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_mode: "both",
+        project_key: "DonggriCompany",
+        evidence_refs: ["EV-HARNESS-META-002"],
+      }),
+    );
+    expect(await screen.findByText("harness-blueprint-test")).toBeInTheDocument();
+    expect(screen.getByText("draft saved")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Apply 차단 확인" }));
+    expect(applyHarnessBlueprint).toHaveBeenCalledWith("harness-blueprint-test");
+    expect(await screen.findByText("harness_apply_blocked_in_v1")).toBeInTheDocument();
+  });
+
+  it("prefers the detected current thread over newer session-file candidates", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getCodexThreadCurrent).mockResolvedValue({
+      ok: true,
+      detected_thread: {
+        thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        source: "env:CODEX_THREAD_ID",
+      },
+      session_candidates: [
+        {
+          thread_id: "019e6290-f27f-7763-bf2a-71940ebd6945",
+          source: "session-file",
+          path: "C:\\Users\\wlflq\\.codex\\sessions\\current.jsonl",
+          size: 1024,
+          mtime: "2026-05-26T04:00:00.000Z",
+        },
+      ],
+      default_scope: {
+        scope_type: "project",
+        scope_value: "DonggriCompany",
+        scope_key: "project:DonggriCompany",
+      },
+      active_activation: {
+        id: "cprun-thread-old",
+        status: "observing",
+        department_agent: "OPS",
+        context_pack_json: JSON.stringify({
+          source: "codex_thread_activation",
+          codex_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+          scope_key: "project:DonggriCompany",
+        }),
+      },
+    });
+
+    render(<ControlPlanePage />);
+
+    await screen.findByRole("heading", { name: "Office Control Platform" });
+    await user.click(screen.getByRole("button", { name: "Runner" }));
+
+    expect(screen.getByText("현재 thread 연결됨")).toBeInTheDocument();
+    expect(screen.getByText("019e4ad5...ad88")).toBeInTheDocument();
+    expect(screen.getByText("scope 공유")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "현재 thread 연결" }));
+    expect(activateCodexThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        scope_type: "project",
+        scope_value: "DonggriCompany",
+      }),
+    );
+  });
+
+  it("does not auto-connect session-file candidates when no current thread is detected", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getCodexThreadCurrent).mockResolvedValue({
+      ok: true,
+      detected_thread: {
+        thread_id: null,
+        source: "none",
+      },
+      session_candidates: [
+        {
+          thread_id: "019e6290-f27f-7763-bf2a-71940ebd6945",
+          source: "session-file",
+          path: "C:\\Users\\wlflq\\.codex\\sessions\\current.jsonl",
+          size: 1024,
+          mtime: "2026-05-26T04:00:00.000Z",
+        },
+      ],
+      default_scope: {
+        scope_type: "project",
+        scope_value: "DonggriCompany",
+        scope_key: "project:DonggriCompany",
+      },
+      active_activation: null,
+    });
+
+    render(<ControlPlanePage />);
+
+    await screen.findByRole("heading", { name: "Office Control Platform" });
+    await user.click(screen.getByRole("button", { name: "Runner" }));
+
+    expect(screen.getByText(/감지된 thread 없음/)).toBeInTheDocument();
+    expect(screen.getByText("session 후보 019e6290...6945 · 수동 입력 후 연결")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "현재 thread 연결" })).toBeDisabled();
+    expect(activateCodexThread).not.toHaveBeenCalled();
   });
 
   it("shows OPS project scopes without creating per-project operators", async () => {

@@ -1,6 +1,10 @@
 import { Rectangle, Sprite, Texture, type Container } from "pixi.js";
+import type { AgentSpriteAssetPack } from "./spriteAssets";
 
-export const OFFICE_PROP_ATLAS_URL = "/sprites/office-renewal-v2/office-props-atlas.png";
+export const LEGACY_OFFICE_PROP_ATLAS_URL = "/sprites/office-renewal-v2/office-props-atlas.png";
+export const DONGGRI_VISUAL_V2_OFFICE_PROP_ATLAS_URL =
+  "/sprites/donggri-visual-v2/office-renewal-v3-props-atlas.png";
+export const OFFICE_PROP_ATLAS_URL = LEGACY_OFFICE_PROP_ATLAS_URL;
 export const OFFICE_PROP_ATLAS_TEXTURE_KEY = "office-props-atlas";
 
 export type OfficeAssetKey =
@@ -48,6 +52,10 @@ export const OFFICE_PROP_FRAMES: Record<OfficeAssetKey, OfficePropFrame> = {
   designBoard: { x: 590, y: 934, w: 286, h: 268 },
   lectureBoard: { x: 902, y: 928, w: 326, h: 282 },
 };
+
+export function getOfficePropAtlasUrl(pack?: AgentSpriteAssetPack | string | null): string {
+  return pack === "donggri_visual_v2" ? DONGGRI_VISUAL_V2_OFFICE_PROP_ATLAS_URL : LEGACY_OFFICE_PROP_ATLAS_URL;
+}
 
 interface AddOfficePropOptions {
   x: number;

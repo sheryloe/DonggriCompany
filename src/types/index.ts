@@ -46,11 +46,13 @@ export type CanonicalIdentitySource = "stored" | "derived";
 export type CliProvider =
   | "claude"
   | "codex"
-  | "gemini"
+  | "agy"
   | "jules"
   | "opencode"
   | "kimi"
   | "copilot"
+  // Legacy provider keys may still exist in old records; new writes use `agy`.
+  | "gemini"
   | "antigravity"
   | "api";
 export type MeetingReviewDecision = "reviewing" | "approved" | "hold";
@@ -934,11 +936,13 @@ export interface StrategicMaintenanceStatus {
 
 export type PixelAgentDensity = "compact" | "balanced" | "showcase";
 export type PixelAgentOfficeTheme = "donggri_cloud_lab";
+export type PixelAgentVisualAssetPack = "legacy" | "donggri_visual_v2";
 
 export interface PixelAgentModeSettings {
   enabled: boolean;
   density: PixelAgentDensity;
   officeTheme: PixelAgentOfficeTheme;
+  visualAssetPack?: PixelAgentVisualAssetPack;
 }
 
 export const MESSENGER_CHANNELS = [
@@ -1043,6 +1047,7 @@ export const DEFAULT_SETTINGS: CompanySettings = {
     enabled: false,
     density: "balanced",
     officeTheme: "donggri_cloud_lab",
+    visualAssetPack: "donggri_visual_v2",
   },
   providerModelConfig: {
     claude: { model: "claude-opus-4-6", subModel: "claude-sonnet-4-6" },
@@ -1052,10 +1057,9 @@ export const DEFAULT_SETTINGS: CompanySettings = {
       subModel: "gpt-5.3-codex",
       subModelReasoningLevel: "high",
     },
-    gemini: { model: "gemini-3-pro-preview" },
+    agy: { model: "Gemini 3.1 Pro (High)" },
     opencode: { model: "github-copilot/claude-sonnet-4.6" },
     copilot: { model: "github-copilot/claude-sonnet-4.6" },
-    antigravity: { model: "google/antigravity-gemini-3-pro" },
   },
   messengerChannels: {
     telegram: { token: "", sessions: [], receiveEnabled: true },

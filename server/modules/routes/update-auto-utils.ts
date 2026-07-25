@@ -1,3 +1,5 @@
+import { compareStrictSemVer, parseStrictSemVer } from "../release/release-identity.ts";
+
 export type AutoUpdateChannel = "patch" | "minor" | "all";
 export type UpdateDeltaKind = "none" | "patch" | "minor" | "major";
 
@@ -14,13 +16,8 @@ export function normalizeVersionTag(value: string): string {
  * - 1.2.3+build.5 -> 1.2.3
  */
 export function normalizeSemverCore(value: string): string {
-  const normalized = normalizeVersionTag(value);
-  if (!normalized) return "";
-  const [withoutBuild] = normalized.split("+", 1);
-  const [core] = withoutBuild.split("-", 1);
-  const semverCore = core || normalized;
-  if (!/^\d+\.\d+\.\d+$/.test(semverCore)) return "";
-  return semverCore;
+  const parsed = parseStrictSemVer(value);
+  return parsed ? `${parsed.major}.${parsed.minor}.${parsed.patch}` : "";
 }
 
 function parseSemverCoreParts(core: string): number[] {
@@ -37,30 +34,16 @@ export function parseVersionParts(value: string): number[] {
 }
 
 export function isRemoteVersionNewer(remote: string, local: string): boolean {
-  const remoteCore = normalizeSemverCore(remote);
-  const localCore = normalizeSemverCore(local);
-  if (!remoteCore || !localCore) return false;
-
-  const remoteParts = parseSemverCoreParts(remoteCore);
-  const localParts = parseSemverCoreParts(localCore);
-  const length = Math.max(remoteParts.length, localParts.length);
-  for (let i = 0; i < length; i += 1) {
-    const r = remoteParts[i] ?? 0;
-    const l = localParts[i] ?? 0;
-    if (r === l) continue;
-    return r > l;
-  }
-  return false;
+  return compareStrictSemVer(remote, local) === 1;
 }
 
 export function computeVersionDeltaKind(local: string, remote: string | null): UpdateDeltaKind {
   if (!remote || !isRemoteVersionNewer(remote, local)) return "none";
-  const l = parseVersionParts(local);
-  const r = parseVersionParts(remote);
-  const [lMajor = 0, lMinor = 0] = l;
-  const [rMajor = 0, rMinor = 0] = r;
-  if (rMajor > lMajor) return "major";
-  if (rMinor > lMinor) return "minor";
+  const localVersion = parseStrictSemVer(local);
+  const remoteVersion = parseStrictSemVer(remote);
+  if (!localVersion || !remoteVersion) return "none";
+  if (localVersion.major !== remoteVersion.major) return "major";
+  if (localVersion.minor !== remoteVersion.minor) return "minor";
   return "patch";
 }
 

@@ -10,7 +10,7 @@ import {
   buildAgentSpriteKey,
   buildAgentSpriteUrl,
 } from "./spriteAssets";
-import { OFFICE_PROP_ATLAS_TEXTURE_KEY, OFFICE_PROP_ATLAS_URL } from "./officePropAtlas";
+import { OFFICE_PROP_ATLAS_TEXTURE_KEY, getOfficePropAtlasUrl } from "./officePropAtlas";
 
 interface UseOfficePixiRuntimeParams {
   containerRef: MutableRefObject<HTMLDivElement | null>;
@@ -111,6 +111,7 @@ export function useOfficePixiRuntime({
       element.appendChild(canvas);
 
       const spriteMap = buildSpriteMap(dataRef.current.agents);
+      const officePropAtlasUrl = getOfficePropAtlasUrl(pixelAgentMode?.visualAssetPack);
       const textures: Record<string, Texture> = {};
       const loads: Promise<void>[] = [];
       const spriteNums = new Set<number>();
@@ -123,7 +124,7 @@ export function useOfficePixiRuntime({
           for (const frame of AGENT_SPRITE_WALK_FRAMES) {
             const key = buildAgentSpriteKey(spriteNum, direction, frame);
             loads.push(
-              Assets.load<Texture>(buildAgentSpriteUrl(spriteNum, direction, frame))
+              Assets.load<Texture>(buildAgentSpriteUrl(spriteNum, direction, frame, pixelAgentMode?.visualAssetPack))
                 .then((texture) => {
                   textures[key] = texture;
                 })
@@ -142,7 +143,7 @@ export function useOfficePixiRuntime({
       );
 
       loads.push(
-        Assets.load<Texture>(OFFICE_PROP_ATLAS_URL)
+        Assets.load<Texture>(officePropAtlasUrl)
           .then((texture) => {
             textures[OFFICE_PROP_ATLAS_TEXTURE_KEY] = texture;
           })
@@ -252,6 +253,7 @@ export function useOfficePixiRuntime({
     triggerDepartmentInteract,
     keysRef,
     tickerContext,
+    pixelAgentMode?.visualAssetPack,
   ]);
 
   useEffect(() => {

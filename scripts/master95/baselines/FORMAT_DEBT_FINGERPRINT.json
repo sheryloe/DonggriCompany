@@ -1,0 +1,9 @@
+{
+  "schema_version": "2026-07-15.master95.format-debt-fingerprint.v1",
+  "source_ref": "contracts/v1/FORMAT_DEBT_BASELINE.json",
+  "prettier_version": "3.8.1",
+  "glob": "**/*.{ts,tsx,js,mjs,cjs,json,yml,yaml,css,scss,html}",
+  "file_count": 85,
+  "canonical_list_sha256": "72658a10ac2bd095a7c9c2d81035919acd66c02bfa0406802ab1c1b665a6f554",
+  "policy": "exact-match-only-new-or-removed-drift-fails"
+}

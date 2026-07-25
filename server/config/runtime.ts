@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveReleaseIdentity } from "../modules/release/release-identity.ts";
 
 export const SERVER_DIRNAME = path.dirname(fileURLToPath(import.meta.url));
 
@@ -46,15 +47,14 @@ loadEnvFile(oauthRuntimeEnvPath, true);
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-export const PKG_VERSION: string = (() => {
-  try {
-    return (
-      JSON.parse(fs.readFileSync(path.resolve(SERVER_DIRNAME, "..", "..", "package.json"), "utf8")).version ?? "1.0.0"
-    );
-  } catch {
-    return "1.0.0";
-  }
-})();
+if (
+  process.env.DONGRI_CERTIFICATION_MODE === "1" &&
+  !/^[0-9a-f]{40}$/i.test(process.env.DONGRI_RELEASE_GIT_SHA?.trim() ?? "")
+) {
+  throw new Error("certification_runtime_git_sha_binding_required");
+}
+export const RELEASE_IDENTITY = resolveReleaseIdentity(path.resolve(SERVER_DIRNAME, "..", ".."));
+export const PKG_VERSION: string = RELEASE_IDENTITY.product_version;
 
 export const PORT = Number(process.env.PORT ?? 8790);
 export const HOST = process.env.HOST ?? "127.0.0.1";
@@ -83,7 +83,7 @@ export const OPENCLAW_CONFIG_PATH = normalizePathEnv(process.env.OPENCLAW_CONFIG
 export const API_AUTH_TOKEN = normalizeSecret(process.env.API_AUTH_TOKEN);
 export const INBOX_WEBHOOK_SECRET = normalizeSecret(process.env.INBOX_WEBHOOK_SECRET);
 export const SESSION_AUTH_TOKEN = API_AUTH_TOKEN || randomBytes(32).toString("hex");
-export const ALLOWED_ORIGIN_SUFFIXES = (process.env.ALLOWED_ORIGIN_SUFFIXES ?? ".ts.net")
+export const ALLOWED_ORIGIN_SUFFIXES = (process.env.ALLOWED_ORIGIN_SUFFIXES ?? "")
   .split(",")
   .map((v) => v.trim())
   .filter(Boolean);

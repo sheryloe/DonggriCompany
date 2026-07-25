@@ -1,12 +1,9 @@
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
-import { PKG_VERSION } from "../../../../config/runtime.ts";
+import { PKG_VERSION, RELEASE_IDENTITY } from "../../../../config/runtime.ts";
 import { isAuthenticated } from "../../../../security/auth.ts";
-import {
-  isRemoteVersionNewer,
-  normalizeVersionTag,
-  type AutoUpdateChannel,
-  type UpdateDeltaKind,
-} from "../../update-auto-utils.ts";
+import { discoverGitHubReleaseIdentity } from "../../../release/github-release-discovery.ts";
+import type { ReleaseComparison, ReleaseIdentity } from "../../../release/release-identity.ts";
+import type { AutoUpdateChannel } from "../../update-auto-utils.ts";
 import { parseAutoUpdateChannel } from "../../update-auto-policy.ts";
 import { createAutoUpdateLock } from "../../update-auto-lock.ts";
 import { createCommandCaptureTools } from "./command-capture.ts";
@@ -29,7 +26,7 @@ export function registerUpdateAutoRoutes(ctx: RuntimeContext): void {
   const killPidTree = __ctx.killPidTree;
 
   const UPDATE_CHECK_ENABLED = String(process.env.UPDATE_CHECK_ENABLED ?? "1").trim() !== "0";
-  const UPDATE_CHECK_REPO = String(process.env.UPDATE_CHECK_REPO ?? "GreenSheep01201/claw-empire").trim();
+  const UPDATE_CHECK_REPO = String(process.env.UPDATE_CHECK_REPO ?? RELEASE_IDENTITY.source_repository).trim();
   const UPDATE_CHECK_TTL_MS = Math.max(
     60_000,
     Number(process.env.UPDATE_CHECK_TTL_MS ?? 30 * 60 * 1000) || 30 * 60 * 1000,
@@ -215,7 +212,12 @@ export function registerUpdateAutoRoutes(ctx: RuntimeContext): void {
       return {
         current_version: PKG_VERSION,
         latest_version: null,
+        latest_revision: null,
         update_available: false,
+        comparison_state: "disabled",
+        auto_apply_allowed: false,
+        current_release_identity: RELEASE_IDENTITY,
+        latest_release_identity: null,
         release_url: null,
         checked_at: now,
         enabled: false,
@@ -230,26 +232,30 @@ export function registerUpdateAutoRoutes(ctx: RuntimeContext): void {
 
     updateStatusInFlight = (async () => {
       let latestVersion: string | null = null;
+      let latestRevision: string | null = null;
+      let latestReleaseIdentity: ReleaseIdentity | null = null;
       let releaseUrl: string | null = null;
       let error: string | null = null;
+      let comparison: ReleaseComparison = {
+        state: "invalid_remote",
+        update_available: false,
+        auto_apply_allowed: false,
+        reason: "release_identity_not_loaded",
+      };
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS);
         try {
-          const response = await fetch(`https://api.github.com/repos/${UPDATE_CHECK_REPO}/releases/latest`, {
-            method: "GET",
-            headers: {
-              accept: "application/vnd.github+json",
-              "user-agent": "claw-empire-update-check",
-            },
+          const discovered = await discoverGitHubReleaseIdentity({
+            repository: UPDATE_CHECK_REPO,
+            localIdentity: RELEASE_IDENTITY,
             signal: controller.signal,
           });
-          if (!response.ok) {
-            throw new Error(`github_http_${response.status}`);
-          }
-          const body = (await response.json().catch(() => null)) as { tag_name?: unknown; html_url?: unknown } | null;
-          latestVersion = typeof body?.tag_name === "string" ? normalizeVersionTag(body.tag_name) : null;
-          releaseUrl = typeof body?.html_url === "string" ? body.html_url : null;
+          latestReleaseIdentity = discovered.identity;
+          latestVersion = latestReleaseIdentity.product_version;
+          latestRevision = latestReleaseIdentity.target_revision;
+          releaseUrl = discovered.release_url;
+          comparison = discovered.comparison;
         } finally {
           clearTimeout(timeout);
         }
@@ -260,7 +266,12 @@ export function registerUpdateAutoRoutes(ctx: RuntimeContext): void {
       const next = {
         current_version: PKG_VERSION,
         latest_version: latestVersion,
-        update_available: Boolean(latestVersion && isRemoteVersionNewer(latestVersion, PKG_VERSION)),
+        latest_revision: latestRevision,
+        update_available: comparison.update_available,
+        comparison_state: comparison.state,
+        auto_apply_allowed: comparison.auto_apply_allowed,
+        current_release_identity: RELEASE_IDENTITY,
+        latest_release_identity: latestReleaseIdentity,
         release_url: releaseUrl,
         checked_at: Date.now(),
         enabled: true,
@@ -353,6 +364,7 @@ export function registerUpdateAutoRoutes(ctx: RuntimeContext): void {
   const buildHealthPayload = () => ({
     ok: true,
     version: PKG_VERSION,
+    release_identity: RELEASE_IDENTITY,
     app: "Dongri-grigri",
     dbPath,
   });

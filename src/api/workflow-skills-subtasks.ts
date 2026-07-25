@@ -160,13 +160,7 @@ export async function getSkills(): Promise<SkillEntry[]> {
 }
 
 export async function refreshSkills(): Promise<SkillEntry[]> {
-  const j = (await post("/api/skills/refresh", { confirm: true })) as {
-    ok: boolean;
-    skills: SkillEntry[];
-    count: number;
-    refreshedAt: number;
-  };
-  return j.skills;
+  throw new Error("skills_refresh_requires_v2_authorization");
 }
 
 export async function installDonggriSkillToCodex(skillName: string): Promise<{
@@ -174,18 +168,8 @@ export async function installDonggriSkillToCodex(skillName: string): Promise<{
   skillName: string;
   installed: boolean;
 }> {
-  return request(`/api/skills/donggri/${encodeURIComponent(skillName)}/install-codex`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-donggri-local-action": "install-codex-skill",
-    },
-    body: JSON.stringify({ confirm: true }),
-  }) as Promise<{
-    ok: boolean;
-    skillName: string;
-    installed: boolean;
-  }>;
+  void skillName;
+  throw new Error("skill_install_requires_v2_authorization");
 }
 
 // Codex sub-agents catalog (VoltAgent/awesome-codex-subagents mirror output)

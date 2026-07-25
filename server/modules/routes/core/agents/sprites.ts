@@ -3,6 +3,34 @@ import path from "node:path";
 import sharp from "sharp";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 
+const SPRITE_REGISTER_DIRECTIONS = ["D", "L", "B", "R"] as const;
+const SPRITE_REGISTER_FRAMES = [1, 2, 3] as const;
+type SpriteRegisterDirection = (typeof SPRITE_REGISTER_DIRECTIONS)[number];
+export type SpriteRegisterPackKey = "legacy" | "donggri_visual_v2";
+
+export function parseSpriteRegisterPackKey(value: unknown): SpriteRegisterPackKey | null {
+  if (value == null || value === "") return "legacy";
+  if (value === "legacy" || value === "donggri_visual_v2") return value;
+  return null;
+}
+
+export function normalizeSpriteRegisterPackKey(value: unknown): SpriteRegisterPackKey {
+  return parseSpriteRegisterPackKey(value) ?? "legacy";
+}
+
+export function resolveSpriteRegisterDir(projectRoot: string, packKey: SpriteRegisterPackKey): string {
+  const baseDir = path.join(projectRoot, "public", "sprites");
+  return packKey === "donggri_visual_v2" ? path.join(baseDir, "donggri-visual-v2") : baseDir;
+}
+
+function buildSpriteRegisterFilenames(spriteNumber: number, direction: SpriteRegisterDirection): string[] {
+  return SPRITE_REGISTER_FRAMES.map((frame) => `${spriteNumber}-${direction}-${frame}.png`);
+}
+
+function formatSavedSpritePath(packKey: SpriteRegisterPackKey, filename: string): string {
+  return packKey === "donggri_visual_v2" ? `donggri-visual-v2/${filename}` : filename;
+}
+
 export function registerSpriteRoutes(ctx: RuntimeContext): void {
   const { app } = ctx;
 
@@ -171,7 +199,10 @@ export function registerSpriteRoutes(ctx: RuntimeContext): void {
       const { sprites, spriteNumber } = req.body as {
         sprites: Record<string, string>;
         spriteNumber: number;
+        packKey?: unknown;
       };
+      const packKey = parseSpriteRegisterPackKey((req.body as Record<string, unknown>)?.packKey);
+      if (!packKey) return res.status(400).json({ error: "invalid_pack_key" });
       if (sprites === undefined || spriteNumber === undefined || spriteNumber === null) {
         return res.status(400).json({ error: "missing_data" });
       }
@@ -182,8 +213,7 @@ export function registerSpriteRoutes(ctx: RuntimeContext): void {
         return res.status(400).json({ error: "invalid_sprites_payload" });
       }
 
-      const validKeys = ["D", "L", "R"] as const;
-      const inputPairs = validKeys
+      const inputPairs = SPRITE_REGISTER_DIRECTIONS
         .map((k) => [k, sprites[k]] as const)
         .filter(([, v]) => typeof v === "string" && v.length > 0);
       if (inputPairs.length === 0) {
@@ -203,15 +233,12 @@ export function registerSpriteRoutes(ctx: RuntimeContext): void {
         parsedSprites.set(dir, buf);
       }
 
-      const spritesDir = path.join(process.cwd(), "public", "sprites");
+      const spritesDir = resolveSpriteRegisterDir(process.cwd(), packKey);
       if (!fs.existsSync(spritesDir)) fs.mkdirSync(spritesDir, { recursive: true });
 
-      const targetFiles: string[] = [];
-      if (parsedSprites.has("D")) {
-        targetFiles.push(`${spriteNumber}-D-1.png`, `${spriteNumber}-D-2.png`, `${spriteNumber}-D-3.png`);
-      }
-      if (parsedSprites.has("L")) targetFiles.push(`${spriteNumber}-L-1.png`);
-      if (parsedSprites.has("R")) targetFiles.push(`${spriteNumber}-R-1.png`);
+      const targetFiles = SPRITE_REGISTER_DIRECTIONS.flatMap((direction) =>
+        parsedSprites.has(direction) ? buildSpriteRegisterFilenames(spriteNumber, direction) : [],
+      );
 
       const alreadyExisting = targetFiles.filter((filename) => fs.existsSync(path.join(spritesDir, filename)));
       if (alreadyExisting.length > 0) {
@@ -219,27 +246,17 @@ export function registerSpriteRoutes(ctx: RuntimeContext): void {
       }
 
       const saved: string[] = [];
-      if (parsedSprites.has("D")) {
-        const buf = parsedSprites.get("D")!;
-        for (const frame of [1, 2, 3]) {
-          const filename = `${spriteNumber}-D-${frame}.png`;
+      for (const direction of SPRITE_REGISTER_DIRECTIONS) {
+        if (!parsedSprites.has(direction)) continue;
+        const buf = parsedSprites.get(direction)!;
+        for (const filename of buildSpriteRegisterFilenames(spriteNumber, direction)) {
           fs.writeFileSync(path.join(spritesDir, filename), buf);
-          saved.push(filename);
+          saved.push(formatSavedSpritePath(packKey, filename));
         }
       }
-      if (parsedSprites.has("L")) {
-        const buf = parsedSprites.get("L")!;
-        fs.writeFileSync(path.join(spritesDir, `${spriteNumber}-L-1.png`), buf);
-        saved.push(`${spriteNumber}-L-1.png`);
-      }
-      if (parsedSprites.has("R")) {
-        const buf = parsedSprites.get("R")!;
-        fs.writeFileSync(path.join(spritesDir, `${spriteNumber}-R-1.png`), buf);
-        saved.push(`${spriteNumber}-R-1.png`);
-      }
 
-      console.log(`[sprites/register] Saved sprite #${spriteNumber}:`, saved);
-      res.json({ ok: true, spriteNumber, saved });
+      console.log(`[sprites/register] Saved sprite #${spriteNumber} (${packKey}):`, saved);
+      res.json({ ok: true, spriteNumber, packKey, saved });
     } catch (err: any) {
       console.error("[sprites/register]", err);
       res.status(500).json({ error: "save_failed", message: err.message });

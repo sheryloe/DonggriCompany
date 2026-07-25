@@ -1,0 +1,32 @@
+{
+  "version": "walk-normalize-v2",
+  "generated_by": "corepack pnpm run agents:sprites:check -- --pack donggri_visual_v2",
+  "asset_pack": "donggri_visual_v2",
+  "source_sheet": "public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png",
+  "runtime_sprites": 44,
+  "directions": ["D", "L", "B", "R"],
+  "frames_per_direction": 3,
+  "expected_file_count": 528,
+  "inspected_file_count": 528,
+  "in_engine_animation_smoke": {
+    "expected_direction_sets": 176,
+    "expected_frames_per_set": 3,
+    "collectable_direction_sets": 176,
+    "pixi_actor_contract": {
+      "anchor": "bottom-center",
+      "fallback_direction": "D",
+      "animation_speed": 0.12
+    }
+  },
+  "quality_gates": {
+    "sprite_size": 96,
+    "max_content_size": 78,
+    "max_frame_drift_px": 10,
+    "bottom_gap_range": [3, 18],
+    "max_center_drift": 20
+  },
+  "result": "pass",
+  "error_count": 0,
+  "warning_count": 0,
+  "issues": []
+}

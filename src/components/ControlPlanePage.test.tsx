@@ -6,6 +6,8 @@ import {
   applyControlPlaneSync,
   applyHarnessBlueprint,
   applyProjectOperatorSync,
+  attachEngineThread,
+  createEngineRun,
   createControlPlanePersona,
   decideControlPlanePersona,
   finishCodexThread,
@@ -14,9 +16,11 @@ import {
   getControlPlaneState,
   rememberAgentMemory,
   prepareControlPlaneRun,
+  previewEngineRoute,
   previewHarnessBlueprint,
   previewProjectOperatorSync,
   previewControlPlaneSync,
+  reconcileEngineSync,
   saveHarnessBlueprintDraft,
   searchAgentMemoryFunctional,
   searchControlPlaneMemory,
@@ -24,7 +28,7 @@ import {
   type ControlPlaneDocStatus,
   type ControlPlaneState,
 } from "../api/control-plane";
-import ControlPlanePage from "./ControlPlanePage";
+import ControlPlanePage, { isProjectionBoundary } from "./ControlPlanePage";
 
 vi.mock("../api/control-plane", async () => {
   return {
@@ -32,6 +36,8 @@ vi.mock("../api/control-plane", async () => {
     applyHarnessBlueprint: vi.fn(),
     applyProjectOperatorSync: vi.fn(),
     activateCodexThread: vi.fn(),
+    attachEngineThread: vi.fn(),
+    createEngineRun: vi.fn(),
     createControlPlanePersona: vi.fn(),
     decideControlPlanePersona: vi.fn(),
     finishCodexThread: vi.fn(),
@@ -40,9 +46,11 @@ vi.mock("../api/control-plane", async () => {
     getControlPlaneState: vi.fn(),
     rememberAgentMemory: vi.fn(),
     prepareControlPlaneRun: vi.fn(),
+    previewEngineRoute: vi.fn(),
     previewHarnessBlueprint: vi.fn(),
     previewProjectOperatorSync: vi.fn(),
     previewControlPlaneSync: vi.fn(),
+    reconcileEngineSync: vi.fn(),
     saveHarnessBlueprintDraft: vi.fn(),
     searchAgentMemoryFunctional: vi.fn(),
     searchControlPlaneMemory: vi.fn(),
@@ -71,6 +79,7 @@ function buildState(): ControlPlaneState {
     missing_count: 0,
   });
   const projectOperators = [
+    "ADS",
     "BloggerGent",
     "CardNewsAgent",
     "DonggriCompany",
@@ -81,12 +90,18 @@ function buildState(): ControlPlaneState {
     "linguist",
     "Reactive-Resume",
     "Tossinapp",
+    "dangyang_ssaju",
     "alpha-shop",
     "runtime",
+    "demo-crypto-exchange-app",
   ].map((key) => {
-    const enabled = key !== "alpha-shop" && key !== "runtime";
+    const candidate = key === "ADS" || key === "alpha-shop" || key === "runtime" || key === "demo-crypto-exchange-app";
+    const enabled = !candidate;
     return {
-      operator_id: `ops-project-${key.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+      operator_id: `ops-project-${key
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")}`,
       project_key: key,
       project_path: `repos/${key}`,
       absolute_path: `G:\\Donggri_DevDrive\\repos\\${key}`,
@@ -95,27 +110,70 @@ function buildState(): ControlPlaneState {
       status: enabled ? ("active" as const) : ("disabled-candidate" as const),
       authority: "operations-only" as const,
       memory_scope: `project:${key}`,
-      assignment_policy: enabled ? "single-ops-agent-project-scope-implement-delegated" : "candidate-disabled-needs-confirmation",
+      assignment_policy: enabled
+        ? "single-ops-agent-project-scope-implement-delegated"
+        : "candidate-disabled-needs-confirmation",
       implementation_delegate: "IMPLEMENT" as const,
       can_create_read_persona: true,
       can_create_write_persona: false,
       can_write_repo: false,
       db_project_id: key === "DonggriCompany" ? "project-1" : null,
       db_project_name: key === "DonggriCompany" ? "DonggriCompany" : null,
-      project_type: key === "runtime" ? "runtime-artifact" : key === "alpha-shop" || key === "GisoolSa" ? "folder" : "git-repo",
-      project_status: enabled ? null : "candidate",
+      project_type:
+        key === "runtime"
+          ? "runtime-artifact"
+          : key === "alpha-shop" || key === "GisoolSa" || key === "ADS" || key === "demo-crypto-exchange-app"
+            ? "folder"
+            : "git-repo",
+      project_status: enabled ? "active" : "candidate",
+      lifecycle_status: enabled ? ("active" as const) : ("candidate" as const),
+      filter_group: key === "ADS" ? "ADS" : null,
+      default_visible: key !== "ADS",
       has_agents: enabled,
-      git_status: key === "GisoolSa" || key === "alpha-shop" || key === "runtime" ? ("not_git" as const) : ("dirty" as const),
+      git_status: key === "GisoolSa" || key === "ADS" || candidate ? ("not_git" as const) : ("dirty" as const),
       git_branch: enabled ? "main" : null,
-      link_status: key === "DonggriCompany" ? ("linked" as const) : enabled ? ("unlinked" as const) : ("candidate" as const),
+      link_status:
+        key === "DonggriCompany" ? ("linked" as const) : enabled ? ("unlinked" as const) : ("candidate" as const),
       memory_tabs: ["Memory", "Runs", "Handoff", "Backlog", "Risk"],
       risk_flags: enabled ? ["db-link-missing"] : ["candidate-disabled"],
-      notes: enabled ? "operations-only; repo writes route to IMPLEMENT" : "disabled candidate; needs confirmation",
+      notes:
+        key === "ADS"
+          ? "ADS filtered; explicit selection required"
+          : enabled
+            ? "operations-only; repo writes route to IMPLEMENT"
+            : "disabled candidate; needs confirmation",
     };
   });
+  const bloggerGentLanes = [
+    ["google-travel-en", "google-travel-blog", "blogger-travel-en", "blogger:34", []],
+    ["google-travel-es", "google-travel-blog", "blogger-travel-es", "blogger:36", []],
+    ["google-travel-ja", "google-travel-blog", "blogger-travel-ja", "blogger:37", []],
+    ["mystery-google", "mystery-google-blog", "blogger-mystery", "the-midnight-archives", []],
+    ["cloudflare-archive", "cloudflare-blog", "cloudflare-archive", "cloudflare:dongriarchive", []],
+    [
+      "mystery-cloudflare",
+      "mystery-cloudflare-blog",
+      "cloudflare-archive",
+      "cloudflare:dongriarchive",
+      ["cloudflare:dongriarchive:mystery"],
+    ],
+    ["shared-platform", "shared-infra", "platform-core", null, []],
+    ["quality-index-analytics", "shared-infra", "ops-db-quality", null, []],
+  ].map(([lane_id, group_id, role_agent, channel_ref, metadata_tags]) => ({
+    lane_id: String(lane_id),
+    group_id: String(group_id),
+    role_agent: String(role_agent),
+    channel_ref: channel_ref === null ? null : String(channel_ref),
+    metadata_tags: metadata_tags as string[],
+    operating_mode: "dry-run" as const,
+  }));
   return {
     ok: true,
     generated_at: "2026-05-22T00:00:00.000Z",
+    source_epoch: `sha256:${"a".repeat(64)}`,
+    projection_epoch: `sha256:${"b".repeat(64)}`,
+    degraded: false,
+    parse_errors: [],
     root: {
       path: "G:\\Donggri_DevDrive",
       repo_estate_root: {
@@ -136,13 +194,46 @@ function buildState(): ControlPlaneState {
         inside_root: true,
       },
     },
+    active_specs: [
+      {
+        doc: doc("_active.md"),
+        id: "20260522-dongri-grigri-control-hub-v1",
+        status: "implementation-in-progress",
+        phase: "ver1-structure-implementation",
+        related_repo: "DonggriCompany",
+        related_repos: ["DonggriCompany"],
+        scope: "root-control-plane",
+        heading: "DonggriCompany",
+        line: 1,
+        next_recommended_action: "Ver.1 implementation",
+        parse_error: null,
+        spec_dir: "G:\\Donggri_DevDrive\\storage\\codex-control\\specs\\20260522-dongri-grigri-control-hub-v1",
+        docs: [
+          "metadata.md",
+          "requirements.md",
+          "design.md",
+          "tasks.md",
+          "repo-map.md",
+          "approvals.md",
+          "evidence.md",
+          "handoff.md",
+          "learnings.md",
+        ].map((name) => doc(name)),
+        missing_docs: [],
+      },
+    ],
     active_spec: {
       doc: doc("_active.md"),
       id: "20260522-dongri-grigri-control-hub-v1",
       status: "implementation-in-progress",
       phase: "ver1-structure-implementation",
       related_repo: "DonggriCompany",
+      related_repos: ["DonggriCompany"],
+      scope: "root-control-plane",
+      heading: "DonggriCompany",
+      line: 1,
       next_recommended_action: "Ver.1 implementation",
+      parse_error: null,
       spec_dir: "G:\\Donggri_DevDrive\\storage\\codex-control\\specs\\20260522-dongri-grigri-control-hub-v1",
       docs: [
         "metadata.md",
@@ -156,6 +247,8 @@ function buildState(): ControlPlaneState {
         "learnings.md",
       ].map((name) => doc(name)),
       missing_docs: [],
+      deprecated: true,
+      replacement: "active_specs[]",
     },
     ver1: {
       version: "Donggri Root Control SDD Ver.1",
@@ -166,11 +259,18 @@ function buildState(): ControlPlaneState {
         steering: "storage\\codex-control\\steering",
       },
       groups: {
-        steering: group("steering", ["product.md", "tech.md", "structure.md", "safety.md", "agent-model.md", "context.md"]),
+        steering: group("steering", [
+          "product.md",
+          "tech.md",
+          "structure.md",
+          "safety.md",
+          "agent-model.md",
+          "context.md",
+        ]),
         hooks: group("hooks", ["README.md", "pre-task.yaml", "pre-implement.yaml"]),
         orchestrator: group("orchestrator", ["README.md", "waves.md", "persona-subagents.md"]),
         context_packs: group("context-packs", ["README.md", "_template.md"]),
-        quality: group("quality", ["rubric.md", "hard-gates.md", "gemini-review.md"]),
+        quality: group("quality", ["rubric.md", "hard-gates.md", "agy-review.md"]),
         integrations: group("integrations", ["codex-app.md", "donggricompany.md"]),
       },
       department_agents: [
@@ -250,7 +350,17 @@ function buildState(): ControlPlaneState {
       persona_subagents: {
         model: "department-agent-controlled-disposable-personas",
         permanent_team_hierarchy: false,
-        lifecycle_states: ["created", "running", "returned", "accepted", "rejected", "recreated", "merged", "expired", "failed"],
+        lifecycle_states: [
+          "created",
+          "running",
+          "returned",
+          "accepted",
+          "rejected",
+          "recreated",
+          "merged",
+          "expired",
+          "failed",
+        ],
         max_recreate_attempts: 2,
         repo_write_parent: "IMPLEMENT",
         required_fields: ["persona_id", "parent_agent", "objective"],
@@ -273,11 +383,17 @@ function buildState(): ControlPlaneState {
         target: 95,
         pass: true,
       },
+      agy_review: {
+        required: true,
+        model: "Gemini 3.1 Pro (High)",
+        status: "pending-local-verification",
+        command_cwd: "G:\\Donggri_DevDrive",
+      },
       gemini_review: {
         required: true,
-        model: "gemini-3.1-pro-preview",
-        status: "pending-local-verification",
-        command_cwd: "C:\\Users\\wlflq\\Downloads",
+        model: "Gemini 3.1 Pro (High)",
+        status: "legacy-alias-for-agy-review",
+        command_cwd: "G:\\Donggri_DevDrive",
       },
     },
     registry: {
@@ -304,6 +420,38 @@ function buildState(): ControlPlaneState {
       dirty_count: 1,
       missing_count: 0,
       unlinked_count: 0,
+      lifecycle_counts: {
+        active: 1,
+        candidate: 0,
+        completed: 0,
+        archived: 0,
+      },
+      repo_estate_discovery: [
+        {
+          name: "DonggriCompany",
+          path: "repos/DonggriCompany",
+          absolute_path: "G:\\Donggri_DevDrive\\repos\\DonggriCompany",
+          classification: "registered",
+          registry_key: "DonggriCompany",
+          reason: "registered-in-projects-yaml",
+        },
+        {
+          name: "ADS",
+          path: "repos/ADS",
+          absolute_path: "G:\\Donggri_DevDrive\\repos\\ADS",
+          classification: "candidate",
+          registry_key: null,
+          reason: "repo-estate-folder-needs-classification",
+        },
+        {
+          name: ".codex",
+          path: "repos/.codex",
+          absolute_path: "G:\\Donggri_DevDrive\\repos\\.codex",
+          classification: "excluded",
+          registry_key: null,
+          reason: "control-runtime-infrastructure-folder",
+        },
+      ],
       projects: [
         {
           key: "DonggriCompany",
@@ -312,6 +460,9 @@ function buildState(): ControlPlaneState {
           type: "git-repo",
           has_agents: true,
           status: "active",
+          lifecycle_status: "active",
+          filter_group: null,
+          default_visible: true,
           summary: "operations platform",
           exists: true,
           db_project_id: "project-1",
@@ -342,7 +493,8 @@ function buildState(): ControlPlaneState {
       missing_count: 0,
     },
     memory: {
-      runtime_path: "G:\\Donggr_Runtime\\agentmemory",
+      runtime_path: "E:\\DonggriPlatform_Asset\\runtime\\agentmemory",
+      data_path: "E:\\DonggriPlatform_Asset\\storage\\agentmemory",
       server_url: "http://127.0.0.1:3111",
       viewer_url: "http://127.0.0.1:3113",
       runtime_preflight: {
@@ -392,7 +544,7 @@ function buildState(): ControlPlaneState {
       },
       capabilities: {
         package: "@agentmemory/agentmemory",
-        observed_version: "0.9.21",
+        observed_version: "0.9.27",
         node_engine: ">=20.0.0",
         source_url: "https://github.com/rohitg00/agentmemory",
         source_files: {
@@ -442,7 +594,15 @@ function buildState(): ControlPlaneState {
         runtime_connect_allowed: false,
         runtime_connect_required_approval: "APR-MEM-RUNTIME-*",
         remember_policy_approval: "APR-MEM-001",
-        blocked_operations: ["install/start", "MCP wiring", "global hooks", "transcript capture", "delete", "forget", "import"],
+        blocked_operations: [
+          "install/start",
+          "MCP wiring",
+          "global hooks",
+          "transcript capture",
+          "delete",
+          "forget",
+          "import",
+        ],
         next_safe_action: "Record approval first, then start AgentMemory runtime in a separate OPS step.",
       },
       integration_mode: "functional-safe-proxy",
@@ -458,7 +618,11 @@ function buildState(): ControlPlaneState {
       },
       trusted_paths: [
         { path: "g:\\donggri_devdrive", classification: "control-root", trust_level: "trusted" },
-        { path: "g:\\donggri_devdrive\\repos\\bloggergent", classification: "legacy-repo-alias", trust_level: "trusted" },
+        {
+          path: "g:\\donggri_devdrive\\repos\\bloggergent",
+          classification: "legacy-repo-alias",
+          trust_level: "trusted",
+        },
       ],
       plugins: [{ key: "browser", enabled: true }],
       marketplaces: [{ key: "personal", enabled: null }],
@@ -499,6 +663,59 @@ function buildState(): ControlPlaneState {
       recent_runs: [],
       recent_personas: [],
       recent_events: [],
+    },
+    engine_sync: {
+      tables_exist: true,
+      provider_status: [
+        {
+          provider: "codex_exec",
+          label: "Codex CLI",
+          available: true,
+          mode: "enabled",
+          detail: "codex exec --json event bridge enabled.",
+        },
+        {
+          provider: "codex_app_server",
+          label: "Codex app-server",
+          available: false,
+          mode: "blocked",
+          detail: "APR-CODEX-APP-SERVER-POC-* 승인 전 대기",
+        },
+      ],
+      run_counts: { planned: 1 },
+      link_counts: { linked: 1 },
+      recent_runs: [
+        {
+          id: "cperun-test",
+          provider: "codex_exec",
+          status: "planned",
+          objective_summary: "Collect Codex exec JSONL",
+          scope_key: "project:DonggriCompany",
+        },
+      ],
+      recent_events: [
+        {
+          id: "cpevt-test",
+          event_type: "route_decided",
+          message: "Codex CLI route selected",
+          severity: "info",
+        },
+      ],
+      recent_thread_links: [
+        {
+          id: "cpthread-test",
+          provider: "codex_exec",
+          external_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+          link_type: "observed",
+          status: "linked",
+          scope_key: "project:DonggriCompany",
+        },
+      ],
+      app_server_poc: {
+        approved: false,
+        mode: "blocked",
+        detail: "APR-CODEX-APP-SERVER-POC-* 승인 전 대기",
+      },
     },
     harness_blueprints: {
       tables_exist: true,
@@ -602,7 +819,15 @@ function buildState(): ControlPlaneState {
         safe_proxy_available: false,
         runtime_connect_allowed: false,
         required_approval: "separate OPS approval",
-        blocked_operations: ["install/start", "MCP wiring", "global hooks", "transcript capture", "delete", "forget", "import"],
+        blocked_operations: [
+          "install/start",
+          "MCP wiring",
+          "global hooks",
+          "transcript capture",
+          "delete",
+          "forget",
+          "import",
+        ],
         remember_approved: true,
       },
       persona_evidence: {
@@ -639,6 +864,73 @@ function buildState(): ControlPlaneState {
         },
         policy: "diagnostic-only; no clean/stash/commit without explicit approval",
       },
+    },
+    master_95: {
+      spec_id: "20260714-donggricompany-95-master-operating-system-v1",
+      generated_at: "2026-07-14T00:00:00.000Z",
+      source_epoch: `sha256:${"a".repeat(64)}`,
+      projection_epoch: `sha256:${"b".repeat(64)}`,
+      phase: "phase-2-runtime-alpha-in-progress",
+      certification_state: "not_certified_foundation_in_progress",
+      root_active_spec_id: "20260522-dongri-grigri-control-hub-v1",
+      active_spec_is_master95: false,
+      companion_mode: true,
+      spec_dir:
+        "G:\\Donggri_DevDrive\\storage\\codex-control\\specs\\20260714-donggricompany-95-master-operating-system-v1",
+      quality_root: "G:\\Donggri_DevDrive\\storage\\codex-control\\quality\\master-95",
+      docs: { spec: [], quality: [], missing_count: 0, missing: [] },
+      dirty_worktree: {
+        repo: "G:\\Donggri_DevDrive\\repos\\DonggriCompany",
+        count: 0,
+        untracked_count: 0,
+        grouped_changes: [],
+        policy: "local inventory",
+      },
+      approvals_required: ["live publish", "DB write", "Docker", "deploy"],
+      scorecard_summary: {
+        targets: {
+          design_specification: 98,
+          implementation_execution_evidence: 97,
+          aggregate: 97.45,
+          agy_each_axis_minimum: 950,
+        },
+        hard_gate_count: 10,
+        blocking_gate_count: 3,
+      },
+      traceability_summary: { total: 20, implemented: 15, in_progress: 2, planned: 3, orphan_evidence: 0 },
+      agent_versions: [],
+      live_pilot_projection: {
+        source_path: "E:\\DonggriPlatform_Asset\\runtime\\DonggriCompany\\master95\\live-pilot\\pilot-runs.jsonl",
+        event_source_path:
+          "E:\\DonggriPlatform_Asset\\runtime\\DonggriCompany\\master95\\live-pilot\\pilot-events.jsonl",
+        mode: "read-only",
+        available: true,
+        parse_error_count: 0,
+        event_parse_error_count: 0,
+        message: "정상적으로 읽었습니다.",
+      },
+      run_summaries: [],
+      bloggergent_ops: {
+        department: "OPS",
+        project_id: "project:BloggerGent",
+        project_key: "BloggerGent",
+        mode: "read-only-dry-run-routing-preview",
+        role_agents: [
+          "blogger-travel-en",
+          "blogger-travel-es",
+          "blogger-travel-ja",
+          "blogger-mystery",
+          "cloudflare-archive",
+          "platform-core",
+          "ops-db-quality",
+        ],
+        lanes: bloggerGentLanes,
+        implementation_delegate: "IMPLEMENT",
+        review_delegate: "REVIEW",
+        approval_owner: "CONTROL",
+        separately_approved_operations: ["live publish", "DB write", "Docker", "deploy", "Git commit/push"],
+      },
+      next_safe_action: "read-only BloggerGent routing preview",
     },
     dongri_grigri: {
       brand: "Dongri-grigri",
@@ -735,6 +1027,15 @@ function buildState(): ControlPlaneState {
 }
 
 describe("ControlPlanePage", () => {
+  it("detects only a changed established projection epoch as a projection boundary", () => {
+    const epochA = `sha256:${"a".repeat(64)}`;
+    const epochB = `sha256:${"b".repeat(64)}`;
+
+    expect(isProjectionBoundary(null, epochA)).toBe(false);
+    expect(isProjectionBoundary(epochA, epochA)).toBe(false);
+    expect(isProjectionBoundary(epochA, epochB)).toBe(true);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getControlPlaneState).mockResolvedValue(buildState());
@@ -873,10 +1174,10 @@ describe("ControlPlanePage", () => {
       approved_for_apply: true,
       active_spec_id: "20260523-dongri-project-operator-agents-v1",
       counts: {
-        operators: 12,
-        enabled: 10,
-        disabled: 2,
-        candidate_disabled: 2,
+        operators: 15,
+        enabled: 11,
+        disabled: 4,
+        candidate_disabled: 4,
         direct_repo_write_allowed: 0,
       },
       operators: buildState().dongri_grigri.project_operators,
@@ -894,10 +1195,10 @@ describe("ControlPlanePage", () => {
       writes: true,
       active_spec_id: "20260523-dongri-project-operator-agents-v1",
       counts: {
-        operators: 12,
-        enabled: 10,
-        disabled: 2,
-        candidate_disabled: 2,
+        operators: 15,
+        enabled: 11,
+        disabled: 4,
+        candidate_disabled: 4,
         direct_repo_write_allowed: 0,
       },
       operators: buildState().dongri_grigri.project_operators,
@@ -956,6 +1257,60 @@ describe("ControlPlanePage", () => {
       error: "harness_apply_blocked_in_v1",
       message: "APR-HARNESS-APPLY-* approval is required before applying a blueprint.",
       blueprint_id: "harness-blueprint-test",
+    });
+    vi.mocked(previewEngineRoute).mockResolvedValue({
+      ok: true,
+      status: 200,
+      writes: false,
+      route: {
+        provider: "codex_exec",
+        engine: "codex",
+        decision: "routeable",
+        scope_type: "project",
+        scope_key: "project:DonggriCompany",
+        reason: "Codex CLI event bridge가 안전한 기본 경로입니다.",
+        alternatives: ["codex_app_server", "claude", "agy", "hermes"],
+        approvals_required: [],
+        computer_use_required: false,
+      },
+    });
+    vi.mocked(createEngineRun).mockResolvedValue({
+      ok: true,
+      status: 200,
+      run: {
+        run: {
+          id: "cperun-created",
+          provider: "codex_exec",
+          status: "planned",
+          scope_key: "project:DonggriCompany",
+          objective_summary: "Codex Engine Sync Bridge 상태를 점검",
+        },
+        events: [{ id: "cpevt-created", event_type: "route_decided", message: "route selected" }],
+      },
+      engine_sync: buildState().engine_sync,
+    });
+    vi.mocked(attachEngineThread).mockResolvedValue({
+      ok: true,
+      status: 200,
+      thread_link: {
+        id: "cpthread-created",
+        provider: "codex_exec",
+        external_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        link_type: "observed",
+        status: "linked",
+        scope_key: "project:DonggriCompany",
+      },
+      engine_sync: buildState().engine_sync,
+    });
+    vi.mocked(reconcileEngineSync).mockResolvedValue({
+      ok: true,
+      status: 200,
+      reconciliation: {
+        stale_marked: 0,
+        linked_observed_threads: 1,
+        raw_transcript_read: false,
+      },
+      engine_sync: buildState().engine_sync,
     });
     const runPayload = {
       ok: true,
@@ -1022,6 +1377,18 @@ describe("ControlPlanePage", () => {
     expect(screen.getByText("품질 게이트")).toBeInTheDocument();
     expect(screen.getByText("한글 무결성")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Control Hub" })).not.toBeInTheDocument();
+  });
+
+  it("opens the read-only projection and bounded durable Master95 operations panel from a dedicated tab", async () => {
+    const user = userEvent.setup();
+    render(<ControlPlanePage />);
+
+    await screen.findByRole("heading", { name: "Office Control Platform" });
+    await user.click(screen.getByRole("button", { name: "관제" }));
+
+    expect(screen.getByRole("heading", { name: "운영 관제 · Run / Trace / Artifact" })).toBeInTheDocument();
+    expect(screen.getByText(/live-pilot은 읽기 전용으로 투영/)).toBeInTheDocument();
+    expect(screen.getByText("표시할 live-pilot Run이 없습니다.")).toBeInTheDocument();
   });
 
   it("runs a read-only AgentMemory search probe without rendering raw transcripts", async () => {
@@ -1155,6 +1522,52 @@ describe("ControlPlanePage", () => {
       }),
     );
     expect(await screen.findByText(/cprun-test/)).toBeInTheDocument();
+  });
+
+  it("routes and links Codex engine sync runs from the Runner tab", async () => {
+    const user = userEvent.setup();
+    render(<ControlPlanePage />);
+
+    await screen.findByRole("heading", { name: "Office Control Platform" });
+    await user.click(screen.getByRole("button", { name: "Runner" }));
+
+    expect(screen.getByText("Codex 엔진 동기화")).toBeInTheDocument();
+    expect(screen.getByText("원장 준비됨")).toBeInTheDocument();
+    expect(screen.getByText(/cperun-test/)).toBeInTheDocument();
+    expect(screen.getAllByText(/019e4ad5/).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: "라우팅 미리보기" }));
+    expect(previewEngineRoute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "codex_exec",
+        scope_type: "project",
+        scope_value: "DonggriCompany",
+      }),
+    );
+    expect(await screen.findByText(/Codex CLI event bridge/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "원장 Run 만들기" }));
+    expect(createEngineRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "codex_exec",
+        scope_type: "project",
+        scope_value: "DonggriCompany",
+        evidence_refs: ["EV-CODEX-ENGINE-SYNC"],
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Thread 연결" }));
+    expect(attachEngineThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "codex_exec",
+        external_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        scope_type: "project",
+        scope_value: "DonggriCompany",
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "동기화 점검" }));
+    expect(reconcileEngineSync).toHaveBeenCalled();
   });
 
   it("previews and saves a Donggri-native harness blueprint before apply is approved", async () => {
@@ -1293,12 +1706,28 @@ describe("ControlPlanePage", () => {
     await user.click(screen.getByRole("button", { name: "프로젝트" }));
 
     expect(screen.getByText("운영 마스터 프로젝트 scope")).toBeInTheDocument();
-    expect(screen.getByText("BloggerGent 상세")).toBeInTheDocument();
+    expect(screen.getByText("DonggriCompany 상세")).toBeInTheDocument();
     expect(screen.getByText("상주 운영 에이전트")).toBeInTheDocument();
     expect(screen.getByText(/프로젝트마다 운영 에이전트를 늘리지 않습니다/)).toBeInTheDocument();
     expect(screen.getAllByText("BloggerGent").length).toBeGreaterThan(0);
     expect(screen.getByText("alpha-shop")).toBeInTheDocument();
     expect(screen.getAllByText(/운영 마스터가 project scope/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /operator sync/i })).not.toBeInTheDocument();
+  });
+
+  it("renders BloggerGent lanes from the read-only Master95 projection", async () => {
+    const user = userEvent.setup();
+    render(<ControlPlanePage initialTab="projects" />);
+
+    await screen.findByRole("heading", { name: "Office Control Platform" });
+    await user.click(screen.getAllByRole("button", { name: /BloggerGent/ })[0]);
+
+    expect(screen.getByText("BloggerGent OPS Project Scope")).toBeInTheDocument();
+    expect(screen.getByText("8 lanes")).toBeInTheDocument();
+    expect(screen.getByText("7 roles")).toBeInTheDocument();
+    expect(screen.getByText("Google Travel Blog Portfolio")).toBeInTheDocument();
+    expect(screen.getByText("Mystery Cloudflare Lane")).toBeInTheDocument();
+    expect(screen.getByText("quality-index-analytics")).toBeInTheDocument();
+    expect(screen.getByText(/live publish·DB·Docker·deploy·Git 작업은 별도 승인/)).toBeInTheDocument();
   });
 });

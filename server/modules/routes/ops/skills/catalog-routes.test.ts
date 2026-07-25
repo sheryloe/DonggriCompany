@@ -175,78 +175,21 @@ describe("skill catalog routes", () => {
     expect(secondFetchMock).not.toHaveBeenCalled();
   });
 
-  it("refreshes the catalog cache and recomputes Codex installed status", async () => {
-    const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), "donggri-codex-home-"));
-    process.env.CODEX_HOME = codexHome;
-    const installedSkillDir = path.join(codexHome, "skills", "donggri-codex-skill-authoring");
-    fs.mkdirSync(installedSkillDir, { recursive: true });
-    fs.writeFileSync(path.join(installedSkillDir, "SKILL.md"), "installed", "utf-8");
-
-    const firstFetchMock = vi.fn(async (input: string | URL) => {
-      const url = String(input);
-      if (url === "https://skills.sh/sitemap.xml") {
-        return new Response(makeSitemapXml(1), { status: 200, headers: { "content-type": "application/xml" } });
-      }
-      if (url === "https://skills.sh" || url === "https://skills.sh/trending") {
-        return new Response(makeInitialSkillsHtml([]), { status: 200, headers: { "content-type": "text/html" } });
-      }
-      return jsonResponse({}, 404);
-    });
-    vi.stubGlobal("fetch", firstFetchMock);
-
-    try {
-      const { app } = await createHarness();
-      await request(app).get("/api/skills").expect(200);
-
-      const secondFetchMock = vi.fn(async (input: string | URL) => {
-        const url = String(input);
-        if (url === "https://skills.sh/sitemap.xml") {
-          return new Response(makeSitemapXml(2), { status: 200, headers: { "content-type": "application/xml" } });
-        }
-        if (url === "https://skills.sh" || url === "https://skills.sh/trending") {
-          return new Response(makeInitialSkillsHtml([]), { status: 200, headers: { "content-type": "text/html" } });
-        }
-        return jsonResponse({}, 404);
-      });
-      vi.stubGlobal("fetch", secondFetchMock);
-
-      const response = await request(app)
-        .post("/api/skills/refresh")
-        .set("Authorization", "Bearer test-token")
-        .expect(200);
-
-      expect(response.body.ok).toBe(true);
-      expect(response.body.count).toBe(response.body.skills.length);
-      expect(secondFetchMock).toHaveBeenCalledTimes(3);
-      expect(response.body.skills.find((skill: any) => skill.skillId === "skill-2")).toBeTruthy();
-      expect(
-        response.body.skills.find((skill: any) => skill.skillId === "donggri-codex-skill-authoring"),
-      ).toMatchObject({
-        codexInstalled: true,
-      });
-    } finally {
-      fs.rmSync(codexHome, { recursive: true, force: true });
-    }
-  });
-
-  it("requires CSRF for catalog refresh without bearer authentication", async () => {
+  it("fails closed before a legacy catalog refresh can fetch or mutate cache state", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({}, 200));
+    vi.stubGlobal("fetch", fetchMock);
     const { app } = await createHarness();
-    const { getCsrfToken } = await import("../../../../security/auth.ts");
-
-    await request(app)
+    const response = await request(app)
       .post("/api/skills/refresh")
-      .expect(403)
-      .expect((response) => {
-        expect(response.body.error).toBe("csrf_required");
-      });
+      .set("Authorization", "Bearer test-token")
+      .expect(410);
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () => new Response(makeSitemapXml(1), { status: 200, headers: { "content-type": "application/xml" } }),
-      ),
-    );
-    await request(app).post("/api/skills/refresh").set("x-csrf-token", getCsrfToken()).expect(200);
+    expect(response.type).toBe("application/problem+json");
+    expect(response.body).toMatchObject({
+      status: 410,
+      code: "legacy_mutation_gone",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns local detail for Donggri seed skills", async () => {
@@ -270,24 +213,7 @@ describe("skill catalog routes", () => {
     expect(response.body.detail.installCommand).toContain("sync-codex-skills.ps1");
   });
 
-  it("requires a local action header before installing a Donggri skill", async () => {
-    const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), "donggri-codex-home-"));
-    process.env.CODEX_HOME = codexHome;
-
-    try {
-      const { app } = await createHarness();
-      const response = await request(app)
-        .post("/api/skills/donggri/donggri-codex-skill-authoring/install-codex")
-        .set("Authorization", "Bearer test-token")
-        .expect(403);
-
-      expect(response.body.error).toBe("local_action_header_required");
-    } finally {
-      fs.rmSync(codexHome, { recursive: true, force: true });
-    }
-  });
-
-  it("installs only repo-backed Donggri skills without exposing absolute destination paths", async () => {
+  it("fails closed before legacy skill install headers can write to Codex home", async () => {
     const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), "donggri-codex-home-"));
     process.env.CODEX_HOME = codexHome;
 
@@ -297,70 +223,15 @@ describe("skill catalog routes", () => {
         .post("/api/skills/donggri/donggri-codex-skill-authoring/install-codex")
         .set("Authorization", "Bearer test-token")
         .set("x-donggri-local-action", "install-codex-skill")
-        .expect(200);
+        .set("x-csrf-token", "legacy-csrf-proof")
+        .expect(410);
 
-      expect(response.body).toEqual({
-        ok: true,
-        skillName: "donggri-codex-skill-authoring",
-        installed: true,
+      expect(response.type).toBe("application/problem+json");
+      expect(response.body).toMatchObject({
+        status: 410,
+        code: "legacy_mutation_gone",
       });
-      expect(response.body.codexSkillPath).toBeUndefined();
-      expect(fs.existsSync(path.join(codexHome, "skills", "donggri-codex-skill-authoring", "SKILL.md"))).toBe(true);
-    } finally {
-      fs.rmSync(codexHome, { recursive: true, force: true });
-    }
-  });
-
-  it("requires CSRF when installing without bearer authentication", async () => {
-    const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), "donggri-codex-home-"));
-    process.env.CODEX_HOME = codexHome;
-
-    try {
-      const { app } = await createHarness();
-      const { getCsrfToken } = await import("../../../../security/auth.ts");
-      await request(app)
-        .post("/api/skills/donggri/donggri-codex-skill-authoring/install-codex")
-        .set("x-donggri-local-action", "install-codex-skill")
-        .expect(403)
-        .expect((response) => {
-          expect(response.body.error).toBe("csrf_required");
-        });
-
-      await request(app)
-        .post("/api/skills/donggri/donggri-codex-skill-authoring/install-codex")
-        .set("x-donggri-local-action", "install-codex-skill")
-        .set("x-csrf-token", getCsrfToken())
-        .expect(200);
-    } finally {
-      fs.rmSync(codexHome, { recursive: true, force: true });
-    }
-  });
-
-  it("restores the previous Codex skill directory when atomic install swap fails", async () => {
-    const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), "donggri-codex-home-"));
-    process.env.CODEX_HOME = codexHome;
-    const existingDir = path.join(codexHome, "skills", "donggri-codex-skill-authoring");
-    const existingSkill = path.join(existingDir, "SKILL.md");
-    fs.mkdirSync(existingDir, { recursive: true });
-    fs.writeFileSync(existingSkill, "original skill content", "utf-8");
-
-    const realRenameSync = fs.renameSync.bind(fs);
-    vi.spyOn(fs, "renameSync").mockImplementation((oldPath, newPath) => {
-      if (String(oldPath).includes(".tmp-")) {
-        throw new Error("forced_atomic_swap_failure");
-      }
-      return realRenameSync(oldPath, newPath);
-    });
-
-    try {
-      const { app } = await createHarness();
-      await request(app)
-        .post("/api/skills/donggri/donggri-codex-skill-authoring/install-codex")
-        .set("Authorization", "Bearer test-token")
-        .set("x-donggri-local-action", "install-codex-skill")
-        .expect(500);
-
-      expect(fs.readFileSync(existingSkill, "utf-8")).toBe("original skill content");
+      expect(fs.existsSync(path.join(codexHome, "skills"))).toBe(false);
     } finally {
       fs.rmSync(codexHome, { recursive: true, force: true });
     }

@@ -45,10 +45,8 @@ describe("update auto utils", () => {
     expect(isRemoteVersionNewer("1.0.0", undefined as unknown as string)).toBe(false);
 
     expect(isRemoteVersionNewer("1.2.3-alpha", "1.2.3-beta")).toBe(false);
-    expect(isRemoteVersionNewer("1.2.3-beta", "1.2.3-alpha")).toBe(false);
-
-    // Pre-release tags are normalized away intentionally (strict semver ordering is not applied here).
-    expect(isRemoteVersionNewer("1.2.3", "1.2.3-beta")).toBe(false);
+    expect(isRemoteVersionNewer("1.2.3-beta", "1.2.3-alpha")).toBe(true);
+    expect(isRemoteVersionNewer("1.2.3", "1.2.3-beta")).toBe(true);
     expect(isRemoteVersionNewer("1.2.3-beta", "1.2.3")).toBe(false);
   });
 
@@ -56,6 +54,7 @@ describe("update auto utils", () => {
     expect(computeVersionDeltaKind("1.1.2", "1.1.3")).toBe("patch");
     expect(computeVersionDeltaKind("1.1.2", "1.2.0")).toBe("minor");
     expect(computeVersionDeltaKind("1.1.2", "2.0.0")).toBe("major");
+    expect(computeVersionDeltaKind("1.1.2-alpha.0", "1.1.2-alpha.1")).toBe("patch");
     expect(computeVersionDeltaKind("1.1.2", "1.1.2")).toBe("none");
     expect(computeVersionDeltaKind("1.1.2", "")).toBe("none");
     expect(computeVersionDeltaKind("1.1.2", null)).toBe("none");

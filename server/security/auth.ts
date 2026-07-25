@@ -293,8 +293,10 @@ export function installSecurityMiddleware(app: Express): void {
     allowedHeaders: [
       "content-type",
       "authorization",
+      "idempotency-key",
       "x-inbox-secret",
       "x-csrf-token",
+      "x-request-id",
       "x-task-interrupt-token",
       "x-donggri-debug-action",
       "x-donggri-local-action",

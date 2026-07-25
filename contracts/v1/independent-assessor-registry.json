@@ -1,0 +1,12 @@
+{
+  "schema": "donggri-independent-assessor-registry/v1",
+  "registry_id": "dongri-grigri-v1-alpha.0-independent-assessor-registry",
+  "candidate_id": "dongri-grigri-v1-alpha.0",
+  "source_epoch": "sha256:867e09c08292ea677d8542d7a4a4b29a71c8fb4211fc2c995af44ec8322551c4",
+  "registry_status": "pending_approval",
+  "approval_id": "APR-V1-ASSESS-001",
+  "approved_at": null,
+  "expires_at": null,
+  "immutable": true,
+  "assessors": []
+}

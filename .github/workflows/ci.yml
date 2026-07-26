@@ -16,6 +16,8 @@ env:
   GIT_CONFIG_KEY_0: init.defaultBranch
   GIT_CONFIG_VALUE_0: main
   NODE_OPTIONS: --no-deprecation
+  DONGRI_RELEASE_GIT_SHA: ${{ github.sha }}
+  DONGRI_CERTIFICATION_MODE: "1"
 
 jobs:
   test:
@@ -108,8 +110,10 @@ jobs:
       - name: Run OpenAPI contract check
         run: pnpm run openapi:check
 
-      - name: Run type check
-        run: pnpm exec tsc -p tsconfig.json --noEmit
+      - name: Run app and node type checks
+        run: |
+          pnpm exec tsc -p tsconfig.app.json --noEmit --pretty false
+          pnpm exec tsc -p tsconfig.node.json --noEmit --pretty false
 
       - name: Run build
         run: pnpm run build
@@ -123,3 +127,118 @@ jobs:
           CI: true
           OAUTH_ENCRYPTION_SECRET: ci-test-encryption-secret
           SESSION_SECRET: ci-test-session-secret
+
+  v1-contract:
+    name: v1-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Verify V1 CI policy and negative gate
+        run: |
+          pnpm run v1:ci-gate:self-test
+          pnpm run v1:ci-gate
+
+      - name: Verify V1 app and node type configurations
+        run: |
+          pnpm exec tsc -p tsconfig.app.json --noEmit --pretty false
+          pnpm exec tsc -p tsconfig.node.json --noEmit --pretty false
+
+      - name: Verify V1 frozen contracts
+        run: |
+          pnpm run v1:release-identity:certify
+          pnpm run v1:openapi-floor
+          pnpm run v1:certification-contract:self-test
+          pnpm run openapi:check
+          pnpm run master95:delivery
+
+      - name: Verify V1 security and durability modules
+        run: >-
+          pnpm exec vitest run --config server/vitest.config.ts
+          server/modules/control-plane/source-adapter.test.ts
+          server/modules/control-plane/mutation-authorizer.test.ts
+          server/modules/control-plane/mutation-authorizer-sqlite.test.ts
+          server/modules/control-plane/event-journal-writer.test.ts
+          server/modules/control-plane/image-upload.test.ts
+          server/modules/control-plane/projection-service.test.ts
+          server/modules/control-plane/certification-contract.test.ts
+          server/modules/routes/ops/control-plane-v2.test.ts
+          server/modules/routes/ops/control-plane-v2-runtime.test.ts
+          server/modules/routes/ops/control-tower.test.ts
+          server/modules/routes/ops/image-workbench-v2.test.ts
+          server/modules/release/release-identity.test.ts
+          server/modules/release/github-release-discovery.test.ts
+
+  windows-candidate:
+    name: windows-candidate
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        shell: cmd
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Verify candidate identity and contracts
+        shell: cmd
+        run: |
+          pnpm run v1:ci-gate:self-test
+          pnpm run v1:ci-gate
+          pnpm run v1:release-identity:certify
+          pnpm run v1:openapi-floor
+          pnpm run v1:certification-contract:self-test
+          pnpm run openapi:check
+          pnpm run master95:delivery
+
+      - name: Verify Windows type and build lanes
+        shell: cmd
+        run: |
+          pnpm exec tsc -p tsconfig.app.json --noEmit --pretty false
+          pnpm exec tsc -p tsconfig.node.json --noEmit --pretty false
+          pnpm run build
+
+      - name: Verify Windows V1 security and routes
+        shell: cmd
+        run: >-
+          pnpm exec vitest run --config server/vitest.config.ts
+          server/modules/control-plane/source-adapter.test.ts
+          server/modules/control-plane/mutation-authorizer.test.ts
+          server/modules/control-plane/mutation-authorizer-sqlite.test.ts
+          server/modules/control-plane/event-journal-writer.test.ts
+          server/modules/control-plane/image-upload.test.ts
+          server/modules/control-plane/projection-service.test.ts
+          server/modules/control-plane/certification-contract.test.ts
+          server/modules/routes/ops/control-plane-v2.test.ts
+          server/modules/routes/ops/control-plane-v2-runtime.test.ts
+          server/modules/routes/ops/control-tower.test.ts
+          server/modules/routes/ops/image-workbench-v2.test.ts
+          server/modules/routes/ops/control-plane.test.ts
+          server/modules/release/release-identity.test.ts
+          server/modules/release/github-release-discovery.test.ts

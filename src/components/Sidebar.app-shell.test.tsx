@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Agent, Department } from "../types";
 import { DEFAULT_SETTINGS } from "../types";
@@ -40,11 +40,12 @@ function buildAgent(id: string, departmentId: string, status: Agent["status"], s
 
 describe("Sidebar app shell", () => {
   it("shows Dongri-grigri office navigation without rejected art-direction labels", () => {
+    const onChangeView = vi.fn();
     const { container } = render(
       <I18nProvider language="ko">
         <Sidebar
           currentView="office"
-          onChangeView={vi.fn()}
+          onChangeView={onChangeView}
           departments={departments}
           agents={[buildAgent("agent-ops", "operations", "working", 3)]}
           settings={DEFAULT_SETTINGS}
@@ -66,6 +67,11 @@ describe("Sidebar app shell", () => {
     }
 
     expect(screen.getByTitle("사무실")).toBeInTheDocument();
+    const tasksButton = screen.getByRole("button", { name: "업무" });
+    expect(tasksButton).toHaveAccessibleName("업무");
+    expect(screen.getByText("TS")).toHaveAttribute("aria-hidden", "true");
+    fireEvent.click(tasksButton);
+    expect(onChangeView).toHaveBeenCalledWith("tasks");
     expect(screen.queryByText("타이쿤")).not.toBeInTheDocument();
     expect(screen.queryByText("CloudOps")).not.toBeInTheDocument();
     expect(screen.queryByText("8bit RPG Command Map")).not.toBeInTheDocument();

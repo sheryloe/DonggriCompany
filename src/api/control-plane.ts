@@ -1,3 +1,10 @@
+import {
+  previewControlPlaneSyncV2,
+  previewEngineRouteV2,
+  previewHarnessBlueprintV2,
+  readAgentMemoryContextV2,
+  searchAgentMemoryV2,
+} from "./control-plane-v2-read-operations";
 import { post, request } from "./core";
 
 export interface ControlPlaneDocStatus {
@@ -11,6 +18,32 @@ export interface ControlPlaneDocStatus {
   error?: string;
 }
 
+export interface ControlPlaneParseError {
+  source: string;
+  code: string;
+  message: string;
+  path: string | null;
+  line: number | null;
+  column: number | null;
+}
+
+export interface ControlPlaneActiveSpec {
+  doc: ControlPlaneDocStatus;
+  id: string | null;
+  status: string | null;
+  phase: string | null;
+  related_repo: string | null;
+  related_repos: string[];
+  scope: string | null;
+  heading: string | null;
+  line: number | null;
+  next_recommended_action: string | null;
+  parse_error: string | null;
+  spec_dir: string | null;
+  docs: ControlPlaneDocStatus[];
+  missing_docs: string[];
+}
+
 export interface ControlPlaneGitStatus {
   is_repo: boolean;
   branch: string | null;
@@ -22,6 +55,8 @@ export interface ControlPlaneGitStatus {
   error: string | null;
 }
 
+export type ControlPlaneProjectLifecycleStatus = "active" | "candidate" | "completed" | "archived";
+
 export interface ControlPlaneRegistryProject {
   key: string;
   path: string;
@@ -29,6 +64,9 @@ export interface ControlPlaneRegistryProject {
   type: string | null;
   has_agents: boolean | null;
   status: string | null;
+  lifecycle_status: ControlPlaneProjectLifecycleStatus;
+  filter_group: string | null;
+  default_visible: boolean;
   summary: string | null;
   operation_agent?: {
     operator_id: string | null;
@@ -44,6 +82,15 @@ export interface ControlPlaneRegistryProject {
   db_project_id: string | null;
   db_project_name: string | null;
   git: ControlPlaneGitStatus;
+}
+
+export interface ControlPlaneRepoEstateDiscovery {
+  name: string;
+  path: string;
+  absolute_path: string;
+  classification: "registered" | "candidate" | "excluded";
+  registry_key: string | null;
+  reason: string;
 }
 
 export interface ControlPlaneDbProjectProjection {
@@ -122,6 +169,12 @@ export interface ControlPlaneVer1State {
     target: number;
     pass: boolean;
   };
+  agy_review: {
+    required: boolean;
+    model: string;
+    status: string;
+    command_cwd: string;
+  };
   gemini_review: {
     required: boolean;
     model: string;
@@ -130,9 +183,184 @@ export interface ControlPlaneVer1State {
   };
 }
 
+export type Master95GateStatus = "pass" | "warn" | "pending" | "fail";
+
+export interface Master95HardGate {
+  id: string;
+  name: string;
+  required: boolean;
+  status: Master95GateStatus;
+  failure_effect: string | null;
+  evidence_refs: string[];
+}
+
+export interface Master95EvidenceRef {
+  id: string;
+  kind: string;
+  status: string;
+  path: string | null;
+  summary: string | null;
+}
+
+export interface Master95RequirementTrace {
+  id: string;
+  title: string;
+  priority: string;
+  status: string;
+  design_refs: string[];
+  interfaces: string[];
+  tests: string[];
+  evidence_refs: string[];
+}
+
+export interface Master95RunSummary {
+  project_id: string | null;
+  task_id: string | null;
+  run_id: string;
+  trace_id: string | null;
+  artifact_id: string | null;
+  artifact_refs: string[];
+  status: string;
+  critical: boolean;
+  work_type: string | null;
+  scenario_type: string | null;
+  concurrency_group_id: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  agent_version: string | null;
+  skill_version: string | null;
+  memory_version: string | null;
+  trace_span_count: number;
+  owner_department: "OPS";
+  handoff_departments: string[];
+  events: Array<{
+    event_id: string;
+    event_type: string;
+    sequence: number;
+    occurred_at: string;
+    department: string | null;
+    routing: string[];
+    reason: string | null;
+    reason_code: string | null;
+    escalation_department: string | null;
+    decision: string | null;
+  }>;
+  evidence_refs: string[];
+}
+
+export interface Master95Scorecard {
+  spec_id: string;
+  certification_state: string;
+  targets: {
+    design_specification: number;
+    implementation_execution_evidence: number;
+    aggregate: number;
+    agy_each_axis_minimum: number;
+  };
+  aggregate_formula: Record<string, unknown>;
+  docs: ControlPlaneDocStatus[];
+  hard_gates: Master95HardGate[];
+  evidence_refs: Master95EvidenceRef[];
+  source_files: Record<string, string>;
+}
+
+export interface Master95Traceability {
+  spec_id: string;
+  generated_at: string;
+  source_file: string;
+  requirements: Master95RequirementTrace[];
+  counts: {
+    total: number;
+    implemented: number;
+    in_progress: number;
+    planned: number;
+    orphan_evidence: number;
+  };
+  orphan_requirements: string[];
+}
+
+export interface Master95Status {
+  spec_id: string;
+  generated_at: string;
+  source_epoch: string;
+  projection_epoch: string;
+  phase: string;
+  certification_state: string;
+  root_active_spec_id: string | null;
+  active_spec_is_master95: boolean;
+  companion_mode: boolean;
+  spec_dir: string;
+  quality_root: string;
+  docs: {
+    spec: ControlPlaneDocStatus[];
+    quality: ControlPlaneDocStatus[];
+    missing_count: number;
+    missing: string[];
+  };
+  dirty_worktree: {
+    repo: string;
+    count: number;
+    untracked_count: number;
+    grouped_changes: Array<{ group: string; count: number; samples: string[] }>;
+    policy: string;
+  };
+  approvals_required: string[];
+  scorecard_summary: {
+    targets: Master95Scorecard["targets"];
+    hard_gate_count: number;
+    blocking_gate_count: number;
+  };
+  traceability_summary: Master95Traceability["counts"];
+  agent_versions: Array<{
+    agent_id: string;
+    version: string;
+    lifecycle: "candidate" | "active" | "deprecated" | "revoked";
+    registered_at: string;
+    activated_at: string | null;
+    deactivated_at: string | null;
+    manifest_id: string | null;
+    display_name: string;
+    rollback_target_version: string | null;
+  }>;
+  live_pilot_projection: {
+    source_path: string;
+    event_source_path: string;
+    mode: "read-only";
+    available: boolean;
+    parse_error_count: number;
+    event_parse_error_count: number;
+    message: string;
+  };
+  run_summaries: Master95RunSummary[];
+  bloggergent_ops: {
+    department: "OPS";
+    project_id: "project:BloggerGent";
+    project_key: "BloggerGent";
+    mode: "read-only-dry-run-routing-preview";
+    role_agents: string[];
+    lanes: Array<{
+      lane_id: string;
+      group_id: string;
+      role_agent: string;
+      channel_ref: string | null;
+      metadata_tags: string[];
+      operating_mode: "read-only" | "dry-run" | "approval-gated";
+    }>;
+    implementation_delegate: "IMPLEMENT";
+    review_delegate: "REVIEW";
+    approval_owner: "CONTROL";
+    separately_approved_operations: string[];
+  };
+  next_safe_action: string;
+}
+
 export interface ControlPlaneState {
   ok: true;
   generated_at: string;
+  source_epoch: string;
+  projection_epoch: string;
+  degraded: boolean;
+  parse_errors: ControlPlaneParseError[];
   root: {
     path: string;
     repo_estate_root: {
@@ -153,16 +381,10 @@ export interface ControlPlaneState {
       inside_root: boolean;
     };
   };
-  active_spec: {
-    doc: ControlPlaneDocStatus;
-    id: string | null;
-    status: string | null;
-    phase: string | null;
-    related_repo: string | null;
-    next_recommended_action: string | null;
-    spec_dir: string | null;
-    docs: ControlPlaneDocStatus[];
-    missing_docs: string[];
+  active_specs: ControlPlaneActiveSpec[];
+  active_spec: ControlPlaneActiveSpec & {
+    deprecated: true;
+    replacement: "active_specs[]";
   };
   ver1: ControlPlaneVer1State;
   registry: {
@@ -171,6 +393,8 @@ export interface ControlPlaneState {
     repo_estate_root: string;
     db_project_count: number;
     db_projects: ControlPlaneDbProjectProjection[];
+    repo_estate_discovery: ControlPlaneRepoEstateDiscovery[];
+    lifecycle_counts: Record<ControlPlaneProjectLifecycleStatus, number>;
     registered_count: number;
     dirty_count: number;
     missing_count: number;
@@ -223,8 +447,10 @@ export interface ControlPlaneState {
   };
   sync: ControlPlaneSyncStatus;
   runner: ControlPlaneRunnerStatus;
+  engine_sync?: ControlPlaneEngineSyncStatus;
   harness_blueprints?: ControlPlaneHarnessBlueprintStatus;
   quality_harness: ControlPlaneQualityHarness;
+  master_95?: Master95Status;
   dongri_grigri: {
     brand: string;
     reset_mode: string;
@@ -291,6 +517,9 @@ export interface ControlPlaneProjectOperator {
   db_project_name: string | null;
   project_type: string | null;
   project_status: string | null;
+  lifecycle_status: ControlPlaneProjectLifecycleStatus;
+  filter_group: string | null;
+  default_visible: boolean;
   has_agents: boolean | null;
   git_status: ControlPlaneGitStatus["status"];
   git_branch: string | null;
@@ -308,6 +537,90 @@ export interface ControlPlaneRunnerStatus {
   recent_runs: Record<string, unknown>[];
   recent_personas: Record<string, unknown>[];
   recent_events: Record<string, unknown>[];
+}
+
+export type EngineProvider = "codex_exec" | "codex_app_server" | "claude" | "agy" | "hermes";
+export type EngineRunStatus =
+  | "planned"
+  | "approval_required"
+  | "running"
+  | "syncing"
+  | "completed"
+  | "blocked"
+  | "failed"
+  | "stale";
+export type EngineEventType =
+  | "route_decided"
+  | "thread_started"
+  | "turn_started"
+  | "approval_requested"
+  | "output_delta"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "reconciled";
+
+export interface ControlPlaneEngineSyncStatus {
+  tables_exist: boolean;
+  provider_status: Array<{
+    provider: EngineProvider;
+    label: string;
+    available: boolean;
+    mode: "enabled" | "preview" | "blocked" | "unavailable";
+    detail: string;
+  }>;
+  run_counts: Record<string, number>;
+  link_counts: Record<string, number>;
+  recent_runs: Record<string, unknown>[];
+  recent_events: Record<string, unknown>[];
+  recent_thread_links: Record<string, unknown>[];
+  app_server_poc: {
+    approved: boolean;
+    mode: "blocked" | "read-only-poc";
+    detail: string;
+  };
+}
+
+export interface EngineRoutePreviewBody {
+  objective: string;
+  provider?: EngineProvider | "codex" | "codex_cli" | "gemini" | "antigravity";
+  scope_type?: "root" | "project" | "spec";
+  scope_value?: string;
+}
+
+export interface EngineRoutePreviewResult {
+  ok: boolean;
+  status?: number;
+  writes?: boolean;
+  error?: string;
+  route?: {
+    provider: EngineProvider;
+    engine: string;
+    decision: "routeable" | "blocked_or_preview";
+    scope_type: "root" | "project" | "spec";
+    scope_key: string;
+    reason: string;
+    alternatives: string[];
+    approvals_required: string[];
+    computer_use_required: boolean;
+  };
+}
+
+export interface EngineRunResult {
+  ok: boolean;
+  status?: number;
+  error?: string;
+  run?:
+    | {
+        run?: Record<string, unknown>;
+        events?: Record<string, unknown>[];
+      }
+    | Record<string, unknown>
+    | null;
+  events?: Record<string, unknown>[];
+  engine_sync?: ControlPlaneEngineSyncStatus;
+  thread_link?: Record<string, unknown>;
+  reconciliation?: Record<string, unknown>;
 }
 
 export interface ControlPlaneQualityHarnessCheck {
@@ -632,6 +945,7 @@ export interface ControlPlaneProjectOperatorSyncResult {
 
 export interface ControlPlaneMemoryStatus {
   runtime_path: string;
+  data_path?: string;
   server_url: string;
   viewer_url: string;
   runtime_preflight?: {
@@ -776,8 +1090,20 @@ export interface ControlPlaneOpenSourceCandidateResult {
   }>;
 }
 
-export function getControlPlaneState(): Promise<ControlPlaneState> {
-  return request<ControlPlaneState>("/api/control-plane/state");
+export function getControlPlaneState(signal?: AbortSignal): Promise<ControlPlaneState> {
+  return request<ControlPlaneState>("/api/control-plane/state", { signal });
+}
+
+export function getMaster95Status(): Promise<{ ok: true; master_95: Master95Status }> {
+  return request("/api/control-plane/v1/master-95/status");
+}
+
+export function getMaster95Scorecard(): Promise<{ ok: true; scorecard: Master95Scorecard }> {
+  return request("/api/control-plane/v1/master-95/scorecard");
+}
+
+export function getMaster95Traceability(): Promise<{ ok: true; traceability: Master95Traceability }> {
+  return request("/api/control-plane/v1/master-95/traceability");
 }
 
 export function getControlPlaneMemoryStatus(): Promise<{
@@ -804,11 +1130,19 @@ export function getAgentMemoryFunctionalStatus(): Promise<{
   return request("/api/control-plane/v1/memory/agentmemory/status");
 }
 
+function legacyV1MutationUnavailable<T>(operation: string, _intent?: unknown): Promise<T> {
+  return Promise.reject(
+    new Error(
+      `legacy_v1_mutation_disabled:${operation}:a_registered_v2_preview_approval_execute_operation_is_required`,
+    ),
+  );
+}
+
 export function searchAgentMemoryFunctional(body: {
   query: string;
   scope?: string;
 }): Promise<ControlPlaneMemorySearchResult> {
-  return post<ControlPlaneMemorySearchResult>("/api/control-plane/v1/memory/agentmemory/search", body);
+  return searchAgentMemoryV2<ControlPlaneMemorySearchResult>(body);
 }
 
 export function getAgentMemoryContext(body: {
@@ -818,7 +1152,7 @@ export function getAgentMemoryContext(body: {
   project_key?: string;
   spec_id?: string;
 }): Promise<ControlPlaneMemoryContextResult> {
-  return post<ControlPlaneMemoryContextResult>("/api/control-plane/v1/memory/agentmemory/context", body);
+  return readAgentMemoryContextV2<ControlPlaneMemoryContextResult>(body);
 }
 
 export function rememberAgentMemory(body: {
@@ -829,25 +1163,25 @@ export function rememberAgentMemory(body: {
   spec_id?: string;
   evidence_refs?: string[];
   source_ref?: string;
-  confirm: "remember-to-agentmemory";
 }): Promise<ControlPlaneMemoryRememberResult> {
-  return post<ControlPlaneMemoryRememberResult>("/api/control-plane/v1/memory/agentmemory/remember", body);
+  return legacyV1MutationUnavailable("agentmemory-remember", body);
 }
 
-export function getOpenSourceSkillCandidates(query = "agent framework", limit = 6): Promise<ControlPlaneOpenSourceCandidateResult> {
+export function getOpenSourceSkillCandidates(
+  query = "agent framework",
+  limit = 6,
+): Promise<ControlPlaneOpenSourceCandidateResult> {
   return request<ControlPlaneOpenSourceCandidateResult>(
     `/api/control-plane/v1/instructor/open-source/candidates?query=${encodeURIComponent(query)}&limit=${encodeURIComponent(String(limit))}`,
   );
 }
 
 export function previewControlPlaneSync(): Promise<ControlPlaneSyncResult> {
-  return post<ControlPlaneSyncResult>("/api/control-plane/v1/sync/preview", {});
+  return previewControlPlaneSyncV2<ControlPlaneSyncResult>();
 }
 
 export function applyControlPlaneSync(): Promise<ControlPlaneSyncResult> {
-  return post<ControlPlaneSyncResult>("/api/control-plane/v1/sync/apply", {
-    confirm: "apply-control-plane-sync",
-  });
+  return legacyV1MutationUnavailable("control-plane-sync-apply");
 }
 
 export function previewProjectOperatorSync(): Promise<ControlPlaneProjectOperatorSyncResult> {
@@ -860,15 +1194,54 @@ export function applyProjectOperatorSync(): Promise<ControlPlaneProjectOperatorS
   });
 }
 
-export function getCodexThreadCurrent(): Promise<CodexThreadCurrentResult> {
-  return request<CodexThreadCurrentResult>("/api/control-plane/v1/codex/thread/current");
+export function getCodexThreadCurrent(signal?: AbortSignal): Promise<CodexThreadCurrentResult> {
+  return request<CodexThreadCurrentResult>("/api/control-plane/v1/codex/thread/current", { signal });
+}
+
+export function getEngineSyncStatus(): Promise<{ ok: true; engine_sync: ControlPlaneEngineSyncStatus }> {
+  return request<{ ok: true; engine_sync: ControlPlaneEngineSyncStatus }>("/api/control-plane/v1/engines/status");
+}
+
+export function previewEngineRoute(body: EngineRoutePreviewBody): Promise<EngineRoutePreviewResult> {
+  return previewEngineRouteV2<EngineRoutePreviewResult>(body);
+}
+
+export function createEngineRun(
+  body: EngineRoutePreviewBody & {
+    task_id?: string;
+    goal_id?: string;
+    external_thread_id?: string;
+    external_session_id?: string;
+    external_turn_id?: string;
+    evidence_refs?: string[];
+    event_jsonl?: string;
+  },
+): Promise<EngineRunResult> {
+  return legacyV1MutationUnavailable("engine-run-create", body);
+}
+
+export function cancelEngineRun(runId: string): Promise<EngineRunResult> {
+  return post<EngineRunResult>(`/api/control-plane/v1/engines/runs/${encodeURIComponent(runId)}/cancel`, {});
+}
+
+export function attachEngineThread(body: {
+  provider?: EngineProvider;
+  external_thread_id: string;
+  scope_type?: "root" | "project" | "spec";
+  scope_value?: string;
+  title?: string;
+  summary?: string;
+  evidence_refs?: string[];
+}): Promise<EngineRunResult> {
+  return legacyV1MutationUnavailable("engine-thread-attach", body);
+}
+
+export function reconcileEngineSync(): Promise<EngineRunResult> {
+  return legacyV1MutationUnavailable("engine-sync-reconcile");
 }
 
 export function activateCodexThread(body: CodexThreadActivationBody): Promise<ControlPlaneRunResult> {
-  return post<ControlPlaneRunResult>("/api/control-plane/v1/codex/thread/activate", {
-    confirm: "activate-codex-thread",
-    ...body,
-  });
+  return legacyV1MutationUnavailable("codex-thread-activate", body);
 }
 
 export function finishCodexThread(
@@ -879,24 +1252,19 @@ export function finishCodexThread(
     handoff_path?: string;
   },
 ): Promise<ControlPlaneRunResult> {
-  return post<ControlPlaneRunResult>(`/api/control-plane/v1/codex/thread/${encodeURIComponent(runId)}/finish`, {
-    confirm: "finish-codex-thread",
-    final_status: body.final_status ?? "completed",
-    evidence_refs: body.evidence_refs ?? [],
-    handoff_path: body.handoff_path,
-  });
+  return legacyV1MutationUnavailable("codex-thread-finish", { run_id: runId, ...body });
 }
 
 export function previewHarnessBlueprint(body: HarnessBlueprintBody): Promise<HarnessBlueprintResult> {
-  return post<HarnessBlueprintResult>("/api/control-plane/v1/harness/blueprints/preview", body);
+  return previewHarnessBlueprintV2<HarnessBlueprintResult>(body);
 }
 
 export function saveHarnessBlueprintDraft(body: HarnessBlueprintBody): Promise<HarnessBlueprintResult> {
-  return post<HarnessBlueprintResult>("/api/control-plane/v1/harness/blueprints/drafts", body);
+  return legacyV1MutationUnavailable("harness-blueprint-save", body);
 }
 
 export function applyHarnessBlueprint(blueprintId: string): Promise<HarnessBlueprintResult> {
-  return post<HarnessBlueprintResult>(`/api/control-plane/v1/harness/blueprints/${encodeURIComponent(blueprintId)}/apply`, {});
+  return legacyV1MutationUnavailable("harness-blueprint-apply", { blueprint_id: blueprintId });
 }
 
 export function prepareControlPlaneRun(body: {
@@ -909,11 +1277,11 @@ export function prepareControlPlaneRun(body: {
   evidence?: string[];
   approval_refs?: string[];
 }): Promise<ControlPlaneRunResult> {
-  return post<ControlPlaneRunResult>("/api/control-plane/v1/runs/prepare", body);
+  return legacyV1MutationUnavailable("control-plane-run-prepare", body);
 }
 
 export function startControlPlaneRun(runId: string): Promise<ControlPlaneRunResult> {
-  return post<ControlPlaneRunResult>(`/api/control-plane/v1/runs/${encodeURIComponent(runId)}/start`, {});
+  return legacyV1MutationUnavailable("control-plane-run-start", { run_id: runId });
 }
 
 export function createControlPlanePersona(
@@ -933,7 +1301,7 @@ export function createControlPlanePersona(
     evidence_refs?: string[];
   },
 ): Promise<ControlPlaneRunResult> {
-  return post<ControlPlaneRunResult>(`/api/control-plane/v1/runs/${encodeURIComponent(runId)}/personas`, body);
+  return legacyV1MutationUnavailable("control-plane-persona-create", { run_id: runId, ...body });
 }
 
 export function decideControlPlanePersona(
@@ -949,5 +1317,5 @@ export function decideControlPlanePersona(
     payload?: Record<string, unknown>;
   },
 ): Promise<ControlPlaneRunResult> {
-  return post<ControlPlaneRunResult>(`/api/control-plane/v1/personas/${encodeURIComponent(personaId)}/decision`, body);
+  return legacyV1MutationUnavailable("control-plane-persona-decide", { persona_id: personaId, ...body });
 }

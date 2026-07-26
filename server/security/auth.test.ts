@@ -85,7 +85,7 @@ describe("auth helpers", () => {
 
   it("handles trusted origins, public paths, and secure cookie rules", () => {
     expect(isTrustedOrigin("http://localhost:8800")).toBe(true);
-    expect(isTrustedOrigin("https://dev.ts.net")).toBe(true);
+    expect(isTrustedOrigin("https://dev.ts.net")).toBe(false);
     expect(isTrustedOrigin("file://tmp/test")).toBe(false);
     expect(isTrustedOrigin("not-a-url")).toBe(false);
     expect(normalizeHostHeader("localhost:8790")).toBe("localhost");

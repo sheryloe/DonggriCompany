@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { hasValidCsrfToken, shouldRequireCsrf } from "../../../../security/auth.ts";
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
+import { resolveReleaseIdentity } from "../../../release/release-identity.ts";
+import { createLegacyMutationGoneHandler } from "../control-plane-v2.ts";
 import type { SkillDetail, SkillEntry } from "./types.ts";
 
 const SKILLS_CACHE_TTL = 3600_000;
@@ -206,48 +206,6 @@ function mergeDonggriSeedSkills(input: { seedSkills: SkillEntry[]; catalogSkills
     if (left.origin !== "donggri" && right.origin === "donggri") return 1;
     return compareCatalogSkills(left, right);
   });
-}
-
-function copyDirectoryRecursive(sourceDir: string, destinationDir: string): void {
-  fs.mkdirSync(destinationDir, { recursive: true });
-  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
-    const sourcePath = path.join(sourceDir, entry.name);
-    const destinationPath = path.join(destinationDir, entry.name);
-    if (entry.isDirectory()) {
-      copyDirectoryRecursive(sourcePath, destinationPath);
-      continue;
-    }
-    if (entry.isFile()) {
-      fs.copyFileSync(sourcePath, destinationPath);
-    }
-  }
-}
-
-function installDirectoryAtomically(sourceDir: string, destinationDir: string): void {
-  const parentDir = path.dirname(destinationDir);
-  const tempDir = path.join(parentDir, `${path.basename(destinationDir)}.tmp-${randomUUID()}`);
-  const backupDir = path.join(parentDir, `${path.basename(destinationDir)}.bak-${randomUUID()}`);
-  let backupCreated = false;
-
-  fs.mkdirSync(parentDir, { recursive: true });
-  copyDirectoryRecursive(sourceDir, tempDir);
-
-  try {
-    if (fs.existsSync(destinationDir)) {
-      fs.renameSync(destinationDir, backupDir);
-      backupCreated = true;
-    }
-    fs.renameSync(tempDir, destinationDir);
-    if (backupCreated) {
-      fs.rmSync(backupDir, { recursive: true, force: true });
-    }
-  } catch (error) {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-    if (backupCreated && !fs.existsSync(destinationDir) && fs.existsSync(backupDir)) {
-      fs.renameSync(backupDir, destinationDir);
-    }
-    throw error;
-  }
 }
 
 function normalizeRepo(value: unknown): string {
@@ -487,11 +445,6 @@ async function loadSkillCatalog(options?: { forceRefresh?: boolean }): Promise<S
   return skills.length > 0 ? skills : (cachedSkills?.data ?? []);
 }
 
-function clearSkillCaches(): void {
-  cachedSkills = null;
-  skillDetailCache.clear();
-}
-
 function stripHtml(input: string): string {
   return decodeHtmlEntities(
     input
@@ -638,25 +591,16 @@ async function fetchSkillDetail(source: string, skillId: string): Promise<SkillD
 
 export function registerSkillCatalogRoutes(ctx: RuntimeContext): void {
   const { app } = ctx;
+  const gone = createLegacyMutationGoneHandler({
+    get_source_epoch: () => resolveReleaseIdentity(REPO_ROOT).source_epoch,
+  });
 
   app.get("/api/skills", async (_req, res) => {
     const skills = await loadSkillCatalog();
     res.json({ skills });
   });
 
-  app.post("/api/skills/refresh", async (req, res) => {
-    if (shouldRequireCsrf(req) && !hasValidCsrfToken(req)) {
-      return res.status(403).json({ ok: false, error: "csrf_required" });
-    }
-    clearSkillCaches();
-    const skills = await loadSkillCatalog({ forceRefresh: true });
-    res.json({
-      ok: true,
-      skills,
-      count: skills.length,
-      refreshedAt: Date.now(),
-    });
-  });
+  app.post("/api/skills/refresh", gone);
 
   app.get("/api/skills/detail", async (req, res) => {
     const source = String(req.query.source ?? "");
@@ -687,38 +631,5 @@ export function registerSkillCatalogRoutes(ctx: RuntimeContext): void {
     res.json({ ok: !!detail, detail: detail ?? null });
   });
 
-  app.post("/api/skills/donggri/:skillName/install-codex", (req, res) => {
-    if (req.header("x-donggri-local-action") !== "install-codex-skill") {
-      return res.status(403).json({ ok: false, error: "local_action_header_required" });
-    }
-    if (shouldRequireCsrf(req) && !hasValidCsrfToken(req)) {
-      return res.status(403).json({ ok: false, error: "csrf_required" });
-    }
-
-    const skillName = String(req.params.skillName ?? "").trim();
-    if (!isSafeSkillName(skillName)) {
-      return res.status(400).json({ ok: false, error: "invalid_skill_name" });
-    }
-
-    const source = resolveRepoSkillSource(skillName);
-    if (!source) {
-      return res.status(404).json({ ok: false, error: "repo_skill_not_found" });
-    }
-
-    const codexSkillsRoot = resolveCodexSkillsRoot();
-    const destinationDir = path.join(codexSkillsRoot, skillName);
-    const resolvedRoot = path.resolve(codexSkillsRoot);
-    const resolvedDestination = path.resolve(destinationDir);
-    if (!resolvedDestination.startsWith(`${resolvedRoot}${path.sep}`)) {
-      return res.status(400).json({ ok: false, error: "unsafe_destination" });
-    }
-
-    installDirectoryAtomically(source.sourceDir, destinationDir);
-    clearSkillCaches();
-    res.json({
-      ok: true,
-      skillName,
-      installed: true,
-    });
-  });
+  app.post("/api/skills/donggri/:skillName/install-codex", gone);
 }

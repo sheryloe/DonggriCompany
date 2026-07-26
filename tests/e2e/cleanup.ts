@@ -1,7 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
-import fs from "node:fs";
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { runE2EDbHelper, type E2EDbHelperAction } from "./fixtures/e2e-db";
 
 type E2ECleanupTargets = {
   apiProviderIds?: string[];
@@ -69,6 +67,36 @@ async function deleteById(
   }
 }
 
+async function discardTaskWorktrees(
+  request: APIRequestContext,
+  taskIds: string[],
+  errors: string[],
+  requestHeaders?: Record<string, string>,
+): Promise<void> {
+  for (const id of taskIds) {
+    try {
+      let response = await request.post(`/api/tasks/${id}/discard`, requestHeaders ? { headers: requestHeaders } : {});
+      if (response.status() === 401 && !requestHeaders) {
+        await request.get("/api/auth/session");
+        response = await request.post(`/api/tasks/${id}/discard`);
+      }
+      for (let attempt = 1; attempt <= 8 && TRANSIENT_HTTP_STATUSES.has(response.status()); attempt += 1) {
+        await sleep(250 * attempt);
+        response = await request.post(`/api/tasks/${id}/discard`, requestHeaders ? { headers: requestHeaders } : {});
+        if (response.status() === 401 && !requestHeaders) {
+          await request.get("/api/auth/session");
+          response = await request.post(`/api/tasks/${id}/discard`);
+        }
+      }
+      if (response.ok() || response.status() === 404) continue;
+      const text = await response.text();
+      errors.push(`/api/tasks/${id}/discard -> ${response.status()}: ${text.slice(0, 300)}`);
+    } catch (error) {
+      errors.push(`/api/tasks/${id}/discard -> ${String(error)}`);
+    }
+  }
+}
+
 async function waitForTaskDeletion(
   request: APIRequestContext,
   taskIds: string[],
@@ -101,50 +129,26 @@ async function waitForTaskDeletion(
 async function runLocalE2EDbMutation(
   label: string,
   errors: string[],
-  mutate: (db: DatabaseSync) => void,
+  action: E2EDbHelperAction,
+  ids: string[],
 ): Promise<void> {
-  const dbPath = path.resolve(process.cwd(), ".tmp", "e2e-runtime", "claw-empire.e2e.sqlite");
-  if (!fs.existsSync(dbPath)) return;
-
-  let lastError: unknown = null;
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    let db: DatabaseSync | null = null;
-    try {
-      db = new DatabaseSync(dbPath);
-      db.exec("PRAGMA busy_timeout = 5000");
-      mutate(db);
-      return;
-    } catch (error) {
-      lastError = error;
-      if (!String(error).toLowerCase().includes("database is locked")) {
-        errors.push(`${label}(local-db) -> ${String(error)}`);
-        return;
-      }
-      await sleep(250 * attempt);
-    } finally {
-      db?.close();
-    }
+  try {
+    runE2EDbHelper(action, { ids });
+  } catch (error) {
+    errors.push(`${label}(local-db-helper) -> ${String(error)}`);
   }
-
-  errors.push(`${label}(local-db) -> ${String(lastError)}`);
 }
 
 async function deleteSubtasksFromLocalE2EDb(subtaskIds: string[], errors: string[]): Promise<void> {
   if (subtaskIds.length === 0) return;
 
-  await runLocalE2EDbMutation("subtasks", errors, (db) => {
-    const placeholders = subtaskIds.map(() => "?").join(", ");
-    db.prepare(`DELETE FROM subtasks WHERE id IN (${placeholders})`).run(...subtaskIds);
-  });
+  await runLocalE2EDbMutation("subtasks", errors, "delete-subtasks", subtaskIds);
 }
 
 async function deleteMessagesForProjectsFromLocalE2EDb(projectIds: string[], errors: string[]): Promise<void> {
   if (projectIds.length === 0) return;
 
-  await runLocalE2EDbMutation("messages", errors, (db) => {
-    const placeholders = projectIds.map(() => "?").join(", ");
-    db.prepare(`DELETE FROM messages WHERE project_id IN (${placeholders})`).run(...projectIds);
-  });
+  await runLocalE2EDbMutation("messages", errors, "delete-project-messages", projectIds);
 }
 
 async function markAgentsIdleForCleanup(
@@ -182,10 +186,7 @@ async function markAgentsIdleForCleanup(
     }
   }
 
-  await runLocalE2EDbMutation("agents(status=offline)", errors, (db) => {
-    const placeholders = agentIds.map(() => "?").join(", ");
-    db.prepare(`UPDATE agents SET status = 'offline' WHERE id IN (${placeholders})`).run(...agentIds);
-  });
+  await runLocalE2EDbMutation("agents(status=offline)", errors, "mark-agents-offline", agentIds);
 }
 
 async function collectDepartmentAgentIds(
@@ -288,6 +289,7 @@ export async function cleanupE2EResources(request: APIRequestContext, targets: E
   const relatedTaskIds = await collectRelatedTaskIds(request, projectIds, departmentIds, errors, requestHeaders);
   const taskIds = uniqueIds([...(targets.taskIds ?? []), ...relatedTaskIds]);
 
+  await discardTaskWorktrees(request, taskIds, errors, requestHeaders);
   await deleteById(request, "/api/tasks", taskIds, errors, requestHeaders);
   await waitForTaskDeletion(request, taskIds, errors, requestHeaders);
   await sleep(300);
@@ -299,6 +301,7 @@ export async function cleanupE2EResources(request: APIRequestContext, targets: E
   await deleteById(request, "/api/agents", agentIds, errors, requestHeaders);
   await deleteById(request, "/api/api-providers", apiProviderIds, errors, requestHeaders);
   const leftoverTaskIds = await collectRelatedTaskIds(request, projectIds, departmentIds, errors, requestHeaders);
+  await discardTaskWorktrees(request, leftoverTaskIds, errors, requestHeaders);
   await deleteById(request, "/api/tasks", leftoverTaskIds, errors, requestHeaders);
   await waitForTaskDeletion(request, leftoverTaskIds, errors, requestHeaders);
   await deleteById(request, "/api/projects", projectIds, errors, requestHeaders);

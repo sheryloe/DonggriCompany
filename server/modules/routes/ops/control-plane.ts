@@ -4,12 +4,34 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Express } from "express";
+import { z } from "zod";
+import { RELEASE_IDENTITY } from "../../../config/runtime.ts";
+import {
+  ControlPlaneSourceAdapter,
+  type ControlPlaneActiveSpecSource,
+  type ControlPlaneSourceFile,
+  type ControlPlaneSourceSnapshot,
+} from "../../control-plane/source-adapter.ts";
+import { createMaster95DefaultAgentRegistry } from "../../master95/agent-registry.ts";
+import { readLivePilotProjection, type Master95RunSummary } from "../../master95/live-pilot-projection.ts";
+import { MASTER95_BLOGGERGENT_LANES, MASTER95_BLOGGERGENT_ROLE_AGENTS } from "../../master95/project-registry.ts";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
+import { registerControlPlaneV2RuntimeRoutes } from "./control-plane-v2-runtime.ts";
+import { createLegacyControlPlaneV1MutationGuard } from "./control-plane-v2.ts";
+import { createMaster95ControlTowerRuntimeLoader, registerMaster95ControlTowerRoutes } from "./control-tower.ts";
+import { registerMaster95ImageWorkbenchRoutes } from "./image-workbench.ts";
 
 const CONTROL_ROOT = "G:\\Donggri_DevDrive";
 const REPO_ESTATE_ROOT = path.join(CONTROL_ROOT, "repos");
 const RUNTIME_PROJECTION_APP = path.join(REPO_ESTATE_ROOT, "DonggriCompany");
 const CODEX_CONTROL_ROOT = path.join(CONTROL_ROOT, "storage", "codex-control");
+const CONTROL_PLANE_SOURCE_ADAPTER = new ControlPlaneSourceAdapter({
+  controlRoot: CONTROL_ROOT,
+  controlPlaneRoot: CODEX_CONTROL_ROOT,
+  sourceEpoch: RELEASE_IDENTITY.source_epoch,
+});
+const CONTROL_PLANE_FAST_TEST_MODE =
+  process.env.CONTROL_PLANE_FAST_TEST_MODE === "1" || process.env.VITEST === "true" || process.env.NODE_ENV === "test";
 const AGENTMEMORY_URL = "http://127.0.0.1:3111";
 const AGENTMEMORY_VIEWER_URL = "http://127.0.0.1:3113";
 const AGENTMEMORY_RUNTIME_PATH = "G:\\Donggr_Runtime\\agentmemory";
@@ -44,7 +66,12 @@ const AGENTMEMORY_REST_GROUPS = [
   {
     key: "blocked",
     label: "Destructive or global operations",
-    paths: ["/agentmemory/forget", "/agentmemory/governance/bulk-delete", "/agentmemory/import", "/agentmemory/snapshot/restore"],
+    paths: [
+      "/agentmemory/forget",
+      "/agentmemory/governance/bulk-delete",
+      "/agentmemory/import",
+      "/agentmemory/snapshot/restore",
+    ],
     dongri_policy: "blocked-until-explicit-approval",
   },
 ];
@@ -62,6 +89,9 @@ const AGENTMEMORY_MCP_TOOLS = [
   "memory_governance_delete",
 ];
 const VER1_FALLBACK_SPEC_ID = "20260522-donggri-root-control-sdd-v1";
+const MASTER95_SPEC_ID = "20260714-donggricompany-95-master-operating-system-v1";
+const MASTER95_SPEC_DIR = path.join(CODEX_CONTROL_ROOT, "specs", MASTER95_SPEC_ID);
+const MASTER95_QUALITY_ROOT = path.join(CODEX_CONTROL_ROOT, "quality", "master-95");
 const VER1_REQUIRED_SPEC_DOCS = [
   "metadata.md",
   "requirements.md",
@@ -72,6 +102,12 @@ const VER1_REQUIRED_SPEC_DOCS = [
   "evidence.md",
   "handoff.md",
   "learnings.md",
+];
+const MASTER95_QUALITY_FILES = [
+  "QUALITY_SCORECARD.md",
+  "SCORING_RULES.json",
+  "EVIDENCE_INDEX.yaml",
+  "requirements-traceability.yaml",
 ];
 const VER1_GROUPS = {
   steering: ["product.md", "tech.md", "structure.md", "safety.md", "agent-model.md", "context.md"],
@@ -87,7 +123,7 @@ const VER1_GROUPS = {
   ],
   orchestrator: ["README.md", "waves.md", "persona-subagents.md", "run-state.md", "recovery.md", "routing.md"],
   context_packs: ["README.md", "_template.md"],
-  quality: ["rubric.md", "hard-gates.md", "gemini-review.md"],
+  quality: ["rubric.md", "hard-gates.md", "agy-review.md"],
   integrations: ["codex-app.md", "donggricompany.md", "agentmemory.md", "gemini-cli.md"],
 };
 const LEGACY_THREAD_TARGETS = [
@@ -282,7 +318,14 @@ type HarnessCheck = {
 };
 
 type HarnessBlueprintTargetMode = "department" | "project" | "both";
-type HarnessBlueprintPattern = "auto" | "pipeline" | "fan-out-fan-in" | "expert-pool" | "producer-reviewer" | "supervisor" | "hierarchical-delegation";
+type HarnessBlueprintPattern =
+  | "auto"
+  | "pipeline"
+  | "fan-out-fan-in"
+  | "expert-pool"
+  | "producer-reviewer"
+  | "supervisor"
+  | "hierarchical-delegation";
 
 type HarnessBlueprintStatus = {
   tables_exist: boolean;
@@ -293,6 +336,190 @@ type HarnessBlueprintStatus = {
   latest_blueprints: Record<string, unknown>[];
 };
 
+type EngineProvider = "codex_exec" | "codex_app_server" | "claude" | "agy" | "hermes";
+type EngineRunStatus =
+  | "planned"
+  | "approval_required"
+  | "running"
+  | "syncing"
+  | "completed"
+  | "blocked"
+  | "failed"
+  | "stale";
+type EngineEventType =
+  | "route_decided"
+  | "thread_started"
+  | "turn_started"
+  | "approval_requested"
+  | "output_delta"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "reconciled";
+
+type EngineSyncStatus = {
+  tables_exist: boolean;
+  provider_status: Array<{
+    provider: EngineProvider;
+    label: string;
+    available: boolean;
+    mode: "enabled" | "preview" | "blocked" | "unavailable";
+    detail: string;
+  }>;
+  run_counts: Record<string, number>;
+  link_counts: Record<string, number>;
+  recent_runs: Record<string, unknown>[];
+  recent_events: Record<string, unknown>[];
+  recent_thread_links: Record<string, unknown>[];
+  app_server_poc: {
+    approved: boolean;
+    mode: "blocked" | "read-only-poc";
+    detail: string;
+  };
+};
+
+type Master95GateStatus = "pass" | "warn" | "pending" | "fail";
+
+type Master95HardGate = {
+  id: string;
+  name: string;
+  required: boolean;
+  status: Master95GateStatus;
+  failure_effect: string | null;
+  evidence_refs: string[];
+};
+
+type Master95EvidenceRef = {
+  id: string;
+  kind: string;
+  status: string;
+  path: string | null;
+  summary: string | null;
+};
+
+type Master95RequirementTrace = {
+  id: string;
+  title: string;
+  priority: string;
+  status: string;
+  design_refs: string[];
+  interfaces: string[];
+  tests: string[];
+  evidence_refs: string[];
+};
+
+type Master95Scorecard = {
+  spec_id: string;
+  certification_state: string;
+  targets: {
+    design_specification: number;
+    implementation_execution_evidence: number;
+    aggregate: number;
+    agy_each_axis_minimum: number;
+  };
+  aggregate_formula: Record<string, unknown>;
+  docs: DocStatus[];
+  hard_gates: Master95HardGate[];
+  evidence_refs: Master95EvidenceRef[];
+  source_files: Record<string, string>;
+};
+
+const master95DocStatusSchema = z
+  .object({
+    key: z.string(),
+    path: z.string(),
+    exists: z.boolean(),
+    size: z.number().nullable(),
+    mtime: z.string().nullable(),
+    sha256: z.string().nullable(),
+    parse_status: z.enum(["ok", "missing", "error"]).optional(),
+    error: z.string().optional(),
+  })
+  .passthrough();
+
+const master95HardGateSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  required: z.boolean(),
+  status: z.enum(["pass", "warn", "pending", "fail"]),
+  failure_effect: z.string().nullable(),
+  evidence_refs: z.array(z.string()),
+});
+
+const master95EvidenceRefSchema = z.object({
+  id: z.string().min(1),
+  kind: z.string(),
+  status: z.string(),
+  path: z.string().nullable(),
+  summary: z.string().nullable(),
+});
+
+const master95RequirementTraceSchema = z.object({
+  id: z.string().regex(/^M95-R[0-9]+$/),
+  title: z.string(),
+  priority: z.string(),
+  status: z.string(),
+  design_refs: z.array(z.string()),
+  interfaces: z.array(z.string()),
+  tests: z.array(z.string()),
+  evidence_refs: z.array(z.string()),
+});
+
+const master95ScorecardSchema = z.object({
+  spec_id: z.literal(MASTER95_SPEC_ID),
+  certification_state: z.string().min(1),
+  targets: z.object({
+    design_specification: z.number(),
+    implementation_execution_evidence: z.number(),
+    aggregate: z.number(),
+    agy_each_axis_minimum: z.number(),
+  }),
+  aggregate_formula: z.record(z.string(), z.unknown()),
+  docs: z.array(master95DocStatusSchema),
+  hard_gates: z.array(master95HardGateSchema),
+  evidence_refs: z.array(master95EvidenceRefSchema),
+  source_files: z.record(z.string(), z.string()),
+});
+
+const master95BloggerGentOpsSchema = z.object({
+  department: z.literal("OPS"),
+  project_id: z.literal("project:BloggerGent"),
+  project_key: z.literal("BloggerGent"),
+  mode: z.literal("read-only-dry-run-routing-preview"),
+  role_agents: z.array(z.string()).length(7),
+  lanes: z
+    .array(
+      z.object({
+        lane_id: z.string(),
+        group_id: z.string(),
+        role_agent: z.string(),
+        channel_ref: z.string().nullable(),
+        metadata_tags: z.array(z.string()),
+        operating_mode: z.enum(["read-only", "dry-run", "approval-gated"]),
+      }),
+    )
+    .length(8),
+  implementation_delegate: z.literal("IMPLEMENT"),
+  review_delegate: z.literal("REVIEW"),
+  approval_owner: z.literal("CONTROL"),
+  separately_approved_operations: z.array(z.string()),
+});
+
+const master95TraceabilitySchema = z.object({
+  spec_id: z.literal(MASTER95_SPEC_ID),
+  generated_at: z.string(),
+  source_file: z.string(),
+  requirements: z.array(master95RequirementTraceSchema),
+  counts: z.object({
+    total: z.number(),
+    implemented: z.number(),
+    in_progress: z.number(),
+    planned: z.number(),
+    orphan_evidence: z.number(),
+  }),
+  orphan_requirements: z.array(z.string()),
+});
+
 type CodexThreadScopeType = "root" | "project" | "spec";
 type ControlPlaneMutationOperationClass =
   | "harness-run"
@@ -301,7 +528,9 @@ type ControlPlaneMutationOperationClass =
   | "persona-evidence"
   | "agentmemory-remember-non-destructive"
   | "db-write-non-destructive"
-  | "agentmemory-runtime-connect";
+  | "agentmemory-runtime-connect"
+  | "codex-engine-sync"
+  | "codex-app-server-poc";
 
 function toIso(ms: number): string {
   return new Date(ms).toISOString();
@@ -379,146 +608,32 @@ function fileStatus(key: string, filePath: string, parseStatus?: DocStatus["pars
   }
 }
 
+function sourceFileStatus(
+  key: string,
+  sourceFile: ControlPlaneSourceFile,
+  sourceSnapshot: ControlPlaneSourceSnapshot,
+): DocStatus {
+  const parseErrors = sourceSnapshot.parse_errors.filter((error) => error.source === sourceFile.relative_path);
+  return {
+    key,
+    path: sourceFile.absolute_path,
+    exists: sourceFile.exists,
+    size: sourceFile.size,
+    mtime: sourceFile.mtime,
+    sha256: sourceFile.sha256,
+    parse_status: !sourceFile.exists ? "missing" : parseErrors.length > 0 ? "error" : "ok",
+    ...(sourceFile.error ? { error: sourceFile.error } : {}),
+  };
+}
+
 function readText(filePath: string): string {
   if (!fs.existsSync(filePath)) return "";
   return fs.readFileSync(filePath, "utf8");
 }
 
-function stripMarkdownHtmlComments(raw: string): string {
-  return raw.replace(/<!--[\s\S]*?-->/g, "");
-}
-
-function extractMarkdownSection(raw: string, heading: string): string {
-  const lines = raw.split(/\r?\n/);
-  const headingPattern = new RegExp(`^##\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
-  const start = lines.findIndex((line) => headingPattern.test(line));
-  if (start < 0) return raw;
-  const sectionLines: string[] = [];
-  for (const line of lines.slice(start + 1)) {
-    if (/^##\s+/.test(line)) break;
-    sectionLines.push(line);
-  }
-  return sectionLines.join("\n");
-}
-
-function parseActiveSpec(raw: string) {
-  const cleaned = stripMarkdownHtmlComments(raw);
-  const currentSection = extractMarkdownSection(cleaned, "Current Active Spec");
-  const matchField = (label: string) => {
-    const match = currentSection.match(new RegExp(`^- ${label}:\\s*(.+)$`, "m"));
-    return match?.[1]?.trim().replace(/^`|`$/g, "") ?? null;
-  };
-  const nextActionMatch = cleaned.match(/## Next Recommended Action\s+([\s\S]*?)(?:\n## |\s*$)/);
-  return {
-    id: matchField("Spec ID"),
-    status: matchField("Status"),
-    phase: matchField("Phase"),
-    related_repo: matchField("Related repo"),
-    next_recommended_action: nextActionMatch?.[1]?.trim() ?? null,
-  };
-}
-
 function resolveVer1SpecId(activeSpecId: string | null): string {
   if (activeSpecId && /-v1$/.test(activeSpecId)) return activeSpecId;
   return VER1_FALLBACK_SPEC_ID;
-}
-
-function parseSimpleProjectsYaml(raw: string): Array<{
-  key: string;
-  path: string;
-  type: string | null;
-  has_agents: boolean | null;
-  status: string | null;
-  summary: string | null;
-  operation_agent: ProjectOperationAgentConfig | null;
-}> {
-  const lines = raw.split(/\r?\n/);
-  const projects: Array<{
-    key: string;
-    path: string;
-    type: string | null;
-    has_agents: boolean | null;
-    status: string | null;
-    summary: string | null;
-    operation_agent: ProjectOperationAgentConfig | null;
-  }> = [];
-  let inProjects = false;
-  let current: (typeof projects)[number] | null = null;
-  let inOperationAgent = false;
-  const parseYamlBool = (value: string): boolean | null =>
-    value === "true" ? true : value === "false" ? false : null;
-
-  for (const line of lines) {
-    if (/^projects:\s*$/.test(line)) {
-      inProjects = true;
-      continue;
-    }
-    if (!inProjects) continue;
-    const projectMatch = line.match(/^ {2}([^:\s][^:]*):\s*$/);
-    if (projectMatch) {
-      if (current) projects.push(current);
-      current = {
-        key: projectMatch[1].trim(),
-        path: "",
-        type: null,
-        has_agents: null,
-        status: null,
-        summary: null,
-        operation_agent: null,
-      };
-      inOperationAgent = false;
-      continue;
-    }
-    if (!current) continue;
-    const agentFieldMatch = line.match(/^ {6}([a-zA-Z0-9_]+):\s*(.*)$/);
-    if (inOperationAgent && agentFieldMatch) {
-      const field = agentFieldMatch[1] as keyof ProjectOperationAgentConfig;
-      const value = agentFieldMatch[2].trim().replace(/^["']|["']$/g, "");
-      if (!current.operation_agent) {
-        current.operation_agent = {
-          operator_id: null,
-          project_key: null,
-          owner_department: null,
-          status: null,
-          authority: null,
-          memory_scope: null,
-          assignment_policy: null,
-          enabled: null,
-        };
-      }
-      if (field === "enabled") {
-        current.operation_agent.enabled = parseYamlBool(value);
-      } else if (field in current.operation_agent) {
-        current.operation_agent[field] = value as never;
-      }
-      continue;
-    }
-    const fieldMatch = line.match(/^ {4}([a-zA-Z0-9_]+):\s*(.*)$/);
-    if (!fieldMatch) continue;
-    const field = fieldMatch[1];
-    const value = fieldMatch[2].trim().replace(/^["']|["']$/g, "");
-    inOperationAgent = field === "operation_agent";
-    if (inOperationAgent) {
-      current.operation_agent = {
-        operator_id: null,
-        project_key: null,
-        owner_department: null,
-        status: null,
-        authority: null,
-        memory_scope: null,
-        assignment_policy: null,
-        enabled: null,
-      };
-      continue;
-    }
-    if (field === "path") current.path = value;
-    if (field === "type") current.type = value;
-    if (field === "status") current.status = value;
-    if (field === "summary") current.summary = value;
-    if (field === "has_agents") current.has_agents = parseYamlBool(value);
-  }
-  if (current) projects.push(current);
-  return projects.filter((project) => project.key && project.path);
 }
 
 function inspectGit(projectPath: string): RegistryProject["git"] {
@@ -621,8 +736,17 @@ function readGitShortStatus(projectPath: string): Array<{ raw: string; path: str
 
 function classifyHygienePath(relativePath: string): string {
   if (/^\.tmp-|\/\.tmp-|\.png$/i.test(relativePath)) return "generated-artifacts/screenshots";
-  if (/^server\/modules\/routes\/ops\/control-plane/i.test(relativePath) || /^src\/api\/control-plane/i.test(relativePath)) return "harness-candidate";
-  if (/^src\/components\/ControlPlanePage/i.test(relativePath) || /^src\/app\//i.test(relativePath) || /^src\/styles\//i.test(relativePath)) return "ui-candidate";
+  if (
+    /^server\/modules\/routes\/ops\/control-plane/i.test(relativePath) ||
+    /^src\/api\/control-plane/i.test(relativePath)
+  )
+    return "harness-candidate";
+  if (
+    /^src\/components\/ControlPlanePage/i.test(relativePath) ||
+    /^src\/app\//i.test(relativePath) ||
+    /^src\/styles\//i.test(relativePath)
+  )
+    return "ui-candidate";
   if (/^agents\//i.test(relativePath) || /^AGENTS\.md$/i.test(relativePath)) return "agent-directory-migration";
   if (/^docs\//i.test(relativePath)) return "docs-candidate";
   return "unrelated-unknown";
@@ -692,9 +816,9 @@ function buildDbProjectProjections(
 
 function tableExists(db: RuntimeContext["db"], tableName: string): boolean {
   try {
-    const row = db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .get(tableName) as { name?: string } | undefined;
+    const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName) as
+      | { name?: string }
+      | undefined;
     return row?.name === tableName;
   } catch {
     return false;
@@ -702,11 +826,7 @@ function tableExists(db: RuntimeContext["db"], tableName: string): boolean {
 }
 
 function readControlSyncStatus(db: RuntimeContext["db"]) {
-  const requiredTables = [
-    "control_plane_snapshots",
-    "control_plane_project_links",
-    "control_plane_spec_task_links",
-  ];
+  const requiredTables = ["control_plane_snapshots", "control_plane_project_links", "control_plane_spec_task_links"];
   const tables = Object.fromEntries(requiredTables.map((name) => [name, tableExists(db, name)]));
   const tablesExist = Object.values(tables).every(Boolean);
   if (!tablesExist) {
@@ -733,9 +853,9 @@ function readControlSyncStatus(db: RuntimeContext["db"]) {
     const linkRows = db
       .prepare("SELECT link_status, COUNT(*) AS count FROM control_plane_project_links GROUP BY link_status")
       .all() as Array<{ link_status: string; count: number }>;
-    const specTaskCountRow = db
-      .prepare("SELECT COUNT(*) AS count FROM control_plane_spec_task_links")
-      .get() as { count?: number } | undefined;
+    const specTaskCountRow = db.prepare("SELECT COUNT(*) AS count FROM control_plane_spec_task_links").get() as
+      | { count?: number }
+      | undefined;
     return {
       tables_exist: true,
       tables,
@@ -934,6 +1054,76 @@ function ensureHarnessBlueprintTables(db: RuntimeContext["db"]): void {
   `);
 }
 
+function ensureEngineSyncTables(db: RuntimeContext["db"]): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS control_plane_engine_runs (
+      id TEXT PRIMARY KEY,
+      spec_id TEXT,
+      task_id TEXT,
+      goal_id TEXT,
+      engine TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      status TEXT NOT NULL,
+      scope_type TEXT NOT NULL,
+      scope_key TEXT NOT NULL,
+      objective_summary TEXT NOT NULL,
+      external_thread_id TEXT,
+      external_session_id TEXT,
+      external_turn_id TEXT,
+      approval_refs_json TEXT NOT NULL DEFAULT '[]',
+      evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+      input_hash TEXT,
+      output_hash TEXT,
+      summary_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_engine_events (
+      id TEXT PRIMARY KEY,
+      run_id TEXT,
+      event_type TEXT NOT NULL,
+      engine TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      external_event_id TEXT,
+      external_thread_id TEXT,
+      external_turn_id TEXT,
+      severity TEXT NOT NULL DEFAULT 'info',
+      message TEXT NOT NULL,
+      evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (run_id) REFERENCES control_plane_engine_runs(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS control_plane_thread_links (
+      id TEXT PRIMARY KEY,
+      engine TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      external_thread_id TEXT NOT NULL,
+      link_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      scope_type TEXT NOT NULL,
+      scope_key TEXT NOT NULL,
+      title TEXT,
+      summary_json TEXT NOT NULL DEFAULT '{}',
+      evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE (provider, external_thread_id, scope_key)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_control_plane_engine_runs_updated
+      ON control_plane_engine_runs(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_engine_runs_provider
+      ON control_plane_engine_runs(provider, status);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_engine_events_run
+      ON control_plane_engine_events(run_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_control_plane_thread_links_status
+      ON control_plane_thread_links(status, updated_at);
+  `);
+}
+
 function ensureProjectOperatorTables(db: RuntimeContext["db"]): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS control_plane_project_operators (
@@ -1020,9 +1210,9 @@ function readControlRunnerStatus(db: RuntimeContext["db"]): RunnerStatus {
   }
 
   const latestRun =
-    (db
-      .prepare("SELECT * FROM control_plane_agent_runs ORDER BY updated_at DESC LIMIT 1")
-      .get() as Record<string, unknown> | undefined) ?? null;
+    (db.prepare("SELECT * FROM control_plane_agent_runs ORDER BY updated_at DESC LIMIT 1").get() as
+      | Record<string, unknown>
+      | undefined) ?? null;
   const runRows = db
     .prepare("SELECT status, COUNT(*) AS count FROM control_plane_agent_runs GROUP BY status")
     .all() as Array<{ status: string; count: number }>;
@@ -1035,10 +1225,14 @@ function readControlRunnerStatus(db: RuntimeContext["db"]): RunnerStatus {
     )
     .all() as Record<string, unknown>[];
   const recentPersonas = db
-    .prepare("SELECT persona_id, run_id, parent_agent, status, objective, write_policy, recreate_count, updated_at FROM control_plane_persona_runs ORDER BY updated_at DESC LIMIT 10")
+    .prepare(
+      "SELECT persona_id, run_id, parent_agent, status, objective, write_policy, recreate_count, updated_at FROM control_plane_persona_runs ORDER BY updated_at DESC LIMIT 10",
+    )
     .all() as Record<string, unknown>[];
   const recentEvents = db
-    .prepare("SELECT id, persona_id, run_id, event_type, decision, reason, merged_into, created_at FROM control_plane_persona_events ORDER BY created_at DESC LIMIT 12")
+    .prepare(
+      "SELECT id, persona_id, run_id, event_type, decision, reason, merged_into, created_at FROM control_plane_persona_events ORDER BY created_at DESC LIMIT 12",
+    )
     .all() as Record<string, unknown>[];
   return {
     tables_exist: true,
@@ -1071,17 +1265,630 @@ function readHarnessBlueprintStatus(db: RuntimeContext["db"]): HarnessBlueprintS
     .all() as Record<string, unknown>[];
   return {
     tables_exist: true,
-    draft_count: Number((db.prepare("SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE status = 'draft'").get() as { count?: number })?.count ?? 0),
+    draft_count: Number(
+      (
+        db.prepare("SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE status = 'draft'").get() as {
+          count?: number;
+        }
+      )?.count ?? 0,
+    ),
     department_draft_count: Number(
-      (db.prepare("SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE status = 'draft' AND target_scope_type IN ('department', 'both')").get() as { count?: number })?.count ?? 0,
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE status = 'draft' AND target_scope_type IN ('department', 'both')",
+          )
+          .get() as { count?: number }
+      )?.count ?? 0,
     ),
     project_draft_count: Number(
-      (db.prepare("SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE status = 'draft' AND target_scope_type IN ('project', 'both')").get() as { count?: number })?.count ?? 0,
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE status = 'draft' AND target_scope_type IN ('project', 'both')",
+          )
+          .get() as { count?: number }
+      )?.count ?? 0,
     ),
     evidence_backed_count: Number(
-      (db.prepare("SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE evidence_refs_json IS NOT NULL AND evidence_refs_json != '[]'").get() as { count?: number })?.count ?? 0,
+      (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM control_plane_harness_blueprints WHERE evidence_refs_json IS NOT NULL AND evidence_refs_json != '[]'",
+          )
+          .get() as { count?: number }
+      )?.count ?? 0,
     ),
     latest_blueprints: rows,
+  };
+}
+
+function hashText(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function normalizeEngineProvider(value: unknown): EngineProvider {
+  const provider = String(value ?? "codex_exec")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  if (provider === "codex" || provider === "codex_cli") return "codex_exec";
+  if (provider === "codex_app_server" || provider === "app_server") return "codex_app_server";
+  if (provider === "claude") return "claude";
+  if (provider === "agy" || provider === "gemini" || provider === "antigravity") return "agy";
+  if (provider === "hermes") return "hermes";
+  return "codex_exec";
+}
+
+function engineNameForProvider(provider: EngineProvider): string {
+  if (provider.startsWith("codex")) return "codex";
+  return provider;
+}
+
+function truncateSummary(value: unknown, max = 800): string {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
+function parseJsonLines(raw: unknown): Record<string, unknown>[] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        const parsed = JSON.parse(line);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? [parsed as Record<string, unknown>]
+          : [];
+      } catch {
+        return [];
+      }
+    });
+}
+
+function summarizeCodexJsonlEvent(event: Record<string, unknown>): {
+  event_type: EngineEventType;
+  message: string;
+  external_event_id: string | null;
+  external_thread_id: string | null;
+  external_turn_id: string | null;
+  severity: "info" | "warn" | "error";
+  payload: Record<string, unknown>;
+} {
+  const type = String(event.type ?? "output_delta");
+  const item =
+    event.item && typeof event.item === "object" && !Array.isArray(event.item)
+      ? (event.item as Record<string, unknown>)
+      : {};
+  const payload: Record<string, unknown> = { codex_event_type: type };
+  const externalThreadId = typeof event.thread_id === "string" ? event.thread_id : null;
+  const externalTurnId = typeof event.turn_id === "string" ? event.turn_id : null;
+  const externalEventId = typeof item.id === "string" ? item.id : null;
+  if (typeof item.type === "string") payload.item_type = item.type;
+  if (typeof item.status === "string") payload.item_status = item.status;
+  if (typeof item.tool === "string") payload.tool = item.tool;
+  if (typeof item.command === "string") payload.command_summary = truncateSummary(item.command, 160);
+
+  if (type === "thread.started") {
+    return {
+      event_type: "thread_started",
+      message: "Codex thread started",
+      external_event_id: externalEventId,
+      external_thread_id: externalThreadId,
+      external_turn_id: externalTurnId,
+      severity: "info",
+      payload,
+    };
+  }
+  if (type === "turn.started") {
+    return {
+      event_type: "turn_started",
+      message: "Codex turn started",
+      external_event_id: externalEventId,
+      external_thread_id: externalThreadId,
+      external_turn_id: externalTurnId,
+      severity: "info",
+      payload,
+    };
+  }
+  if (type === "turn.completed") {
+    return {
+      event_type: "completed",
+      message: "Codex turn completed",
+      external_event_id: externalEventId,
+      external_thread_id: externalThreadId,
+      external_turn_id: externalTurnId,
+      severity: "info",
+      payload,
+    };
+  }
+  if (type === "turn.failed" || type === "error") {
+    return {
+      event_type: "failed",
+      message: truncateSummary(event.error ?? event.message ?? "Codex event failed", 240),
+      external_event_id: externalEventId,
+      external_thread_id: externalThreadId,
+      external_turn_id: externalTurnId,
+      severity: "error",
+      payload,
+    };
+  }
+  if (String(item.type ?? "").includes("approval") || /requestApproval/i.test(type)) {
+    return {
+      event_type: "approval_requested",
+      message: "승인이 필요한 Codex 작업을 감지했습니다.",
+      external_event_id: externalEventId,
+      external_thread_id: externalThreadId,
+      external_turn_id: externalTurnId,
+      severity: "warn",
+      payload,
+    };
+  }
+  if (type === "item.started" || type === "item.completed") {
+    return {
+      event_type: "output_delta",
+      message: `Codex ${type}: ${String(item.type ?? "item")}`,
+      external_event_id: externalEventId,
+      external_thread_id: externalThreadId,
+      external_turn_id: externalTurnId,
+      severity: "info",
+      payload,
+    };
+  }
+  return {
+    event_type: "output_delta",
+    message: `Codex event: ${type}`,
+    external_event_id: externalEventId,
+    external_thread_id: externalThreadId,
+    external_turn_id: externalTurnId,
+    severity: "info",
+    payload,
+  };
+}
+
+function containsUnsafeEnginePayload(value: unknown): string | null {
+  const raw = typeof value === "string" ? value : JSON.stringify(value ?? {});
+  if (/\b(sk-[A-Za-z0-9_-]{16,}|sk-proj-[A-Za-z0-9_-]{16,})\b/.test(raw)) return "secret_like_payload_blocked";
+  if (/\b(access_token|refresh_token|id_token|authorization_code|oauth_code)\b\s*[:=]/i.test(raw)) {
+    return "oauth_token_payload_blocked";
+  }
+  if (/-----BEGIN (?:OPENSSH |RSA |EC |PRIVATE )?PRIVATE KEY-----/i.test(raw)) return "secret_like_payload_blocked";
+  if (/(?:\\"|")messages(?:\\"|")\s*:\s*\[|\braw[_\s-]?transcript\b|\bfull[_\s-]?transcript\b/i.test(raw)) {
+    return "raw_transcript_blocked";
+  }
+  return null;
+}
+
+function buildEngineProviderStatus(specId: string | null): EngineSyncStatus["provider_status"] {
+  const appServerApproved = getApprovedOperationApprovalIds(specId, "codex-app-server-poc").length > 0;
+  return [
+    {
+      provider: "codex_exec",
+      label: "Codex CLI",
+      available: true,
+      mode: "enabled",
+      detail: "codex exec --json 기반 이벤트 수집을 사용할 수 있습니다.",
+    },
+    {
+      provider: "codex_app_server",
+      label: "Codex app-server",
+      available: appServerApproved,
+      mode: appServerApproved ? "preview" : "blocked",
+      detail: appServerApproved
+        ? "승인된 read-only PoC 상태 확인만 허용됩니다."
+        : "APR-CODEX-APP-SERVER-POC-* 승인 전에는 차단됩니다.",
+    },
+    {
+      provider: "claude",
+      label: "Claude CLI",
+      available: true,
+      mode: "preview",
+      detail: "기존 CLI provider 슬롯으로만 표시됩니다.",
+    },
+    {
+      provider: "agy",
+      label: "AGY CLI",
+      available: true,
+      mode: "preview",
+      detail: "기존 read-only review/provider 슬롯으로만 표시됩니다.",
+    },
+    {
+      provider: "hermes",
+      label: "Hermes",
+      available: false,
+      mode: "blocked",
+      detail: "구체 runtime surface 확인 전까지 adapter 슬롯만 보존됩니다.",
+    },
+  ];
+}
+
+function readEngineSyncStatus(db: RuntimeContext["db"]): EngineSyncStatus {
+  const activeSpec = buildActiveSpecStatus();
+  const tablesExist =
+    tableExists(db, "control_plane_engine_runs") &&
+    tableExists(db, "control_plane_engine_events") &&
+    tableExists(db, "control_plane_thread_links");
+  const appServerApproved = getApprovedOperationApprovalIds(activeSpec.id, "codex-app-server-poc").length > 0;
+  if (!tablesExist) {
+    return {
+      tables_exist: false,
+      provider_status: buildEngineProviderStatus(activeSpec.id),
+      run_counts: {},
+      link_counts: {},
+      recent_runs: [],
+      recent_events: [],
+      recent_thread_links: [],
+      app_server_poc: {
+        approved: appServerApproved,
+        mode: appServerApproved ? "read-only-poc" : "blocked",
+        detail: appServerApproved
+          ? "PoC 승인됨. 실제 daemon ownership은 범위 밖입니다."
+          : "승인 전에는 app-server PoC가 차단됩니다.",
+      },
+    };
+  }
+  const runRows = db
+    .prepare("SELECT status, COUNT(*) AS count FROM control_plane_engine_runs GROUP BY status")
+    .all() as Array<{ status: string; count: number }>;
+  const linkRows = db
+    .prepare("SELECT status, COUNT(*) AS count FROM control_plane_thread_links GROUP BY status")
+    .all() as Array<{ status: string; count: number }>;
+  return {
+    tables_exist: true,
+    provider_status: buildEngineProviderStatus(activeSpec.id),
+    run_counts: Object.fromEntries(runRows.map((row) => [row.status, row.count])),
+    link_counts: Object.fromEntries(linkRows.map((row) => [row.status, row.count])),
+    recent_runs: db.prepare("SELECT * FROM control_plane_engine_runs ORDER BY updated_at DESC LIMIT 8").all() as Record<
+      string,
+      unknown
+    >[],
+    recent_events: db
+      .prepare("SELECT * FROM control_plane_engine_events ORDER BY created_at DESC LIMIT 16")
+      .all() as Record<string, unknown>[],
+    recent_thread_links: db
+      .prepare("SELECT * FROM control_plane_thread_links ORDER BY updated_at DESC LIMIT 8")
+      .all() as Record<string, unknown>[],
+    app_server_poc: {
+      approved: appServerApproved,
+      mode: appServerApproved ? "read-only-poc" : "blocked",
+      detail: appServerApproved
+        ? "PoC 승인됨. 실제 daemon ownership은 범위 밖입니다."
+        : "승인 전에는 app-server PoC가 차단됩니다.",
+    },
+  };
+}
+
+function buildEngineRoutePreview(db: RuntimeContext["db"], body: Record<string, unknown>) {
+  const objective = truncateSummary(body.objective, 500);
+  if (!objective) return { ok: false, status: 400, error: "objective_required" };
+  const unsafe = containsUnsafeEnginePayload(body);
+  if (unsafe) return { ok: false, status: 400, error: unsafe };
+  const requestedProvider = normalizeEngineProvider(body.provider);
+  const lower = objective.toLowerCase();
+  const provider: EngineProvider =
+    requestedProvider !== "codex_exec"
+      ? requestedProvider
+      : /review|검토|평가|agy|gemini/i.test(objective)
+        ? "agy"
+        : /claude|문서|ppt|presentation/i.test(objective)
+          ? "claude"
+          : /hermes|local/i.test(objective)
+            ? "hermes"
+            : /computer use|gui|oauth|브라우저|화면|클릭/i.test(objective)
+              ? "codex_app_server"
+              : "codex_exec";
+  const status =
+    provider === "hermes" || provider === "codex_app_server" || /computer use|oauth|token|auth code/.test(lower)
+      ? "blocked_or_preview"
+      : "routeable";
+  const scopeType = String(body.scope_type ?? "project").toLowerCase() as CodexThreadScopeType;
+  const scope = validateCodexThreadScope(db, scopeType, body.scope_value ?? "DonggriCompany");
+  if (!scope.ok) return { ok: false, status: 400, error: scope.error };
+  return {
+    ok: true,
+    status: 200,
+    writes: false,
+    route: {
+      provider,
+      engine: engineNameForProvider(provider),
+      decision: status,
+      scope_type: scope.scope_type,
+      scope_key: scope.scope_key,
+      reason:
+        provider === "codex_exec"
+          ? "로컬 파일과 CLI 중심 작업이므로 Codex CLI event bridge를 선택했습니다."
+          : provider === "codex_app_server"
+            ? "GUI 상호작용 가능성이 있어 app-server 사용 승인 경계가 필요합니다."
+            : provider === "agy"
+              ? "검토와 평가 성격이 강해 AGY provider를 선택했습니다."
+              : provider === "claude"
+                ? "문서 생성과 구조화 성격이 강해 Claude provider를 선택했습니다."
+                : "Hermes runtime이 확인되지 않아 preview/blocked 상태입니다.",
+      alternatives: ["codex_exec", "codex_app_server", "claude", "agy", "hermes"].filter((item) => item !== provider),
+      approvals_required: provider === "codex_app_server" ? ["APR-CODEX-APP-SERVER-POC-*"] : [],
+      computer_use_required: /computer use|gui|브라우저|화면|클릭/i.test(objective),
+    },
+  };
+}
+
+function insertEngineEvent(
+  db: RuntimeContext["db"],
+  event: {
+    run_id?: string | null;
+    event_type: EngineEventType;
+    engine: string;
+    provider: EngineProvider;
+    external_event_id?: string | null;
+    external_thread_id?: string | null;
+    external_turn_id?: string | null;
+    severity?: "info" | "warn" | "error";
+    message: string;
+    evidence_refs?: string[];
+    payload?: Record<string, unknown>;
+  },
+) {
+  ensureEngineSyncTables(db);
+  const now = Date.now();
+  const id = `cpevt-${now}-${crypto.randomBytes(4).toString("hex")}`;
+  db.prepare(
+    `INSERT INTO control_plane_engine_events (
+      id, run_id, event_type, engine, provider, external_event_id, external_thread_id,
+      external_turn_id, severity, message, evidence_refs_json, payload_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    event.run_id ?? null,
+    event.event_type,
+    event.engine,
+    event.provider,
+    event.external_event_id ?? null,
+    event.external_thread_id ?? null,
+    event.external_turn_id ?? null,
+    event.severity ?? "info",
+    event.message,
+    JSON.stringify(event.evidence_refs ?? []),
+    JSON.stringify(event.payload ?? {}),
+    now,
+  );
+  return id;
+}
+
+function createEngineRun(db: RuntimeContext["db"], body: Record<string, unknown>, approvalRefs: string[]) {
+  ensureEngineSyncTables(db);
+  const preview = buildEngineRoutePreview(db, body);
+  if (!preview.ok) return preview;
+  const route = preview.route as {
+    provider: EngineProvider;
+    engine: string;
+    decision: "routeable" | "blocked_or_preview";
+    scope_type: CodexThreadScopeType;
+    scope_key: string;
+    reason: string;
+    computer_use_required: boolean;
+  };
+  const provider = route.provider;
+  const objective = truncateSummary(body.objective, 500);
+  const evidenceRefs = parseJsonArray(body.evidence_refs).slice(0, 20);
+  const eventRows = parseJsonLines(body.event_jsonl).map(summarizeCodexJsonlEvent);
+  const now = Date.now();
+  const runId = `cperun-${now}-${crypto.randomBytes(4).toString("hex")}`;
+  const inputHash = hashText(JSON.stringify({ objective, provider, scope: route.scope_key }));
+  const outputHash = eventRows.length > 0 ? hashText(JSON.stringify(eventRows)) : null;
+  const status: EngineRunStatus =
+    route.decision === "blocked_or_preview"
+      ? "blocked"
+      : eventRows.some((event) => event.event_type === "completed")
+        ? "completed"
+        : eventRows.length > 0
+          ? "syncing"
+          : "planned";
+  const summary = {
+    storage_policy: "summary_hash_refs_only",
+    raw_transcript_stored: false,
+    route,
+    event_count: eventRows.length,
+    computer_use_required: Boolean(route.computer_use_required),
+  };
+  db.prepare(
+    `INSERT INTO control_plane_engine_runs (
+      id, spec_id, task_id, goal_id, engine, provider, status, scope_type, scope_key,
+      objective_summary, external_thread_id, external_session_id, external_turn_id,
+      approval_refs_json, evidence_refs_json, input_hash, output_hash, summary_json,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    runId,
+    buildActiveSpecStatus().id,
+    typeof body.task_id === "string" ? body.task_id.trim() || null : null,
+    typeof body.goal_id === "string" ? body.goal_id.trim() || null : null,
+    route.engine,
+    provider,
+    status,
+    route.scope_type,
+    route.scope_key,
+    objective,
+    typeof body.external_thread_id === "string"
+      ? body.external_thread_id.trim() || null
+      : (eventRows.find((event) => event.external_thread_id)?.external_thread_id ?? null),
+    typeof body.external_session_id === "string" ? body.external_session_id.trim() || null : null,
+    typeof body.external_turn_id === "string"
+      ? body.external_turn_id.trim() || null
+      : (eventRows.find((event) => event.external_turn_id)?.external_turn_id ?? null),
+    JSON.stringify(approvalRefs),
+    JSON.stringify(evidenceRefs),
+    inputHash,
+    outputHash,
+    JSON.stringify(summary),
+    now,
+    now,
+  );
+  insertEngineEvent(db, {
+    run_id: runId,
+    event_type: "route_decided",
+    engine: String(route.engine),
+    provider,
+    message: String(route.reason),
+    evidence_refs: evidenceRefs,
+    payload: route,
+  });
+  for (const event of eventRows) {
+    insertEngineEvent(db, {
+      run_id: runId,
+      event_type: event.event_type,
+      engine: String(route.engine),
+      provider,
+      external_event_id: event.external_event_id,
+      external_thread_id: event.external_thread_id,
+      external_turn_id: event.external_turn_id,
+      severity: event.severity,
+      message: event.message,
+      evidence_refs: evidenceRefs,
+      payload: event.payload,
+    });
+  }
+  return { ok: true, status: 200, run: readEngineRun(db, runId), engine_sync: readEngineSyncStatus(db) };
+}
+
+function readEngineRun(db: RuntimeContext["db"], runId: string) {
+  if (!tableExists(db, "control_plane_engine_runs")) return null;
+  const run = db.prepare("SELECT * FROM control_plane_engine_runs WHERE id = ?").get(runId) as
+    | Record<string, unknown>
+    | undefined;
+  if (!run) return null;
+  const events = tableExists(db, "control_plane_engine_events")
+    ? (db
+        .prepare("SELECT * FROM control_plane_engine_events WHERE run_id = ? ORDER BY created_at ASC")
+        .all(runId) as Record<string, unknown>[])
+    : [];
+  return { run, events };
+}
+
+function cancelEngineRun(db: RuntimeContext["db"], runId: string, approvalRefs: string[]) {
+  ensureEngineSyncTables(db);
+  const existing = readEngineRun(db, runId);
+  if (!existing) return { ok: false, status: 404, error: "engine_run_not_found" };
+  const now = Date.now();
+  db.prepare("UPDATE control_plane_engine_runs SET status = ?, updated_at = ? WHERE id = ?").run("blocked", now, runId);
+  insertEngineEvent(db, {
+    run_id: runId,
+    event_type: "cancelled",
+    engine: String(existing.run.engine ?? "codex"),
+    provider: normalizeEngineProvider(existing.run.provider),
+    severity: "warn",
+    message: "Engine run was cancelled from DonggriCompany control surface.",
+    evidence_refs: approvalRefs,
+  });
+  return { ok: true, status: 200, run: readEngineRun(db, runId), engine_sync: readEngineSyncStatus(db) };
+}
+
+function attachEngineThread(db: RuntimeContext["db"], body: Record<string, unknown>, approvalRefs: string[]) {
+  ensureEngineSyncTables(db);
+  const unsafe = containsUnsafeEnginePayload(body);
+  if (unsafe) return { ok: false, status: 400, error: unsafe };
+  const provider = normalizeEngineProvider(body.provider);
+  const externalThreadId = truncateSummary(body.external_thread_id, 120);
+  if (!isSafeThreadId(externalThreadId)) return { ok: false, status: 400, error: "invalid_thread_id" };
+  const scope = validateCodexThreadScope(db, body.scope_type, body.scope_value ?? "DonggriCompany");
+  if (!scope.ok) return { ok: false, status: 400, error: scope.error };
+  const now = Date.now();
+  const id = `cpthread-${now}-${crypto.randomBytes(4).toString("hex")}`;
+  const summary = {
+    title: truncateSummary(body.title, 120) || "Observed Codex thread",
+    note: truncateSummary(body.summary, 300),
+    raw_transcript_stored: false,
+    storage_policy: "summary_hash_refs_only",
+  };
+  db.prepare(
+    `INSERT INTO control_plane_thread_links (
+      id, engine, provider, external_thread_id, link_type, status, scope_type, scope_key,
+      title, summary_json, evidence_refs_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(provider, external_thread_id, scope_key) DO UPDATE SET
+      status = excluded.status,
+      title = excluded.title,
+      summary_json = excluded.summary_json,
+      evidence_refs_json = excluded.evidence_refs_json,
+      updated_at = excluded.updated_at`,
+  ).run(
+    id,
+    engineNameForProvider(provider),
+    provider,
+    externalThreadId,
+    "observed",
+    "linked",
+    scope.scope_type,
+    scope.scope_key,
+    summary.title,
+    JSON.stringify(summary),
+    JSON.stringify(parseJsonArray(body.evidence_refs).slice(0, 20)),
+    now,
+    now,
+  );
+  insertEngineEvent(db, {
+    event_type: "thread_started",
+    engine: engineNameForProvider(provider),
+    provider,
+    external_thread_id: externalThreadId,
+    message: "Observed Codex thread linked to DonggriCompany scope.",
+    evidence_refs: approvalRefs,
+    payload: { scope_key: scope.scope_key, link_type: "observed" },
+  });
+  return {
+    ok: true,
+    status: 200,
+    thread_link: db
+      .prepare(
+        "SELECT * FROM control_plane_thread_links WHERE provider = ? AND external_thread_id = ? AND scope_key = ?",
+      )
+      .get(provider, externalThreadId, scope.scope_key),
+    engine_sync: readEngineSyncStatus(db),
+  };
+}
+
+function reconcileEngineSync(db: RuntimeContext["db"], approvalRefs: string[]) {
+  ensureEngineSyncTables(db);
+  const now = Date.now();
+  const staleCutoff = now - 1000 * 60 * 60 * 6;
+  const staleCandidates = db
+    .prepare(
+      "SELECT id FROM control_plane_engine_runs WHERE status IN ('planned', 'running', 'syncing') AND updated_at < ?",
+    )
+    .all(staleCutoff) as Array<{ id: string }>;
+  for (const row of staleCandidates) {
+    db.prepare("UPDATE control_plane_engine_runs SET status = ?, updated_at = ? WHERE id = ?").run(
+      "stale",
+      now,
+      row.id,
+    );
+  }
+  const orphanLinks = Number(
+    (
+      db.prepare("SELECT COUNT(*) AS count FROM control_plane_thread_links WHERE status = 'linked'").get() as {
+        count?: number;
+      }
+    )?.count ?? 0,
+  );
+  insertEngineEvent(db, {
+    event_type: "reconciled",
+    engine: "control-plane",
+    provider: "codex_exec",
+    message: "Engine sync reconciliation completed.",
+    evidence_refs: approvalRefs,
+    payload: { stale_marked: staleCandidates.length, linked_observed_threads: orphanLinks },
+  });
+  return {
+    ok: true,
+    status: 200,
+    reconciliation: {
+      stale_marked: staleCandidates.length,
+      linked_observed_threads: orphanLinks,
+      raw_transcript_read: false,
+    },
+    engine_sync: readEngineSyncStatus(db),
   };
 }
 
@@ -1132,13 +1939,11 @@ function parseSpecTaskLinks(specId: string | null): ControlPlaneSpecTaskLink[] {
   if (tableLinks.length > 0) return tableLinks;
 
   const links: ControlPlaneSpecTaskLink[] = [];
-  let current:
-    | {
-        taskKey: string;
-        title: string | null;
-        fields: Map<string, string>;
-      }
-    | null = null;
+  let current: {
+    taskKey: string;
+    title: string | null;
+    fields: Map<string, string>;
+  } | null = null;
 
   const flush = () => {
     if (!current) return;
@@ -1213,7 +2018,8 @@ function buildProjectOperators(projects: RegistryProject[]): ProjectOperatorAgen
   return projects.map((project) => {
     const config = project.operation_agent;
     const candidate = project.status === "candidate" || project.type === "runtime-artifact";
-    const enabled = config?.enabled ?? (!candidate && project.exists);
+    const lifecycleEnabled = project.status === "active";
+    const enabled = project.exists && lifecycleEnabled && config?.enabled !== false;
     const status: ProjectOperatorAgent["status"] = !project.exists
       ? "missing"
       : enabled
@@ -1226,6 +2032,8 @@ function buildProjectOperators(projects: RegistryProject[]): ProjectOperatorAgen
       !project.git.is_repo && project.type !== "folder" && project.type !== "runtime-artifact" ? "not-git" : null,
       project.git.status === "dirty" ? "dirty-worktree" : null,
       candidate ? "candidate-disabled" : null,
+      project.status === "archived" ? "lifecycle-archived" : null,
+      project.status === "completed" ? "lifecycle-completed" : null,
       !project.db_project_id ? "db-link-missing" : null,
     ].filter(Boolean) as string[];
 
@@ -1258,7 +2066,7 @@ function buildProjectOperators(projects: RegistryProject[]): ProjectOperatorAgen
       risk_flags: riskFlags,
       notes: enabled
         ? "OPS project scope; not a separate persistent project agent; repo writes route to IMPLEMENT"
-        : "disabled candidate scope; needs confirmation",
+        : `disabled by projects.yaml lifecycle (${project.status ?? "unknown"}) or missing path`,
     };
   });
 }
@@ -1588,7 +2396,11 @@ function applyProjectOperatorSync(db: RuntimeContext["db"]) {
   };
 }
 
-function readProjectOperatorRows(db: RuntimeContext["db"], operatorId: string, table: string): Record<string, unknown>[] {
+function readProjectOperatorRows(
+  db: RuntimeContext["db"],
+  operatorId: string,
+  table: string,
+): Record<string, unknown>[] {
   try {
     ensureProjectOperatorTables(db);
     return db
@@ -1599,7 +2411,10 @@ function readProjectOperatorRows(db: RuntimeContext["db"], operatorId: string, t
   }
 }
 
-function buildProjectOperatorMemory(operator: ProjectOperatorAgent, memory: Awaited<ReturnType<typeof buildAgentMemoryStatus>>) {
+function buildProjectOperatorMemory(
+  operator: ProjectOperatorAgent,
+  memory: Awaited<ReturnType<typeof buildAgentMemoryStatus>>,
+) {
   return {
     operator_id: operator.operator_id,
     project_key: operator.project_key,
@@ -1622,7 +2437,10 @@ function buildProjectOperatorMemory(operator: ProjectOperatorAgent, memory: Awai
   };
 }
 
-function buildRegistryProjects(db: RuntimeContext["db"]): {
+function buildRegistryProjects(
+  db: RuntimeContext["db"],
+  sourceSnapshot: ControlPlaneSourceSnapshot = CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot(),
+): {
   doc: DocStatus;
   projects: RegistryProject[];
   repo_estate_root: string;
@@ -1633,17 +2451,8 @@ function buildRegistryProjects(db: RuntimeContext["db"]): {
   missing_count: number;
   unlinked_count: number;
 } {
-  const registryPath = path.join(CODEX_CONTROL_ROOT, "registry", "projects.yaml");
-  let parseStatus: DocStatus["parse_status"] = "ok";
-  let raw = "";
-  let entries: ReturnType<typeof parseSimpleProjectsYaml> = [];
-  try {
-    raw = readText(registryPath);
-    entries = parseSimpleProjectsYaml(raw);
-  } catch {
-    parseStatus = "error";
-  }
-  const doc = fileStatus("projects.yaml", registryPath, parseStatus);
+  const entries = sourceSnapshot.projects;
+  const doc = sourceFileStatus("projects.yaml", sourceSnapshot.files.projects, sourceSnapshot);
   const dbRows = readDbProjectRows(db);
   const dbProjects = readDbProjects(db);
   const registryByAbsolutePath = new Map<string, string>();
@@ -1712,23 +2521,351 @@ function listMarkdownDocs(dir: string): DocStatus[] {
     .map((entry) => fileStatus(entry.name, path.join(dir, entry.name)));
 }
 
-function buildActiveSpecStatus() {
-  const activePath = path.join(CODEX_CONTROL_ROOT, "specs", "_active.md");
-  const raw = readText(activePath);
-  const active = parseActiveSpec(raw);
-  const safeActiveId = isSafeSpecId(active.id) ? active.id : null;
+function buildActiveSpecProjection(
+  active: ControlPlaneActiveSpecSource | null,
+  sourceSnapshot: ControlPlaneSourceSnapshot,
+) {
+  const candidateActiveId = active?.id ?? null;
+  const safeActiveId = isSafeSpecId(candidateActiveId) ? candidateActiveId : null;
   const specDir = safeActiveId ? path.join(CODEX_CONTROL_ROOT, "specs", safeActiveId) : null;
   const docs = specDir ? listMarkdownDocs(specDir) : [];
   const requiredDocs = VER1_REQUIRED_SPEC_DOCS;
   const missingDocs = requiredDocs.filter((doc) => !docs.some((item) => item.key === doc && item.exists));
   return {
-    doc: fileStatus("_active.md", activePath, raw ? "ok" : "missing"),
-    ...active,
+    doc: sourceFileStatus("_active.md", sourceSnapshot.files.active_specs, sourceSnapshot),
     id: safeActiveId,
-    parse_error: active.id && !safeActiveId ? "invalid_spec_id" : null,
+    status: active?.status ?? null,
+    phase: active?.phase ?? null,
+    related_repo: active?.related_repo ?? null,
+    related_repos: active?.related_repos ?? [],
+    scope: active?.scope ?? null,
+    heading: active?.heading ?? null,
+    line: active?.line ?? null,
+    next_recommended_action: active?.next_recommended_action ?? null,
+    parse_error: active?.id && !safeActiveId ? "invalid_spec_id" : active ? null : "active_spec_unavailable",
     spec_dir: specDir,
     docs,
     missing_docs: missingDocs,
+  };
+}
+
+function buildActiveSpecStatuses(
+  sourceSnapshot: ControlPlaneSourceSnapshot = CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot(),
+) {
+  return sourceSnapshot.active_specs.map((active) => buildActiveSpecProjection(active, sourceSnapshot));
+}
+
+function buildActiveSpecStatus(
+  sourceSnapshot: ControlPlaneSourceSnapshot = CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot(),
+) {
+  return {
+    ...buildActiveSpecProjection(sourceSnapshot.active_spec, sourceSnapshot),
+    deprecated: true as const,
+    replacement: "active_specs[]" as const,
+  };
+}
+
+function readJsonObject(filePath: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(readText(filePath));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function unquoteScalar(value: string): string {
+  return value.trim().replace(/^["']|["']$/g, "");
+}
+
+function normalizeGateStatus(value: unknown): Master95GateStatus {
+  const status = String(value ?? "pending")
+    .trim()
+    .toLowerCase();
+  if (status === "pass" || status === "warn" || status === "fail" || status === "pending") return status;
+  if (status === "implemented" || status === "recorded") return "pass";
+  if (status === "partial" || status === "referenced" || status === "in_progress") return "warn";
+  return "pending";
+}
+
+function parseMaster95EvidenceIndex(raw: string): {
+  certification_state: string | null;
+  evidence: Master95EvidenceRef[];
+  hard_gates: Record<string, Master95GateStatus>;
+} {
+  const lines = raw.split(/\r?\n/);
+  const evidence: Master95EvidenceRef[] = [];
+  const hardGates: Record<string, Master95GateStatus> = {};
+  let current: Master95EvidenceRef | null = null;
+  let inEvidence = false;
+  let inHardGates = false;
+  let certificationState: string | null = null;
+
+  for (const line of lines) {
+    const topLevel = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
+    if (topLevel) {
+      const [, key, value] = topLevel;
+      if (key === "certification_state") certificationState = unquoteScalar(value);
+      inEvidence = key === "evidence";
+      inHardGates = key === "hard_gates";
+      if (key !== "evidence" && current) {
+        evidence.push(current);
+        current = null;
+      }
+      continue;
+    }
+
+    const itemMatch = line.match(/^\s{2}-\s+id:\s*(.+)$/);
+    if (inEvidence && itemMatch) {
+      if (current) evidence.push(current);
+      current = { id: unquoteScalar(itemMatch[1]), kind: "", status: "", path: null, summary: null };
+      continue;
+    }
+
+    const fieldMatch = line.match(/^\s{4}([A-Za-z0-9_]+):\s*(.*)$/);
+    if (inEvidence && current && fieldMatch) {
+      const [, key, value] = fieldMatch;
+      const scalar = unquoteScalar(value);
+      if (key === "kind") current.kind = scalar;
+      if (key === "status") current.status = scalar;
+      if (key === "path") current.path = scalar || null;
+      if (key === "summary") current.summary = scalar || null;
+      continue;
+    }
+
+    const gateMatch = line.match(/^\s{2}([A-Za-z0-9_]+):\s*(.+)$/);
+    if (inHardGates && gateMatch) {
+      hardGates[gateMatch[1]] = normalizeGateStatus(gateMatch[2]);
+    }
+  }
+  if (current) evidence.push(current);
+
+  return { certification_state: certificationState, evidence, hard_gates: hardGates };
+}
+
+function parseMaster95Traceability(raw: string): Master95RequirementTrace[] {
+  const requirements: Master95RequirementTrace[] = [];
+  let current: Master95RequirementTrace | null = null;
+  let listKey: keyof Pick<Master95RequirementTrace, "design_refs" | "interfaces" | "tests" | "evidence_refs"> | null =
+    null;
+
+  for (const line of raw.split(/\r?\n/)) {
+    const itemMatch = line.match(/^\s{2}-\s+id:\s*(M95-R[0-9]+)$/);
+    if (itemMatch) {
+      if (current) requirements.push(current);
+      current = {
+        id: itemMatch[1],
+        title: "",
+        priority: "",
+        status: "",
+        design_refs: [],
+        interfaces: [],
+        tests: [],
+        evidence_refs: [],
+      };
+      listKey = null;
+      continue;
+    }
+    if (!current) continue;
+
+    const fieldMatch = line.match(/^\s{4}([A-Za-z0-9_]+):\s*(.*)$/);
+    if (fieldMatch) {
+      const [, key, value] = fieldMatch;
+      const scalar = unquoteScalar(value);
+      if (key === "title") current.title = scalar;
+      else if (key === "priority") current.priority = scalar;
+      else if (key === "status") current.status = scalar;
+      else if (key === "design_refs" || key === "interfaces" || key === "tests" || key === "evidence_refs") {
+        listKey = key;
+        current[listKey] = scalar === "[]" ? [] : current[listKey];
+      } else {
+        listKey = null;
+      }
+      continue;
+    }
+
+    const listItem = line.match(/^\s{6}-\s*(.+)$/);
+    if (listKey && listItem) current[listKey].push(unquoteScalar(listItem[1]));
+  }
+  if (current) requirements.push(current);
+  return requirements;
+}
+
+function buildMaster95Scorecard(): Master95Scorecard {
+  const rulesPath = path.join(MASTER95_QUALITY_ROOT, "SCORING_RULES.json");
+  const evidencePath = path.join(MASTER95_QUALITY_ROOT, "EVIDENCE_INDEX.yaml");
+  const rules = readJsonObject(rulesPath);
+  const targets = (rules.targets && typeof rules.targets === "object" ? rules.targets : {}) as Record<string, unknown>;
+  const evidenceIndex = parseMaster95EvidenceIndex(readText(evidencePath));
+  const ruleGates = Array.isArray(rules.hard_gates) ? (rules.hard_gates as Record<string, unknown>[]) : [];
+  const hardGates = ruleGates.map((gate) => {
+    const name = String(gate.name ?? "");
+    return {
+      id: String(gate.id ?? name),
+      name,
+      required: gate.required !== false,
+      status: evidenceIndex.hard_gates[name] ?? "pending",
+      failure_effect: typeof gate.failure_effect === "string" ? gate.failure_effect : null,
+      evidence_refs: evidenceIndex.evidence.map((item) => item.id),
+    };
+  });
+
+  const scorecard = {
+    spec_id: MASTER95_SPEC_ID,
+    certification_state:
+      typeof rules.certification_state === "string"
+        ? rules.certification_state
+        : (evidenceIndex.certification_state ?? "not_certified_foundation_in_progress"),
+    targets: {
+      design_specification: Number(targets.design_specification ?? 98),
+      implementation_execution_evidence: Number(targets.implementation_execution_evidence ?? 97),
+      aggregate: Number(targets.aggregate ?? 97.45),
+      agy_each_axis_minimum: Number(targets.agy_each_axis_minimum ?? 950),
+    },
+    aggregate_formula:
+      rules.aggregate_formula && typeof rules.aggregate_formula === "object" && !Array.isArray(rules.aggregate_formula)
+        ? (rules.aggregate_formula as Record<string, unknown>)
+        : {},
+    docs: MASTER95_QUALITY_FILES.map((file) => fileStatus(file, path.join(MASTER95_QUALITY_ROOT, file))),
+    hard_gates: hardGates,
+    evidence_refs: evidenceIndex.evidence,
+    source_files: {
+      scorecard: path.join(MASTER95_QUALITY_ROOT, "QUALITY_SCORECARD.md"),
+      scoring_rules: rulesPath,
+      evidence_index: evidencePath,
+      traceability: path.join(MASTER95_QUALITY_ROOT, "requirements-traceability.yaml"),
+    },
+  };
+  return master95ScorecardSchema.parse(scorecard) as Master95Scorecard;
+}
+
+function buildMaster95Traceability() {
+  const requirements = parseMaster95Traceability(
+    readText(path.join(MASTER95_QUALITY_ROOT, "requirements-traceability.yaml")),
+  );
+  const orphanRequirements = requirements.filter((requirement) => requirement.evidence_refs.length === 0);
+  const traceability = {
+    spec_id: MASTER95_SPEC_ID,
+    generated_at: new Date().toISOString(),
+    source_file: path.join(MASTER95_QUALITY_ROOT, "requirements-traceability.yaml"),
+    requirements,
+    counts: {
+      total: requirements.length,
+      implemented: requirements.filter((requirement) => requirement.status === "implemented").length,
+      in_progress: requirements.filter((requirement) => requirement.status === "in_progress").length,
+      planned: requirements.filter((requirement) => requirement.status === "planned").length,
+      orphan_evidence: orphanRequirements.length,
+    },
+    orphan_requirements: orphanRequirements.map((requirement) => requirement.id),
+  };
+  return master95TraceabilitySchema.parse(traceability);
+}
+
+function buildMaster95Status(sourceSnapshot: ControlPlaneSourceSnapshot = CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot()) {
+  const activeSpecs = buildActiveSpecStatuses(sourceSnapshot);
+  const primaryActiveSpec = buildActiveSpecStatus(sourceSnapshot);
+  const activeMaster95Spec = activeSpecs.find((spec) => spec.id === MASTER95_SPEC_ID) ?? null;
+  const specDocs = VER1_REQUIRED_SPEC_DOCS.map((file) => fileStatus(file, path.join(MASTER95_SPEC_DIR, file)));
+  const qualityDocs = MASTER95_QUALITY_FILES.map((file) => fileStatus(file, path.join(MASTER95_QUALITY_ROOT, file)));
+  const changes = readGitShortStatus(RUNTIME_PROJECTION_APP);
+  const scorecard = buildMaster95Scorecard();
+  const traceability = buildMaster95Traceability();
+  const agentRegistry = createMaster95DefaultAgentRegistry();
+  const missingDocs = [...specDocs, ...qualityDocs].filter((doc) => !doc.exists).map((doc) => doc.path);
+  const livePilotProjection = CONTROL_PLANE_FAST_TEST_MODE
+    ? {
+        source_path: "test-mode",
+        event_source_path: "test-mode",
+        mode: "read-only" as const,
+        available: false,
+        parse_error_count: 0,
+        event_parse_error_count: 0,
+        message: "테스트 모드에서는 라이브 파일럿 런타임 읽기를 생략합니다.",
+        run_summaries: [] as Master95RunSummary[],
+      }
+    : readLivePilotProjection();
+
+  return {
+    spec_id: MASTER95_SPEC_ID,
+    generated_at: new Date().toISOString(),
+    source_epoch: sourceSnapshot.source_epoch,
+    projection_epoch: sourceSnapshot.projection_epoch,
+    degraded: sourceSnapshot.degraded,
+    parse_errors: sourceSnapshot.parse_errors,
+    phase: activeMaster95Spec?.phase ?? null,
+    certification_state: scorecard.certification_state,
+    root_active_spec_id: primaryActiveSpec.id,
+    active_spec_is_master95: Boolean(activeMaster95Spec),
+    companion_mode: !activeMaster95Spec,
+    spec_dir: MASTER95_SPEC_DIR,
+    quality_root: MASTER95_QUALITY_ROOT,
+    docs: {
+      spec: specDocs,
+      quality: qualityDocs,
+      missing_count: missingDocs.length,
+      missing: missingDocs,
+    },
+    dirty_worktree: {
+      repo: RUNTIME_PROJECTION_APP,
+      count: changes.length,
+      untracked_count: changes.filter((change) => change.status === "??").length,
+      grouped_changes: summarizeHygieneGroups(changes),
+      policy: "local workspace inventory guardrail; no source reset/restore/delete without separate approval",
+    },
+    approvals_required: [
+      "_active.md switch",
+      "legacy asset deletion",
+      "DB migration/apply/reset",
+      "Docker destructive operation",
+      "AgentMemory runtime start/connect/write capture",
+      "deploy",
+      "secrets/OAuth mutation",
+    ],
+    scorecard_summary: {
+      targets: scorecard.targets,
+      hard_gate_count: scorecard.hard_gates.length,
+      blocking_gate_count: scorecard.hard_gates.filter((gate) => gate.required && gate.status !== "pass").length,
+    },
+    traceability_summary: traceability.counts,
+    agent_versions: agentRegistry.listRecords().map((record) => {
+      const manifest = agentRegistry.getManifest(record.agent_id, record.version);
+      return {
+        ...record,
+        manifest_id: manifest?.manifest_id ?? null,
+        display_name: manifest?.display_name ?? record.agent_id,
+        rollback_target_version: manifest?.rollback_target_version ?? null,
+      };
+    }),
+    live_pilot_projection: {
+      source_path: livePilotProjection.source_path,
+      event_source_path: livePilotProjection.event_source_path,
+      mode: livePilotProjection.mode,
+      available: livePilotProjection.available,
+      parse_error_count: livePilotProjection.parse_error_count,
+      event_parse_error_count: livePilotProjection.event_parse_error_count,
+      message: livePilotProjection.message,
+    },
+    run_summaries: livePilotProjection.run_summaries,
+    bloggergent_ops: master95BloggerGentOpsSchema.parse({
+      department: "OPS",
+      project_id: "project:BloggerGent",
+      project_key: "BloggerGent",
+      mode: "read-only-dry-run-routing-preview",
+      role_agents: MASTER95_BLOGGERGENT_ROLE_AGENTS,
+      lanes: MASTER95_BLOGGERGENT_LANES.map((lane) => ({
+        lane_id: lane.lane_id,
+        group_id: lane.group_id,
+        role_agent: lane.role_agent,
+        channel_ref: lane.channel_ref,
+        metadata_tags: lane.metadata_tags,
+        operating_mode: lane.operating_mode,
+      })),
+      implementation_delegate: "IMPLEMENT",
+      review_delegate: "REVIEW",
+      approval_owner: "CONTROL",
+      separately_approved_operations: ["live publish", "DB write", "Docker", "deploy", "Git commit/push"],
+    }),
+    next_safe_action: activeMaster95Spec?.next_recommended_action ?? null,
   };
 }
 
@@ -1808,7 +2945,9 @@ function buildVer1Status(activeSpecId: string | null) {
   };
   const hardGateDocs = [
     ...Object.values(groups).flatMap((group) => group.docs),
-    ...VER1_REQUIRED_SPEC_DOCS.map((name) => fileStatus(name, path.join(CODEX_CONTROL_ROOT, "specs", ver1SpecId, name))),
+    ...VER1_REQUIRED_SPEC_DOCS.map((name) =>
+      fileStatus(name, path.join(CODEX_CONTROL_ROOT, "specs", ver1SpecId, name)),
+    ),
   ];
   const missingCount = hardGateDocs.filter((doc) => !doc.exists).length;
   const hasKiroDir =
@@ -1832,7 +2971,17 @@ function buildVer1Status(activeSpecId: string | null) {
     persona_subagents: {
       model: "department-agent-controlled-disposable-personas",
       permanent_team_hierarchy: false,
-      lifecycle_states: ["created", "running", "returned", "accepted", "rejected", "recreated", "merged", "expired", "failed"],
+      lifecycle_states: [
+        "created",
+        "running",
+        "returned",
+        "accepted",
+        "rejected",
+        "recreated",
+        "merged",
+        "expired",
+        "failed",
+      ],
       max_recreate_attempts: 2,
       repo_write_parent: "IMPLEMENT",
       required_fields: [
@@ -1861,11 +3010,17 @@ function buildVer1Status(activeSpecId: string | null) {
       target: 95,
       pass: score >= 95 && !hasKiroDir && activeSpecId === ver1SpecId,
     },
+    agy_review: {
+      required: true,
+      model: "Gemini 3.1 Pro (High)",
+      status: "pending-local-verification",
+      command_cwd: CONTROL_ROOT,
+    },
     gemini_review: {
       required: true,
-      model: "gemini-3.1-pro-preview",
-      status: "pending-local-verification",
-      command_cwd: "C:\\Users\\wlflq\\Downloads",
+      model: "Gemini 3.1 Pro (High)",
+      status: "legacy-alias-for-agy-review",
+      command_cwd: CONTROL_ROOT,
     },
   };
 }
@@ -2049,7 +3204,9 @@ function parseTomlSections(raw: string, sectionPrefix: string): Array<{ key: str
   return out;
 }
 
-function parseTrustedProjectSections(raw: string): Array<{ path: string; classification: string; trust_level: string | null }> {
+function parseTrustedProjectSections(
+  raw: string,
+): Array<{ path: string; classification: string; trust_level: string | null }> {
   const lines = raw.split(/\r?\n/);
   const out: Array<{ path: string; classification: string; trust_level: string | null }> = [];
   let current: { path: string; classification: string; trust_level: string | null } | null = null;
@@ -2110,12 +3267,48 @@ const DEPARTMENT_AGENT_FILES: Array<{
   write_policy: string;
   can_spawn_write_persona: boolean;
 }> = [
-  { id: "CONTROL", file: "control.toml", role: "root state, routing, approvals, quality gate, run creation", write_policy: "control-plane-docs", can_spawn_write_persona: true },
-  { id: "SPEC", file: "spec_writer.toml", role: "requirements, design, tasks, repo-map, approvals", write_policy: "spec-docs", can_spawn_write_persona: true },
-  { id: "EXPLORE", file: "explorer.toml", role: "read-only repo and document investigation", write_policy: "read-only", can_spawn_write_persona: false },
-  { id: "IMPLEMENT", file: "implementer.toml", role: "approved task implementation", write_policy: "approved-task-files", can_spawn_write_persona: true },
-  { id: "REVIEW", file: "reviewer.toml", role: "read-only findings-first review", write_policy: "read-only", can_spawn_write_persona: false },
-  { id: "OPS", file: "ops.toml", role: "runtime, config, DB sync, Gemini, AgentMemory, safety gates", write_policy: "evidence-and-approved-ops", can_spawn_write_persona: true },
+  {
+    id: "CONTROL",
+    file: "control.toml",
+    role: "root state, routing, approvals, quality gate, run creation",
+    write_policy: "control-plane-docs",
+    can_spawn_write_persona: true,
+  },
+  {
+    id: "SPEC",
+    file: "spec_writer.toml",
+    role: "requirements, design, tasks, repo-map, approvals",
+    write_policy: "spec-docs",
+    can_spawn_write_persona: true,
+  },
+  {
+    id: "EXPLORE",
+    file: "explorer.toml",
+    role: "read-only repo and document investigation",
+    write_policy: "read-only",
+    can_spawn_write_persona: false,
+  },
+  {
+    id: "IMPLEMENT",
+    file: "implementer.toml",
+    role: "approved task implementation",
+    write_policy: "approved-task-files",
+    can_spawn_write_persona: true,
+  },
+  {
+    id: "REVIEW",
+    file: "reviewer.toml",
+    role: "read-only findings-first review",
+    write_policy: "read-only",
+    can_spawn_write_persona: false,
+  },
+  {
+    id: "OPS",
+    file: "ops.toml",
+    role: "runtime, config, DB sync, Gemini, AgentMemory, safety gates",
+    write_policy: "evidence-and-approved-ops",
+    can_spawn_write_persona: true,
+  },
 ];
 
 const DONGRI_GRIGRI_DEPARTMENTS: Record<
@@ -2355,12 +3548,14 @@ function buildDepartmentMemorySummaries(
   for (const run of runner.recent_runs) {
     const department = asDepartmentId(run.department_agent);
     const updatedAt = Number(run.updated_at ?? 0);
-    if (department && updatedAt > (recentByDepartment.get(department) ?? 0)) recentByDepartment.set(department, updatedAt);
+    if (department && updatedAt > (recentByDepartment.get(department) ?? 0))
+      recentByDepartment.set(department, updatedAt);
   }
   for (const persona of runner.recent_personas) {
     const department = asDepartmentId(persona.parent_agent);
     const updatedAt = Number(persona.updated_at ?? 0);
-    if (department && updatedAt > (recentByDepartment.get(department) ?? 0)) recentByDepartment.set(department, updatedAt);
+    if (department && updatedAt > (recentByDepartment.get(department) ?? 0))
+      recentByDepartment.set(department, updatedAt);
   }
 
   return buildDepartmentAgentManifests().map((agent) => {
@@ -2500,9 +3695,7 @@ function buildDepartmentChatRooms(runner: RunnerStatus) {
 
   return rooms.map((room) => ({
     ...room,
-    messages: room.messages
-      .sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")))
-      .slice(0, 8),
+    messages: room.messages.sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? ""))).slice(0, 8),
   }));
 }
 
@@ -2574,9 +3767,7 @@ function buildMasterDepartmentChatRooms(runner: RunnerStatus) {
 
   return rooms.map((room) => ({
     ...room,
-    messages: room.messages
-      .sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")))
-      .slice(0, 8),
+    messages: room.messages.sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? ""))).slice(0, 8),
   }));
 }
 
@@ -2641,7 +3832,9 @@ function hasApprovedApproval(
   return parseApprovalLedger(specId).entries.some((entry) => {
     const expiresAt = entry.expires_at ? Date.parse(entry.expires_at) : Number.NaN;
     const notExpired = Number.isNaN(expiresAt) || expiresAt >= now;
-    return entry.status === "approved" && pattern.test(entry.id) && notExpired && predicate(entry as Record<string, string>);
+    return (
+      entry.status === "approved" && pattern.test(entry.id) && notExpired && predicate(entry as Record<string, string>)
+    );
   });
 }
 
@@ -2708,9 +3901,22 @@ const MUTATION_APPROVAL_POLICY: Record<
     required_approval: "APR-MEM-RUNTIME-*",
     blocked_message: "AgentMemory runtime start/connect requires separate OPS approval.",
   },
+  "codex-engine-sync": {
+    pattern: /^APR-CODEX-ENGINE-SYNC-\d{3}$/,
+    required_approval: "APR-CODEX-ENGINE-SYNC-*",
+    blocked_message: "Codex engine sync mutations require an approved active-spec engine sync approval.",
+  },
+  "codex-app-server-poc": {
+    pattern: /^APR-CODEX-APP-SERVER-POC-\d{3}$/,
+    required_approval: "APR-CODEX-APP-SERVER-POC-*",
+    blocked_message: "Codex app-server PoC requires a separate active-spec approval.",
+  },
 };
 
-function approvalAllowsOperation(entry: Record<string, string>, operationClass: ControlPlaneMutationOperationClass): boolean {
+function approvalAllowsOperation(
+  entry: Record<string, string>,
+  operationClass: ControlPlaneMutationOperationClass,
+): boolean {
   const policyDecision = String(entry.policy_decision ?? "").toLowerCase();
   const operationClasses = String(entry.operation_class ?? "")
     .split(/[\s,;]+/)
@@ -2735,11 +3941,17 @@ function getApprovedOperationApprovals(specId: string | null, operationClass: Co
   });
 }
 
-function getApprovedOperationApprovalIds(specId: string | null, operationClass: ControlPlaneMutationOperationClass): string[] {
+function getApprovedOperationApprovalIds(
+  specId: string | null,
+  operationClass: ControlPlaneMutationOperationClass,
+): string[] {
   return getApprovedOperationApprovals(specId, operationClass).map((entry) => entry.id);
 }
 
-function getHeader(req: { get?: (name: string) => string | undefined; headers?: Record<string, unknown> }, name: string): string | null {
+function getHeader(
+  req: { get?: (name: string) => string | undefined; headers?: Record<string, unknown> },
+  name: string,
+): string | null {
   const fromGetter = req.get?.(name) ?? req.get?.(name.toLowerCase());
   if (fromGetter) return fromGetter;
   const value = req.headers?.[name.toLowerCase()] ?? req.headers?.[name];
@@ -2747,7 +3959,10 @@ function getHeader(req: { get?: (name: string) => string | undefined; headers?: 
   return typeof value === "string" ? value : null;
 }
 
-function isAllowedControlPlaneMutationOrigin(req: { get?: (name: string) => string | undefined; headers?: Record<string, unknown> }): boolean {
+function isAllowedControlPlaneMutationOrigin(req: {
+  get?: (name: string) => string | undefined;
+  headers?: Record<string, unknown>;
+}): boolean {
   const hasExpressHeaders = typeof req.get === "function" || Boolean(req.headers);
   if (!hasExpressHeaders) return true;
   const origin = getHeader(req, "origin");
@@ -2813,7 +4028,15 @@ function isSafeThreadId(value: unknown): value is string {
 function listCodexSessionCandidates(limit = 5) {
   const sessionsRoot = path.join(os.homedir(), ".codex", "sessions");
   if (!fs.existsSync(sessionsRoot)) return [];
-  const candidates: Array<{ thread_id: string | null; source: string; path: string; size: number; mtime: string; started_at: string | null; sort_time: number }> = [];
+  const candidates: Array<{
+    thread_id: string | null;
+    source: string;
+    path: string;
+    size: number;
+    mtime: string;
+    started_at: string | null;
+    sort_time: number;
+  }> = [];
   const visit = (dir: string, depth: number) => {
     if (depth > 4 || candidates.length > 200) return;
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -2880,7 +4103,8 @@ function validateCodexThreadScope(db: RuntimeContext["db"], scopeTypeRaw: unknow
   if (scopeType === "root") {
     return { ok: true as const, scope_type: scopeType, scope_value: null, scope_key: "root", selected_repo: null };
   }
-  const scopeValue = typeof scopeValueRaw === "string" && scopeValueRaw.trim() ? scopeValueRaw.trim() : "DonggriCompany";
+  const scopeValue =
+    typeof scopeValueRaw === "string" && scopeValueRaw.trim() ? scopeValueRaw.trim() : "DonggriCompany";
   if (scopeType === "project") {
     const registry = buildRegistryProjects(db);
     if (!registry.projects.some((project) => project.key === scopeValue)) {
@@ -2919,7 +4143,9 @@ function findCodexThreadActivation(
   if (!tableExists(db, "control_plane_agent_runs")) return null;
   const statuses = includeFinished ? ["observing", "active", "completed", "cancelled"] : ["observing", "active"];
   const rows = db
-    .prepare(`SELECT * FROM control_plane_agent_runs WHERE status IN (${statuses.map(() => "?").join(",")}) ORDER BY updated_at DESC LIMIT 100`)
+    .prepare(
+      `SELECT * FROM control_plane_agent_runs WHERE status IN (${statuses.map(() => "?").join(",")}) ORDER BY updated_at DESC LIMIT 100`,
+    )
     .all(...statuses) as Record<string, unknown>[];
   return (
     rows.find((row) => {
@@ -2957,7 +4183,8 @@ function activateCodexThread(db: RuntimeContext["db"], body: Record<string, unkn
     return { ok: false, status: 400, error: "confirmation_required" };
   }
   const detected = detectCodexThread();
-  const threadId = typeof body.thread_id === "string" && body.thread_id.trim() ? body.thread_id.trim() : detected.thread_id;
+  const threadId =
+    typeof body.thread_id === "string" && body.thread_id.trim() ? body.thread_id.trim() : detected.thread_id;
   if (!isSafeThreadId(threadId)) {
     return { ok: false, status: 400, error: "invalid_thread_id" };
   }
@@ -2998,14 +4225,9 @@ function activateCodexThread(db: RuntimeContext["db"], body: Record<string, unkn
     },
   ];
   if (existing) {
-    db.prepare("UPDATE control_plane_agent_runs SET status = ?, objective = ?, context_pack_json = ?, hook_decisions_json = ?, updated_at = ? WHERE id = ?").run(
-      status,
-      objective,
-      JSON.stringify(contextPack),
-      JSON.stringify(hookDecisions),
-      now,
-      String(existing.id),
-    );
+    db.prepare(
+      "UPDATE control_plane_agent_runs SET status = ?, objective = ?, context_pack_json = ?, hook_decisions_json = ?, updated_at = ? WHERE id = ?",
+    ).run(status, objective, JSON.stringify(contextPack), JSON.stringify(hookDecisions), now, String(existing.id));
     return { ok: true, status: 200, duplicate: true, ...readControlRun(db, String(existing.id)) };
   }
   const runId = `cprun-thread-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
@@ -3166,7 +4388,10 @@ function normalizeHarnessPattern(value: unknown): HarnessBlueprintPattern | null
   return null;
 }
 
-function chooseHarnessPattern(objective: string, preferred: HarnessBlueprintPattern): Exclude<HarnessBlueprintPattern, "auto"> {
+function chooseHarnessPattern(
+  objective: string,
+  preferred: HarnessBlueprintPattern,
+): Exclude<HarnessBlueprintPattern, "auto"> {
   if (preferred !== "auto") return preferred;
   const lower = objective.toLowerCase();
   if (/review|검토|qa|quality|품질/.test(lower)) return "producer-reviewer";
@@ -3182,7 +4407,11 @@ function buildDepartmentWorkflow() {
     { phase: "spec", owner_department: "SPEC", output: "requirements, design, tasks, repo-map, approvals" },
     { phase: "explore", owner_department: "EXPLORE", output: "read-only fan-out findings with evidence refs" },
     { phase: "implement", owner_department: "IMPLEMENT", output: "approved code or document changes only" },
-    { phase: "review", owner_department: "REVIEW", output: "producer-reviewer acceptance, hashes, and regression evidence" },
+    {
+      phase: "review",
+      owner_department: "REVIEW",
+      output: "producer-reviewer acceptance, hashes, and regression evidence",
+    },
     { phase: "ops-handoff", owner_department: "OPS", output: "runtime/evidence/handoff and QMS ledger updates" },
   ];
 }
@@ -3196,7 +4425,8 @@ function buildHarnessBlueprintPreview(db: RuntimeContext["db"], body: Record<str
   if (!objective) return { ok: false, status: 400, error: "objective_required" };
 
   const registry = buildRegistryProjects(db);
-  const projectKey = typeof body.project_key === "string" && body.project_key.trim() ? body.project_key.trim() : "DonggriCompany";
+  const projectKey =
+    typeof body.project_key === "string" && body.project_key.trim() ? body.project_key.trim() : "DonggriCompany";
   const project = registry.projects.find((item) => item.key === projectKey) ?? null;
   if ((targetMode === "project" || targetMode === "both") && !project) {
     return { ok: false, status: 400, error: "invalid_project_key" };
@@ -3213,7 +4443,10 @@ function buildHarnessBlueprintPreview(db: RuntimeContext["db"], body: Record<str
           owner_department: "OPS",
           operation_scope: `project:${projectKey}`,
           repo_path: project?.absolute_path ?? null,
-          worktree_hint: projectKey === "BloggerGent" ? "Use registered blog role worktrees from projects.yaml." : "Use baseline repo only for inspection unless a registered worktree exists.",
+          worktree_hint:
+            projectKey === "BloggerGent"
+              ? "Use registered blog role worktrees from projects.yaml."
+              : "Use baseline repo only for inspection unless a registered worktree exists.",
           implementation_delegate: "IMPLEMENT",
         }
       : null;
@@ -3221,8 +4454,16 @@ function buildHarnessBlueprintPreview(db: RuntimeContext["db"], body: Record<str
     ...departmentWorkflow,
     ...(projectWorkflow
       ? [
-          { phase: "project-scope", owner_department: "OPS", output: `OPS opens ${projectWorkflow.operation_scope} and routes implementation to IMPLEMENT.` },
-          { phase: "project-review", owner_department: "REVIEW", output: "Project-specific evidence, hashes, and QMS findings are merged." },
+          {
+            phase: "project-scope",
+            owner_department: "OPS",
+            output: `OPS opens ${projectWorkflow.operation_scope} and routes implementation to IMPLEMENT.`,
+          },
+          {
+            phase: "project-review",
+            owner_department: "REVIEW",
+            output: "Project-specific evidence, hashes, and QMS findings are merged.",
+          },
         ]
       : []),
   ];
@@ -3238,16 +4479,37 @@ function buildHarnessBlueprintPreview(db: RuntimeContext["db"], body: Record<str
     pattern_summary: HARNESS_PATTERNS[pattern].summary,
     source: {
       description: objective,
-      references: ["https://github.com/revfactory/harness", "https://raw.githubusercontent.com/revfactory/harness/main/skills/harness/SKILL.md"],
+      references: [
+        "https://github.com/revfactory/harness",
+        "https://raw.githubusercontent.com/revfactory/harness/main/skills/harness/SKILL.md",
+      ],
       absorption_mode: "donggri-native-patterns-only",
     },
     department_workflow: departmentWorkflow,
     project_workflow: projectWorkflow,
     phases,
     suggested_personas: [
-      { persona_id: "explore-readonly-scout", parent_agent: "EXPLORE", write_policy: "read-only", purpose: "Parallel source and repo investigation.", disposable: true },
-      { persona_id: "review-evidence-checker", parent_agent: "REVIEW", write_policy: "read-only", purpose: "Boundary comparison, regression risk, and evidence density check.", disposable: true },
-      { persona_id: "ops-handoff-recorder", parent_agent: "OPS", write_policy: "evidence-and-approved-ops", purpose: "Evidence, handoff, and QMS ledger summary.", disposable: true },
+      {
+        persona_id: "explore-readonly-scout",
+        parent_agent: "EXPLORE",
+        write_policy: "read-only",
+        purpose: "Parallel source and repo investigation.",
+        disposable: true,
+      },
+      {
+        persona_id: "review-evidence-checker",
+        parent_agent: "REVIEW",
+        write_policy: "read-only",
+        purpose: "Boundary comparison, regression risk, and evidence density check.",
+        disposable: true,
+      },
+      {
+        persona_id: "ops-handoff-recorder",
+        parent_agent: "OPS",
+        write_policy: "evidence-and-approved-ops",
+        purpose: "Evidence, handoff, and QMS ledger summary.",
+        disposable: true,
+      },
     ],
     evidence_plan: ["EV-HARNESS-PREVIEW", "EV-HARNESS-DRAFT", "EV-HARNESS-QMS"],
     approval_map: [
@@ -3261,7 +4523,15 @@ function buildHarnessBlueprintPreview(db: RuntimeContext["db"], body: Record<str
       "Evidence refs required before applied status.",
       "Apply stays blocked until explicit APR-HARNESS-APPLY approval.",
     ],
-    blocked_outputs: [".claude/*", ".kiro/*", "plugin install", "permanent staff", "nested personas", "raw transcript capture", "AgentMemory hooks"],
+    blocked_outputs: [
+      ".claude/*",
+      ".kiro/*",
+      "plugin install",
+      "permanent staff",
+      "nested personas",
+      "raw transcript capture",
+      "AgentMemory hooks",
+    ],
     apply_gate: { status: "blocked", required_approval: "APR-HARNESS-APPLY-*" },
   };
   return { ok: true, status: 200, writes: false, blueprint };
@@ -3310,12 +4580,22 @@ function saveHarnessBlueprintDraft(db: RuntimeContext["db"], body: Record<string
     now,
   );
   const row = db.prepare("SELECT * FROM control_plane_harness_blueprints WHERE id = ?").get(id);
-  return { ok: true, status: 200, writes: true, blueprint_id: id, blueprint, draft: row, harness_blueprints: readHarnessBlueprintStatus(db) };
+  return {
+    ok: true,
+    status: 200,
+    writes: true,
+    blueprint_id: id,
+    blueprint,
+    draft: row,
+    harness_blueprints: readHarnessBlueprintStatus(db),
+  };
 }
 
 function applyHarnessBlueprint(db: RuntimeContext["db"], blueprintId: string) {
   ensureHarnessBlueprintTables(db);
-  const existing = db.prepare("SELECT * FROM control_plane_harness_blueprints WHERE id = ?").get(blueprintId) as Record<string, unknown> | undefined;
+  const existing = db.prepare("SELECT * FROM control_plane_harness_blueprints WHERE id = ?").get(blueprintId) as
+    | Record<string, unknown>
+    | undefined;
   if (!existing) return { ok: false, status: 404, error: "blueprint_not_found" };
   return {
     ok: false,
@@ -3334,13 +4614,19 @@ function createControlRun(db: RuntimeContext["db"], body: Record<string, unknown
   if (!allowedDepartments.has(department as DepartmentAgentManifest["id"])) {
     return { ok: false, status: 400, error: "invalid_department_agent" };
   }
-  const objective = typeof body.objective === "string" && body.objective.trim() ? body.objective.trim() : "Control Plane run";
+  const objective =
+    typeof body.objective === "string" && body.objective.trim() ? body.objective.trim() : "Control Plane run";
   const taskId = typeof body.task_id === "string" ? body.task_id.trim() : "";
   const selectedRepo = typeof body.selected_repo === "string" ? body.selected_repo.trim() : "";
   const runId = `cprun-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   const routingId = `cproute-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
   const now = Date.now();
-  const approvalRefs = [...new Set([...parseJsonArray(body.approval_refs), ...getApprovedOperationApprovalIds(activeSpec.id, "harness-run")])];
+  const approvalRefs = [
+    ...new Set([
+      ...parseJsonArray(body.approval_refs),
+      ...getApprovedOperationApprovalIds(activeSpec.id, "harness-run"),
+    ]),
+  ];
   const contextPack = buildContextPackPayload(activeSpec.id, department, objective);
   const hookDecisions = [
     {
@@ -3396,7 +4682,9 @@ function createControlRun(db: RuntimeContext["db"], body: Record<string, unknown
 
 function readControlRun(db: RuntimeContext["db"], runId: string) {
   if (!tableExists(db, "control_plane_agent_runs")) return null;
-  const run = db.prepare("SELECT * FROM control_plane_agent_runs WHERE id = ?").get(runId) as Record<string, unknown> | undefined;
+  const run = db.prepare("SELECT * FROM control_plane_agent_runs WHERE id = ?").get(runId) as
+    | Record<string, unknown>
+    | undefined;
   if (!run) return null;
   const routing = db
     .prepare("SELECT * FROM control_plane_routing_decisions WHERE run_id = ? ORDER BY created_at DESC")
@@ -3424,7 +4712,13 @@ function validatePersonaInput(run: Record<string, unknown>, body: Record<string,
   const allowedDepartments = new Set(DEPARTMENT_AGENT_FILES.map((item) => item.id));
   if (!allowedDepartments.has(parentAgent as DepartmentAgentManifest["id"])) return "invalid_parent_agent";
   const writePolicy = String(body.write_policy ?? "read-only");
-  const allowedWritePolicies = new Set(["read-only", "control-plane-docs", "evidence-handoff", "approved-task-files", "approved-db-sync"]);
+  const allowedWritePolicies = new Set([
+    "read-only",
+    "control-plane-docs",
+    "evidence-handoff",
+    "approved-task-files",
+    "approved-db-sync",
+  ]);
   if (!allowedWritePolicies.has(writePolicy)) return "invalid_write_policy";
   const allowedPaths = parseAllowedPaths(body.allowed_paths);
   const taskId =
@@ -3435,14 +4729,17 @@ function validatePersonaInput(run: Record<string, unknown>, body: Record<string,
         : "";
   const evidenceRefs = parseJsonArray(body.evidence_refs);
   const specId = typeof run.spec_id === "string" ? run.spec_id : null;
-  if (writePolicy === "approved-task-files" && parentAgent !== "IMPLEMENT") return "repo_write_requires_implement_parent";
-  if (writePolicy === "approved-task-files" && allowedPaths.write.length === 0) return "repo_write_requires_allowed_paths";
+  if (writePolicy === "approved-task-files" && parentAgent !== "IMPLEMENT")
+    return "repo_write_requires_implement_parent";
+  if (writePolicy === "approved-task-files" && allowedPaths.write.length === 0)
+    return "repo_write_requires_allowed_paths";
   if (!taskId) return "task_ref_required";
   if (evidenceRefs.length === 0) return "evidence_refs_required";
   if (writePolicy !== "read-only") {
     const approvalRef = String(body.approval_ref ?? "").trim();
     if (!approvalRef) return "write_persona_requires_approval_ref";
-    if (!getApprovedOperationApprovalIds(specId, "persona-evidence").includes(approvalRef)) return "invalid_persona_approval_ref";
+    if (!getApprovedOperationApprovalIds(specId, "persona-evidence").includes(approvalRef))
+      return "invalid_persona_approval_ref";
   }
   if (!String(body.objective ?? "").trim()) return "objective_required";
   return null;
@@ -3501,7 +4798,9 @@ function createPersonaRun(db: RuntimeContext["db"], runId: string, body: Record<
     JSON.stringify(parseJsonArray(body.return_schema)),
     typeof body.expiry === "string" ? body.expiry : "single-task",
     typeof body.quality_bar === "string" ? body.quality_bar : "Evidence-backed result with concrete paths.",
-    typeof body.recreate_policy === "string" ? body.recreate_policy : "recreate if missing evidence or unclear conclusion",
+    typeof body.recreate_policy === "string"
+      ? body.recreate_policy
+      : "recreate if missing evidence or unclear conclusion",
     2,
     typeof body.approval_ref === "string" ? body.approval_ref : null,
     JSON.stringify(evidenceRefs),
@@ -3548,7 +4847,10 @@ function decidePersona(db: RuntimeContext["db"], personaId: string, body: Record
     return { ok: false, status: 400, error: "max_recreate_attempts_reached" };
   }
   const evidenceRefs = parseJsonArray(body.evidence_refs);
-  const payload = body.payload && typeof body.payload === "object" && !Array.isArray(body.payload) ? (body.payload as Record<string, unknown>) : {};
+  const payload =
+    body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)
+      ? (body.payload as Record<string, unknown>)
+      : {};
   const outputHash = normalizeEvidenceHash(body.output_hash ?? payload.output_hash);
   const sourceHash = normalizeEvidenceHash(body.source_hash ?? payload.source_hash);
   const qualityBarResult =
@@ -3577,7 +4879,9 @@ function decidePersona(db: RuntimeContext["db"], personaId: string, body: Record
   };
   const now = Date.now();
   const runId = typeof persona.run_id === "string" ? persona.run_id : String(persona.run_id ?? "");
-  db.prepare("UPDATE control_plane_persona_runs SET status = ?, recreate_count = ?, evidence_refs_json = ?, updated_at = ? WHERE persona_id = ?").run(
+  db.prepare(
+    "UPDATE control_plane_persona_runs SET status = ?, recreate_count = ?, evidence_refs_json = ?, updated_at = ? WHERE persona_id = ?",
+  ).run(
     statusMap[decision],
     decision === "recreate" ? recreateCount + 1 : recreateCount,
     JSON.stringify(evidenceRefs),
@@ -3610,14 +4914,20 @@ function evaluateControlHook(body: Record<string, unknown>) {
   const task = typeof body.task === "string" ? body.task : "";
   const operation = String(body.operation ?? body.command ?? "").toLowerCase();
   const hookPath = hook ? path.join(CODEX_CONTROL_ROOT, "hooks", `${hook}.yaml`) : "";
-  if (!hook || !/^[a-z0-9-]+$/.test(hook) || !fs.existsSync(hookPath) || !isInside(path.join(CODEX_CONTROL_ROOT, "hooks"), hookPath)) {
+  if (
+    !hook ||
+    !/^[a-z0-9-]+$/.test(hook) ||
+    !fs.existsSync(hookPath) ||
+    !isInside(path.join(CODEX_CONTROL_ROOT, "hooks"), hookPath)
+  ) {
     return { ok: false, decision: "block", reason_code: "E_HOOK_MISSING", hook, task };
   }
   if (!task && (hook === "pre-task" || hook === "pre-implement")) {
     return { ok: true, decision: "block", reason_code: "E_TASK_ID_MISSING", hook, task };
   }
   if (hook === "pre-git") {
-    const riskyGit = /\b(commit|push|pull|fetch|reset|rebase|merge|stash|clean|checkout|restore|switch)\b/.test(operation) ||
+    const riskyGit =
+      /\b(commit|push|pull|fetch|reset|rebase|merge|stash|clean|checkout|restore|switch)\b/.test(operation) ||
       /\bbranch\s+-d\b/.test(operation) ||
       /\btag\s+-d\b/.test(operation);
     return {
@@ -3659,7 +4969,9 @@ function evaluateControlHook(body: Record<string, unknown>) {
     return {
       ok: true,
       decision: String(body.approval_ref ?? "").trim() ? "allow" : "approval-required",
-      reason_code: String(body.approval_ref ?? "").trim() ? "IMPLEMENT_APPROVAL_PRESENT" : "E_IMPLEMENT_APPROVAL_REQUIRED",
+      reason_code: String(body.approval_ref ?? "").trim()
+        ? "IMPLEMENT_APPROVAL_PRESENT"
+        : "E_IMPLEMENT_APPROVAL_REQUIRED",
       operation_class: "repo-write",
       required_approval: String(body.approval_ref ?? "").trim() ? null : "APR-AGENT-001",
       hook,
@@ -3715,7 +5027,13 @@ function buildCodexAssetsStatus() {
 async function fetchJson(
   url: string,
   init?: RequestInit,
-): Promise<{ ok: boolean; status: number | null; body: unknown; error: string | null; reason: "ok" | "http_error" | "timeout" | "network_error" }> {
+): Promise<{
+  ok: boolean;
+  status: number | null;
+  body: unknown;
+  error: string | null;
+  reason: "ok" | "http_error" | "timeout" | "network_error";
+}> {
   try {
     const response = await fetch(url, {
       ...init,
@@ -3807,7 +5125,15 @@ function buildAgentMemoryCapabilities() {
       observed_memory_tool_count: 53,
       wiring_status: "approval-required",
     },
-    scope_model: ["root", "department:<ID>", "project:<project-key>", "run:<run-id>", "persona:<persona-id>", "spec:<spec-id>", "evidence:<EV-id>"],
+    scope_model: [
+      "root",
+      "department:<ID>",
+      "project:<project-key>",
+      "run:<run-id>",
+      "persona:<persona-id>",
+      "spec:<spec-id>",
+      "evidence:<EV-id>",
+    ],
     safety: {
       source_of_truth: "storage/codex-control",
       search_context: "summary-only-read",
@@ -3832,7 +5158,9 @@ function readAgentMemoryConfigStatus() {
   };
 }
 
-async function buildAgentMemoryStatus() {
+async function buildAgentMemoryStatus(
+  sourceSnapshot: ControlPlaneSourceSnapshot = CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot(),
+) {
   const health = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/health`);
   const livez = await fetchJson(`${AGENTMEMORY_URL}/agentmemory/livez`);
   const viewer = await fetchJson(AGENTMEMORY_VIEWER_URL);
@@ -3842,7 +5170,7 @@ async function buildAgentMemoryStatus() {
   const serverAvailable = health.ok || livez.ok;
   const viewerReachable = viewer.ok;
   const config = readAgentMemoryConfigStatus();
-  const activeSpec = buildActiveSpecStatus();
+  const activeSpec = buildActiveSpecStatus(sourceSnapshot);
   const runtimeApprovalRefs = getApprovedOperationApprovalIds(activeSpec.id, "agentmemory-runtime-connect");
   const runtimeConnectAllowed = runtimeApprovalRefs.length > 0;
   return {
@@ -3901,7 +5229,15 @@ async function buildAgentMemoryStatus() {
       runtime_connect_allowed: runtimeConnectAllowed,
       runtime_connect_required_approval: "APR-MEM-RUNTIME-*",
       remember_policy_approval: "APR-MEM-001",
-      blocked_operations: ["install/start", "MCP wiring", "global hooks", "transcript capture", "delete", "forget", "import"],
+      blocked_operations: [
+        "install/start",
+        "MCP wiring",
+        "global hooks",
+        "transcript capture",
+        "delete",
+        "forget",
+        "import",
+      ],
       next_safe_action: serverAvailable
         ? "Use safe search/context/remember only inside approved scope."
         : "Record approval first, then start AgentMemory runtime in a separate OPS step.",
@@ -3948,7 +5284,11 @@ function buildQualityHarnessStatus(
     harnessBlueprints.department_draft_count > 0 &&
     harnessBlueprints.project_draft_count > 0 &&
     harnessBlueprints.evidence_backed_count > 0;
-  const blueprintCoverageStatus: HarnessCheckStatus = blueprintCoveragePass ? "pass" : harnessBlueprints.draft_count > 0 ? "warn" : "planned";
+  const blueprintCoverageStatus: HarnessCheckStatus = blueprintCoveragePass
+    ? "pass"
+    : harnessBlueprints.draft_count > 0
+      ? "warn"
+      : "planned";
 
   const checks: HarnessCheck[] = [
     {
@@ -3956,7 +5296,9 @@ function buildQualityHarnessStatus(
       label: "Source of truth",
       status: sourceDocsReady ? "pass" : "warn",
       detail: sourceDocsReady ? "Root docs and active spec are readable." : "Some active spec documents are missing.",
-      next_safe_action: sourceDocsReady ? "Continue evidence-backed work." : "Repair the missing SDD documents before implementation.",
+      next_safe_action: sourceDocsReady
+        ? "Continue evidence-backed work."
+        : "Repair the missing SDD documents before implementation.",
     },
     {
       key: "thread_relationship",
@@ -3969,7 +5311,9 @@ function buildQualityHarnessStatus(
           : currentThreadId
             ? "Detected Codex thread is not connected yet."
             : "No current Codex thread was detected. Session-file candidates require manual selection.",
-      next_safe_action: currentActivation ? "Close with evidence/handoff when done." : "Activate the current thread with project:DonggriCompany scope.",
+      next_safe_action: currentActivation
+        ? "Close with evidence/handoff when done."
+        : "Activate the current thread with project:DonggriCompany scope.",
     },
     {
       key: "agentmemory_runtime",
@@ -3986,8 +5330,12 @@ function buildQualityHarnessStatus(
       key: "agentmemory_approval",
       label: "Memory approval",
       status: rememberApproved ? "pass" : "warn",
-      detail: rememberApproved ? "Non-destructive remember approval is present." : "Remember writes need APR-MEM approval in the active spec.",
-      next_safe_action: rememberApproved ? "Keep storing summaries only." : "Add/confirm APR-MEM scope before memory capture.",
+      detail: rememberApproved
+        ? "Non-destructive remember approval is present."
+        : "Remember writes need APR-MEM approval in the active spec.",
+      next_safe_action: rememberApproved
+        ? "Keep storing summaries only."
+        : "Add/confirm APR-MEM scope before memory capture.",
     },
     {
       key: "persona_evidence",
@@ -3997,7 +5345,8 @@ function buildQualityHarnessStatus(
         personaTotal > 0 && eventTotal > 0
           ? "Persona runs and events exist as harness evidence."
           : "Persona tables exist, but operational persona evidence is still thin.",
-      next_safe_action: "Create read-only persona records for investigation/review tasks and decide accept/reject with evidence.",
+      next_safe_action:
+        "Create read-only persona records for investigation/review tasks and decide accept/reject with evidence.",
     },
     {
       key: "release_hygiene",
@@ -4006,14 +5355,20 @@ function buildQualityHarnessStatus(
       detail: releaseDirty
         ? "DonggriCompany has dirty or untracked files that must be grouped before release."
         : "DonggriCompany worktree is clean.",
-      next_safe_action: releaseDirty ? "Review groups and split commit-ready changes only after explicit Git approval." : "Continue verification.",
+      next_safe_action: releaseDirty
+        ? "Review groups and split commit-ready changes only after explicit Git approval."
+        : "Continue verification.",
     },
     {
       key: "korean_integrity",
       label: "Korean text integrity",
       status: textIntegrity.pass ? "pass" : "warn",
-      detail: textIntegrity.pass ? "Configured mojibake patterns are absent." : "Visible Korean integrity issues need targeted repair.",
-      next_safe_action: textIntegrity.pass ? "Keep checking rendered UI." : "Fix only verified source/rendered text issues.",
+      detail: textIntegrity.pass
+        ? "Configured mojibake patterns are absent."
+        : "Visible Korean integrity issues need targeted repair.",
+      next_safe_action: textIntegrity.pass
+        ? "Keep checking rendered UI."
+        : "Fix only verified source/rendered text issues.",
     },
     {
       key: "capa_audit",
@@ -4022,7 +5377,9 @@ function buildQualityHarnessStatus(
       detail: qmsHasOpenWork
         ? "QMS ledgers are active and contain open release/persona findings."
         : "QMS ledgers are active with no open harness findings.",
-      next_safe_action: qmsHasOpenWork ? "Close NC/CAPA records with evidence and effectiveness checks." : "Keep recurring internal audit review active.",
+      next_safe_action: qmsHasOpenWork
+        ? "Close NC/CAPA records with evidence and effectiveness checks."
+        : "Keep recurring internal audit review active.",
     },
     {
       key: "harness_blueprint_coverage",
@@ -4047,9 +5404,12 @@ function buildQualityHarnessStatus(
         owner_department: "OPS",
         related_spec: activeSpec.id,
         related_run: typeof runner.latest_run?.id === "string" ? runner.latest_run.id : null,
-        root_cause: releaseDirty ? "Mixed tracked/untracked changes are present in the baseline repo." : "No current release hygiene drift.",
+        root_cause: releaseDirty
+          ? "Mixed tracked/untracked changes are present in the baseline repo."
+          : "No current release hygiene drift.",
         containment: "Classify files and block clean/stash/commit until explicit Git approval.",
-        corrective_action: "Split harness, UI, agent migration, generated artifact, and unrelated groups before release.",
+        corrective_action:
+          "Split harness, UI, agent migration, generated artifact, and unrelated groups before release.",
         preventive_action: "Keep release hygiene classifier visible in Control Plane quality checks.",
         due_at: "2026-05-28",
         effectiveness_check: "Git status groups reviewed and generated artifacts excluded from release candidates.",
@@ -4063,12 +5423,16 @@ function buildQualityHarnessStatus(
         owner_department: "REVIEW",
         related_spec: activeSpec.id,
         related_run: typeof runner.latest_run?.id === "string" ? runner.latest_run.id : null,
-        root_cause: personaEvidenceThin ? "Persona run/event history is below the operational evidence threshold." : "Persona evidence threshold is met.",
-        containment: "Require task refs, evidence refs, output hash, source hash, and quality bar result on accept/merge.",
+        root_cause: personaEvidenceThin
+          ? "Persona run/event history is below the operational evidence threshold."
+          : "Persona evidence threshold is met.",
+        containment:
+          "Require task refs, evidence refs, output hash, source hash, and quality bar result on accept/merge.",
         corrective_action: "Record persona decisions for real investigation and review tasks.",
         preventive_action: "Reject accept/merge without evidence hash metadata.",
         due_at: "2026-05-28",
-        effectiveness_check: "Recent persona timeline contains at least three personas and six events or the finding remains open.",
+        effectiveness_check:
+          "Recent persona timeline contains at least three personas and six events or the finding remains open.",
         status: personaEvidenceThin ? "open" : "closed",
         evidence_refs: ["EV-PERSONA-EVIDENCE"],
       },
@@ -4080,12 +5444,14 @@ function buildQualityHarnessStatus(
         severity: qmsHasOpenWork ? "major" : "minor",
         owner_department: "CONTROL",
         related_spec: activeSpec.id,
-        root_cause: "Agent harness controls existed as dashboard checks before this spec, but approval/QMS loops were incomplete.",
+        root_cause:
+          "Agent harness controls existed as dashboard checks before this spec, but approval/QMS loops were incomplete.",
         containment: "Central mutation guard, safe memory validation, persona evidence enforcement, and QMS ledgers.",
         corrective_action: "Implement this hardening spec and verify API/UI/OpenAPI behavior.",
         preventive_action: "Keep approval class validation and QMS ledger checks in regression tests.",
         due_at: "2026-05-28",
-        effectiveness_check: "Target score is 830/1000 or higher after dirty worktree and persona evidence records are closed.",
+        effectiveness_check:
+          "Target score is 830/1000 or higher after dirty worktree and persona evidence records are closed.",
         status: qmsHasOpenWork ? "in_progress" : "effectiveness_check",
         evidence_refs: ["EV-QMS-HARDENING"],
       },
@@ -4098,10 +5464,7 @@ function buildQualityHarnessStatus(
         owner_department: "REVIEW",
         related_spec: activeSpec.id,
         scope: "API approvals, AgentMemory, persona evidence, QMS, release hygiene",
-        findings: [
-          ...(releaseDirty ? ["NC-REL-001"] : []),
-          ...(personaEvidenceThin ? ["NC-PER-001"] : []),
-        ],
+        findings: [...(releaseDirty ? ["NC-REL-001"] : []), ...(personaEvidenceThin ? ["NC-PER-001"] : [])],
         due_at: "2026-05-28",
         effectiveness_check: "Run tsc, API/web tests, OpenAPI check, build, spec-quality, and browser smoke.",
         status: qmsHasOpenWork ? "in_progress" : "closed",
@@ -4116,9 +5479,21 @@ function buildQualityHarnessStatus(
   };
   const qmsScoreImpact = qmsCounts.open_nonconformances * 30 + qmsCounts.open_capas * 20 + qmsCounts.open_audits * 10;
   const scoreMap: Record<HarnessCheckStatus, number> = { pass: 100, warn: 70, planned: 55, blocked: 30 };
-  const score = Math.max(0, Math.min(1000, Math.round((checks.reduce((sum, check) => sum + scoreMap[check.status], 0) / checks.length) * 10) - qmsScoreImpact));
+  const score = Math.max(
+    0,
+    Math.min(
+      1000,
+      Math.round((checks.reduce((sum, check) => sum + scoreMap[check.status], 0) / checks.length) * 10) -
+        qmsScoreImpact,
+    ),
+  );
   return {
-    level: score >= 900 ? "Level 4 - ISO 9001-inspired operating harness" : score >= 830 ? "Level 3 - release candidate harness" : "Level 2 - strong beta hardening",
+    level:
+      score >= 900
+        ? "Level 4 - ISO 9001-inspired operating harness"
+        : score >= 830
+          ? "Level 3 - release candidate harness"
+          : "Level 2 - strong beta hardening",
     score,
     target_score: 1000,
     target_release_score: 830,
@@ -4133,9 +5508,11 @@ function buildQualityHarnessStatus(
     thread_relationship: {
       current_thread_id: currentThreadId,
       current_activation_id: typeof currentActivation?.id === "string" ? currentActivation.id : null,
-      current_activation_scope: typeof currentActivationContext.scope_key === "string" ? currentActivationContext.scope_key : null,
+      current_activation_scope:
+        typeof currentActivationContext.scope_key === "string" ? currentActivationContext.scope_key : null,
       previous_activation_id: typeof previousActivation?.id === "string" ? previousActivation.id : null,
-      previous_thread_id: typeof latestActivationContext.codex_thread_id === "string" ? latestActivationContext.codex_thread_id : null,
+      previous_thread_id:
+        typeof latestActivationContext.codex_thread_id === "string" ? latestActivationContext.codex_thread_id : null,
       shared_memory_scope: "project:DonggriCompany",
       raw_transcript_capture: false,
     },
@@ -4183,13 +5560,16 @@ function buildQualityHarnessStatus(
 export async function buildControlPlaneState(db: RuntimeContext["db"]) {
   const markerPath = path.join(CONTROL_ROOT, "CODEX_CONTROL_ROOT");
   const rootDocPath = path.join(CONTROL_ROOT, "AGENTS.md");
-  const registry = buildRegistryProjects(db);
-  const activeSpec = buildActiveSpecStatus();
+  const sourceSnapshot = CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot();
+  const registry = buildRegistryProjects(db, sourceSnapshot);
+  const activeSpecs = buildActiveSpecStatuses(sourceSnapshot);
+  const activeSpec = buildActiveSpecStatus(sourceSnapshot);
   const handoffs = buildHandoffStatus();
   const memoryDocs = buildMemoryDocs();
-  const memory = await buildAgentMemoryStatus();
+  const memory = await buildAgentMemoryStatus(sourceSnapshot);
   const runner = readControlRunnerStatus(db);
   const harnessBlueprints = readHarnessBlueprintStatus(db);
+  const engineSync = readEngineSyncStatus(db);
   const projectOperators = buildProjectOperators(registry.projects);
   const internalDepartmentMemory = buildDepartmentMemorySummaries(memory, memoryDocs, runner);
   const internalDepartmentChats = buildDepartmentChatRooms(runner);
@@ -4197,11 +5577,24 @@ export async function buildControlPlaneState(db: RuntimeContext["db"]) {
   const departmentMemory = buildMasterDepartmentMemorySummaries(memory, memoryDocs, runner);
   const departmentChats = buildMasterDepartmentChatRooms(runner);
   const textIntegrity = buildKoreanTextIntegrityStatus();
-  const qualityHarness = buildQualityHarnessStatus(db, registry, activeSpec, runner, memory, textIntegrity, harnessBlueprints);
+  const qualityHarness = buildQualityHarnessStatus(
+    db,
+    registry,
+    activeSpec,
+    runner,
+    memory,
+    textIntegrity,
+    harnessBlueprints,
+  );
+  const master95 = buildMaster95Status(sourceSnapshot);
 
   return {
     ok: true,
-    generated_at: new Date().toISOString(),
+    generated_at: sourceSnapshot.generated_at,
+    source_epoch: sourceSnapshot.source_epoch,
+    projection_epoch: sourceSnapshot.projection_epoch,
+    degraded: sourceSnapshot.degraded,
+    parse_errors: sourceSnapshot.parse_errors,
     root: {
       path: CONTROL_ROOT,
       repo_estate_root: {
@@ -4222,6 +5615,7 @@ export async function buildControlPlaneState(db: RuntimeContext["db"]) {
         inside_root: isInside(CONTROL_ROOT, CODEX_CONTROL_ROOT),
       },
     },
+    active_specs: activeSpecs,
     active_spec: activeSpec,
     ver1: buildVer1Status(activeSpec.id),
     registry,
@@ -4232,7 +5626,9 @@ export async function buildControlPlaneState(db: RuntimeContext["db"]) {
     codex_assets: buildCodexAssetsStatus(),
     sync: readControlSyncStatus(db),
     runner,
+    engine_sync: engineSync,
     quality_harness: qualityHarness,
+    master_95: master95,
     dongri_grigri: {
       brand: "Dongri-grigri",
       reset_mode: "soft-reset-legacy-preserved",
@@ -4287,7 +5683,11 @@ function validateSafeMemorySummary(text: string, evidenceRefs: string[]) {
   if (lineCount > 18 || transcriptMarkers >= 3 || /"role"\s*:\s*"(user|assistant|system|tool)"/i.test(text)) {
     return "raw_transcript_blocked";
   }
-  if (/sk-[A-Za-z0-9_-]{20,}|api[_-]?key|access[_-]?token|refresh[_-]?token|password|private[_-]?key|-----BEGIN/i.test(text)) {
+  if (
+    /sk-[A-Za-z0-9_-]{20,}|api[_-]?key|access[_-]?token|refresh[_-]?token|password|private[_-]?key|-----BEGIN/i.test(
+      text,
+    )
+  ) {
     return "secret_like_payload_blocked";
   }
   if (/\b\d{3}-\d{2}-\d{4}\b|\b\d{6}-\d{7}\b/.test(text)) {
@@ -4374,7 +5774,13 @@ export async function rememberAgentMemory(body: Record<string, unknown>) {
   }
   const activeSpec = buildActiveSpecStatus();
   if (!hasApprovedAgentMemoryRemember(activeSpec.id)) {
-      return { ok: false, available: false, captured: false, error: "approval_required", required_approval: "APR-MEM-001" };
+    return {
+      ok: false,
+      available: false,
+      captured: false,
+      error: "approval_required",
+      required_approval: "APR-MEM-001",
+    };
   }
   const metadata = buildAgentMemoryMetadata(body);
   const safeSummaryError = validateSafeMemorySummary(text, metadata.evidence_refs);
@@ -4417,6 +5823,42 @@ export function registerControlPlaneRoutes(
   ctx: Pick<RuntimeContext, "app" | "db"> | { app: Express; db: RuntimeContext["db"] },
 ): void {
   const { app, db } = ctx;
+  const getSourceEpoch = () => CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot().source_epoch;
+  const getProjectionEpoch = () => CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot().projection_epoch;
+  const loadControlTower = createMaster95ControlTowerRuntimeLoader(getSourceEpoch, getProjectionEpoch);
+  app.use(
+    "/api/control-plane/v1",
+    createLegacyControlPlaneV1MutationGuard({
+      get_source_epoch: getSourceEpoch,
+      compatibility_enabled: process.env.CONTROL_PLANE_V1_MUTATION_COMPAT === "1",
+      compatibility_proof: process.env.CONTROL_PLANE_V1_MUTATION_PROOF,
+      allowed_origins: (process.env.ALLOWED_ORIGINS ?? "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+      test_mode: CONTROL_PLANE_FAST_TEST_MODE,
+    }),
+  );
+  registerMaster95ControlTowerRoutes(app, {
+    sourceEpoch: getSourceEpoch,
+    projectionEpoch: getProjectionEpoch,
+    loadControlTower,
+  });
+  registerMaster95ImageWorkbenchRoutes(app);
+  registerControlPlaneV2RuntimeRoutes(
+    { app, db },
+    {
+      source_adapter: CONTROL_PLANE_SOURCE_ADAPTER,
+      read_operations: {
+        memory_search: ({ query, scope }) => searchAgentMemory(query, scope),
+        memory_context: (body) => getAgentMemoryContext(body),
+        control_plane_sync_preview: () => buildControlSyncPreview(db),
+        engine_route_preview: (body) => buildEngineRoutePreview(db, body),
+        harness_blueprint_preview: (body) => buildHarnessBlueprintPreview(db, body),
+      },
+      load_control_tower: loadControlTower,
+    },
+  );
 
   app.get("/api/control-plane/state", async (_req, res) => {
     try {
@@ -4456,7 +5898,17 @@ export function registerControlPlaneRoutes(
 
   app.get("/api/control-plane/v1/specs/active", async (_req, res) => {
     const state = await buildControlPlaneState(db);
-    res.json({ ok: true, active_spec: state.active_spec, ver1: { active: state.ver1.active, spec_id: state.ver1.spec_id } });
+    res.json({
+      ok: true,
+      generated_at: state.generated_at,
+      source_epoch: state.source_epoch,
+      projection_epoch: state.projection_epoch,
+      degraded: state.degraded,
+      parse_errors: state.parse_errors,
+      active_specs: state.active_specs,
+      active_spec: state.active_spec,
+      ver1: { active: state.ver1.active, spec_id: state.ver1.spec_id },
+    });
   });
 
   app.get("/api/control-plane/v1/hooks/status", async (_req, res) => {
@@ -4530,6 +5982,35 @@ export function registerControlPlaneRoutes(
   app.get("/api/control-plane/v1/quality/score", async (_req, res) => {
     const state = await buildControlPlaneState(db);
     res.json({ ok: true, quality: state.ver1.quality_score, hard_gates: state.ver1.hard_gates });
+  });
+
+  app.get("/api/control-plane/v1/agy-review/latest", async (_req, res) => {
+    const state = await buildControlPlaneState(db);
+    res.json({ ok: true, agy_review: state.ver1.agy_review });
+  });
+
+  app.get("/api/control-plane/v1/master-95/status", async (_req, res) => {
+    try {
+      res.json({ ok: true, master_95: buildMaster95Status() });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "master95_status_failed", message: safeError(error) });
+    }
+  });
+
+  app.get("/api/control-plane/v1/master-95/scorecard", async (_req, res) => {
+    try {
+      res.json({ ok: true, scorecard: buildMaster95Scorecard() });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "master95_scorecard_failed", message: safeError(error) });
+    }
+  });
+
+  app.get("/api/control-plane/v1/master-95/traceability", async (_req, res) => {
+    try {
+      res.json({ ok: true, traceability: buildMaster95Traceability() });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "master95_traceability_failed", message: safeError(error) });
+    }
   });
 
   app.get("/api/control-plane/v1/gemini-review/latest", async (_req, res) => {
@@ -4612,8 +6093,22 @@ export function registerControlPlaneRoutes(
     res.json({ ok: true, runner: readControlRunnerStatus(db) });
   });
 
+  app.get("/api/control-plane/v1/engines/status", async (_req, res) => {
+    res.json({ ok: true, engine_sync: readEngineSyncStatus(db) });
+  });
+
   app.get("/api/control-plane/v1/harness/blueprints/status", async (_req, res) => {
     res.json({ ok: true, harness_blueprints: readHarnessBlueprintStatus(db) });
+  });
+
+  app.get("/api/control-plane/v1/engines/runs/:id", async (req, res) => {
+    const runId = typeof req.params?.id === "string" ? req.params.id : "";
+    const result = readEngineRun(db, runId);
+    if (!result) {
+      res.status(404).json({ ok: false, error: "engine_run_not_found" });
+      return;
+    }
+    res.json({ ok: true, ...result });
   });
 
   app.get("/api/control-plane/v1/runs/:runId", async (req, res) => {
@@ -4626,10 +6121,78 @@ export function registerControlPlaneRoutes(
     res.json({ ok: true, ...result });
   });
 
-  const post = (app as unknown as {
-    post?: (path: string, handler: (req: any, res: any) => unknown) => unknown;
-  }).post;
+  const post = (
+    app as unknown as {
+      post?: (path: string, handler: (req: any, res: any) => unknown) => unknown;
+    }
+  ).post;
   if (typeof post === "function") {
+    post.call(app, "/api/control-plane/v1/engines/route-preview", async (req, res) => {
+      try {
+        const result = buildEngineRoutePreview(db, req.body ?? {});
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "engine_route_preview_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/engines/runs", async (req, res) => {
+      const guard = guardControlPlaneMutation(req, "codex-engine-sync");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
+        return;
+      }
+      try {
+        const result = createEngineRun(db, req.body ?? {}, guard.approval_refs);
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "engine_run_create_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/engines/runs/:id/cancel", async (req, res) => {
+      const guard = guardControlPlaneMutation(req, "codex-engine-sync");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
+        return;
+      }
+      try {
+        const runId = typeof req.params?.id === "string" ? req.params.id : "";
+        const result = cancelEngineRun(db, runId, guard.approval_refs);
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "engine_run_cancel_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/engines/threads/attach", async (req, res) => {
+      const guard = guardControlPlaneMutation(req, "codex-engine-sync");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
+        return;
+      }
+      try {
+        const result = attachEngineThread(db, req.body ?? {}, guard.approval_refs);
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "engine_thread_attach_failed", message: safeError(error) });
+      }
+    });
+
+    post.call(app, "/api/control-plane/v1/engines/reconcile", async (req, res) => {
+      const guard = guardControlPlaneMutation(req, "codex-engine-sync");
+      if (!guard.ok) {
+        res.status(guard.status).json(guard);
+        return;
+      }
+      try {
+        const result = reconcileEngineSync(db, guard.approval_refs);
+        res.status(result.status).json(result);
+      } catch (error) {
+        res.status(500).json({ ok: false, error: "engine_reconcile_failed", message: safeError(error) });
+      }
+    });
+
     post.call(app, "/api/control-plane/v1/harness/blueprints/preview", async (req, res) => {
       try {
         const result = buildHarnessBlueprintPreview(db, req.body ?? {});
@@ -4674,12 +6237,20 @@ export function registerControlPlaneRoutes(
         normalizedMemoryString(body.query, 300),
         normalizedMemoryScope(body.scope),
       );
-      res.status(result.ok || result.error === "query_required" || result.error === "agentmemory_unavailable" ? 200 : 503).json(result);
+      res
+        .status(
+          result.ok || result.error === "query_required" || result.error === "agentmemory_unavailable" ? 200 : 503,
+        )
+        .json(result);
     });
 
     post.call(app, "/api/control-plane/v1/memory/agentmemory/context", async (req, res) => {
       const result = await getAgentMemoryContext((req.body ?? {}) as Record<string, unknown>);
-      res.status(result.ok || result.error === "query_required" || result.error === "agentmemory_unavailable" ? 200 : 503).json(result);
+      res
+        .status(
+          result.ok || result.error === "query_required" || result.error === "agentmemory_unavailable" ? 200 : 503,
+        )
+        .json(result);
     });
 
     post.call(app, "/api/control-plane/v1/memory/agentmemory/remember", async (req, res) => {
@@ -4735,7 +6306,8 @@ export function registerControlPlaneRoutes(
         res.status(403).json({
           ok: false,
           error: "approval_required",
-          message: "A non-expired APR-DB approval for non-destructive control_plane_* writes is required before DB sync apply.",
+          message:
+            "A non-expired APR-DB approval for non-destructive control_plane_* writes is required before DB sync apply.",
         });
         return;
       }
@@ -4773,7 +6345,8 @@ export function registerControlPlaneRoutes(
         res.status(403).json({
           ok: false,
           error: "approval_required",
-          message: "A non-expired APR-DB approval for non-destructive control_plane_* writes is required before project operator sync apply.",
+          message:
+            "A non-expired APR-DB approval for non-destructive control_plane_* writes is required before project operator sync apply.",
         });
         return;
       }

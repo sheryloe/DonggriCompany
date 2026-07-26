@@ -15,7 +15,7 @@ function makeSettings(): LocalSettings {
 }
 
 describe("PixelAgentModeSettingsTab", () => {
-  it("saves the pixel agent mode settings", async () => {
+  it("saves pixel agent mode settings with the selected visual asset pack", async () => {
     const user = userEvent.setup();
     const persistSettings = vi.fn();
 
@@ -33,17 +33,20 @@ describe("PixelAgentModeSettingsTab", () => {
 
     render(<Harness />);
 
-    await user.click(screen.getByRole("button", { name: "픽셀 에이전트 모드" }));
-    await user.click(screen.getByRole("button", { name: /쇼케이스/ }));
-    await user.click(screen.getByRole("button", { name: "저장" }));
+    const initialButtons = screen.getAllByRole("button");
+    await user.click(initialButtons[0]);
+    await user.click(initialButtons[3]);
+    await user.click(screen.getByRole("button", { name: /Visual V2/ }));
+    await user.click(screen.getAllByRole("button").at(-1)!);
 
     expect(persistSettings).toHaveBeenCalledWith(
       expect.objectContaining({
-        pixelAgentMode: {
+        pixelAgentMode: expect.objectContaining({
           enabled: true,
           density: "showcase",
           officeTheme: "donggri_cloud_lab",
-        },
+          visualAssetPack: "donggri_visual_v2",
+        }),
       }),
     );
   });

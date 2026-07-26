@@ -1,15 +1,23 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { archiveAgentGuideFile, upsertAgentGuideFile } from "./agent-guide-files.ts";
+import { archiveAgentGuideFile, resolveGuideRoot, upsertAgentGuideFile } from "./agent-guide-files.ts";
 
-const guideRoot = path.resolve(process.cwd(), "agents");
 const cleanupTargets: string[] = [];
+const originalGuideRoot = process.env.AGENT_GUIDE_ROOT;
+let guideRoot = "";
 
 function queueCleanup(targetPath: string): void {
   if (!cleanupTargets.includes(targetPath)) cleanupTargets.push(targetPath);
 }
+
+beforeEach(() => {
+  guideRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dongri-agent-guides-"));
+  process.env.AGENT_GUIDE_ROOT = guideRoot;
+  queueCleanup(guideRoot);
+});
 
 afterEach(() => {
   for (const target of cleanupTargets.splice(0, cleanupTargets.length)) {
@@ -19,9 +27,55 @@ afterEach(() => {
       // ignore
     }
   }
+  if (originalGuideRoot === undefined) delete process.env.AGENT_GUIDE_ROOT;
+  else process.env.AGENT_GUIDE_ROOT = originalGuideRoot;
 });
 
 describe("agent guide files", () => {
+  it("uses only the fixed projects runtime root for isolated E2E guide writes", () => {
+    const isolatedRoot = path.resolve(process.cwd(), ".tmp", "e2e-runtime", "projects", "agent-guides");
+    const dbPath = path.resolve(process.cwd(), ".tmp", "e2e-runtime", "claw-empire.e2e.sqlite");
+    const previousGuideRoot = process.env.AGENT_GUIDE_ROOT;
+    const previousDbPath = process.env.DB_PATH;
+    const previousE2EFlag = process.env.E2E_ISOLATED_RUNTIME;
+    const previousVitest = process.env.VITEST;
+    const previousNodeEnv = process.env.NODE_ENV;
+    queueCleanup(path.resolve(process.cwd(), ".tmp", "e2e-runtime", "projects"));
+    process.env.AGENT_GUIDE_ROOT = isolatedRoot;
+    process.env.DB_PATH = dbPath;
+    process.env.E2E_ISOLATED_RUNTIME = "1";
+    process.env.VITEST = "false";
+    process.env.NODE_ENV = "production";
+
+    try {
+      expect(resolveGuideRoot()).toBe(isolatedRoot);
+      const savedPath = upsertAgentGuideFile({
+        id: "e2e-isolated-guide",
+        name: "E2E Isolated Guide",
+        role: "member",
+        departmentId: "planning",
+        workflowProfileJson: null,
+      });
+      expect(path.resolve(savedPath)).toBe(
+        path.join(isolatedRoot, "planning", "E2E_Isolated_Guide", "E2E_Isolated_Guide_AGENTS.md"),
+      );
+
+      process.env.DB_PATH = path.join(path.dirname(dbPath), "unexpected.sqlite");
+      expect(resolveGuideRoot()).toBe(path.resolve(process.cwd(), "agents"));
+    } finally {
+      if (previousGuideRoot === undefined) delete process.env.AGENT_GUIDE_ROOT;
+      else process.env.AGENT_GUIDE_ROOT = previousGuideRoot;
+      if (previousDbPath === undefined) delete process.env.DB_PATH;
+      else process.env.DB_PATH = previousDbPath;
+      if (previousE2EFlag === undefined) delete process.env.E2E_ISOLATED_RUNTIME;
+      else process.env.E2E_ISOLATED_RUNTIME = previousE2EFlag;
+      if (previousVitest === undefined) delete process.env.VITEST;
+      else process.env.VITEST = previousVitest;
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
   it("creates bundle files under agents/<department>/<name>/", () => {
     const departmentId = "test-agent-guides-planning";
     const agentName = "AlphaGuide";

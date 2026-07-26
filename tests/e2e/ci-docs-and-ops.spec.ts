@@ -58,7 +58,7 @@ test.describe("CI docs and operational API coverage", () => {
   test("OpenAPI exposes contributor-facing ops routes and live endpoints respond", async ({ request }) => {
     const seed = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
     const repoPath = process.cwd();
-    const browseParentPath = path.dirname(repoPath);
+    const browseRootPath = repoPath;
     const cleanup = {
       taskIds: [] as string[],
       projectIds: [] as string[],
@@ -148,15 +148,15 @@ test.describe("CI docs and operational API coverage", () => {
       expect(cliUsageRefresh.ok).toBe(true);
       expect(typeof cliUsageRefresh.usage).toBe("object");
 
-      const pathBrowseRes = await request.get(`/api/projects/path-browse?path=${encodeURIComponent(browseParentPath)}`);
+      const pathBrowseRes = await request.get(`/api/projects/path-browse?path=${encodeURIComponent(browseRootPath)}`);
       const pathBrowse = await expectOkJson<{
         ok: boolean;
         current_path: string;
         entries: Array<{ name: string; path: string }>;
       }>(pathBrowseRes, "GET /api/projects/path-browse");
       expect(pathBrowse.ok).toBe(true);
-      expect(pathBrowse.current_path).toBe(browseParentPath);
-      expect(pathBrowse.entries.some((entry) => entry.path === repoPath)).toBe(true);
+      expect(pathBrowse.current_path).toBe(browseRootPath);
+      expect(pathBrowse.entries.some((entry) => entry.path === path.join(repoPath, "src"))).toBe(true);
 
       const createProjectRes = await request.post("/api/projects", {
         data: {

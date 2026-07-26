@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
 import { spawn } from "node:child_process";
-import { PKG_VERSION } from "../../../../config/runtime.ts";
+import { PKG_VERSION, RELEASE_IDENTITY } from "../../../../config/runtime.ts";
+import type { ReleaseComparisonState, ReleaseIdentity } from "../../../release/release-identity.ts";
 import { parseSafeRestartCommand } from "../../update-auto-command.ts";
 import { needsForceConfirmation, shouldSkipUpdateByGuards } from "../../update-auto-policy.ts";
 import {
@@ -14,7 +15,12 @@ import { tailText, type CommandCaptureResult } from "./command-capture.ts";
 export type UpdateStatusPayload = {
   current_version: string;
   latest_version: string | null;
+  latest_revision: string | null;
   update_available: boolean;
+  comparison_state: ReleaseComparisonState | "disabled";
+  auto_apply_allowed: boolean;
+  current_release_identity: ReleaseIdentity;
+  latest_release_identity: ReleaseIdentity | null;
   release_url: string | null;
   checked_at: number;
   enabled: boolean;
@@ -140,6 +146,8 @@ export async function applyUpdateNow(
   const deltaKind = computeVersionDeltaKind(PKG_VERSION, status.latest_version);
 
   if (!status.update_available) reasons.push("no_update_available");
+  if (RELEASE_IDENTITY.channel !== "stable") reasons.push("prerelease_status_only");
+  if (!status.auto_apply_allowed) reasons.push(`release_apply_blocked:${status.comparison_state}`);
   // Fail closed when channel enforcement needs release metadata but latest version is unavailable.
   if (AUTO_UPDATE_CHANNEL !== "all" && !status.latest_version) {
     reasons.push("channel_check_unavailable");
@@ -172,7 +180,8 @@ export async function applyUpdateNow(
   if (AUTO_UPDATE_IDLE_ONLY && inProgress > 0) reasons.push(`busy_tasks:${inProgress}`);
   if (AUTO_UPDATE_IDLE_ONLY && activeProcesses.size > 0) reasons.push(`active_cli_processes:${activeProcesses.size}`);
 
-  const skipByGuard = shouldSkipUpdateByGuards(reasons, force);
+  const releaseApplyBlocked = RELEASE_IDENTITY.channel !== "stable" || !status.auto_apply_allowed;
+  const skipByGuard = releaseApplyBlocked || shouldSkipUpdateByGuards(reasons, force);
   if (skipByGuard || dryRun) {
     const finishedAt = Date.now();
     if (dryRun) reasons.push("dry_run");
@@ -229,6 +238,19 @@ export async function applyUpdateNow(
   }
 
   if (!error) {
+    const remoteRevisionRes = await runCommandCapture(
+      "git",
+      ["rev-parse", `refs/remotes/origin/${AUTO_UPDATE_TARGET_BRANCH}`],
+      10_000,
+    );
+    const remoteRevision = remoteRevisionRes.stdout.trim().toLowerCase();
+    if (!remoteRevisionRes.ok || !status.latest_revision || remoteRevision !== status.latest_revision.toLowerCase()) {
+      reasons.push("release_target_revision_mismatch");
+      error = "release_target_revision_mismatch";
+    }
+  }
+
+  if (!error) {
     if (hasExceededTotalTimeout()) {
       error = "update_total_timeout_exceeded";
       reasons.push("update_total_timeout_exceeded");
@@ -279,8 +301,13 @@ export async function applyUpdateNow(
     reasons.push("manual_restart_required");
   }
 
-  const afterRes = await runCommandCapture("git", ["rev-parse", "--short", "HEAD"], 10_000);
-  afterHead = afterRes.ok ? afterRes.stdout.trim() : null;
+  const afterRes = await runCommandCapture("git", ["rev-parse", "HEAD"], 10_000);
+  const afterFullHead = afterRes.ok ? afterRes.stdout.trim().toLowerCase() : null;
+  afterHead = afterFullHead?.slice(0, 12) ?? null;
+  if (!error && (!status.latest_revision || afterFullHead !== status.latest_revision.toLowerCase())) {
+    reasons.push("release_applied_revision_mismatch");
+    error = "release_applied_revision_mismatch";
+  }
 
   const finishedAt = Date.now();
   const applied = !error;

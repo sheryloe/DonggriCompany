@@ -13,6 +13,9 @@ describe("spriteAssets", () => {
     expect(AGENT_SPRITE_WALK_FRAMES).toEqual([1, 2, 3]);
     expect(buildAgentSpriteKey(12, "B", 3)).toBe("12-B-3");
     expect(buildAgentSpriteUrl(12, "B", 3)).toBe("/sprites/12-B-3.png?v=agent-visual-v2");
+    expect(buildAgentSpriteUrl(12, "B", 3, "donggri_visual_v2")).toBe(
+      "/sprites/donggri-visual-v2/12-B-3.png?v=donggri-visual-v2-quality-20260716",
+    );
   });
 
   it("maps movement vectors to sprite directions", () => {

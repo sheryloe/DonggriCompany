@@ -55,12 +55,13 @@ function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; 
       onClick={onClick}
       className={`sidebar-nav-item ${active ? "active font-semibold" : ""}`}
       title={item.label}
+      aria-label={item.label}
     >
       <span className="sidebar-nav-icon" aria-hidden="true">
         <Icon className="h-4 w-4" strokeWidth={2} />
       </span>
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      <span className="font-mono text-[10px]" style={{ color: "var(--th-text-muted)" }}>
+      <span className="font-mono text-[10px]" style={{ color: "var(--th-text-muted)" }} aria-hidden="true">
         {item.mark}
       </span>
     </button>
@@ -83,7 +84,10 @@ export default function Sidebar({ currentView, onChangeView, connected }: Sideba
             <Gauge className="h-5 w-5 text-cyan-500 dark:text-cyan-300" strokeWidth={2.2} />
           </div>
           <div className="min-w-0 text-left">
-            <div className="truncate text-base font-extrabold tracking-normal" style={{ color: "var(--th-text-primary)" }}>
+            <div
+              className="truncate text-base font-extrabold tracking-normal"
+              style={{ color: "var(--th-text-primary)" }}
+            >
               Dongri-grigri
             </div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-600 dark:text-cyan-400">
@@ -91,12 +95,18 @@ export default function Sidebar({ currentView, onChangeView, connected }: Sideba
             </div>
           </div>
         </button>
-        <span className="rounded-md border px-2 py-1 text-[10px] font-semibold" style={{ borderColor: "var(--th-border)", color: "var(--th-text-muted)" }}>
+        <span
+          className="rounded-md border px-2 py-1 text-[10px] font-semibold"
+          style={{ borderColor: "var(--th-border)", color: "var(--th-text-muted)" }}
+        >
           Ver.1
         </span>
       </div>
 
-      <div className="mx-3 mt-3 rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+      <div
+        className="mx-3 mt-3 rounded-lg border p-3"
+        style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-emerald-500" : "bg-rose-500"}`} />
@@ -113,21 +123,38 @@ export default function Sidebar({ currentView, onChangeView, connected }: Sideba
 
       <nav className="flex-1 space-y-4 px-3 py-4">
         <div className="space-y-1">
-          <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--th-text-muted)" }}>
+          <div
+            className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: "var(--th-text-muted)" }}
+          >
             Main
           </div>
           {NAV_ITEMS.map((item) => (
-            <NavButton key={item.view} item={item} active={currentView === item.view} onClick={() => onChangeView(item.view)} />
+            <NavButton
+              key={item.view}
+              item={item}
+              active={currentView === item.view}
+              onClick={() => onChangeView(item.view)}
+            />
           ))}
         </div>
       </nav>
 
-      <div className="mx-3 mb-3 rounded-lg border p-3" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
+      <div
+        className="mx-3 mb-3 rounded-lg border p-3"
+        style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+      >
         <div className="mb-2 flex items-center justify-between">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--th-text-muted)" }}>
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: "var(--th-text-muted)" }}
+          >
             마스터 에이전트
           </div>
-          <span className="rounded-md border px-1.5 py-0.5 text-[10px]" style={{ borderColor: "var(--th-border)", color: "var(--th-text-muted)" }}>
+          <span
+            className="rounded-md border px-1.5 py-0.5 text-[10px]"
+            style={{ borderColor: "var(--th-border)", color: "var(--th-text-muted)" }}
+          >
             6개
           </span>
         </div>
@@ -136,15 +163,22 @@ export default function Sidebar({ currentView, onChangeView, connected }: Sideba
             <div key={agent.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: agent.color }} />
               <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold" style={{ color: "var(--th-text-primary)" }}>{agent.label}</div>
-                <div className="truncate text-[10px]" style={{ color: "var(--th-text-muted)" }}>{agent.scope}</div>
+                <div className="truncate font-semibold" style={{ color: "var(--th-text-primary)" }}>
+                  {agent.label}
+                </div>
+                <div className="truncate text-[10px]" style={{ color: "var(--th-text-muted)" }}>
+                  {agent.scope}
+                </div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="mx-3 mb-3 rounded-lg border border-cyan-300/30 bg-cyan-300/10 p-3 text-xs" style={{ color: "var(--th-text-secondary)" }}>
+      <div
+        className="mx-3 mb-3 rounded-lg border border-cyan-300/30 bg-cyan-300/10 p-3 text-xs"
+        style={{ color: "var(--th-text-secondary)" }}
+      >
         OPS는 작은 관제 코너로 프로젝트 scope를 맡고, 부서 마스터는 업무마다 필요한 실행 담당과 증거를 연결합니다.
       </div>
     </aside>

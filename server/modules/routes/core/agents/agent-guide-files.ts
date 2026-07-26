@@ -29,12 +29,23 @@ const DEFAULT_CLASS_PATH = "(unclassified)";
 const DEFAULT_PROMOTION_POLICY = "junior -> senior @xp>=300, team_leader manual only";
 const MASTER_AGENT_PROMOTION_POLICY = "master_agent fixed role; no junior/senior ladder";
 const PROJECT_AGENTS_ROOT = path.resolve(process.cwd(), "agents");
+const ISOLATED_E2E_RUNTIME_ROOT = path.resolve(process.cwd(), ".tmp", "e2e-runtime");
+const ISOLATED_E2E_GUIDE_ROOT = path.join(ISOLATED_E2E_RUNTIME_ROOT, "projects", "agent-guides");
+const ISOLATED_E2E_DB_PATH = path.join(ISOLATED_E2E_RUNTIME_ROOT, "claw-empire.e2e.sqlite");
 let warnedExternalGuideRoot = false;
 
-function resolveGuideRoot(): string {
+// Exported for contract tests; this is not an HTTP or product API surface.
+export function resolveGuideRoot(): string {
   const envRoot = String(process.env.AGENT_GUIDE_ROOT ?? "").trim();
   const resolvedEnvRoot = envRoot ? path.resolve(envRoot) : "";
-  const allowExternalTestRoot = resolvedEnvRoot && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
+  const configuredDbPath = String(process.env.DB_PATH ?? "").trim();
+  const allowIsolatedE2ERoot =
+    process.env.E2E_ISOLATED_RUNTIME === "1" &&
+    resolvedEnvRoot === ISOLATED_E2E_GUIDE_ROOT &&
+    Boolean(configuredDbPath) &&
+    path.resolve(configuredDbPath) === ISOLATED_E2E_DB_PATH;
+  const allowExternalTestRoot =
+    resolvedEnvRoot && (process.env.VITEST === "true" || process.env.NODE_ENV === "test" || allowIsolatedE2ERoot);
   if (allowExternalTestRoot) {
     return resolvedEnvRoot;
   }

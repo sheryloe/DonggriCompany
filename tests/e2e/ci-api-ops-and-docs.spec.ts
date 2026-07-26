@@ -309,9 +309,9 @@ test.describe("CI API ops and docs coverage", () => {
 
   test("project path helpers + api provider CRUD + ops diagnostics are reachable in CI", async ({ request }) => {
     const seed = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
-    const projectsRoot = path.resolve("..");
+    const projectsRoot = process.cwd();
     const repoName = path.basename(process.cwd());
-    const candidateProjectPath = path.join(projectsRoot, "climpire-ci-path-check", seed);
+    const candidateProjectPath = path.join(projectsRoot, ".tmp", "e2e-runtime", "path-check", seed);
 
     await establishApiSession(request);
 
@@ -359,7 +359,7 @@ test.describe("CI API ops and docs coverage", () => {
     );
     expect(pathBrowse.ok).toBe(true);
     expect(pathBrowse.current_path).toBe(projectsRoot);
-    expect(pathBrowse.entries.some((entry) => entry.name === repoName)).toBe(true);
+    expect(pathBrowse.entries.some((entry) => entry.name === "src")).toBe(true);
 
     const presets = await expectOkJson<{
       ok: boolean;
@@ -432,7 +432,7 @@ test.describe("CI API ops and docs coverage", () => {
           data: {
             name: `ci-run-provider-${seed}`,
             type: "openai",
-            base_url: "http://127.0.0.1:9/v1",
+            base_url: "https://example.invalid/v1",
             api_key: "ci-test-key",
             enabled: true,
             models_cache: JSON.stringify(["ci-test-model"]),
@@ -565,7 +565,7 @@ test.describe("CI API ops and docs coverage", () => {
 
     const swaggerUi = await request.get("/api/docs");
     expect(swaggerUi.ok()).toBe(true);
-    await expect(swaggerUi.text()).resolves.toContain("Claw-Empire API Docs");
+    await expect(swaggerUi.text()).resolves.toContain("Dongri-grigri API Docs");
 
     const openapi = await expectOkJson<{
       openapi: string;

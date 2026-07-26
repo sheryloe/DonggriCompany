@@ -6,6 +6,10 @@ services:
       args:
         APP_UID: 10001
         APP_GID: 10001
+        DONGRI_RELEASE_GIT_SHA: ${DONGRI_RELEASE_GIT_SHA:-}
+        DONGRI_RELEASE_BUILT_AT: ${DONGRI_RELEASE_BUILT_AT:-}
+        DONGRI_SOURCE_EPOCH: ${DONGRI_SOURCE_EPOCH:-}
+        DONGRI_CERTIFICATION_MODE: ${DONGRI_CERTIFICATION_MODE:-0}
     container_name: donggricompany
     restart: unless-stopped
     mem_limit: ${DOCKER_MEM_LIMIT:-2g}
@@ -80,9 +84,9 @@ services:
     ports:
       - "8900:8900"
     volumes:
-      - ${DONGGRI_RUNTIME_ROOT:-../runtime/DonggriCompany}/data:/app/data
-      - ${DONGGRI_RUNTIME_ROOT:-../runtime/DonggriCompany}/office-accounts:/app/.office-accounts
-      - ${DONGGRI_RUNTIME_ROOT:-../runtime/DonggriCompany}/worktrees:/runtime/worktrees/DonggriCompany
+      - ${DONGGRI_RUNTIME_ROOT:-E:/DonggriPlatform_Asset/runtime/DonggriCompany}/data:/app/data
+      - ${DONGGRI_RUNTIME_ROOT:-E:/DonggriPlatform_Asset/runtime/DonggriCompany}/office-accounts:/app/.office-accounts
+      - ${DONGGRI_RUNTIME_ROOT:-E:/DonggriPlatform_Asset/runtime/DonggriCompany}/worktrees:/runtime/worktrees/DonggriCompany
       - .:/workspace/DonggriCompany
       - ${USERPROFILE}/.codex/multi-auth:/home/app/.codex/multi-auth:ro
     working_dir: /app

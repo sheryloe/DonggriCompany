@@ -5,6 +5,9 @@ process.env.NODE_ENV = "test";
 
 // Force isolated SQLite/log paths for server-side Vitest runs.
 const workerSuffix = process.env.VITEST_WORKER_ID || String(process.pid);
+// Keep token-at-rest tests hermetic and isolated from local/CI secrets.
+// Production still fails closed when no encryption secret is configured.
+process.env.OAUTH_ENCRYPTION_SECRET = `dongri-grigri-vitest-encryption-${workerSuffix}`;
 const runtimeDir = path.resolve(process.cwd(), ".tmp", "vitest-runtime");
 const dbPath = path.join(runtimeDir, `claw-empire.vitest.${workerSuffix}.sqlite`);
 const logsDir = path.join(runtimeDir, `logs-${workerSuffix}`);

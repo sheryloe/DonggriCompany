@@ -11,8 +11,86 @@ const PACKAGE_JSON_PATH = path.resolve(process.cwd(), "package.json");
 const MODE = process.argv.includes("--write") ? "write" : "check";
 
 const METHODS = ["get", "post", "put", "patch", "delete"];
+const DISCOVERED_ROUTE_FILES = [
+  "server/modules/routes/ops/control-plane.ts",
+  "server/modules/routes/ops/control-tower.ts",
+  "server/modules/routes/ops/image-workbench.ts",
+];
+// These routes are registered through bounded route factories whose paths are
+// exported constants. The lightweight source scanner intentionally does not
+// execute TypeScript, so keep this delegation manifest explicit and tested by
+// the route integration suite.
+const DELEGATED_EXPRESS_ROUTES = [
+  {
+    method: "get",
+    pathname: "/api/control-plane/v2/state",
+    source_file: "server/modules/routes/ops/control-plane-v2-runtime.ts",
+  },
+  {
+    method: "get",
+    pathname: "/api/control-plane/v2/image-workbench/projects/{projectId}/artifacts",
+    source_file: "server/modules/routes/ops/control-plane-v2-runtime.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/mutations/preview",
+    source_file: "server/modules/routes/ops/control-plane-v2.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/mutations/approval",
+    source_file: "server/modules/routes/ops/control-plane-v2.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/mutations/execute",
+    source_file: "server/modules/routes/ops/control-plane-v2.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/image-workbench/uploads/preview",
+    source_file: "server/modules/routes/ops/image-workbench-v2.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/image-workbench/uploads",
+    source_file: "server/modules/routes/ops/image-workbench-v2.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/memory/agentmemory/search",
+    source_file: "server/modules/routes/ops/control-plane-v2-read-operations.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/memory/agentmemory/context",
+    source_file: "server/modules/routes/ops/control-plane-v2-read-operations.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/sync/preview",
+    source_file: "server/modules/routes/ops/control-plane-v2-read-operations.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/engines/route-preview",
+    source_file: "server/modules/routes/ops/control-plane-v2-read-operations.ts",
+  },
+  {
+    method: "post",
+    pathname: "/api/control-plane/v2/harness/blueprints/preview",
+    source_file: "server/modules/routes/ops/control-plane-v2-read-operations.ts",
+  },
+];
 const PUBLIC_API_PATHS = new Set(["/api/health", "/api/auth/session", "/api/openapi.json"]);
 const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
+const CONTROL_PLANE_V2_POST_READ_PATHS = new Set([
+  "/api/control-plane/v2/memory/agentmemory/search",
+  "/api/control-plane/v2/memory/agentmemory/context",
+  "/api/control-plane/v2/sync/preview",
+  "/api/control-plane/v2/engines/route-preview",
+  "/api/control-plane/v2/harness/blueprints/preview",
+]);
 const JSON_MEDIA_TYPES = ["application/json"];
 const CONFLICT_RESPONSE_EXCLUSIONS = new Set(["POST /api/messenger/discord/channels"]);
 
@@ -400,13 +478,17 @@ function ensureSecuritySchemes(doc) {
 
 function ensureLocalMutationOriginContract(pathname, method, operation, doc) {
   if (!pathname.startsWith("/api/control-plane/") || !MUTATING_METHODS.has(method)) return;
+  const postReadOperation = method === "post" && CONTROL_PLANE_V2_POST_READ_PATHS.has(pathname);
+  const parameterKey = postReadOperation ? "LocalControlPlaneReadOrigin" : "LocalControlPlaneMutationOrigin";
   doc.components ??= {};
   doc.components.parameters ??= {};
-  doc.components.parameters.LocalControlPlaneMutationOrigin ??= {
+  doc.components.parameters[parameterKey] ??= {
     name: "Origin",
     in: "header",
     required: true,
-    description: "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
+    description: postReadOperation
+      ? "Required for Control Plane v2 POST read/preview operations. Only local Dongri-grigri UI origins are accepted."
+      : "Required for Control Plane mutations. Only local Dongri-grigri UI origins are accepted.",
     schema: {
       type: "string",
       enum: ["http://127.0.0.1:8800", "http://localhost:8800", "http://127.0.0.1:8810", "http://localhost:8810"],
@@ -415,16 +497,23 @@ function ensureLocalMutationOriginContract(pathname, method, operation, doc) {
   operation.parameters ??= [];
   const hasOriginParameter = operation.parameters.some((parameter) => {
     if (!parameter || typeof parameter !== "object") return false;
-    if (parameter.$ref === "#/components/parameters/LocalControlPlaneMutationOrigin") return true;
-    return String(parameter.name ?? "").toLowerCase() === "origin" && String(parameter.in ?? "").toLowerCase() === "header";
+    if (parameter.$ref === `#/components/parameters/${parameterKey}`) return true;
+    return (
+      String(parameter.name ?? "").toLowerCase() === "origin" && String(parameter.in ?? "").toLowerCase() === "header"
+    );
   });
   if (!hasOriginParameter) {
-    operation.parameters.push({ $ref: "#/components/parameters/LocalControlPlaneMutationOrigin" });
+    operation.parameters.push({ $ref: `#/components/parameters/${parameterKey}` });
   }
-  const note =
-    "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header.";
+  const note = postReadOperation
+    ? "This is a side-effect-free POST read/preview operation. Authentication, CSRF, and an allowed local Origin are required; Idempotency-Key and approval receipts are not used."
+    : "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header.";
   const currentDescription = typeof operation.description === "string" ? operation.description : "";
-  operation.description = currentDescription.includes(note) ? currentDescription : currentDescription ? `${currentDescription}\n\n${note}` : note;
+  operation.description = currentDescription.includes(note)
+    ? currentDescription
+    : currentDescription
+      ? `${currentDescription}\n\n${note}`
+      : note;
 }
 
 function isProtectedOperation(pathname, method, operation, doc) {
@@ -444,7 +533,12 @@ function ensureOperationSecurity(pathname, method, operation) {
     return;
   }
   if (MUTATING_METHODS.has(method)) {
-    operation.security = [{ bearerAuth: [] }, { cookieAuth: [], csrfHeader: [] }];
+    operation.security = pathname.startsWith("/api/control-plane/v2/")
+      ? [
+          { bearerAuth: [], csrfHeader: [] },
+          { cookieAuth: [], csrfHeader: [] },
+        ]
+      : [{ bearerAuth: [] }, { cookieAuth: [], csrfHeader: [] }];
     return;
   }
   if (!Array.isArray(operation.security)) {
@@ -469,6 +563,372 @@ function ensureOperationErrorResponses(pathname, method, operation, doc) {
   }
   if (MUTATING_METHODS.has(method) && !operation.responses["409"]) {
     operation.responses["409"] = { $ref: STANDARD_ERROR_RESPONSE_REFS["409"] };
+  }
+}
+
+function normalizeExpressPath(routePath) {
+  return routePath.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+}
+
+function discoverExpressRoutes() {
+  const routes = new Map();
+  for (const relativeFile of DISCOVERED_ROUTE_FILES) {
+    const absoluteFile = path.resolve(process.cwd(), relativeFile);
+    if (!fs.existsSync(absoluteFile)) continue;
+    const raw = fs.readFileSync(absoluteFile, "utf8");
+    const stringConstants = new Map(
+      [...raw.matchAll(/\bconst\s+([A-Za-z0-9_]+)\s*=\s*["']([^"']+)["'];/g)].map((match) => [match[1], match[2]]),
+    );
+    const addRoute = (method, routePath) => {
+      const constantPrefix = routePath.match(/^\$\{([A-Za-z0-9_]+)\}/);
+      if (constantPrefix && stringConstants.has(constantPrefix[1])) {
+        routePath = `${stringConstants.get(constantPrefix[1])}${routePath.slice(constantPrefix[0].length)}`;
+      }
+      if (!routePath.startsWith("/api/")) return;
+      const normalizedPath = normalizeExpressPath(routePath);
+      routes.set(`${method.toLowerCase()} ${normalizedPath}`, {
+        method: method.toLowerCase(),
+        pathname: normalizedPath,
+        source_file: relativeFile,
+      });
+    };
+    for (const match of raw.matchAll(/\bapp\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/g)) {
+      addRoute(match[1], match[2]);
+    }
+    for (const match of raw.matchAll(/\b(post|put|patch|del|delete)\.call\(\s*app\s*,\s*["'`]([^"'`]+)["'`]/g)) {
+      addRoute(match[1] === "del" ? "delete" : match[1], match[2]);
+    }
+  }
+  for (const route of DELEGATED_EXPRESS_ROUTES) {
+    routes.set(`${route.method} ${route.pathname}`, route);
+  }
+  return [...routes.values()].sort((a, b) => `${a.pathname} ${a.method}`.localeCompare(`${b.pathname} ${b.method}`));
+}
+
+function ensurePathParameters(pathname, operation) {
+  const names = [...pathname.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+  if (names.length === 0) return;
+  operation.parameters ??= [];
+  for (const name of names) {
+    const exists = operation.parameters.some((parameter) => {
+      if (!parameter || typeof parameter !== "object" || parameter.$ref) return false;
+      return parameter.name === name && parameter.in === "path";
+    });
+    if (!exists) {
+      operation.parameters.push({
+        name,
+        in: "path",
+        required: true,
+        schema: {
+          type: "string",
+        },
+      });
+    }
+  }
+}
+
+function ensureDiscoveredRouteOperations(doc) {
+  doc.paths ??= {};
+  for (const route of discoverExpressRoutes()) {
+    doc.paths[route.pathname] ??= {};
+    if (!doc.paths[route.pathname][route.method]) {
+      doc.paths[route.pathname][route.method] = {
+        tags: route.pathname.startsWith("/api/control-plane/") ? ["control-plane"] : ["default"],
+        summary: `${route.method.toUpperCase()} ${route.pathname}`,
+        description: `Discovered from ${route.source_file}. Keep this operation documented or remove the route.`,
+        responses: {
+          200: {
+            description: `${route.method.toUpperCase()} ${route.pathname}`,
+          },
+        },
+      };
+    }
+    ensurePathParameters(route.pathname, doc.paths[route.pathname][route.method]);
+  }
+}
+
+function ensureControlPlaneV2Contracts(doc) {
+  doc.components ??= {};
+  doc.components.schemas ??= {};
+  doc.components.parameters ??= {};
+  doc.components.schemas.ControlPlaneV2Envelope ??= {
+    type: "object",
+    required: ["data", "request_id", "source_epoch"],
+    properties: {
+      data: { type: "object", additionalProperties: true },
+      request_id: { type: "string", minLength: 1 },
+      source_epoch: { type: "string", minLength: 1 },
+    },
+    additionalProperties: false,
+  };
+  doc.components.schemas.ControlPlaneProblem ??= {
+    type: "object",
+    required: ["type", "title", "status", "code", "request_id", "source_epoch"],
+    properties: {
+      type: { type: "string", format: "uri" },
+      title: { type: "string", minLength: 1 },
+      status: { type: "integer", minimum: 400, maximum: 599 },
+      detail: { type: "string" },
+      instance: { type: "string" },
+      code: { type: "string", minLength: 1 },
+      request_id: { type: "string", minLength: 1 },
+      source_epoch: { type: "string", minLength: 1 },
+    },
+    additionalProperties: true,
+  };
+  doc.components.parameters.ControlPlaneV2IdempotencyKey ??= {
+    name: "Idempotency-Key",
+    in: "header",
+    required: true,
+    schema: { type: "string", minLength: 8, maxLength: 200 },
+  };
+  doc.components.parameters.ControlPlaneV2RequestId ??= {
+    name: "X-Request-ID",
+    in: "header",
+    required: false,
+    schema: {
+      type: "string",
+      pattern: "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$",
+    },
+  };
+
+  const jsonBodySchemas = {
+    "/api/control-plane/v2/mutations/preview": {
+      type: "object",
+      required: ["operation", "project_id"],
+      properties: {
+        operation: { type: "string" },
+        project_id: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    "/api/control-plane/v2/mutations/approval": {
+      type: "object",
+      required: ["preview_id"],
+      properties: {
+        preview_id: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    "/api/control-plane/v2/mutations/execute": {
+      type: "object",
+      required: ["preview_id", "approval_id", "source_epoch", "confirmation_text"],
+      properties: {
+        preview_id: { type: "string" },
+        approval_id: { type: "string" },
+        source_epoch: { type: "string" },
+        confirmation_text: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    "/api/control-plane/v2/memory/agentmemory/search": {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string", minLength: 1, maxLength: 300 },
+        scope: {
+          type: "string",
+          minLength: 1,
+          maxLength: 160,
+          pattern: "^[A-Za-z0-9:_./-]+$",
+          default: "root",
+        },
+      },
+      additionalProperties: false,
+    },
+    "/api/control-plane/v2/memory/agentmemory/context": {
+      type: "object",
+      required: ["query"],
+      properties: {
+        query: { type: "string", minLength: 1, maxLength: 300 },
+        scope: { type: "string", minLength: 1, maxLength: 160, pattern: "^[A-Za-z0-9:_./-]+$" },
+        department: { type: "string", minLength: 1, maxLength: 40 },
+        project_key: { type: "string", minLength: 1, maxLength: 80 },
+        spec_id: { type: "string", minLength: 1, maxLength: 120 },
+      },
+      additionalProperties: false,
+    },
+    "/api/control-plane/v2/sync/preview": {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+    "/api/control-plane/v2/engines/route-preview": {
+      type: "object",
+      required: ["objective"],
+      properties: {
+        objective: { type: "string", minLength: 1, maxLength: 500 },
+        provider: {
+          type: "string",
+          enum: [
+            "codex_exec",
+            "codex_app_server",
+            "claude",
+            "agy",
+            "hermes",
+            "codex",
+            "codex_cli",
+            "gemini",
+            "antigravity",
+          ],
+        },
+        scope_type: { type: "string", enum: ["root", "project", "spec"] },
+        scope_value: { type: "string", minLength: 1, maxLength: 300 },
+      },
+      additionalProperties: false,
+    },
+    "/api/control-plane/v2/harness/blueprints/preview": {
+      type: "object",
+      required: ["target_mode", "objective"],
+      properties: {
+        target_mode: { type: "string", enum: ["department", "project", "both"] },
+        project_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 80,
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        },
+        objective: { type: "string", minLength: 1, maxLength: 2000 },
+        preferred_pattern: {
+          type: "string",
+          enum: [
+            "auto",
+            "pipeline",
+            "fan-out-fan-in",
+            "expert-pool",
+            "producer-reviewer",
+            "supervisor",
+            "hierarchical-delegation",
+          ],
+        },
+        evidence_refs: {
+          type: "array",
+          maxItems: 10,
+          items: { type: "string", minLength: 1, maxLength: 300 },
+        },
+      },
+      additionalProperties: false,
+    },
+  };
+
+  for (const [pathname, pathItem] of Object.entries(doc.paths ?? {})) {
+    if (!pathname.startsWith("/api/control-plane/v2/") || !pathItem || typeof pathItem !== "object") continue;
+    for (const method of METHODS) {
+      const operation = pathItem[method];
+      if (!operation || typeof operation !== "object") continue;
+      operation.parameters ??= [];
+      if (method === "post" && CONTROL_PLANE_V2_POST_READ_PATHS.has(pathname)) {
+        operation.parameters = operation.parameters.filter(
+          (parameter) =>
+            parameter?.$ref !== "#/components/parameters/ControlPlaneV2IdempotencyKey" &&
+            !(
+              String(parameter?.name ?? "").toLowerCase() === "idempotency-key" &&
+              String(parameter?.in ?? "").toLowerCase() === "header"
+            ),
+        );
+      }
+      if (
+        !operation.parameters.some(
+          (parameter) =>
+            parameter?.$ref === "#/components/parameters/ControlPlaneV2RequestId" ||
+            (String(parameter?.name ?? "").toLowerCase() === "x-request-id" &&
+              String(parameter?.in ?? "").toLowerCase() === "header"),
+        )
+      ) {
+        operation.parameters.push({ $ref: "#/components/parameters/ControlPlaneV2RequestId" });
+      }
+      if (
+        MUTATING_METHODS.has(method) &&
+        !CONTROL_PLANE_V2_POST_READ_PATHS.has(pathname) &&
+        !operation.parameters.some(
+          (parameter) =>
+            parameter?.$ref === "#/components/parameters/ControlPlaneV2IdempotencyKey" ||
+            (String(parameter?.name ?? "").toLowerCase() === "idempotency-key" &&
+              String(parameter?.in ?? "").toLowerCase() === "header"),
+        )
+      ) {
+        operation.parameters.push({ $ref: "#/components/parameters/ControlPlaneV2IdempotencyKey" });
+      }
+      if (method === "get" && pathname === "/api/control-plane/v2/image-workbench/projects/{projectId}/artifacts") {
+        for (const name of ["candidate_id", "source_epoch"]) {
+          if (!operation.parameters.some((parameter) => parameter?.name === name && parameter?.in === "query")) {
+            operation.parameters.push({
+              name,
+              in: "query",
+              required: false,
+              description: `Optional exact current ${name} guard; stale values fail closed.`,
+              schema: { type: "string", minLength: 1 },
+            });
+          }
+        }
+      }
+
+      if (method === "post" && jsonBodySchemas[pathname]) {
+        operation.requestBody = {
+          required: true,
+          content: {
+            "application/json": {
+              schema: jsonBodySchemas[pathname],
+            },
+          },
+        };
+      }
+      if (method === "post" && pathname.startsWith("/api/control-plane/v2/image-workbench/uploads")) {
+        operation.requestBody = {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                required: ["metadata", "image"],
+                properties: {
+                  metadata: {
+                    type: "string",
+                    description: "Strict JSON metadata; server preview and execute schemas differ.",
+                  },
+                  image: {
+                    type: "string",
+                    format: "binary",
+                  },
+                },
+                additionalProperties: false,
+              },
+            },
+          },
+        };
+      }
+
+      operation.responses ??= {};
+      const successStatuses =
+        pathname === "/api/control-plane/v2/image-workbench/uploads/preview"
+          ? ["201"]
+          : pathname === "/api/control-plane/v2/image-workbench/uploads"
+            ? ["200", "201"]
+            : ["200"];
+      if (pathname === "/api/control-plane/v2/image-workbench/uploads/preview") {
+        delete operation.responses["200"];
+      }
+      for (const status of successStatuses) {
+        operation.responses[status] = {
+          description: "Control Plane v2 envelope",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ControlPlaneV2Envelope" },
+            },
+          },
+        };
+      }
+      for (const status of ["400", "401", "403", "404", "409", "410", "415", "422", "428", "429", "500", "503"]) {
+        operation.responses[status] ??= {
+          description: "Control Plane Problem",
+          content: {
+            "application/problem+json": {
+              schema: { $ref: "#/components/schemas/ControlPlaneProblem" },
+            },
+          },
+        };
+      }
+    }
   }
 }
 
@@ -545,6 +1005,8 @@ function normalizeOpenApiDoc(doc) {
   ensureStandardErrorResponses(doc);
   ensureSecuritySchemes(doc);
   doc.paths ??= {};
+  ensureDiscoveredRouteOperations(doc);
+  ensureControlPlaneV2Contracts(doc);
 
   for (const [pathname, pathItem] of Object.entries(doc.paths)) {
     if (!pathItem || typeof pathItem !== "object") continue;

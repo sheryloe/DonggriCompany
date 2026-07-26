@@ -33,6 +33,7 @@ export default function ControlPlaneSummaryCard({ onOpen }: ControlPlaneSummaryC
 
   const enabledScopes = state?.dongri_grigri.project_operators.filter((scope) => scope.enabled).length ?? 0;
   const masterCount = state?.dongri_grigri.master_departments?.length ?? 6;
+  const activeSpec = state?.active_specs?.[0] ?? state?.active_spec ?? null;
 
   return (
     <section className="game-panel p-3" aria-label="Dongri-grigri 운영 요약">
@@ -63,8 +64,14 @@ export default function ControlPlaneSummaryCard({ onOpen }: ControlPlaneSummaryC
         </div>
       ) : (
         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>
+          <div
+            className="rounded-lg border p-2.5"
+            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+          >
+            <div
+              className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: "var(--th-text-muted)" }}
+            >
               <FolderKanban className="h-3.5 w-3.5" />
               작업 루트
             </div>
@@ -72,19 +79,31 @@ export default function ControlPlaneSummaryCard({ onOpen }: ControlPlaneSummaryC
               {state?.root.repo_estate_root.path ?? "불러오는 중"}
             </div>
           </div>
-          <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>
+          <div
+            className="rounded-lg border p-2.5"
+            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+          >
+            <div
+              className="text-[11px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: "var(--th-text-muted)" }}
+            >
               현재 스펙
             </div>
             <div className="mt-1 truncate font-mono text-xs" style={{ color: "var(--th-text-primary)" }}>
-              {state?.active_spec.id ?? "불러오는 중"}
+              {activeSpec?.id ?? "불러오는 중"}
             </div>
             <div className="mt-1 text-xs" style={{ color: "var(--th-text-muted)" }}>
-              {formatStatus(state?.active_spec.phase)}
+              {formatStatus(activeSpec?.phase)}
             </div>
           </div>
-          <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>
+          <div
+            className="rounded-lg border p-2.5"
+            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+          >
+            <div
+              className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: "var(--th-text-muted)" }}
+            >
               <Network className="h-3.5 w-3.5" />
               마스터 에이전트
             </div>
@@ -95,8 +114,14 @@ export default function ControlPlaneSummaryCard({ onOpen }: ControlPlaneSummaryC
               업무마다 필요한 persona를 생성
             </div>
           </div>
-          <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}>
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--th-text-muted)" }}>
+          <div
+            className="rounded-lg border p-2.5"
+            style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)" }}
+          >
+            <div
+              className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: "var(--th-text-muted)" }}
+            >
               <Brain className="h-3.5 w-3.5" />
               기억 / 프로젝트
             </div>

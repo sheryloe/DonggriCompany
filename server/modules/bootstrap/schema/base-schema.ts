@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { applyControlPlaneMutationSchema } from "./control-plane-mutation-schema.ts";
 import { applyMemorySchema } from "./memory-schema.ts";
 import { applyModuleSchema } from "./module-schema.ts";
 
@@ -508,6 +509,7 @@ CREATE TABLE IF NOT EXISTS api_providers (
 
   ensureCanonicalCompatibilityColumns(db);
   ensureCanonicalCompatibilityIndexes(db);
+  applyControlPlaneMutationSchema(db);
   applyMemorySchema(db);
   applyModuleSchema(db);
 }

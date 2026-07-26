@@ -118,8 +118,8 @@ function shouldRetryStatus(status: number): boolean {
 
 function isCsrfTokenInvalidResponse(status: number, body: unknown): boolean {
   if (status !== 403 || !body || typeof body !== "object") return false;
-  const error = (body as { error?: unknown }).error;
-  return error === "csrf_token_invalid" || error === "csrf_required";
+  const error = (body as { error?: unknown; code?: unknown }).error ?? (body as { code?: unknown }).code;
+  return error === "csrf_token_invalid" || error === "csrf_required" || error === "csrf_invalid";
 }
 
 function backoffDelayMs(attempt: number): number {
@@ -191,6 +191,71 @@ export async function postWithIdempotency<T>(
     }
   }
 
+  throw new Error("unreachable_retry_loop");
+}
+
+export async function postMultipartWithIdempotency<T>(
+  url: string,
+  body: FormData,
+  idempotencyKey: string,
+  canRetryAuth = true,
+): Promise<T> {
+  const baseHeaders: HeadersInit = {
+    "Idempotency-Key": idempotencyKey,
+  };
+
+  for (let attempt = 0; attempt <= POST_RETRY_LIMIT; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
+    try {
+      const headers = withAuthHeaders(baseHeaders, "POST");
+      const requestUrl = `${base}${url}`;
+      const response = await fetch(requestUrl, {
+        method: "POST",
+        headers,
+        body,
+        signal: controller.signal,
+        credentials: "same-origin",
+      });
+      if (response.status === 401 && canRetryAuth && url !== SESSION_BOOTSTRAP_PATH) {
+        await bootstrapSession({ force: true });
+        return postMultipartWithIdempotency<T>(url, body, idempotencyKey, false);
+      }
+      if (response.ok) return response.json();
+
+      const responseBody = await response.json().catch(() => null);
+      if (isCsrfTokenInvalidResponse(response.status, responseBody) && canRetryAuth) {
+        await bootstrapSession({ force: true });
+        return postMultipartWithIdempotency<T>(url, body, idempotencyKey, false);
+      }
+      const errCode =
+        typeof responseBody?.code === "string"
+          ? responseBody.code
+          : typeof responseBody?.error === "string"
+            ? responseBody.error
+            : null;
+      const errMsg = errCode ?? responseBody?.detail ?? responseBody?.message ?? `Request failed: ${response.status}`;
+      if (attempt < POST_RETRY_LIMIT && shouldRetryStatus(response.status)) {
+        await sleep(backoffDelayMs(attempt));
+        continue;
+      }
+      throw new ApiRequestError(errMsg, {
+        status: response.status,
+        code: errCode,
+        details: responseBody,
+        url: requestUrl,
+      });
+    } catch (error) {
+      const retryableNetworkError = error instanceof TypeError || isAbortError(error);
+      if (attempt < POST_RETRY_LIMIT && retryableNetworkError) {
+        await sleep(backoffDelayMs(attempt));
+        continue;
+      }
+      throw error instanceof Error ? error : new Error(String(error));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
   throw new Error("unreachable_retry_loop");
 }
 
@@ -285,8 +350,8 @@ export async function request<T>(url: string, init?: RequestInit, canRetryAuth =
       await bootstrapSession({ force: true });
       return request<T>(url, init, false);
     }
-    const errorCode = typeof body?.error === "string" ? body.error : null;
-    throw new ApiRequestError(errorCode ?? body?.message ?? `Request failed: ${r.status}`, {
+    const errorCode = typeof body?.code === "string" ? body.code : typeof body?.error === "string" ? body.error : null;
+    throw new ApiRequestError(errorCode ?? body?.detail ?? body?.message ?? `Request failed: ${r.status}`, {
       status: r.status,
       code: errorCode,
       details: body,
@@ -301,6 +366,21 @@ export function post<T = unknown>(url: string, body?: unknown): Promise<T> {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+export function postJsonWithIdempotencyHeader<T = unknown>(
+  url: string,
+  body: unknown,
+  idempotencyKey: string,
+): Promise<T> {
+  return request<T>(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(body),
   });
 }
 

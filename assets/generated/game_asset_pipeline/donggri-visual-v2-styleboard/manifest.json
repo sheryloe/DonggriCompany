@@ -1,0 +1,35 @@
+{
+  "asset_pack": "donggri_visual_v2",
+  "asset_key": "donggri-visual-v2-styleboard",
+  "status": "source_generated",
+  "engine": "codex_imagegen_builtin",
+  "created_at_kst": "2026-07-13",
+  "source_files": [
+    "assets/generated/game_asset_pipeline/donggri-visual-v2-styleboard/donggri-visual-v2-styleboard-source.png",
+    "assets/generated/game_asset_pipeline/donggri-visual-v2-styleboard/prompt.md"
+  ],
+  "published_files": [
+    "public/generated/donggri-visual-v2/styleboard/donggri-visual-v2-styleboard.png",
+    "public/generated/donggri-visual-v2/characters/character-roster.png",
+    "public/generated/donggri-visual-v2/portraits/portrait-cards.png",
+    "public/generated/donggri-visual-v2/office/office-renewal-v3.png",
+    "public/generated/donggri-visual-v2/props/office-renewal-v3-props-atlas.png",
+    "public/generated/donggri-visual-v2/panels/department-panels.png",
+    "public/generated/donggri-visual-v2/ui/manager-panels.png"
+  ],
+  "derived_assets": {
+    "character_roster": "public/generated/donggri-visual-v2/characters/character-roster.png",
+    "portrait_cards": "public/generated/donggri-visual-v2/portraits/portrait-cards.png",
+    "office_scene": "public/generated/donggri-visual-v2/office/office-renewal-v3.png",
+    "props_atlas": "public/generated/donggri-visual-v2/props/office-renewal-v3-props-atlas.png",
+    "department_panels": "public/generated/donggri-visual-v2/panels/department-panels.png",
+    "manager_panels": "public/generated/donggri-visual-v2/ui/manager-panels.png"
+  },
+  "review": {
+    "requires_human_approval_before_runtime_replacement": true,
+    "notes": [
+      "The style board is a visual direction guide, not a direct runtime sprite sheet.",
+      "Runtime sprites are kept in the separate donggri-visual-v2 namespace and can be replaced one actor at a time."
+    ]
+  }
+}

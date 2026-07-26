@@ -254,6 +254,11 @@ function markMigrationDone(content) {
 
 function main() {
   try {
+    if (process.env.E2E_ISOLATED_RUNTIME === "1") {
+      console.log("[Claw-Empire] v1.0.5 auto-apply: skipped for isolated E2E runtime");
+      return;
+    }
+
     const migration = maybeAutoPatchEnv();
     if (migration.skippedByMarker) return;
     if (!migration.needsMigration) {

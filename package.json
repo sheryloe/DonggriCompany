@@ -23,7 +23,7 @@
     "migrate:custom-skills": "node scripts/migrate-custom-skills-canonical.mjs",
     "predev": "node scripts/auto-apply-v1.0.5.mjs",
     "predev:local": "node scripts/auto-apply-v1.0.5.mjs",
-    "predev:e2e": "node scripts/auto-apply-v1.0.5.mjs",
+    "predev:e2e": "cross-env E2E_ISOLATED_RUNTIME=1 node scripts/auto-apply-v1.0.5.mjs",
     "predev:tailscale": "node scripts/auto-apply-v1.0.5.mjs",
     "prestart": "node scripts/auto-apply-v1.0.5.mjs && node scripts/ensure-remotion-runtime.mjs",
     "prestart:tailscale": "node scripts/auto-apply-v1.0.5.mjs && node scripts/ensure-remotion-runtime.mjs",

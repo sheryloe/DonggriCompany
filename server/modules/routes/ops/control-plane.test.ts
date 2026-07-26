@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   ControlPlaneSourceAdapter,
@@ -66,7 +67,9 @@ const nativeReadFileSync = fs.readFileSync.bind(fs);
 const nativeStatSync = fs.statSync.bind(fs);
 
 function normalizeFixturePath(file: fs.PathLike | number): string {
-  return String(file).replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
+  const normalized = String(file).replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
+  const controlRootIndex = normalized.indexOf("g:/donggri_devdrive");
+  return controlRootIndex >= 0 ? normalized.slice(controlRootIndex) : normalized;
 }
 
 function fixtureSourceFile(relativePath: string, content: string): ControlPlaneSourceFile {
@@ -403,9 +406,9 @@ describe("control plane routes", () => {
     const payload = res.payload as any;
     expect(res.statusCode).toBe(200);
     expect(payload.ok).toBe(true);
-    expect(payload.root.path).toBe("G:\\Donggri_DevDrive");
-    expect(payload.root.repo_estate_root.path).toBe("G:\\Donggri_DevDrive\\repos");
-    expect(payload.root.runtime_projection_app.path).toBe("G:\\Donggri_DevDrive\\repos\\DonggriCompany");
+    expect(payload.root.path).toBe(FIXTURE_CONTROL_ROOT);
+    expect(payload.root.repo_estate_root.path).toBe(path.join(FIXTURE_CONTROL_ROOT, "repos"));
+    expect(payload.root.runtime_projection_app.path).toBe(path.join(FIXTURE_CONTROL_ROOT, "repos", "DonggriCompany"));
     expect(payload.generated_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(payload.source_epoch).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(payload.degraded).toBe(false);
@@ -418,7 +421,7 @@ describe("control plane routes", () => {
       replacement: "active_specs[]",
     });
     expect(payload.registry.projects).toEqual(expect.any(Array));
-    expect(payload.registry.repo_estate_root).toBe("G:\\Donggri_DevDrive\\repos");
+    expect(payload.registry.repo_estate_root).toBe(path.join(FIXTURE_CONTROL_ROOT, "repos"));
     expect(payload.sync.tables_exist).toBe(false);
     expect(payload.runner.tables_exist).toBe(false);
     expect(payload.codex_assets.exposure_policy).toBe("summary-only-no-raw-config-no-secrets-no-transcripts");

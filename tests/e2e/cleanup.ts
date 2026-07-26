@@ -67,6 +67,36 @@ async function deleteById(
   }
 }
 
+async function discardTaskWorktrees(
+  request: APIRequestContext,
+  taskIds: string[],
+  errors: string[],
+  requestHeaders?: Record<string, string>,
+): Promise<void> {
+  for (const id of taskIds) {
+    try {
+      let response = await request.post(`/api/tasks/${id}/discard`, requestHeaders ? { headers: requestHeaders } : {});
+      if (response.status() === 401 && !requestHeaders) {
+        await request.get("/api/auth/session");
+        response = await request.post(`/api/tasks/${id}/discard`);
+      }
+      for (let attempt = 1; attempt <= 8 && TRANSIENT_HTTP_STATUSES.has(response.status()); attempt += 1) {
+        await sleep(250 * attempt);
+        response = await request.post(`/api/tasks/${id}/discard`, requestHeaders ? { headers: requestHeaders } : {});
+        if (response.status() === 401 && !requestHeaders) {
+          await request.get("/api/auth/session");
+          response = await request.post(`/api/tasks/${id}/discard`);
+        }
+      }
+      if (response.ok() || response.status() === 404) continue;
+      const text = await response.text();
+      errors.push(`/api/tasks/${id}/discard -> ${response.status()}: ${text.slice(0, 300)}`);
+    } catch (error) {
+      errors.push(`/api/tasks/${id}/discard -> ${String(error)}`);
+    }
+  }
+}
+
 async function waitForTaskDeletion(
   request: APIRequestContext,
   taskIds: string[],
@@ -259,6 +289,7 @@ export async function cleanupE2EResources(request: APIRequestContext, targets: E
   const relatedTaskIds = await collectRelatedTaskIds(request, projectIds, departmentIds, errors, requestHeaders);
   const taskIds = uniqueIds([...(targets.taskIds ?? []), ...relatedTaskIds]);
 
+  await discardTaskWorktrees(request, taskIds, errors, requestHeaders);
   await deleteById(request, "/api/tasks", taskIds, errors, requestHeaders);
   await waitForTaskDeletion(request, taskIds, errors, requestHeaders);
   await sleep(300);
@@ -270,6 +301,7 @@ export async function cleanupE2EResources(request: APIRequestContext, targets: E
   await deleteById(request, "/api/agents", agentIds, errors, requestHeaders);
   await deleteById(request, "/api/api-providers", apiProviderIds, errors, requestHeaders);
   const leftoverTaskIds = await collectRelatedTaskIds(request, projectIds, departmentIds, errors, requestHeaders);
+  await discardTaskWorktrees(request, leftoverTaskIds, errors, requestHeaders);
   await deleteById(request, "/api/tasks", leftoverTaskIds, errors, requestHeaders);
   await waitForTaskDeletion(request, leftoverTaskIds, errors, requestHeaders);
   await deleteById(request, "/api/projects", projectIds, errors, requestHeaders);

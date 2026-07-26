@@ -242,7 +242,12 @@ function inspectWorktreeVerification(wtInfo?: {
   };
 }
 
-export function registerWorktreeAndUsageRoutes(ctx: RuntimeContext): {
+export function registerWorktreeAndUsageRoutes(
+  ctx: RuntimeContext,
+  deps: {
+    runJulesSessionList?: (profileHome: string) => string;
+  } = {},
+): {
   refreshCliUsageData: () => Promise<Record<string, CliUsageEntry>>;
 } {
   const {
@@ -264,6 +269,20 @@ export function registerWorktreeAndUsageRoutes(ctx: RuntimeContext): {
     getGeminiProjectId,
     broadcast,
   } = ctx;
+  const runJulesSessionList =
+    deps.runJulesSessionList ??
+    ((profileHome: string) => {
+      const envPatch: NodeJS.ProcessEnv = { ...process.env, HOME: profileHome };
+      if (process.platform === "win32") {
+        envPatch.USERPROFILE = profileHome;
+      }
+      return execFileSync("jules", ["remote", "list", "--session"], {
+        env: envPatch,
+        timeout: 8_000,
+        stdio: "pipe",
+        shell: process.platform === "win32",
+      }).toString("utf8");
+    });
 
   app.get("/api/tasks/:id/diff", (req, res) => {
     const id = String(req.params.id);
@@ -870,17 +889,8 @@ export function registerWorktreeAndUsageRoutes(ctx: RuntimeContext): {
     lastActive: string | null;
     error: string | null;
   } {
-    const envPatch: NodeJS.ProcessEnv = { ...process.env, HOME: profileHome };
-    if (process.platform === "win32") {
-      envPatch.USERPROFILE = profileHome;
-    }
     try {
-      const output = execFileSync("jules", ["remote", "list", "--session"], {
-        env: envPatch,
-        timeout: 8_000,
-        stdio: "pipe",
-        shell: process.platform === "win32",
-      }).toString("utf8");
+      const output = runJulesSessionList(profileHome);
       const parsed = parseJulesSessionList(output);
       return { counts: parsed.counts, lastActive: parsed.lastActive, error: null };
     } catch (error) {

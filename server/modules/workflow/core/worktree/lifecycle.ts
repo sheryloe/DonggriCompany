@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { isExactGitWorkingTreeRoot, resolveGitWorkingTreeRoot } from "../git-repository-root.ts";
 
 export type WorktreeInfo = {
   worktreePath: string;
@@ -39,20 +40,18 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
   const gitWorktreeAddTimeoutMs = Math.max(15_000, Number(process.env.WORKTREE_ADD_TIMEOUT_MS ?? 120_000) || 120_000);
   const allowGitBootstrap = process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP === "1";
 
-  function isGitRepo(dir: string): boolean {
-    try {
-      execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: dir, stdio: "pipe", timeout: 5000 });
-      return true;
-    } catch {
-      return false;
-    }
-  }
+  const isGitRepo = isExactGitWorkingTreeRoot;
 
   function ensureWorktreeBootstrapRepo(projectPath: string, taskId: string): boolean {
     if (isGitRepo(projectPath)) return true;
     if (!allowGitBootstrap) {
       appendTaskLog(taskId, "system", "execution_blocked git_repo_required");
       appendTaskLog(taskId, "system", "Git bootstrap is disabled. Set WORKTREE_ALLOW_GIT_BOOTSTRAP=1 to enable it.");
+      return false;
+    }
+    if (resolveGitWorkingTreeRoot(projectPath)) {
+      appendTaskLog(taskId, "system", "execution_blocked git_repo_required");
+      appendTaskLog(taskId, "system", "Git bootstrap cannot create a nested repository inside another working tree.");
       return false;
     }
     const shortId = taskId.slice(0, 8);
@@ -328,6 +327,34 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
     if (!info) return;
 
     const shortId = taskId.slice(0, 8);
+    const resolvedWorktreePath = path.resolve(info.worktreePath);
+    const dependencyLinkPath = path.join(resolvedWorktreePath, "node_modules");
+
+    if (path.dirname(dependencyLinkPath) === resolvedWorktreePath) {
+      try {
+        const dependencyStat = fs.lstatSync(dependencyLinkPath);
+        if (dependencyStat.isSymbolicLink()) {
+          try {
+            fs.unlinkSync(dependencyLinkPath);
+          } catch {
+            if (process.platform !== "win32") throw new Error(`Failed to unlink ${dependencyLinkPath}`);
+            fs.rmdirSync(dependencyLinkPath);
+          }
+          appendTaskLog(taskId, "system", `Worktree dependency link removed: ${dependencyLinkPath}`);
+        } else {
+          appendTaskLog(
+            taskId,
+            "system",
+            `Worktree dependency path preserved because it is not a link: ${dependencyLinkPath}`,
+          );
+        }
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT") {
+          appendTaskLog(taskId, "system", `Worktree dependency link cleanup skipped: ${String(error)}`);
+        }
+      }
+    }
 
     try {
       execFileSync("git", ["worktree", "remove", info.worktreePath, "--force"], {
@@ -344,6 +371,21 @@ export function createWorktreeLifecycleTools(deps: CreateWorktreeLifecycleToolsD
         execFileSync("git", ["worktree", "prune"], { cwd: projectPath, stdio: "pipe", timeout: 5000 });
       } catch {
         /* ignore */
+      }
+    }
+
+    try {
+      const remainingStat = fs.lstatSync(resolvedWorktreePath);
+      if (
+        remainingStat.isDirectory() &&
+        !remainingStat.isSymbolicLink() &&
+        fs.readdirSync(resolvedWorktreePath).length === 0
+      ) {
+        fs.rmdirSync(resolvedWorktreePath);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        appendTaskLog(taskId, "system", `Empty worktree directory cleanup skipped: ${String(error)}`);
       }
     }
 

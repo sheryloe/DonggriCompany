@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
+import {
+  ControlPlaneSourceAdapter,
+  type ControlPlaneSourceFile,
+  type ControlPlaneSourceSnapshot,
+} from "../../control-plane/source-adapter.ts";
 import { registerControlPlaneRoutes } from "./control-plane.ts";
 
 vi.setConfig({ testTimeout: 15_000 });
@@ -52,8 +57,274 @@ function createFakeDb() {
   };
 }
 
+const FIXTURE_CONTROL_ROOT = "G:\\Donggri_DevDrive";
+const FIXTURE_CONTROL_PLANE_ROOT = `${FIXTURE_CONTROL_ROOT}\\storage\\codex-control`;
+const FIXTURE_ACTIVE_SPEC_ID = "20260725-control-plane-route-fixture-v1";
+const FIXTURE_SECONDARY_SPEC_ID = "20260725-secondary-route-fixture-v1";
+const nativeExistsSync = fs.existsSync.bind(fs);
+const nativeReadFileSync = fs.readFileSync.bind(fs);
+const nativeStatSync = fs.statSync.bind(fs);
+
+function normalizeFixturePath(file: fs.PathLike | number): string {
+  return String(file).replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
+}
+
+function fixtureSourceFile(relativePath: string, content: string): ControlPlaneSourceFile {
+  return {
+    relative_path: relativePath,
+    absolute_path: `${FIXTURE_CONTROL_ROOT}\\${relativePath.replace(/\//g, "\\")}`,
+    exists: true,
+    size: Buffer.byteLength(content),
+    mtime: "2026-07-25T00:00:00.000Z",
+    sha256: "1".repeat(64),
+    content,
+    error: null,
+  };
+}
+
+const fixtureActiveSpecs = [
+  {
+    id: FIXTURE_ACTIVE_SPEC_ID,
+    status: "implementation",
+    phase: "preflight",
+    related_repo: `${FIXTURE_CONTROL_ROOT}\\repos\\DonggriCompany`,
+    related_repos: [`${FIXTURE_CONTROL_ROOT}\\repos\\DonggriCompany`],
+    scope: "Control Plane route fixture",
+    heading: "Current Active Spec (Control Plane route fixture)",
+    line: 1,
+    next_recommended_action: null,
+  },
+  {
+    id: FIXTURE_SECONDARY_SPEC_ID,
+    status: "review",
+    phase: "fixture-review",
+    related_repo: `${FIXTURE_CONTROL_ROOT}\\repos\\BloggerGent`,
+    related_repos: [`${FIXTURE_CONTROL_ROOT}\\repos\\BloggerGent`],
+    scope: "Secondary route fixture",
+    heading: "Current Active Spec (Secondary route fixture)",
+    line: 8,
+    next_recommended_action: null,
+  },
+];
+
+const fixtureProjects: ControlPlaneSourceSnapshot["projects"] = [
+  {
+    key: "DonggriCompany",
+    path: "repos/DonggriCompany",
+    type: "git-repo",
+    has_agents: true,
+    status: "active",
+    summary: "Primary runtime projection fixture.",
+    operation_agent: null,
+    enabled: true,
+  },
+  {
+    key: "BloggerGent",
+    path: "repos/BloggerGent",
+    type: "git-repo",
+    has_agents: true,
+    status: "active",
+    summary: "Publishing fixture.",
+    operation_agent: null,
+    enabled: true,
+  },
+  {
+    key: "DonggrolGameBook",
+    path: "repos/DonggrolGameBook",
+    type: "git-repo",
+    has_agents: true,
+    status: "active",
+    summary: "GameBook fixture.",
+    operation_agent: null,
+    enabled: true,
+  },
+  {
+    key: "CardNewsAgent",
+    path: "repos/CardNewsAgent",
+    type: "git-repo",
+    has_agents: true,
+    status: "archived",
+    summary: "Archived fixture.",
+    operation_agent: null,
+    enabled: false,
+  },
+  {
+    key: "alpha-shop",
+    path: "repos/alpha-shop",
+    type: "folder",
+    has_agents: false,
+    status: "candidate",
+    summary: "Disabled candidate fixture.",
+    operation_agent: null,
+    enabled: false,
+  },
+];
+
+const fixtureProjectsSource = fixtureSourceFile(
+  "storage/codex-control/registry/projects.yaml",
+  "projects:\n  DonggriCompany:\n    path: repos/DonggriCompany\n    status: active\n",
+);
+const fixtureActiveSpecsSource = fixtureSourceFile(
+  "storage/codex-control/specs/_active.md",
+  `- Spec ID: \`${FIXTURE_ACTIVE_SPEC_ID}\`\n- Spec ID: \`${FIXTURE_SECONDARY_SPEC_ID}\`\n`,
+);
+const fixtureSnapshot: ControlPlaneSourceSnapshot = {
+  generated_at: "2026-07-25T00:00:00.000Z",
+  source_epoch: `sha256:${"a".repeat(64)}`,
+  projection_epoch: `sha256:${"b".repeat(64)}`,
+  degraded: false,
+  parse_errors: [],
+  active_specs: fixtureActiveSpecs,
+  active_spec: fixtureActiveSpecs[0],
+  next_recommended_action: null,
+  projects: fixtureProjects,
+  files: {
+    projects: fixtureProjectsSource,
+    active_specs: fixtureActiveSpecsSource,
+  },
+};
+
+const fixtureFileContents = new Map<string, string>();
+const registerFixtureFile = (absolutePath: string, content: string) => {
+  fixtureFileContents.set(normalizeFixturePath(absolutePath), content);
+};
+
+registerFixtureFile(
+  `${FIXTURE_CONTROL_PLANE_ROOT}\\specs\\${FIXTURE_ACTIVE_SPEC_ID}\\approvals.md`,
+  "# Fixture approval ledger\n",
+);
+for (const name of [
+  "metadata.md",
+  "requirements.md",
+  "design.md",
+  "tasks.md",
+  "repo-map.md",
+  "approvals.md",
+  "evidence.md",
+  "handoff.md",
+  "learnings.md",
+]) {
+  registerFixtureFile(
+    `${FIXTURE_CONTROL_PLANE_ROOT}\\specs\\20260714-donggricompany-95-master-operating-system-v1\\${name}`,
+    `# ${name} route fixture\n`,
+  );
+}
+registerFixtureFile(
+  `${FIXTURE_CONTROL_PLANE_ROOT}\\quality\\master-95\\QUALITY_SCORECARD.md`,
+  "# Master95 route fixture\n",
+);
+registerFixtureFile(
+  `${FIXTURE_CONTROL_PLANE_ROOT}\\quality\\master-95\\SCORING_RULES.json`,
+  JSON.stringify({
+    certification_state: "not_certified_foundation_in_progress",
+    targets: {
+      design_specification: 98,
+      implementation_execution_evidence: 97,
+      aggregate: 97.45,
+      agy_each_axis_minimum: 950,
+    },
+    aggregate_formula: {},
+    hard_gates: Array.from({ length: 10 }, (_, index) => ({
+      id: `M95-G${String(index + 1).padStart(2, "0")}`,
+      name: `fixture_gate_${index + 1}`,
+      required: true,
+      failure_effect: "block_certification",
+    })),
+  }),
+);
+registerFixtureFile(
+  `${FIXTURE_CONTROL_PLANE_ROOT}\\quality\\master-95\\EVIDENCE_INDEX.yaml`,
+  "certification_state: not_certified_foundation_in_progress\nevidence: []\nhard_gates: {}\n",
+);
+registerFixtureFile(
+  `${FIXTURE_CONTROL_PLANE_ROOT}\\quality\\master-95\\requirements-traceability.yaml`,
+  `requirements:
+  - id: M95-R001
+    title: Hermetic route fixture
+    priority: must
+    status: implemented
+    design_refs: []
+    interfaces: []
+    tests: []
+    evidence_refs:
+      - EV-FIXTURE-001
+`,
+);
+
+function isFixtureControlPath(file: fs.PathLike | number): boolean {
+  const normalized = normalizeFixturePath(file);
+  return normalized === "g:/donggri_devdrive" || normalized.startsWith("g:/donggri_devdrive/");
+}
+
+function fixtureExistsSync(file: fs.PathLike): boolean {
+  const normalized = normalizeFixturePath(file);
+  if (fixtureFileContents.has(normalized)) return true;
+  if (normalized === "g:/donggri_devdrive/repos/alpha-shop") return true;
+  if (isFixtureControlPath(file)) return false;
+  return nativeExistsSync(file);
+}
+
+function fixtureReadFileSync(file: fs.PathOrFileDescriptor, options?: unknown): string | Buffer {
+  const normalized = normalizeFixturePath(file);
+  const content = fixtureFileContents.get(normalized);
+  if (content !== undefined) {
+    const encoding = typeof options === "string" ? options : (options as { encoding?: string } | undefined)?.encoding;
+    return encoding ? content : Buffer.from(content);
+  }
+  if (isFixtureControlPath(file)) {
+    const error = Object.assign(new Error(`ENOENT: no such file or directory, open '${String(file)}'`), {
+      code: "ENOENT",
+    });
+    throw error;
+  }
+  return (nativeReadFileSync as (...args: unknown[]) => string | Buffer)(file, options);
+}
+
+function fixtureStatSync(file: fs.PathLike, options?: unknown): fs.Stats {
+  const normalized = normalizeFixturePath(file);
+  const content = fixtureFileContents.get(normalized);
+  if (content !== undefined) {
+    const mtime = new Date("2026-07-25T00:00:00.000Z");
+    return {
+      size: Buffer.byteLength(content),
+      mtime,
+      mtimeMs: mtime.getTime(),
+      isFile: () => true,
+      isDirectory: () => false,
+    } as fs.Stats;
+  }
+  if (normalized === "g:/donggri_devdrive/repos/alpha-shop") {
+    return {
+      size: 0,
+      mtime: new Date("2026-07-25T00:00:00.000Z"),
+      mtimeMs: Date.parse("2026-07-25T00:00:00.000Z"),
+      isFile: () => false,
+      isDirectory: () => true,
+    } as fs.Stats;
+  }
+  if (isFixtureControlPath(file)) {
+    const error = Object.assign(new Error(`ENOENT: no such file or directory, stat '${String(file)}'`), {
+      code: "ENOENT",
+    });
+    throw error;
+  }
+  return (nativeStatSync as (...args: unknown[]) => fs.Stats)(file, options);
+}
+
+beforeEach(() => {
+  vi.spyOn(ControlPlaneSourceAdapter.prototype, "readSnapshot").mockImplementation(() =>
+    structuredClone(fixtureSnapshot),
+  );
+  vi.spyOn(fs, "existsSync").mockImplementation(fixtureExistsSync);
+  vi.spyOn(fs, "readFileSync").mockImplementation(fixtureReadFileSync as typeof fs.readFileSync);
+  vi.spyOn(fs, "statSync").mockImplementation(fixtureStatSync as typeof fs.statSync);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 function mockHarnessMetaApprovalLedger() {
-  const originalReadFileSync = fs.readFileSync.bind(fs);
   const approvalsTable = `# Approvals
 
 | approval_id | status | created_at | expires_at | requester_role | approver | scope | repo | resolved_paths | operation_class | command_digest | risk_level | policy_decision | approval_text_ref | preflight_result | postflight_result | evidence_ref | reason_code |
@@ -65,12 +336,11 @@ function mockHarnessMetaApprovalLedger() {
     if (normalized.includes("/storage/codex-control/specs/") && normalized.endsWith("/approvals.md")) {
       return approvalsTable;
     }
-    return originalReadFileSync(file, options as never);
+    return fixtureReadFileSync(file, options) as never;
   });
 }
 
 function mockHarnessRunApprovalLedger() {
-  const originalReadFileSync = fs.readFileSync.bind(fs);
   const approvalsTable = `# Approvals
 
 | approval_id | status | created_at | expires_at | requester_role | approver | scope | repo | resolved_paths | operation_class | command_digest | risk_level | policy_decision | approval_text_ref | preflight_result | postflight_result | evidence_ref | reason_code |
@@ -82,12 +352,11 @@ function mockHarnessRunApprovalLedger() {
     if (normalized.includes("/storage/codex-control/specs/") && normalized.endsWith("/approvals.md")) {
       return approvalsTable;
     }
-    return originalReadFileSync(file, options as never);
+    return fixtureReadFileSync(file, options) as never;
   });
 }
 
 function mockEngineSyncApprovalLedger({ includeAppServer = false } = {}) {
-  const originalReadFileSync = fs.readFileSync.bind(fs);
   const appServerRow = includeAppServer
     ? `| APR-CODEX-APP-SERVER-POC-001 | approved | 2026-07-25T00:00:00+09:00 | 2026-12-31T23:59:59+09:00 | CONTROL | user | Codex app-server read-only PoC fixture | G:\\Donggri_DevDrive\\repos\\DonggriCompany | control_plane_engine_* test tables | codex-app-server-poc | app-server status only | medium | allow | test fixture | pass | pass | EV-CODEX-APP-SERVER-POC | route-test |\n`
     : "";
@@ -102,12 +371,11 @@ ${appServerRow}`;
     if (normalized.includes("/storage/codex-control/specs/") && normalized.endsWith("/approvals.md")) {
       return approvalsTable;
     }
-    return originalReadFileSync(file, options as never);
+    return fixtureReadFileSync(file, options) as never;
   });
 }
 
 function mockNoEngineSyncApprovalLedger() {
-  const originalReadFileSync = fs.readFileSync.bind(fs);
   const approvalsTable = `# Approvals
 
 | approval_id | status | created_at | expires_at | requester_role | approver | scope | repo | resolved_paths | operation_class | command_digest | risk_level | policy_decision | approval_text_ref | preflight_result | postflight_result | evidence_ref | reason_code |
@@ -119,7 +387,7 @@ function mockNoEngineSyncApprovalLedger() {
     if (normalized.includes("/storage/codex-control/specs/") && normalized.endsWith("/approvals.md")) {
       return approvalsTable;
     }
-    return originalReadFileSync(file, options as never);
+    return fixtureReadFileSync(file, options) as never;
   });
 }
 
@@ -194,6 +462,84 @@ describe("control plane routes", () => {
     expect(payload.quality_harness.release_hygiene.policy).toContain("diagnostic-only");
     expect(JSON.stringify(payload)).not.toContain("developer_instructions");
     vi.restoreAllMocks();
+  });
+
+  it("propagates missing Control Plane sources as a degraded empty active-spec projection", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("agentmemory offline"));
+    const sourceMissingErrors = [
+      {
+        source: "storage/codex-control/registry/projects.yaml",
+        code: "source_missing",
+        message: "Control Plane source file is missing",
+        path: fixtureProjectsSource.absolute_path,
+        line: null,
+        column: null,
+      },
+      {
+        source: "storage/codex-control/specs/_active.md",
+        code: "source_missing",
+        message: "Control Plane source file is missing",
+        path: fixtureActiveSpecsSource.absolute_path,
+        line: null,
+        column: null,
+      },
+    ];
+    vi.mocked(ControlPlaneSourceAdapter.prototype.readSnapshot).mockImplementation(() => ({
+      ...structuredClone(fixtureSnapshot),
+      degraded: true,
+      parse_errors: structuredClone(sourceMissingErrors),
+      active_specs: [],
+      active_spec: null,
+      projects: [],
+      files: {
+        projects: {
+          ...fixtureProjectsSource,
+          exists: false,
+          size: null,
+          mtime: null,
+          sha256: null,
+          content: null,
+          error: "source_missing",
+        },
+        active_specs: {
+          ...fixtureActiveSpecsSource,
+          exists: false,
+          size: null,
+          mtime: null,
+          sha256: null,
+          content: null,
+          error: "source_missing",
+        },
+      },
+    }));
+    const { app, routes } = createFakeApp();
+    registerControlPlaneRoutes({ app: app as any, db: createFakeDb() as any });
+
+    const res = createFakeResponse();
+    await routes.get("GET /api/control-plane/v1/specs/active")?.({}, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toMatchObject({
+      ok: true,
+      degraded: true,
+      active_specs: [],
+      active_spec: {
+        id: null,
+        deprecated: true,
+        replacement: "active_specs[]",
+        parse_error: "active_spec_unavailable",
+      },
+      parse_errors: expect.arrayContaining([
+        expect.objectContaining({
+          source: "storage/codex-control/registry/projects.yaml",
+          code: "source_missing",
+        }),
+        expect.objectContaining({
+          source: "storage/codex-control/specs/_active.md",
+          code: "source_missing",
+        }),
+      ]),
+    });
   });
 
   it("marks AgentMemory viewer reachable only for 2xx responses", async () => {
@@ -700,9 +1046,9 @@ describe("control plane routes", () => {
     const oldThreadId = process.env.CODEX_THREAD_ID;
     delete process.env.CODEX_THREAD_ID;
     const sessionThreadId = "019e6290-f27f-7763-bf2a-71940ebd6945";
-    const originalExistsSync = fs.existsSync.bind(fs);
+    const originalExistsSync = fixtureExistsSync;
     const originalReaddirSync = fs.readdirSync.bind(fs);
-    const originalStatSync = fs.statSync.bind(fs);
+    const originalStatSync = fixtureStatSync;
 
     vi.spyOn(fs, "existsSync").mockImplementation((file) => {
       const normalized = String(file).replace(/\\/g, "/");

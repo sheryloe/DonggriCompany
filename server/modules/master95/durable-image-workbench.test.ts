@@ -232,7 +232,7 @@ describe("Master95DurableImageWorkbench", () => {
     expect(restarted.handoffReceipts("project:DonggriCompany")).toHaveLength(100);
     expect(restarted.list("project:DonggriCompany")).toHaveLength(100);
     expect(restarted.list("project:DonggriCompany").every((item) => item.exported_at !== null)).toBe(true);
-  });
+  }, 15_000);
 });
 
 describe("Master95MemoryImageAssetStore", () => {

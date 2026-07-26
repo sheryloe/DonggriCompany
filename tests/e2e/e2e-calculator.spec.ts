@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type APIResponse } from "@playwright/test";
 import http from "node:http";
-import path from "node:path";
 import { cleanupE2EResources } from "./cleanup";
+import { createE2EGitProject } from "./fixtures/git-project";
 
 type ApiAuthHeaders = {
   read: Record<string, string>;
@@ -284,6 +284,36 @@ async function waitForTaskDetail(
   return expectOkJson<TaskDetail>(response, "GET /api/tasks/:id");
 }
 
+async function waitForAutomaticRunToSettle(params: {
+  request: APIRequestContext;
+  taskId: string;
+  readHeaders: Record<string, string>;
+  timeoutMs: number;
+}): Promise<void> {
+  const { request, taskId, readHeaders, timeoutMs } = params;
+  const startedAt = Date.now();
+  let observedExecution = false;
+  let lastDetail: TaskDetail | null = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const detail = await waitForTaskDetail(request, taskId, readHeaders);
+    lastDetail = detail;
+    const messages = (detail.logs ?? []).map((entry) => String(entry.message ?? ""));
+    observedExecution =
+      observedExecution ||
+      detail.task.status === "in_progress" ||
+      messages.some((message) => message.startsWith("Git worktree created:"));
+    if (observedExecution && detail.task.status !== "planned" && detail.task.status !== "in_progress") {
+      return;
+    }
+    await sleep(200);
+  }
+
+  throw new Error(
+    `automatic task run did not settle before explicit rerun (task=${taskId}, observed=${observedExecution}, status=${lastDetail?.task.status ?? "unknown"})`,
+  );
+}
+
 async function waitForTaskRunOutcome(params: {
   request: APIRequestContext;
   taskId: string;
@@ -425,6 +455,7 @@ async function createDirectiveExecutionFixture(params: {
     projectIds: [] as string[],
     requestHeaders: apiAuth.write,
   };
+  const projectPath = createE2EGitProject(seed);
 
   const mock = await startMockOpenAiServer(`pm-${seed}`);
   try {
@@ -433,7 +464,7 @@ async function createDirectiveExecutionFixture(params: {
         headers: apiAuth.write,
         data: {
           name: `e2e-provider-${seed}`,
-          type: "openai",
+          type: "ollama",
           base_url: mock.baseUrl,
           api_key: "e2e-local-key",
           enabled: true,
@@ -551,7 +582,7 @@ async function createDirectiveExecutionFixture(params: {
         headers: apiAuth.write,
         data: {
           name: `e2e-pm-project-${seed}`,
-          project_path: path.resolve("test-results", "e2e", "pm-orchestration", seed),
+          project_path: projectPath,
           core_goal: "Validate PM orchestration E2E delegation run review relay",
           assignment_mode: "manual",
           agent_ids: [
@@ -642,7 +673,12 @@ test.describe("E2E PM orchestration (simulation + conditional live telegram)", (
         readHeaders: apiAuth.read,
         writeHeaders: apiAuth.write,
       });
-      await sleep(8_000);
+      await waitForAutomaticRunToSettle({
+        request,
+        taskId: task.id,
+        readHeaders: apiAuth.read,
+        timeoutMs: 90_000,
+      });
 
       let lifecycle: { outcome: "done" | "failed"; detail: TaskDetail; seenStatuses: Set<string> } | null = null;
       for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -819,7 +855,12 @@ test.describe("E2E PM orchestration (simulation + conditional live telegram)", (
         readHeaders: apiAuth.read,
         writeHeaders: apiAuth.write,
       });
-      await sleep(8_000);
+      await waitForAutomaticRunToSettle({
+        request,
+        taskId: task.id,
+        readHeaders: apiAuth.read,
+        timeoutMs: 90_000,
+      });
       await expectOkJson(
         await request.patch(`/api/tasks/${task.id}`, {
           headers: apiAuth.write,

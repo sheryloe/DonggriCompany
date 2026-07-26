@@ -1,12 +1,23 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import path from "node:path";
 
 const isWindows = process.platform === "win32";
 const corepackBin = isWindows ? "corepack.cmd" : "corepack";
 const nodeBin = process.execPath;
+const e2eApiAuthToken = randomBytes(32).toString("hex");
+const e2eRuntimeDir = path.resolve(process.cwd(), ".tmp", "e2e-runtime");
 const e2eEnv = {
   ...process.env,
+  AGENT_GUIDE_ROOT: path.join(e2eRuntimeDir, "projects", "agent-guides"),
+  API_AUTH_TOKEN: e2eApiAuthToken,
+  E2E_PROXY_API_AUTH_TOKEN: e2eApiAuthToken,
+  E2E_ISOLATED_RUNTIME: "1",
+  OAUTH_ENCRYPTION_SECRET: randomBytes(32).toString("hex"),
+  PROJECT_PATH_ALLOWED_ROOTS: process.cwd(),
+  SESSION_SECRET: randomBytes(32).toString("hex"),
   NODE_OPTIONS: [process.env.NODE_OPTIONS, "--disable-warning=ExperimentalWarning"].filter(Boolean).join(" "),
 };
 

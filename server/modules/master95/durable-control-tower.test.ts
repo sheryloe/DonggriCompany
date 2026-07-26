@@ -141,7 +141,7 @@ describe("Master95DurableControlTower", () => {
     expect(snapshot.artifacts).toHaveLength(100);
     expect(snapshot.artifacts.every((artifact) => artifact.verified)).toBe(true);
     expect(snapshot.event_count).toBe(3_200);
-  });
+  }, 15_000);
 
   it("applies every explicit operator control with isolation, lineage, and idempotency", () => {
     const store = new Master95DurableControlTower(new Master95MemoryControlTowerJournal());

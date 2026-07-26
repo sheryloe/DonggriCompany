@@ -20,6 +20,7 @@ tasks/todo.md
 .env
 .env.*
 !.env.example
+!deploy/.env.production.template
 .direnv/
 *.pem
 *.key

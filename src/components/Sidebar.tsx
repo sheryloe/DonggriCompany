@@ -55,12 +55,13 @@ function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; 
       onClick={onClick}
       className={`sidebar-nav-item ${active ? "active font-semibold" : ""}`}
       title={item.label}
+      aria-label={item.label}
     >
       <span className="sidebar-nav-icon" aria-hidden="true">
         <Icon className="h-4 w-4" strokeWidth={2} />
       </span>
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      <span className="font-mono text-[10px]" style={{ color: "var(--th-text-muted)" }}>
+      <span className="font-mono text-[10px]" style={{ color: "var(--th-text-muted)" }} aria-hidden="true">
         {item.mark}
       </span>
     </button>

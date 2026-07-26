@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import fs from "node:fs";
 import express from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
@@ -6,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { SESSION_AUTH_TOKEN } from "../../../config/runtime.ts";
 import { getCsrfToken } from "../../../security/auth.ts";
 import { applyControlPlaneMutationSchema } from "../../bootstrap/schema/control-plane-mutation-schema.ts";
+import { ControlPlaneSourceAdapter, type ControlPlaneSourceSnapshot } from "../../control-plane/source-adapter.ts";
 import {
   CONTROL_PLANE_V2_READ_OPERATION_IDS,
   CONTROL_PLANE_V2_READ_OPERATION_PATHS,
@@ -13,6 +15,68 @@ import {
 import { registerControlPlaneRoutes } from "./control-plane.ts";
 
 vi.setConfig({ testTimeout: 20_000 });
+
+const FIXTURE_SPEC_ID = "20260726-control-plane-v2-read-fixture-v1";
+const FIXTURE_CONTROL_ROOT = "g:/donggri_devdrive";
+const nativeExistsSync = fs.existsSync.bind(fs);
+const fixtureSourceSnapshot: ControlPlaneSourceSnapshot = {
+  generated_at: "2026-07-26T00:00:00.000Z",
+  source_epoch: `sha256:${"9".repeat(64)}`,
+  projection_epoch: `sha256:${"8".repeat(64)}`,
+  degraded: false,
+  parse_errors: [],
+  active_specs: [
+    {
+      id: FIXTURE_SPEC_ID,
+      status: "implementation",
+      phase: "ci-read-integration",
+      related_repo: "G:\\Donggri_DevDrive\\repos\\DonggriCompany",
+      related_repos: ["G:\\Donggri_DevDrive\\repos\\DonggriCompany"],
+      scope: "Hermetic Control Plane v2 read-operation fixture",
+      heading: "Current Active Spec (Control Plane v2 read fixture)",
+      line: 1,
+      next_recommended_action: null,
+    },
+  ],
+  active_spec: null,
+  next_recommended_action: null,
+  projects: [
+    {
+      key: "DonggriCompany",
+      path: "repos/__control-plane-v2-read-fixture-missing__",
+      type: "git-repo",
+      has_agents: true,
+      status: "active",
+      summary: "Hermetic project fixture with no host filesystem dependency.",
+      operation_agent: null,
+      enabled: true,
+    },
+  ],
+  files: {
+    projects: {
+      relative_path: "storage/codex-control/registry/projects.yaml",
+      absolute_path: "G:\\Donggri_DevDrive\\storage\\codex-control\\registry\\projects.yaml",
+      exists: true,
+      size: 128,
+      mtime: "2026-07-26T00:00:00.000Z",
+      sha256: "7".repeat(64),
+      content:
+        "projects:\n  DonggriCompany:\n    path: repos/__control-plane-v2-read-fixture-missing__\n    status: active\n",
+      error: null,
+    },
+    active_specs: {
+      relative_path: "storage/codex-control/specs/_active.md",
+      absolute_path: "G:\\Donggri_DevDrive\\storage\\codex-control\\specs\\_active.md",
+      exists: true,
+      size: 96,
+      mtime: "2026-07-26T00:00:00.000Z",
+      sha256: "6".repeat(64),
+      content: `- Spec ID: \`${FIXTURE_SPEC_ID}\`\n`,
+      error: null,
+    },
+  },
+};
+fixtureSourceSnapshot.active_spec = fixtureSourceSnapshot.active_specs[0] ?? null;
 
 function authenticatedRead(builder: request.Test): request.Test {
   return builder
@@ -52,6 +116,15 @@ describe("Control Plane v2 production read-operation integration", () => {
   let fetchMock: MockInstance<typeof fetch>;
 
   beforeEach(() => {
+    vi.spyOn(ControlPlaneSourceAdapter.prototype, "readSnapshot").mockImplementation(() =>
+      structuredClone(fixtureSourceSnapshot),
+    );
+    vi.spyOn(fs, "existsSync").mockImplementation((file) => {
+      const normalized = String(file).replace(/\\/g, "/").replace(/\/+/g, "/").toLowerCase();
+      return normalized === FIXTURE_CONTROL_ROOT || normalized.startsWith(`${FIXTURE_CONTROL_ROOT}/`)
+        ? false
+        : nativeExistsSync(file);
+    });
     db = new DatabaseSync(":memory:");
     applyControlPlaneMutationSchema(db);
     app = express();
@@ -78,7 +151,7 @@ describe("Control Plane v2 production read-operation integration", () => {
   });
 
   afterEach(() => {
-    fetchMock.mockRestore();
+    vi.restoreAllMocks();
     db.close();
   });
 

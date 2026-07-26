@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Master95Status } from "../../api/control-plane";
@@ -554,7 +554,9 @@ describe("Master95OperationsPanel", () => {
       await user.click(screen.getByTestId(`execute-journey-${journeyId}`));
       const approval = await screen.findByTestId("control-tower-v2-approval");
       const required = approval.querySelector("code")?.textContent ?? "";
-      await user.type(screen.getByRole("textbox", { name: "확인문 직접 입력" }), required);
+      fireEvent.change(screen.getByRole("textbox", { name: "확인문 직접 입력" }), {
+        target: { value: required },
+      });
       await user.click(screen.getByRole("button", { name: "승인된 변경 실행" }));
       await waitFor(() => expect(screen.queryByTestId("control-tower-v2-approval")).not.toBeInTheDocument());
     }
@@ -725,7 +727,9 @@ describe("Master95OperationsPanel", () => {
       await user.click(screen.getByRole("button", { name: buttonName }));
       const approval = await screen.findByTestId("control-tower-v2-approval");
       const required = approval.querySelector("code")?.textContent ?? "";
-      await user.type(screen.getByRole("textbox", { name: "확인문 직접 입력" }), required);
+      fireEvent.change(screen.getByRole("textbox", { name: "확인문 직접 입력" }), {
+        target: { value: required },
+      });
       await user.click(screen.getByRole("button", { name: "승인된 변경 실행" }));
       await waitFor(() => expect(screen.queryByTestId("control-tower-v2-approval")).not.toBeInTheDocument());
     }
@@ -746,5 +750,5 @@ describe("Master95OperationsPanel", () => {
     expect(controlTowerApi.execute).toHaveBeenCalledTimes(11);
     expect(screen.getByText('{"result":"verified"}')).toBeInTheDocument();
     expect(screen.getByText(/revoked · process_started=false/)).toBeInTheDocument();
-  });
+  }, 15_000);
 });

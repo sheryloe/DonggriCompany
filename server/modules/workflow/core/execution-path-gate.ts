@@ -1,8 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { execFileSync } from "node:child_process";
 import type { DatabaseSync } from "node:sqlite";
+import {
+  isExactGitWorkingTreeRoot,
+  isPathInsideCanonicalRoot,
+  resolveGitWorkingTreeRoot,
+} from "./git-repository-root.ts";
 
 type ProjectBoundTask = {
   project_id?: string | null;
@@ -106,14 +110,12 @@ function getDefaultAllowedRoots(): string[] {
   return roots;
 }
 
-function isPathInsideRoot(candidatePath: string, rootPath: string): boolean {
-  const rel = path.relative(rootPath, candidatePath);
-  if (!rel) return true;
-  return !rel.startsWith("..") && !path.isAbsolute(rel);
-}
-
 function isPathInsideAllowedRoots(candidatePath: string, allowedRoots: string[]): boolean {
-  return allowedRoots.some((root) => isPathInsideRoot(candidatePath, root));
+  return allowedRoots.some((root) =>
+    isPathInsideCanonicalRoot(candidatePath, root, {
+      allowMissingCandidate: true,
+    }),
+  );
 }
 
 function resolveTaskProjectPath(
@@ -143,19 +145,6 @@ function resolveTaskProjectPath(
   const fromTask = normalizeProjectPathInput(task.project_path);
   if (fromTask) return fromTask;
   return null;
-}
-
-function isGitRepo(projectPath: string): boolean {
-  try {
-    execFileSync("git", ["rev-parse", "--is-inside-work-tree"], {
-      cwd: projectPath,
-      stdio: "pipe",
-      timeout: 5000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function evaluateExecutionPathGate(input: {
@@ -188,12 +177,14 @@ export function evaluateExecutionPathGate(input: {
   }
 
   const allowGitBootstrap = input.allowGitBootstrap ?? process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP === "1";
-  if (!allowGitBootstrap && !isGitRepo(normalizedPath)) {
+  const isExactGitRoot = isExactGitWorkingTreeRoot(normalizedPath);
+  const isNestedInsideGitRoot = !isExactGitRoot && Boolean(resolveGitWorkingTreeRoot(normalizedPath));
+  if (!isExactGitRoot && (!allowGitBootstrap || isNestedInsideGitRoot)) {
     return {
       ok: false,
       statusCode: 409,
       error: "git_repo_required",
-      message: "Git repository is required for isolated worktree execution.",
+      message: "Project path must be the exact root of a Git repository or linked worktree.",
       allowedRoots,
     };
   }

@@ -174,6 +174,37 @@ projects:
     expect(after.projection_epoch).not.toBe(before.projection_epoch);
   });
 
+  it("fails closed with explicit source-missing evidence when the Control Plane documents are absent", async () => {
+    const controlRoot = await fs.mkdtemp(path.join(os.tmpdir(), "donggri-source-adapter-missing-"));
+    temporaryDirectories.push(controlRoot);
+    const adapter = new ControlPlaneSourceAdapter({
+      controlRoot,
+      controlPlaneRoot: path.join(controlRoot, "storage", "codex-control"),
+      sourceEpoch: CANDIDATE_SOURCE_EPOCH,
+      now: () => new Date("2026-07-25T00:00:00Z"),
+    });
+
+    const snapshot = adapter.readSnapshot();
+
+    expect(snapshot.degraded).toBe(true);
+    expect(snapshot.projects).toEqual([]);
+    expect(snapshot.active_specs).toEqual([]);
+    expect(snapshot.active_spec).toBeNull();
+    expect(snapshot.parse_errors).toHaveLength(2);
+    expect(snapshot.parse_errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "storage/codex-control/registry/projects.yaml",
+          code: "source_missing",
+        }),
+        expect.objectContaining({
+          source: "storage/codex-control/specs/_active.md",
+          code: "source_missing",
+        }),
+      ]),
+    );
+  });
+
   it("fails closed when immutable candidate source authority is absent or malformed", () => {
     expect(() => new ControlPlaneSourceAdapter()).toThrow("candidate_source_epoch_required");
     expect(() => new ControlPlaneSourceAdapter({ sourceEpoch: "sha256:not-a-digest" })).toThrow(

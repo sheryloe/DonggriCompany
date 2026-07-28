@@ -540,7 +540,7 @@ describe("Control Plane v2 runtime integration", () => {
           source_epoch: SOURCE_EPOCH,
           command: {
             executable_id: "image-workbench-v2-store",
-            cwd_ref: "worktree:DonggriCompany-v1-stabilization",
+            cwd_ref: "worktree:DonggriCompany-v01-main",
           },
         },
         upload_fingerprint: {

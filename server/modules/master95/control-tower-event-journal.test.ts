@@ -145,7 +145,7 @@ describe("Master95EventJournalControlTowerRuntime", () => {
           }) as never,
       },
       load_control_tower: async () => runtime,
-      cwd_ref: "worktree:DonggriCompany-v1-stabilization",
+      cwd_ref: "worktree:DonggriCompany-v01-main",
       spec_id: "20260725-donggricompany-v1-stabilization-certification-v1",
       create_attempt_id: () => "partial-retry",
       now: () => new Date(nowCalls++ === 0 ? previewOccurredAt : laterOccurredAt),

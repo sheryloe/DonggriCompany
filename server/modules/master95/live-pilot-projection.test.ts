@@ -5,13 +5,14 @@ import {
   parseLivePilotRunSummaries,
   readLivePilotProjection,
 } from "./live-pilot-projection.ts";
+import { sourceEpochPathSegment } from "./candidate-observation.ts";
+import { resolveReleaseIdentity } from "../release/release-identity.ts";
 
 describe("Master95 live-pilot read-only projection", () => {
   it("reads only the current V1 candidate and source-epoch runtime path", () => {
-    expect(MASTER95_LIVE_PILOT_JSONL).toContain("dongri-grigri-v1-alpha.0");
-    expect(MASTER95_LIVE_PILOT_JSONL).toContain(
-      "sha256-867e09c08292ea677d8542d7a4a4b29a71c8fb4211fc2c995af44ec8322551c4",
-    );
+    const identity = resolveReleaseIdentity();
+    expect(MASTER95_LIVE_PILOT_JSONL).toContain(identity.candidate_id);
+    expect(MASTER95_LIVE_PILOT_JSONL).toContain(sourceEpochPathSegment(identity.source_epoch));
     expect(MASTER95_LIVE_PILOT_JSONL).not.toContain("master95\\live-pilot");
   });
 

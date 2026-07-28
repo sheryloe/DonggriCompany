@@ -1,6 +1,6 @@
 {
   "name": "donggri-company",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-alpha.1",
   "description": "DonggriCompany - local-first Dongri-grigri office control platform.",
   "donggriRelease": {
     "schemaVersion": "1.0.0",
@@ -11,7 +11,7 @@
     "epoch": 1,
     "channel": "alpha",
     "gitSha": "9519f4036ec8e9380d044a4ff65e737485256a3b",
-    "candidateId": "dongri-grigri-v1-alpha.0",
+    "candidateId": "dongri-grigri-v01-alpha.1",
     "sourceEpoch": "sha256:867e09c08292ea677d8542d7a4a4b29a71c8fb4211fc2c995af44ec8322551c4",
     "builtAt": "2026-07-25T00:00:00+09:00",
     "legacySourceVersion": "2.0.4"
@@ -121,6 +121,12 @@
     "master95:dev:local:resilient": "concurrently --restart-tries 12 --restart-after exponential -n web,api -c cyan,magenta \"cross-env VITE_DEV=1 vite --host 127.0.0.1 --port 8800\" \"cross-env VITE_DEV=1 HOST=127.0.0.1 PORT=8790 APP_DATA_DIR=data nodemon --exitcrash --delay 1000ms --watch server --ext ts --exec tsx server/index.ts\"",
     "master95:ux-audit": "node scripts/master95/check-ux-completeness.mjs",
     "master95:ux-audit:certify": "node scripts/master95/check-ux-completeness.mjs --require-proven",
+    "master95:ux-audit:self-test": "node --test scripts/master95/ux-audit-contract.test.mjs scripts/master95/build-v01-ux-audit.test.mjs scripts/master95/build-v01-owner-study.test.mjs scripts/master95/build-v01-accessibility-evidence.test.mjs scripts/master95/run-v01-accessibility-automation.test.mjs && tsx --test scripts/master95/run-v01-five-journey-evidence.test.ts",
+    "master95:ux-audit:v01:build": "node scripts/master95/build-v01-ux-audit.mjs",
+    "master95:ux-audit:v01:five-journey": "tsx scripts/master95/run-v01-five-journey-evidence.ts",
+    "master95:ux-audit:v01:owner-study": "node scripts/master95/build-v01-owner-study.mjs",
+    "master95:ux-audit:v01:accessibility": "node scripts/master95/build-v01-accessibility-evidence.mjs",
+    "master95:ux-audit:v01:accessibility:automate": "node scripts/master95/run-v01-accessibility-automation.mjs",
     "master95:image-workbench:sync": "tsx scripts/master95/generate-image-workbench.ts --write",
     "master95:image-workbench": "tsx scripts/master95/generate-image-workbench.ts --check && vitest run --config server/vitest.config.ts server/modules/master95/image-workbench.test.ts && pnpm run agents:sprites:check",
     "master95:pilot:sync": "tsx scripts/master95/generate-pilot-readiness.ts --write",

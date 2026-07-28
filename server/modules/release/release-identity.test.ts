@@ -20,7 +20,7 @@ const identity = (overrides: Partial<ReleaseIdentity> = {}): ReleaseIdentity => 
   channel: "alpha",
   git_sha: "9519f4036ec8e9380d044a4ff65e737485256a3b",
   target_revision: "9519f4036ec8e9380d044a4ff65e737485256a3b",
-  candidate_id: "dongri-grigri-v1-alpha.0",
+  candidate_id: "dongri-grigri-v01-alpha.1",
   source_epoch: "sha256:test-source-epoch",
   built_at: "2026-07-25T00:00:00+09:00",
   legacy_source_version: "2.0.4",
@@ -64,7 +64,7 @@ describe("release identity", () => {
       }),
     ).toMatchObject({
       git_sha: "9519f4036ec8e9380d044a4ff65e737485256a3b",
-      candidate_id: "dongri-grigri-v1-alpha.0",
+      candidate_id: "dongri-grigri-v01-alpha.1",
       source_epoch: "sha256:867e09c08292ea677d8542d7a4a4b29a71c8fb4211fc2c995af44ec8322551c4",
     });
   });

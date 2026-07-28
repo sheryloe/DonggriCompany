@@ -60,7 +60,7 @@ const preview: ControlPlaneV2Preview = {
   command: {
     executable_id: "image-workbench-store",
     args: ["artifact-1"],
-    cwd_ref: "worktree:DonggriCompany-v1-stabilization",
+    cwd_ref: "worktree:DonggriCompany-v01-main",
   },
   target_digest: "b".repeat(64),
   scope_digest: "c".repeat(64),

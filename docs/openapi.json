@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "DonggriCompany API",
-    "version": "1.0.0-alpha.0",
+    "version": "1.0.0-alpha.1",
     "description": "Baseline OpenAPI contract for commonly used DonggriCompany endpoints."
   },
   "servers": [
@@ -7193,7 +7193,7 @@
                 "example": {
                   "ok": true,
                   "status": "healthy",
-                  "version": "1.0.0-alpha.0",
+                  "version": "1.0.0-alpha.1",
                   "app": "DonggriCompany",
                   "dbPath": "/workspace/donggri-company.sqlite"
                 }
@@ -9897,7 +9897,7 @@
                   "openapi": "3.0.3",
                   "info": {
                     "title": "DonggriCompany API",
-                    "version": "1.0.0-alpha.0"
+                    "version": "1.0.0-alpha.1"
                   }
                 }
               }

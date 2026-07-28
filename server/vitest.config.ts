@@ -4,16 +4,12 @@ export default defineConfig({
   test: {
     environment: "node",
     // Server tests exercise real Git, SQLite, and child-process boundaries.
-    // Vitest 3.2 dispatching one file per Tinypool task can close the Windows
-    // child-process channel mid-run. Keep all server files in one isolated fork
-    // while preserving process.chdir() support (unlike a threads pool).
+    // Server tests exercise process-global state and real child processes.
+    // A single long-lived Windows fork can lose its Tinypool IPC channel after
+    // enough suites; use one isolated fork per file, scheduled sequentially.
     pool: "forks",
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
     maxWorkers: 1,
+    fileParallelism: false,
     include: ["server/**/*.{test,spec}.ts"],
     exclude: ["**/node_modules/**", "dist/**"],
     setupFiles: ["./server/test/setup.ts"],

@@ -36,7 +36,7 @@ import {
 export const CONTROL_PLANE_V2_STATE_PATH = "/api/control-plane/v2/state";
 export const IMAGE_WORKBENCH_V2_ARTIFACTS_PATH = "/api/control-plane/v2/image-workbench/projects/:projectId/artifacts";
 export const IMAGE_WORKBENCH_STORE_EXECUTABLE_ID = "image-workbench-v2-store";
-export const DONGGRI_V1_WORKTREE_CWD_REF = "worktree:DonggriCompany-v1-stabilization";
+export const DONGGRI_V01_MAIN_WORKTREE_CWD_REF = "worktree:DonggriCompany-v01-main";
 export const DONGGRI_V1_STABILIZATION_SPEC_ID = "20260725-donggricompany-v1-stabilization-certification-v1";
 export const IMAGE_WORKBENCH_V2_RUNTIME_ROOT = path.join(MASTER95_IMAGE_RUNTIME_ROOT, "v2-assets");
 
@@ -457,7 +457,7 @@ export function createControlPlaneV2Runtime(
     // These are logical, server-owned dispatch identifiers. Neither accepts a
     // raw shell string and both are bound to a registered cwd_ref.
     allowed_executable_ids: [IMAGE_WORKBENCH_STORE_EXECUTABLE_ID, CONTROL_TOWER_V2_EXECUTABLE_ID],
-    allowed_cwd_refs: [DONGGRI_V1_WORKTREE_CWD_REF],
+    allowed_cwd_refs: [DONGGRI_V01_MAIN_WORKTREE_CWD_REF],
     now,
   });
   const getEpochAuthority = () => {
@@ -474,7 +474,7 @@ export function createControlPlaneV2Runtime(
       (async () => {
         throw new Error("control_tower_runtime_unavailable");
       }),
-    cwd_ref: DONGGRI_V1_WORKTREE_CWD_REF,
+    cwd_ref: DONGGRI_V01_MAIN_WORKTREE_CWD_REF,
     spec_id: DONGGRI_V1_STABILIZATION_SPEC_ID,
     now,
   });
@@ -737,7 +737,7 @@ export function registerControlPlaneV2RuntimeRoutes(
     create_store_command: (input) => ({
       executable_id: IMAGE_WORKBENCH_STORE_EXECUTABLE_ID,
       args: ["persist", input.project_id, input.artifact_id, input.original_sha256, input.export_target_ref],
-      cwd_ref: DONGGRI_V1_WORKTREE_CWD_REF,
+      cwd_ref: DONGGRI_V01_MAIN_WORKTREE_CWD_REF,
     }),
     allowed_origins: runtime.allowed_origins,
     create_request_id: createId,

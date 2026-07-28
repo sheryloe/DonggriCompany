@@ -64,7 +64,7 @@ function selectionManifestSha256(): string {
 
 function expectedCandidateId(productVersion: string): string {
   const suffix = productVersion.replace(/^1\.0\.0-/, "");
-  return `dongri-grigri-v1-${suffix}`;
+  return `dongri-grigri-v01-${suffix}`;
 }
 
 function canonicalize(value: unknown): unknown {

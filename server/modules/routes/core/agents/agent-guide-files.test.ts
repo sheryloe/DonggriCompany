@@ -3,10 +3,18 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { archiveAgentGuideFile, resolveGuideRoot, upsertAgentGuideFile } from "./agent-guide-files.ts";
+import {
+  archiveAgentGuideFile,
+  isApprovedV01EvidenceGuidePair,
+  resolveGuideRoot,
+  upsertAgentGuideFile,
+} from "./agent-guide-files.ts";
 
 const cleanupTargets: string[] = [];
 const originalGuideRoot = process.env.AGENT_GUIDE_ROOT;
+const originalDbPath = process.env.DB_PATH;
+const originalV01EvidenceRuntime = process.env.V01_EVIDENCE_RUNTIME;
+const originalV01EvidenceRuntimeRoot = process.env.V01_EVIDENCE_RUNTIME_ROOT;
 let guideRoot = "";
 
 function queueCleanup(targetPath: string): void {
@@ -29,9 +37,52 @@ afterEach(() => {
   }
   if (originalGuideRoot === undefined) delete process.env.AGENT_GUIDE_ROOT;
   else process.env.AGENT_GUIDE_ROOT = originalGuideRoot;
+  if (originalDbPath === undefined) delete process.env.DB_PATH;
+  else process.env.DB_PATH = originalDbPath;
+  if (originalV01EvidenceRuntime === undefined) delete process.env.V01_EVIDENCE_RUNTIME;
+  else process.env.V01_EVIDENCE_RUNTIME = originalV01EvidenceRuntime;
+  if (originalV01EvidenceRuntimeRoot === undefined) delete process.env.V01_EVIDENCE_RUNTIME_ROOT;
+  else process.env.V01_EVIDENCE_RUNTIME_ROOT = originalV01EvidenceRuntimeRoot;
 });
 
 describe("agent guide files", () => {
+  it("accepts only a same-boundary Windows V01 evidence DB and guide pair", () => {
+    const boundaryRoot =
+      "E:\\DonggriPlatform_Asset\\runtime\\DonggriCompany\\v01\\alpha1-smoke-service-candidate-attempt-02";
+    const guideRoot = `${boundaryRoot}\\agent-guides`;
+    const dbPath = `${boundaryRoot}\\donggri-v01-alpha1-smoke.sqlite`;
+
+    expect(isApprovedV01EvidenceGuidePair({ boundaryRoot, guideRoot, dbPath, platform: "win32" })).toBe(true);
+    expect(
+      isApprovedV01EvidenceGuidePair({
+        boundaryRoot,
+        guideRoot: "E:\\DonggriPlatform_Asset\\runtime\\DonggriCompany\\v01\\alpha1-smoke-service-other\\agent-guides",
+        dbPath,
+        platform: "win32",
+      }),
+    ).toBe(false);
+    expect(
+      isApprovedV01EvidenceGuidePair({
+        boundaryRoot,
+        guideRoot,
+        dbPath: "G:\\Donggri_DevDrive\\worktrees\\DonggriCompany-v01-main\\data\\runtime.sqlite",
+        platform: "win32",
+      }),
+    ).toBe(false);
+    expect(isApprovedV01EvidenceGuidePair({ boundaryRoot, guideRoot, dbPath, platform: "linux" })).toBe(false);
+  });
+
+  it("fails closed instead of falling back to project agents for an invalid V01 evidence pair", () => {
+    const dbPath = path.join(guideRoot, "runtime.sqlite");
+    fs.writeFileSync(dbPath, "");
+    process.env.V01_EVIDENCE_RUNTIME = "1";
+    process.env.V01_EVIDENCE_RUNTIME_ROOT = guideRoot;
+    process.env.AGENT_GUIDE_ROOT = path.join(guideRoot, "agent-guides");
+    process.env.DB_PATH = dbPath;
+
+    expect(() => resolveGuideRoot()).toThrow("v01_evidence_guide_root_invalid");
+  });
+
   it("uses only the fixed projects runtime root for isolated E2E guide writes", () => {
     const isolatedRoot = path.resolve(process.cwd(), ".tmp", "e2e-runtime", "projects", "agent-guides");
     const dbPath = path.resolve(process.cwd(), ".tmp", "e2e-runtime", "claw-empire.e2e.sqlite");

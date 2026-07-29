@@ -32,13 +32,102 @@ const PROJECT_AGENTS_ROOT = path.resolve(process.cwd(), "agents");
 const ISOLATED_E2E_RUNTIME_ROOT = path.resolve(process.cwd(), ".tmp", "e2e-runtime");
 const ISOLATED_E2E_GUIDE_ROOT = path.join(ISOLATED_E2E_RUNTIME_ROOT, "projects", "agent-guides");
 const ISOLATED_E2E_DB_PATH = path.join(ISOLATED_E2E_RUNTIME_ROOT, "claw-empire.e2e.sqlite");
+const V01_EVIDENCE_RUNTIME_ROOT = "E:\\DonggriPlatform_Asset\\runtime\\DonggriCompany\\v01";
 let warnedExternalGuideRoot = false;
+
+type V01EvidenceGuidePair = {
+  boundaryRoot: string;
+  guideRoot: string;
+  dbPath: string;
+  platform?: NodeJS.Platform;
+};
+
+function isStrictChild(candidate: string, root: string, pathApi: typeof path.win32): boolean {
+  const relative = pathApi.relative(pathApi.resolve(root), pathApi.resolve(candidate));
+  return (
+    relative.length > 0 &&
+    relative !== ".." &&
+    !relative.startsWith(`..${pathApi.sep}`) &&
+    !pathApi.isAbsolute(relative)
+  );
+}
+
+export function isApprovedV01EvidenceGuidePair({
+  boundaryRoot,
+  guideRoot,
+  dbPath,
+  platform = process.platform,
+}: V01EvidenceGuidePair): boolean {
+  if (platform !== "win32") return false;
+  const boundary = path.win32.resolve(boundaryRoot);
+  const guide = path.win32.resolve(guideRoot);
+  const database = path.win32.resolve(dbPath);
+  return (
+    isStrictChild(boundary, V01_EVIDENCE_RUNTIME_ROOT, path.win32) &&
+    isStrictChild(guide, boundary, path.win32) &&
+    isStrictChild(database, boundary, path.win32) &&
+    path.win32.basename(guide).toLowerCase() === "agent-guides" &&
+    path.win32.extname(database).toLowerCase() === ".sqlite"
+  );
+}
+
+function resolvePhysicalTarget(targetPath: string): string {
+  let existingAncestor = path.resolve(targetPath);
+  while (!fs.existsSync(existingAncestor)) {
+    const parent = path.dirname(existingAncestor);
+    if (parent === existingAncestor) throw new Error("v01_evidence_existing_ancestor_missing");
+    existingAncestor = parent;
+  }
+  return path.resolve(
+    fs.realpathSync.native(existingAncestor),
+    path.relative(existingAncestor, path.resolve(targetPath)),
+  );
+}
+
+function assertV01EvidencePhysicalBoundary(boundaryRoot: string, guideRoot: string, dbPath: string): void {
+  if (!fs.existsSync(V01_EVIDENCE_RUNTIME_ROOT) || !fs.statSync(V01_EVIDENCE_RUNTIME_ROOT).isDirectory()) {
+    throw new Error("v01_evidence_runtime_root_missing");
+  }
+  if (!fs.existsSync(boundaryRoot) || !fs.statSync(boundaryRoot).isDirectory()) {
+    throw new Error("v01_evidence_boundary_missing");
+  }
+  if (!fs.existsSync(dbPath) || !fs.statSync(dbPath).isFile()) {
+    throw new Error("v01_evidence_db_missing");
+  }
+  const physicalRuntimeRoot = fs.realpathSync.native(V01_EVIDENCE_RUNTIME_ROOT);
+  const physicalBoundary = fs.realpathSync.native(boundaryRoot);
+  if (!isStrictChild(physicalBoundary, physicalRuntimeRoot, path)) {
+    throw new Error("v01_evidence_boundary_physical_escape");
+  }
+  for (const [field, target] of [
+    ["guide_root", guideRoot],
+    ["db_path", dbPath],
+  ] as const) {
+    if (!isStrictChild(resolvePhysicalTarget(target), physicalBoundary, path)) {
+      throw new Error(`v01_evidence_${field}_physical_escape`);
+    }
+  }
+}
 
 // Exported for contract tests; this is not an HTTP or product API surface.
 export function resolveGuideRoot(): string {
   const envRoot = String(process.env.AGENT_GUIDE_ROOT ?? "").trim();
   const resolvedEnvRoot = envRoot ? path.resolve(envRoot) : "";
   const configuredDbPath = String(process.env.DB_PATH ?? "").trim();
+  const v01BoundaryRoot = String(process.env.V01_EVIDENCE_RUNTIME_ROOT ?? "").trim();
+  if (process.env.V01_EVIDENCE_RUNTIME === "1") {
+    if (
+      !isApprovedV01EvidenceGuidePair({
+        boundaryRoot: v01BoundaryRoot,
+        guideRoot: resolvedEnvRoot,
+        dbPath: configuredDbPath,
+      })
+    ) {
+      throw new Error("v01_evidence_guide_root_invalid");
+    }
+    assertV01EvidencePhysicalBoundary(v01BoundaryRoot, resolvedEnvRoot, configuredDbPath);
+    return resolvedEnvRoot;
+  }
   const allowIsolatedE2ERoot =
     process.env.E2E_ISOLATED_RUNTIME === "1" &&
     resolvedEnvRoot === ISOLATED_E2E_GUIDE_ROOT &&

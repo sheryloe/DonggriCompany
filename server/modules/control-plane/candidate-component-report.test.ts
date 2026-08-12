@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readVerifiedCandidateComponentReport, writeCandidateComponentReport } from "./candidate-component-report.ts";
 import { createCandidateComponentReport, type CandidateComponentReportUnsigned } from "./certification-contract.ts";
@@ -100,6 +100,40 @@ describe("candidate component report artifact authority", () => {
         report: report(),
       }),
     ).toThrow("candidate_component_report_output_exists");
+  });
+
+  it("rejects a schema-valid replacement between the exclusive write and readback", () => {
+    const originalReadFileSync = fs.readFileSync.bind(fs);
+    let replaced = false;
+    const readSpy = vi.spyOn(fs, "readFileSync").mockImplementation(((
+      filePath: fs.PathOrFileDescriptor,
+      options?: unknown,
+    ) => {
+      if (!replaced && path.resolve(String(filePath)) === path.resolve(outputPath)) {
+        replaced = true;
+        const current = JSON.parse(originalReadFileSync(outputPath, "utf8")) as Record<string, unknown>;
+        const { integrity: _integrity, ...unsigned } = current;
+        const substituted = createCandidateComponentReport({
+          ...(unsigned as CandidateComponentReportUnsigned),
+          summary: "A concurrent writer replaced the report after creation.",
+        });
+        fs.writeFileSync(outputPath, `${JSON.stringify(substituted)}\n`, "utf8");
+      }
+      return originalReadFileSync(filePath, options as never);
+    }) as typeof fs.readFileSync);
+
+    try {
+      expect(() =>
+        writeCandidateComponentReport({
+          output_path: outputPath,
+          report_root: root,
+          evidence_roots: [root],
+          report: report(),
+        }),
+      ).toThrow("candidate_component_report_postwrite_mismatch");
+    } finally {
+      readSpy.mockRestore();
+    }
   });
 
   it("rejects missing, byte-mismatched, and hash-mismatched artifacts", () => {

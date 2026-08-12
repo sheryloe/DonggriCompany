@@ -82,6 +82,31 @@ describe("candidate score output authority", () => {
     ).toThrow("candidate_score_attempt_exists");
   });
 
+  it("uses code-unit key ordering for reproducible score bytes", () => {
+    const report = scoreReport();
+    report.dimensions = Object.fromEntries(
+      ["ab", "a_b", "a", "A", "z", "m", "b", "aa", "a-"].map((key, index) => [
+        key,
+        {
+          weight: index === 0 ? 20 : 10,
+          score: 97.45,
+          evidence_sha256: ["5".repeat(64)],
+          blockers: [],
+        },
+      ]),
+    );
+    const written = writeCandidateScoreAttempt({
+      candidate_root: root,
+      attempt_id: "alpha2-canonical-order-001",
+      report,
+    });
+    const serialized = fs.readFileSync(written.report_path, "utf8");
+    const positions = ["A", "a", "a-", "a_b", "aa", "ab", "b", "m", "z"].map((key) =>
+      serialized.indexOf(`"${key}":`, serialized.indexOf(`"dimensions":`)),
+    );
+    expect(positions.every((position, index) => index === 0 || position > positions[index - 1]!)).toBe(true);
+  });
+
   it("rejects unsafe attempt IDs and a tampered sidecar", () => {
     expect(() =>
       writeCandidateScoreAttempt({

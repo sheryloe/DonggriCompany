@@ -6,9 +6,12 @@ const APPROVAL_ID_PATTERN = /^APR-V0?1-[A-Z0-9-]+$/;
 
 function approvalSection(ledger: string, approvalId: string): string {
   if (!APPROVAL_ID_PATTERN.test(approvalId)) throw new Error("candidate_component_approval_id_invalid");
-  const heading = `## ${approvalId}`;
-  const start = ledger.indexOf(heading);
-  if (start < 0) throw new Error("candidate_component_approval_not_found");
+  const headingPattern = new RegExp(`(?:^|\\r?\\n)(## ${approvalId})[ \\t]*(?=\\r?\\n|$)`, "g");
+  const matches = [...ledger.matchAll(headingPattern)];
+  if (matches.length === 0) throw new Error("candidate_component_approval_not_found");
+  if (matches.length > 1) throw new Error("candidate_component_approval_duplicate");
+  const start = (matches[0]?.index ?? 0) + (matches[0]?.[0].length ?? 0) - (matches[0]?.[1].length ?? 0);
+  const heading = matches[0]?.[1] ?? `## ${approvalId}`;
   const rest = ledger.slice(start + heading.length);
   const nextHeading = rest.search(/\r?\n##\s+/);
   return nextHeading < 0 ? ledger.slice(start) : ledger.slice(start, start + heading.length + nextHeading);

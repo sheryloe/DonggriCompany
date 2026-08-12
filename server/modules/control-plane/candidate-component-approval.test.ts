@@ -33,10 +33,10 @@ function ledger(overrides: Record<string, string> = {}): string {
   ].join("\n");
 }
 
-function validate(input: { ledger?: string; now?: string } = {}) {
+function validate(input: { ledger?: string; now?: string; approval_id?: string } = {}) {
   return validateCandidateComponentApproval({
     ledger: input.ledger ?? ledger(),
-    approval_id: "APR-V01-COMPONENT-EVIDENCE-001",
+    approval_id: input.approval_id ?? "APR-V01-COMPONENT-EVIDENCE-001",
     identity,
     component: "api_and_event_schema",
     attempt_id: "alpha2-static-001",
@@ -44,6 +44,23 @@ function validate(input: { ledger?: string; now?: string } = {}) {
     now: input.now ?? "2026-07-30T12:00:00+09:00",
   });
 }
+
+it("requires one exact approval heading instead of accepting prefixes, body text, or duplicates", () => {
+  expect(() =>
+    validate({
+      approval_id: "APR-V01-COMPONENT-EVIDENCE-00",
+      ledger: ledger(),
+    }),
+  ).toThrow("candidate_component_approval_not_found");
+
+  expect(() =>
+    validate({
+      ledger: `Reference ## APR-V01-COMPONENT-EVIDENCE-001 in prose.\n${ledger({ policy_decision: "rejected" })}`,
+    }),
+  ).toThrow("candidate_component_approval_not_approved");
+
+  expect(() => validate({ ledger: `${ledger()}\n${ledger()}` })).toThrow("candidate_component_approval_duplicate");
+});
 
 describe("candidate component approval", () => {
   it("accepts only one exact immutable candidate, attempt, root, and component allowlist", () => {

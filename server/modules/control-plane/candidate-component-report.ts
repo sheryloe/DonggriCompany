@@ -43,7 +43,7 @@ function canonicalize(value: unknown): unknown {
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right, "en"))
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
         .map(([key, child]) => [key, canonicalize(child)]),
     );
   }
@@ -219,10 +219,14 @@ export function writeCandidateComponentReport(
     throw new Error("candidate_component_report_output_physical_path_outside_root");
   }
 
-  fs.writeFileSync(outputPath, canonicalJson(report), { encoding: "utf8", flag: "wx" });
-  return readVerifiedCandidateComponentReport({
+  const serialized = canonicalJson(report);
+  const expectedSha256 = sha256(serialized);
+  fs.writeFileSync(outputPath, serialized, { encoding: "utf8", flag: "wx" });
+  const verified = readVerifiedCandidateComponentReport({
     report_path: outputPath,
     report_root: reportRoot,
     evidence_roots: options.evidence_roots,
   });
+  if (verified.sha256 !== expectedSha256) throw new Error("candidate_component_report_postwrite_mismatch");
+  return verified;
 }

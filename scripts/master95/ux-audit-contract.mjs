@@ -216,6 +216,7 @@ function evaluateAccessibility(measurement, blockers) {
   if (nonNegativeInteger(measurement.focus_trap_count, "accessibility_focus_trap_count") !== 0) {
     blockers.add("accessibility_focus_trap");
   }
+  if (measurement.focus_cycle_complete !== "pass") blockers.add("accessibility_focus_cycle");
   if (measurement.browser_zoom_200_reflow !== "pass") blockers.add("accessibility_browser_zoom_200_reflow");
   if (finiteNumber(measurement.mobile_390x844_overflow_px, "mobile_390x844_overflow_px") > 0) {
     blockers.add("accessibility_mobile_overflow");

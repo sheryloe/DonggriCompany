@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  createCandidateComponentReport,
   createFreezeRecord,
+  validateCandidateComponentReport,
   validateCertificationDecision,
   validateComponentReport,
   validateFreezeRecord,
@@ -28,6 +30,65 @@ describe("V1 certification evidence contract", () => {
     expect(() => validateComponentReport({ ...report, component_status: "certified" })).toThrow();
     expect(() => validateComponentReport({ ...report, certification_claimed: true })).toThrow();
     expect(validateComponentReport({ ...report, evidence_mode: "synthetic" }).evidence_mode).toBe("synthetic");
+  });
+
+  it("requires active candidate component reports to bind git SHA and reject historical credit", () => {
+    const report = createCandidateComponentReport({
+      schema: "donggri-component-report/v2",
+      report_type: "component",
+      component: "api_and_event_schema",
+      candidate_id: "dongri-grigri-v01-alpha.2",
+      git_sha: "1".repeat(40),
+      source_epoch: sourceEpoch,
+      generated_at: "2026-07-29T00:00:00Z",
+      evidence_mode: "actual",
+      component_status: "pass",
+      quality_score: 97.45,
+      certification_claimed: false,
+      historical_evidence_credited: false,
+      producer: {
+        id: "v01-component-producer",
+        version: "1.0.0",
+        authority: "candidate_tooling",
+      },
+      provenance: {
+        run_id: "run-api-contract",
+        approval_id: "APR-V01-WAVE-B-PREPARATION-001",
+        command_sha256: "d".repeat(64),
+        trust_root_sha256: null,
+      },
+      attestation: {
+        scheme: "integrity_only",
+        key_id: null,
+        signature_base64: null,
+      },
+      evidence_files: [{ path: "openapi.json", sha256: "b".repeat(64), bytes: 100 }],
+      summary: "Candidate-bound API floor passed.",
+    });
+    const { integrity: _integrity, ...unsignedReport } = report;
+    expect(validateCandidateComponentReport(report).git_sha).toBe("1".repeat(40));
+    expect(() =>
+      createCandidateComponentReport({
+        ...unsignedReport,
+        evidence_files: [],
+      }),
+    ).toThrow();
+    expect(() => validateCandidateComponentReport({ ...report, git_sha: "unbound" })).toThrow();
+    expect(() => validateCandidateComponentReport({ ...report, historical_evidence_credited: true })).toThrow();
+    expect(() => validateCandidateComponentReport({ ...report, certification_claimed: true })).toThrow();
+    expect(() =>
+      validateCandidateComponentReport({
+        ...report,
+        summary: "Tampered after signing.",
+      }),
+    ).toThrow("candidate_component_report_integrity_mismatch");
+    expect(() =>
+      createCandidateComponentReport({
+        ...unsignedReport,
+        producer: { ...report.producer, authority: "independent_assessor" },
+        provenance: { ...report.provenance, trust_root_sha256: null },
+      }),
+    ).toThrow();
   });
 
   it("permits a certification claim only in the exact final decision file with all hard gates passed", () => {

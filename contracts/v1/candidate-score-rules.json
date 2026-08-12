@@ -1,0 +1,130 @@
+{
+  "schema": "donggri-candidate-score-rules/v1",
+  "spec_id": "20260725-donggricompany-v1-stabilization-certification-v1",
+  "release_epoch": "dongri-grigri-v1",
+  "score_version": "2026-07-30.v01.candidate-bound.v2-continuous",
+  "component_score_model": "actual_pass_quality_score_mean",
+  "hard_gate_model": "binary_component_status",
+  "targets": {
+    "aggregate": 97.45,
+    "hard_gates_required": 10
+  },
+  "historical_baseline": {
+    "score": 84.5,
+    "hard_gates_declared_passed": 8,
+    "credit": 0,
+    "reason": "legacy Master95 manual declarations are historical context only"
+  },
+  "dimensions": [
+    {
+      "id": "architecture_spec",
+      "weight": 15,
+      "components": ["final_system_architecture", "all_adrs", "requirements_traceability_matrix"]
+    },
+    {
+      "id": "implementation",
+      "weight": 15,
+      "components": [
+        "all_agent_manifests",
+        "project_registry_snapshot",
+        "skill_registry_snapshot",
+        "api_and_event_schema"
+      ]
+    },
+    {
+      "id": "api_compatibility",
+      "weight": 10,
+      "components": ["api_and_event_schema", "e2e_execution_trace"]
+    },
+    {
+      "id": "security_safety",
+      "weight": 10,
+      "components": ["security_and_permission_test_report"]
+    },
+    {
+      "id": "durability_recovery",
+      "weight": 10,
+      "components": [
+        "failure_and_recovery_rehearsal_report",
+        "performance_and_cost_report",
+        "reproducible_delivery_and_rollback"
+      ]
+    },
+    {
+      "id": "ux_accessibility",
+      "weight": 10,
+      "components": ["ui_usability_test"]
+    },
+    {
+      "id": "test_reproducibility",
+      "weight": 10,
+      "components": ["e2e_execution_trace", "security_and_permission_test_report", "image_workbench_test"]
+    },
+    {
+      "id": "operations_readiness",
+      "weight": 10,
+      "components": ["performance_and_cost_report", "thirty_day_pilot_report"]
+    },
+    {
+      "id": "release_certification_readiness",
+      "weight": 10,
+      "components": [
+        "reproducible_delivery_and_rollback",
+        "thirty_day_pilot_report",
+        "independent_evaluator_reassessment_sheet"
+      ]
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "M95-G01",
+      "name": "no_unauthorized_tool_execution",
+      "components": ["security_and_permission_test_report"]
+    },
+    {
+      "id": "M95-G02",
+      "name": "no_cross_project_leakage",
+      "components": ["project_registry_snapshot", "e2e_execution_trace"]
+    },
+    {
+      "id": "M95-G03",
+      "name": "trace_completeness_100_percent",
+      "components": ["requirements_traceability_matrix", "e2e_execution_trace"]
+    },
+    {
+      "id": "M95-G04",
+      "name": "no_approval_bypass",
+      "components": ["security_and_permission_test_report"]
+    },
+    {
+      "id": "M95-G05",
+      "name": "recovery_rate_min_99_percent",
+      "components": ["failure_and_recovery_rehearsal_report", "performance_and_cost_report"]
+    },
+    {
+      "id": "M95-G06",
+      "name": "golden_task_success_min_95_percent",
+      "components": ["e2e_execution_trace"]
+    },
+    {
+      "id": "M95-G07",
+      "name": "critical_security_tests_100_percent",
+      "components": ["security_and_permission_test_report"]
+    },
+    {
+      "id": "M95-G08",
+      "name": "ui_journey_success_min_95_percent",
+      "components": ["ui_usability_test"]
+    },
+    {
+      "id": "M95-G09",
+      "name": "image_artifact_loss_zero",
+      "components": ["image_workbench_test"]
+    },
+    {
+      "id": "M95-G10",
+      "name": "independent_reassessment_all_95_plus",
+      "components": ["independent_evaluator_reassessment_sheet"]
+    }
+  ]
+}

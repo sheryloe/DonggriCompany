@@ -4,6 +4,7 @@ import { z } from "zod";
 
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const SOURCE_EPOCH_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const APPROVAL_ID_PATTERN = /^APR-V0?1-[A-Z0-9-]+$/;
 const ISO_DATE = z.string().refine((value) => !Number.isNaN(Date.parse(value)), "invalid_datetime");
 
 const ReleaseIdentityEvidenceSchema = z
@@ -43,6 +44,104 @@ export const ComponentReportSchema = z
   .strict();
 
 export type ComponentReport = z.infer<typeof ComponentReportSchema>;
+
+const CandidateComponentProducerSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9._-]{1,127}$/),
+    version: z.string().min(1).max(128),
+    authority: z.enum(["candidate_tooling", "human_attestation", "independent_assessor"]),
+  })
+  .strict();
+
+const CandidateComponentProvenanceSchema = z
+  .object({
+    run_id: z.string().regex(/^[a-z0-9][a-z0-9._-]{1,127}$/),
+    approval_id: z.string().regex(APPROVAL_ID_PATTERN),
+    command_sha256: z.string().regex(SHA256_PATTERN),
+    trust_root_sha256: z.string().regex(SHA256_PATTERN).nullable(),
+  })
+  .strict();
+
+const CandidateComponentAttestationSchema = z
+  .object({
+    scheme: z.enum(["integrity_only", "ed25519"]),
+    key_id: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9._-]{1,127}$/)
+      .nullable(),
+    signature_base64: z
+      .string()
+      .regex(/^[A-Za-z0-9+/]{86}==$|^[A-Za-z0-9_-]{86}$/)
+      .nullable(),
+  })
+  .strict();
+
+const CandidateComponentReportUnsignedSchema = z
+  .object({
+    schema: z.literal("donggri-component-report/v2"),
+    report_type: z.literal("component"),
+    component: z.string().min(1),
+    candidate_id: z.string().regex(/^dongri-grigri-v01-[a-z0-9.-]+$/),
+    git_sha: z.string().regex(/^[0-9a-f]{40}$/),
+    source_epoch: z.string().regex(SOURCE_EPOCH_PATTERN),
+    generated_at: ISO_DATE,
+    evidence_mode: z.enum(["actual", "synthetic"]),
+    component_status: z.enum(["collecting", "pass", "fail"]),
+    quality_score: z.number().min(0).max(100),
+    certification_claimed: z.literal(false),
+    historical_evidence_credited: z.literal(false),
+    producer: CandidateComponentProducerSchema,
+    provenance: CandidateComponentProvenanceSchema,
+    attestation: CandidateComponentAttestationSchema,
+    evidence_files: z.array(EvidenceFileSchema).min(1),
+    summary: z.string().min(1),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const externalAuthority = value.producer.authority === "independent_assessor";
+    if (externalAuthority !== Boolean(value.provenance.trust_root_sha256)) {
+      context.addIssue({
+        code: "custom",
+        path: ["provenance", "trust_root_sha256"],
+        message: "component_report_trust_root_must_match_authority",
+      });
+    }
+    const externalAttestation =
+      value.attestation.scheme === "ed25519" &&
+      Boolean(value.attestation.key_id) &&
+      Boolean(value.attestation.signature_base64);
+    if (externalAuthority !== externalAttestation) {
+      context.addIssue({
+        code: "custom",
+        path: ["attestation"],
+        message: "component_report_attestation_must_match_authority",
+      });
+    }
+    if (
+      !externalAuthority &&
+      (value.attestation.scheme !== "integrity_only" ||
+        value.attestation.key_id !== null ||
+        value.attestation.signature_base64 !== null)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["attestation"],
+        message: "component_report_internal_attestation_invalid",
+      });
+    }
+  });
+
+export const CandidateComponentReportSchema = CandidateComponentReportUnsignedSchema.safeExtend({
+  integrity: z
+    .object({
+      algorithm: z.literal("sha256"),
+      payload_sha256: z.string().regex(SHA256_PATTERN),
+    })
+    .strict(),
+}).strict();
+
+export type CandidateComponentReport = z.infer<typeof CandidateComponentReportSchema>;
+export type CandidateComponentReportUnsigned = z.infer<typeof CandidateComponentReportUnsignedSchema>;
 
 export const CertificationDecisionSchema = z
   .object({
@@ -90,7 +189,7 @@ export type CertificationDecision = z.infer<typeof CertificationDecisionSchema>;
 const FreezeRecordUnsignedSchema = z
   .object({
     schema: z.literal("donggri-source-epoch-freeze/v1"),
-    approval_id: z.string().regex(/^APR-V1-[A-Z0-9-]+$/),
+    approval_id: z.string().regex(APPROVAL_ID_PATTERN),
     selection_manifest_sha256: z.string().regex(SHA256_PATTERN),
     candidate_identity: ReleaseIdentityEvidenceSchema,
     candidate_identity_sha256: z.string().regex(SHA256_PATTERN),
@@ -146,6 +245,30 @@ export function validateCertificationDecision(input: unknown, filePath: string):
     throw new Error("certification_decision_filename_invalid");
   }
   return CertificationDecisionSchema.parse(input);
+}
+
+export function validateCandidateComponentReport(input: unknown): CandidateComponentReport {
+  const report = CandidateComponentReportSchema.parse(input);
+  const { integrity, ...unsigned } = report;
+  if (integrity.payload_sha256 !== calculateCandidateComponentPayloadSha256(unsigned)) {
+    throw new Error("candidate_component_report_integrity_mismatch");
+  }
+  return report;
+}
+
+export function calculateCandidateComponentPayloadSha256(report: CandidateComponentReportUnsigned): string {
+  return hashCanonical(CandidateComponentReportUnsignedSchema.parse(report));
+}
+
+export function createCandidateComponentReport(input: CandidateComponentReportUnsigned): CandidateComponentReport {
+  const unsigned = CandidateComponentReportUnsignedSchema.parse(input);
+  return {
+    ...unsigned,
+    integrity: {
+      algorithm: "sha256",
+      payload_sha256: calculateCandidateComponentPayloadSha256(unsigned),
+    },
+  };
 }
 
 export function validateFreezeRecord(input: unknown): FreezeRecord {

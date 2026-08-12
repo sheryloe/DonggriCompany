@@ -1,6 +1,6 @@
 {
   "name": "donggri-company",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "DonggriCompany - local-first Dongri-grigri office control platform.",
   "donggriRelease": {
     "schemaVersion": "1.0.0",
@@ -10,8 +10,7 @@
     "releaseEpoch": "dongri-grigri-v1",
     "epoch": 1,
     "channel": "alpha",
-    "gitSha": "9519f4036ec8e9380d044a4ff65e737485256a3b",
-    "candidateId": "dongri-grigri-v01-alpha.1",
+    "candidateId": "dongri-grigri-v01-alpha.2",
     "sourceEpoch": "sha256:867e09c08292ea677d8542d7a4a4b29a71c8fb4211fc2c995af44ec8322551c4",
     "builtAt": "2026-07-25T00:00:00+09:00",
     "legacySourceVersion": "2.0.4"
@@ -72,6 +71,9 @@
     "v1:selection:apply": "node scripts/v1-apply-selection-manifest.mjs --apply --approval APR-V1-IMPLEMENT-001",
     "v1:certification-contract": "tsx scripts/v1-certification-contract.ts",
     "v1:certification-contract:self-test": "tsx scripts/v1-certification-contract.ts --self-test",
+    "v1:component-report": "tsx scripts/v1-component-report.ts",
+    "v1:candidate-score": "tsx scripts/v1-candidate-score.ts",
+    "v1:candidate-score:self-test": "tsx scripts/v1-candidate-score.ts --self-test && vitest run --config server/vitest.config.ts server/modules/control-plane/candidate-component-report.test.ts server/modules/control-plane/candidate-component-producer.test.ts server/modules/control-plane/candidate-component-approval.test.ts server/modules/control-plane/candidate-score-output.test.ts server/modules/control-plane/candidate-score.test.ts server/modules/control-plane/candidate-certification-decision.test.ts server/modules/control-plane/certification-contract.test.ts",
     "v1:release-identity": "tsx scripts/v1-release-identity.ts",
     "v1:release-identity:certify": "tsx scripts/v1-release-identity.ts --require-clean --require-build-binding",
     "v1:release-identity:asset": "tsx scripts/v1-release-identity.ts --write dist/donggri-release-identity.json",

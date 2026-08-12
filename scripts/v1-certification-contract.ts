@@ -8,6 +8,7 @@ import {
   validateComponentReport,
   validateFreezeRecord,
 } from "../server/modules/control-plane/certification-contract.ts";
+import { validateCandidateCertificationDecision } from "../server/modules/control-plane/candidate-certification-decision.ts";
 import { resolveReleaseIdentity } from "../server/modules/release/release-identity.ts";
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..");
@@ -18,6 +19,7 @@ const SPEC_ROOT = path.resolve(
 const SELECTION_MANIFEST_PATH = path.join(SPEC_ROOT, "SELECTION_MANIFEST.json");
 const SELECTION_CHECKSUM_PATH = path.join(SPEC_ROOT, "SELECTION_MANIFEST.sha256");
 const APPROVAL_LEDGER_PATH = path.join(SPEC_ROOT, "approvals.md");
+const SCORE_RULES_PATH = path.join(PROJECT_ROOT, "contracts", "v1", "candidate-score-rules.json");
 
 function readJson(filePath: string): unknown {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -189,7 +191,27 @@ try {
     );
   } else if (valueAfter("--decision")) {
     const filePath = path.resolve(valueAfter("--decision")!);
-    const decision = validateCertificationDecision(readJson(filePath), filePath);
+    const decisionInput = readJson(filePath);
+    const schema = (decisionInput as { schema?: unknown } | null)?.schema;
+    const decision =
+      schema === "donggri-certification-decision/v2"
+        ? (() => {
+            const scoreReportPath = valueAfter("--score-report");
+            if (!scoreReportPath || !path.isAbsolute(scoreReportPath)) {
+              throw new Error("candidate_certification_score_report_absolute_path_required");
+            }
+            const scoreRulesPath = valueAfter("--score-rules") ?? SCORE_RULES_PATH;
+            if (!path.isAbsolute(scoreRulesPath)) {
+              throw new Error("candidate_certification_score_rules_absolute_path_required");
+            }
+            return validateCandidateCertificationDecision(
+              decisionInput,
+              filePath,
+              fs.readFileSync(path.resolve(scoreReportPath)),
+              fs.readFileSync(path.resolve(scoreRulesPath)),
+            ).decision;
+          })()
+        : validateCertificationDecision(decisionInput, filePath);
     process.stdout.write(`${JSON.stringify({ ok: true, mode: "decision", decision: decision.decision })}\n`);
   } else if (valueAfter("--freeze-record")) {
     const filePath = valueAfter("--freeze-record")!;
@@ -206,7 +228,9 @@ try {
       })}\n`,
     );
   } else {
-    throw new Error("usage: --self-test | --component <path> | --decision <path> | --freeze-record <absolute-path>");
+    throw new Error(
+      "usage: --self-test | --component <path> | --decision <path> [--score-report <absolute-path>] [--score-rules <absolute-path>] | --freeze-record <absolute-path>",
+    );
   }
 } catch (error) {
   fail(error);

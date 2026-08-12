@@ -7,9 +7,9 @@ Dongri-grigri는 `G:\Donggri_DevDrive`의 단일 Control Plane을 사무실형 �
 | 항목         | 현재 값                                       |
 | ------------ | --------------------------------------------- |
 | 제품         | `Dongri-grigri V01`                           |
-| 패키지 버전  | `1.0.0-alpha.1`                               |
+| 패키지 버전  | `1.0.0-alpha.2`                               |
 | 릴리스 epoch | `dongri-grigri-v1`                            |
-| 후보 ID      | `dongri-grigri-v01-alpha.1`                   |
+| 후보 ID      | `dongri-grigri-v01-alpha.2`                   |
 | 채널         | `alpha`                                       |
 | 단계         | `Advanced Alpha / Pre-certification / Pre-RC` |
 | 운영 범위    | Windows 로컬 운영                             |
@@ -199,7 +199,15 @@ corepack pnpm run v1:ci-gate:self-test
 corepack pnpm run v1:ci-gate
 corepack pnpm run v1:openapi-floor
 corepack pnpm run v1:certification-contract:self-test
+corepack pnpm run v1:candidate-score:self-test
 corepack pnpm run master95:delivery
+```
+
+실제 후보 점수 계산은 clean worktree와 현재 후보에 일치하는 절대 경로의 freeze record를 모두 요구합니다. 점수 산출물은 고정 파일을 덮어쓰지 않고 `score\attempts\<attempt-id>` 아래에 시도별로 새로 생성합니다.
+
+```bat
+corepack pnpm run v1:candidate-score -- --freeze-record G:\Donggri_DevDrive\storage\codex-control\specs\20260725-donggricompany-v1-stabilization-certification-v1\CANDIDATE_FREEZE_RECORD.json
+corepack pnpm run v1:candidate-score -- --freeze-record G:\Donggri_DevDrive\storage\codex-control\specs\20260725-donggricompany-v1-stabilization-certification-v1\CANDIDATE_FREEZE_RECORD.json --write --attempt-id alpha2-static-001
 ```
 
 검사가 통과해도 자동으로 인증, tag, push 또는 배포 권한이 생기지 않습니다. 실제 certification claim은 최종 `CERTIFICATION_DECISION.json`만 할 수 있습니다.
@@ -216,7 +224,7 @@ corepack pnpm run master95:delivery
 
 ## V01 완료 순서
 
-1. `alpha.1` 통합 후보와 UX/browser smoke 완료
+1. `alpha.2` 통합 후보와 UX/browser smoke 완료
 2. 로컬 `2.0.4` migration bridge 구현·복구 리허설
 3. Candidate repo 외부 assessor trust root 확정
 4. 재시작 가능한 장기 runtime과 실제 Soak/Pilot

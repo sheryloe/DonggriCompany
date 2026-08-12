@@ -225,6 +225,7 @@ export function buildV01AccessibilityEvidence(automation, manual, binding, gener
     automation.measurement.contrast_minimum_light >= 4.5 &&
     automation.measurement.keyboard_visible_focus === "pass" &&
     automation.measurement.focus_trap_count === 0 &&
+    automation.measurement.focus_cycle_complete === "pass" &&
     automation.measurement.mobile_390x844_overflow_px <= 0 &&
     automatedFindings.length === 0;
   const zoomPass = manual.browser_zoom.reflow_pass === true && manual.browser_zoom.horizontal_overflow_px === 0;
@@ -249,6 +250,7 @@ export function buildV01AccessibilityEvidence(automation, manual, binding, gener
       contrast_minimum_light: automation.measurement.contrast_minimum_light,
       keyboard_visible_focus: automation.measurement.keyboard_visible_focus,
       focus_trap_count: automation.measurement.focus_trap_count,
+      focus_cycle_complete: automation.measurement.focus_cycle_complete,
       browser_zoom_200_reflow: zoomPass ? "pass" : "fail",
       mobile_390x844_overflow_px: automation.measurement.mobile_390x844_overflow_px,
       screen_reader: screenReaderPass ? "pass" : "fail",

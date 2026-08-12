@@ -85,6 +85,7 @@ function completeAudit() {
         contrast_minimum_light: 7.19,
         keyboard_visible_focus: "pass",
         focus_trap_count: 0,
+        focus_cycle_complete: "pass",
         browser_zoom_200_reflow: "pass",
         mobile_390x844_overflow_px: 0,
         screen_reader: "pass",

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -176,6 +177,21 @@ function isRevision(value: string): boolean {
   return /^[0-9a-f]{40}$/i.test(value);
 }
 
+function currentGitRevision(projectRoot: string): string {
+  try {
+    const revision = execFileSync("git", ["-C", projectRoot, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .trim()
+      .toLowerCase();
+    return isRevision(revision) ? revision : "";
+  } catch {
+    return "";
+  }
+}
+
 function isReleaseIdentity(value: unknown): value is ReleaseIdentity {
   if (!value || typeof value !== "object") return false;
   const identity = value as Record<string, unknown>;
@@ -206,7 +222,7 @@ function isReleaseIdentity(value: unknown): value is ReleaseIdentity {
     typeof identity.candidate_id === "string" &&
     identity.candidate_id.length > 0 &&
     typeof identity.source_epoch === "string" &&
-    identity.source_epoch.length > 0 &&
+    /^sha256:[0-9a-f]{64}$/.test(identity.source_epoch) &&
     typeof identity.built_at === "string" &&
     !Number.isNaN(Date.parse(identity.built_at)) &&
     typeof identity.legacy_source_version === "string" &&
@@ -227,7 +243,11 @@ export function resolveReleaseIdentity(
   const metadata = manifest.donggriRelease ?? {};
   const productVersion = String(manifest.version ?? "");
   const channel = parseChannel(metadata.channel);
-  const gitSha = firstNonEmpty(env.DONGRI_RELEASE_GIT_SHA, metadata.gitSha).toLowerCase();
+  const gitSha = firstNonEmpty(
+    env.DONGRI_RELEASE_GIT_SHA,
+    currentGitRevision(projectRoot),
+    metadata.gitSha,
+  ).toLowerCase();
 
   const candidate: unknown = {
     schema_version: metadata.schemaVersion,

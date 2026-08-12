@@ -55,6 +55,7 @@ function requireCleanCandidate() {
 
 function candidateBinding() {
   const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  const expectedCandidateId = `dongri-grigri-v01-${String(pkg.version ?? "").replace(/^1\.0\.0-/, "")}`;
   const binding = {
     candidate_id: String(pkg.donggriRelease?.candidateId ?? ""),
     candidate_sha: execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
@@ -65,7 +66,8 @@ function candidateBinding() {
       .toLowerCase(),
     source_epoch: String(pkg.donggriRelease?.sourceEpoch ?? "").toLowerCase(),
   };
-  assert(binding.candidate_id === "dongri-grigri-v01-alpha.1", "a11y_candidate_id_mismatch");
+  assert(/^1\.0\.0-(alpha|beta|rc)\.\d+$/.test(String(pkg.version ?? "")), "a11y_product_version_invalid");
+  assert(binding.candidate_id === expectedCandidateId, "a11y_candidate_id_mismatch");
   assert(/^[0-9a-f]{40}$/.test(binding.candidate_sha), "a11y_candidate_sha_invalid");
   assert(/^sha256:[0-9a-f]{64}$/.test(binding.source_epoch), "a11y_source_epoch_invalid");
   return binding;
@@ -169,11 +171,18 @@ async function collectFocusEvidence(page) {
     firstSeen.set(identity, index);
   }
   const expectedUniqueTraversal = Math.min(visibleCount, 100);
+  const focusCycleComplete =
+    visibleCount > 0 &&
+    visibleCount <= 100 &&
+    identities.length === visibleCount + 1 &&
+    firstRepeatIndex === visibleCount &&
+    identities[0] === identities[visibleCount];
   return {
     visible_interactive_count: visibleCount,
     sampled_focus_count: samples.length,
     missing_visible_focus_count: samples.filter((sample) => !sample.visible_focus).length,
     focus_trap_count: firstRepeatIndex >= 0 && firstRepeatIndex < expectedUniqueTraversal ? 1 : 0,
+    focus_cycle_complete: focusCycleComplete,
     samples,
   };
 }
@@ -305,6 +314,7 @@ export function summarizeV01AccessibilityAutomation(input) {
     input.lightContrast.pass &&
     input.focus.missing_visible_focus_count === 0 &&
     input.focus.focus_trap_count === 0 &&
+    input.focus.focus_cycle_complete === true &&
     input.mobile.maximum_overflow_px === 0 &&
     criticalFindings.length === 0;
   return {
@@ -314,6 +324,7 @@ export function summarizeV01AccessibilityAutomation(input) {
       contrast_minimum_light: input.lightContrast.min_contrast_ratio ?? 0,
       keyboard_visible_focus: input.focus.missing_visible_focus_count === 0 ? "pass" : "fail",
       focus_trap_count: input.focus.focus_trap_count,
+      focus_cycle_complete: input.focus.focus_cycle_complete === true ? "pass" : "fail",
       mobile_390x844_overflow_px: input.mobile.maximum_overflow_px,
       critical_findings: criticalFindings,
     },

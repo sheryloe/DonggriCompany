@@ -27,6 +27,7 @@ function inputs() {
         contrast_minimum_light: 7,
         keyboard_visible_focus: "pass",
         focus_trap_count: 0,
+        focus_cycle_complete: "pass",
         mobile_390x844_overflow_px: 0,
         critical_findings: [],
       },

@@ -6,7 +6,7 @@ function input() {
   return {
     darkContrast: { pass: true, min_contrast_ratio: 7.1 },
     lightContrast: { pass: true, min_contrast_ratio: 7 },
-    focus: { missing_visible_focus_count: 0, focus_trap_count: 0 },
+    focus: { missing_visible_focus_count: 0, focus_trap_count: 0, focus_cycle_complete: true },
     mobile: { maximum_overflow_px: 0 },
     criticalFindings: [],
     consoleErrors: [],
@@ -27,6 +27,14 @@ test("fails on one pixel of mobile overflow", () => {
   const result = summarizeV01AccessibilityAutomation(value);
   assert.equal(result.component_status, "fail");
   assert.equal(result.measurement.mobile_390x844_overflow_px, 1);
+});
+
+test("fails when forward keyboard traversal does not complete one exact focus cycle", () => {
+  const value = input();
+  value.focus.focus_cycle_complete = false;
+  const result = summarizeV01AccessibilityAutomation(value);
+  assert.equal(result.component_status, "fail");
+  assert.equal(result.measurement.focus_cycle_complete, "fail");
 });
 
 test("promotes browser errors to critical findings", () => {

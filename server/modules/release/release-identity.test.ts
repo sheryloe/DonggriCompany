@@ -21,7 +21,7 @@ const identity = (overrides: Partial<ReleaseIdentity> = {}): ReleaseIdentity => 
   git_sha: "9519f4036ec8e9380d044a4ff65e737485256a3b",
   target_revision: "9519f4036ec8e9380d044a4ff65e737485256a3b",
   candidate_id: "dongri-grigri-v01-alpha.1",
-  source_epoch: "sha256:test-source-epoch",
+  source_epoch: `sha256:${"a".repeat(64)}`,
   built_at: "2026-07-25T00:00:00+09:00",
   legacy_source_version: "2.0.4",
   ...overrides,
@@ -63,10 +63,17 @@ describe("release identity", () => {
         DONGRI_RELEASE_BUILT_AT: "",
       }),
     ).toMatchObject({
-      git_sha: "9519f4036ec8e9380d044a4ff65e737485256a3b",
-      candidate_id: "dongri-grigri-v01-alpha.1",
+      candidate_id: "dongri-grigri-v01-alpha.2",
       source_epoch: "sha256:867e09c08292ea677d8542d7a4a4b29a71c8fb4211fc2c995af44ec8322551c4",
     });
+    expect(
+      resolveReleaseIdentity(undefined, {
+        DONGRI_RELEASE_GIT_SHA: "",
+        DONGRI_RELEASE_CANDIDATE_ID: " ",
+        DONGRI_SOURCE_EPOCH: "",
+        DONGRI_RELEASE_BUILT_AT: "",
+      }).git_sha,
+    ).toMatch(/^[0-9a-f]{40}$/);
   });
 
   it("rejects malformed or unbound identities", () => {
@@ -74,6 +81,7 @@ describe("release identity", () => {
     expect(parseReleaseIdentity(identity({ git_sha: "unbound" }))).toBeNull();
     expect(parseReleaseIdentity(identity({ channel: "stable" }))).toBeNull();
     expect(parseReleaseIdentity(identity({ product_version: "1.0.0", channel: "alpha" }))).toBeNull();
+    expect(parseReleaseIdentity(identity({ source_epoch: "source-epoch-unbound" }))).toBeNull();
   });
 
   it("blocks identity and epoch drift", () => {

@@ -1,26 +1,26 @@
-# Claw-Empire Deployment Guide
+# DonggriCompany Deployment Guide
 
 This directory contains production deployment examples for a single-host Linux setup.
 
 Included files:
 
-- `deploy/.env.production.template`: runtime environment template
+- `deploy/.env.production.template`: placeholder-only runtime environment template
 - `deploy/claw-empire@.service`: example user-level systemd service
 - `deploy/nginx/claw-empire.conf`: example nginx reverse proxy
 
 ## Assumptions
 
 - Node.js 22 or newer
-- pnpm 9 or newer
+- Corepack with the exact pnpm version declared in `package.json`
 - Linux with `systemd`
 - Optional: nginx for TLS termination and reverse proxying
 
 ## 1. Build the app
 
 ```bash
-git clone https://github.com/GreenSheep01201/claw-empire.git
-cd claw-empire
-pnpm install
+git clone <APPROVED_REPOSITORY_URL> DonggriCompany
+cd DonggriCompany
+corepack pnpm install --frozen-lockfile
 pnpm run build
 ```
 
@@ -35,12 +35,12 @@ Set at minimum:
 - `OAUTH_ENCRYPTION_SECRET`
 - `INBOX_WEBHOOK_SECRET`
 - `API_AUTH_TOKEN` for non-loopback access
-- `OAUTH_BASE_URL` if the public URL differs from `http://127.0.0.1:8790`
+- `OAUTH_BASE_URL` if the public URL differs from `http://127.0.0.1:8900`
 
 If you run behind nginx on the same host, keep:
 
 - `HOST=127.0.0.1`
-- `PORT=8790`
+- `PORT=8900`
 
 If you expose the Node server directly on a LAN or VPN, set `HOST=0.0.0.0` and review `ALLOWED_ORIGINS` or `ALLOWED_ORIGIN_SUFFIXES`.
 
@@ -82,7 +82,7 @@ Update `server_name` before enabling the site. If you use Let's Encrypt, install
 Local health check:
 
 ```bash
-curl http://127.0.0.1:8790/api/health
+curl http://127.0.0.1:8900/api/health
 ```
 
 Authenticated remote check:
@@ -94,10 +94,9 @@ curl -H "Authorization: Bearer YOUR_API_AUTH_TOKEN" https://claw.example.com/api
 ## 6. Updating
 
 ```bash
-git pull
-pnpm install
-pnpm run build
-systemctl --user restart claw-empire
+Follow `deploy/ROLLBACK_RUNBOOK.md`. Do not use an unrecorded `git pull` as a
+release mechanism. Every release must name an immutable source revision and a
+previous verified rollback revision.
 ```
 
 ## Notes

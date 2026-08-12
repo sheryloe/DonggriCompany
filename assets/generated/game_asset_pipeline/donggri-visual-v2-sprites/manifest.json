@@ -1,0 +1,34 @@
+{
+  "asset_pack": "donggri_visual_v2",
+  "asset_key": "donggri-visual-v2-runtime-sprites",
+  "status": "generated_v2_runtime_assets",
+  "generated_at_kst": "2026-07-13",
+  "source": {
+    "type": "deterministic_runtime_generation_from_visual_v2_styleboard",
+    "styleboard": "public/generated/donggri-visual-v2/styleboard/donggri-visual-v2-styleboard.png",
+    "previous_runtime_backup": "E:/DonggriPlatform_Asset/archive/DonggriCompany/20260713-donggri-visual-v2-agy-runtime-remediation/public-sprites-donggri-visual-v2-seeded-copy"
+  },
+  "published_directory": "public/sprites/donggri-visual-v2",
+  "runtime_props_atlas": "public/sprites/donggri-visual-v2/office-renewal-v3-props-atlas.png",
+  "sprite_contract": {
+    "sprite_numbers": 44,
+    "directions": [
+      "D",
+      "L",
+      "B",
+      "R"
+    ],
+    "frames_per_direction": 3,
+    "expected_files": 528,
+    "generated_files": 528,
+    "sprite_size": "96x96",
+    "url_example": "/sprites/donggri-visual-v2/12-B-3.png?v=donggri-visual-v2"
+  },
+  "replacement_policy": {
+    "legacy_assets_deleted": false,
+    "legacy_assets_backed_up": true,
+    "backup_path": "E:/DonggriPlatform_Asset/archive/DonggriCompany/20260713-donggri-visual-v2-agy-runtime-remediation/public-sprites-donggri-visual-v2-seeded-copy",
+    "register_endpoint": "/api/sprites/register",
+    "register_pack_key": "donggri_visual_v2"
+  }
+}

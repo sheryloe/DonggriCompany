@@ -108,6 +108,9 @@ jobs:
       - name: Run OpenAPI contract check
         run: pnpm run openapi:check
 
+      - name: Run Master95 repo delivery gate
+        run: pnpm run master95:delivery
+
       - name: Run type check
         run: pnpm exec tsc -p tsconfig.json --noEmit
 

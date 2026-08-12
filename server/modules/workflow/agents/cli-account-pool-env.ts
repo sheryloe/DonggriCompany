@@ -41,12 +41,26 @@ type ResolveCliAccountPoolEnvInput = {
   };
 };
 
-const POOL_CAPABLE_PROVIDERS = new Set(["codex", "gemini", "jules"]);
+const POOL_CAPABLE_PROVIDERS = new Set(["codex", "agy", "jules", "gemini", "antigravity"]);
 const AUTH_ARTIFACT_MARKERS: Record<string, string[]> = {
   codex: [".codex/auth.json"],
-  gemini: [".gemini/oauth_creds.json", ".config/gcloud/application_default_credentials.json"],
+  agy: [".gemini/antigravity-cli/settings.json", ".gemini/antigravity-cli/installation_id"],
   jules: [".jules/auth.json", ".jules/credentials.json", ".jules/cache/oauth_creds.json"],
+  antigravity: [".gemini/antigravity-cli/settings.json", ".gemini/antigravity-cli/installation_id"],
+  gemini: [".gemini/antigravity-cli/settings.json", ".gemini/antigravity-cli/installation_id"],
 };
+
+function normalizeRuntimeProvider(raw: unknown): string {
+  const value = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  return value === "gemini" || value === "antigravity" ? "agy" : value;
+}
+
+function providerLookupKeys(provider: string): string[] {
+  if (provider === "agy") return ["agy", "antigravity", "gemini"];
+  return [provider];
+}
 
 function fileExistsNonEmpty(filePath: string): boolean {
   try {
@@ -62,8 +76,11 @@ export function resolveCliAccountProfileHome(provider: string, poolId: string, r
   if (fs.existsSync(profileHome)) return profileHome;
 
   const normalizedRaw = rawProfileHome.replace(/[\\/]+/g, "/").toLowerCase();
-  const legacySuffix = `/.office-accounts/${provider}/${poolId}`.toLowerCase();
-  if (normalizedRaw.endsWith(legacySuffix)) {
+  const legacySuffixes =
+    provider === "agy"
+      ? ["agy", "antigravity", "gemini"].map((entry) => `/.office-accounts/${entry}/${poolId}`.toLowerCase())
+      : [`/.office-accounts/${provider}/${poolId}`.toLowerCase()];
+  if (legacySuffixes.some((suffix) => normalizedRaw.endsWith(suffix))) {
     const repoScoped = path.resolve(process.cwd(), "data", "office-accounts", provider, poolId);
     if (fs.existsSync(repoScoped)) return repoScoped;
   }
@@ -129,9 +146,7 @@ function computePoolIndex(seed: string | undefined, count: number): number {
 }
 
 export function resolveCliAccountPoolEnv(input: ResolveCliAccountPoolEnvInput): CliAccountPoolEnvResolution {
-  const provider = String(input.provider ?? "")
-    .trim()
-    .toLowerCase();
+  const provider = normalizeRuntimeProvider(input.provider);
   const poolId = String(input.cliAccountPoolId ?? "").trim();
   const platform = input.platform ?? process.platform;
   const requireExplicitSelection = input.policy?.requireExplicitSelection === true;
@@ -159,11 +174,11 @@ export function resolveCliAccountPoolEnv(input: ResolveCliAccountPoolEnvInput): 
         .prepare(
           `SELECT account_pool_id, label, profile_home
            FROM cli_account_pools
-           WHERE provider = ? AND account_pool_id = ?
+           WHERE provider IN (${providerLookupKeys(provider).map(() => "?").join(", ")}) AND account_pool_id = ?
            ${explicitStatusFilter}
            LIMIT 1`,
         )
-        .get(provider, poolId) as CliAccountPoolRow | undefined;
+        .get(...providerLookupKeys(provider), poolId) as CliAccountPoolRow | undefined;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
@@ -178,10 +193,10 @@ export function resolveCliAccountPoolEnv(input: ResolveCliAccountPoolEnvInput): 
           .prepare(
             `SELECT account_pool_id
              FROM cli_account_pools
-             WHERE provider = ? AND account_pool_id = ?
+             WHERE provider IN (${providerLookupKeys(provider).map(() => "?").join(", ")}) AND account_pool_id = ?
              LIMIT 1`,
           )
-          .get(provider, poolId) as { account_pool_id?: string } | undefined;
+          .get(...providerLookupKeys(provider), poolId) as { account_pool_id?: string } | undefined;
         if (exists) {
           return {
             ok: false,
@@ -208,10 +223,10 @@ export function resolveCliAccountPoolEnv(input: ResolveCliAccountPoolEnvInput): 
         .prepare(
           `SELECT account_pool_id, label, profile_home
            FROM cli_account_pools
-           WHERE provider = ? AND status = 'connected'
+           WHERE provider IN (${providerLookupKeys(provider).map(() => "?").join(", ")}) AND status = 'connected'
            ORDER BY COALESCE(last_verified_at, updated_at, created_at) DESC`,
         )
-        .all(provider) as CliAccountPoolRow[];
+        .all(...providerLookupKeys(provider)) as CliAccountPoolRow[];
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {

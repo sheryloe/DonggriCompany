@@ -10,6 +10,7 @@ import {
   isApiRequestError,
   makeIdempotencyKey,
   previewProjectModule,
+  updateProjectAssetJob,
 } from "../api";
 import {
   getAssetJobStatusLabel,
@@ -30,6 +31,7 @@ import type {
   ProjectModuleManifest,
   ProjectModulePreview,
 } from "../types";
+import ImageWorkbenchPanel from "./image-workbench/ImageWorkbenchPanel";
 
 type CategoryFilter = ProjectModuleCategoryFilter;
 
@@ -77,6 +79,8 @@ function errorMessage(error: unknown): string {
   if (isApiRequestError(error)) {
     const labels: Record<string, string> = {
       idempotency_key_required: "적용 식별자가 필요합니다. 다시 시도해 주세요.",
+      asset_job_files_required: "source_files 또는 published_files가 비어 있으면 이미지 작업을 승인할 수 없습니다.",
+      asset_job_published_files_required: "published_files가 비어 있으면 이미지 작업을 게시할 수 없습니다.",
       image_module_required: "이미지 생성 계열 모듈만 이미지 작업을 만들 수 있습니다.",
       module_binding_exists: "이미 같은 모듈이 프로젝트에 연결되어 있습니다.",
       module_not_found: "모듈을 찾을 수 없습니다.",
@@ -121,6 +125,14 @@ export default function ModulesLibrary() {
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
   );
+  const workbenchProject = selectedProject
+    ? {
+        id: selectedProject.id.startsWith("project:")
+          ? selectedProject.id
+          : `project:${selectedProject.name.replace(/[^A-Za-z0-9._-]+/g, "-")}`,
+        name: selectedProject.name,
+      }
+    : { id: "project:BloggerGent", name: "BloggerGent · read-only local scope" };
 
   const filteredModules = useMemo(() => {
     return modules.filter((module) => category === "all" || module.category_key === category);
@@ -264,6 +276,41 @@ export default function ModulesLibrary() {
     }
   };
 
+  const handleMarkAssetJob = async (job: AssetJob, status: AssetJob["status"]) => {
+    if (!selectedProject) return;
+    if (status === "approved" && job.source_files.length === 0 && job.published_files.length === 0) {
+      setError("source_files 또는 published_files가 없는 이미지 작업은 승인할 수 없습니다.");
+      setNotice(null);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await updateProjectAssetJob(selectedProject.id, job.id, {
+        status,
+        review: {
+          visual_pack: "donggri_visual_v2",
+          updated_from: "modules-library",
+          review_note:
+            status === "approved"
+              ? "Visual V2 asset job approved for workspace publication."
+              : "Visual V2 asset job is ready for review.",
+        },
+      });
+      await loadProjectState(selectedProject.id);
+      setNotice(
+        status === "approved"
+          ? "이미지 작업을 승인 상태로 기록했습니다."
+          : "이미지 작업을 검토 대기 상태로 기록했습니다.",
+      );
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 text-slate-100">
       <div className="rounded-3xl border border-slate-700 bg-slate-900/80 p-5 shadow-xl shadow-slate-950/20">
@@ -322,6 +369,23 @@ export default function ModulesLibrary() {
       {error ? (
         <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-100">{error}</div>
       ) : null}
+
+      <ImageWorkbenchPanel
+        projectId={workbenchProject.id}
+        projectName={workbenchProject.name}
+        generationDraftEnabled={Boolean(selectedProject && selectedModule && imageModuleSelected)}
+        onCreateGenerationDraft={async () => {
+          if (!selectedProject || !selectedModule || !moduleCanCreateAssetJob(selectedModule)) {
+            throw new Error("이미지 모듈과 프로젝트를 먼저 선택하세요.");
+          }
+          await createProjectAssetJob(selectedProject.id, {
+            module_key: selectedModule.module_key,
+            asset_key: `${selectedModule.module_key}-${Date.now()}`,
+            asset_brief: assetBrief,
+          });
+          await loadProjectState(selectedProject.id);
+        }}
+      />
 
       {loading ? (
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">
@@ -472,6 +536,33 @@ export default function ModulesLibrary() {
                       <span>{getAssetJobStatusLabel(job.status)}</span>
                     </div>
                     <p className="mt-1 text-slate-500">{getProjectModuleTitle(job.module_key)}</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                      <span>source {job.source_files.length}</span>
+                      <span>published {job.published_files.length}</span>
+                    </div>
+                    {Object.keys(job.review ?? {}).length > 0 ? (
+                      <p className="mt-1 truncate text-[11px] text-amber-200" title={JSON.stringify(job.review)}>
+                        review metadata recorded
+                      </p>
+                    ) : null}
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleMarkAssetJob(job, "needs_review")}
+                        className="flex-1 rounded-md border border-amber-300/40 px-2 py-1 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        검토 대기
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleMarkAssetJob(job, "approved")}
+                        className="flex-1 rounded-md border border-emerald-300/40 px-2 py-1 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        승인 기록
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { resolveProviderRuntimeKind } from "../../workflow/agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../../workflow/agents/provider-policy-resolver.ts";
+import { resolveAgyRuntimeOptions } from "../../workflow/agents/agy-runtime-options.ts";
 import { previewCanonicalRouting } from "../../company/canonical-policy.ts";
 import { resolveCanonicalIdentity } from "../../company/canonical-identity.ts";
 import { formatDelegationTrace } from "./delegation-log.ts";
@@ -35,6 +36,7 @@ type ParentTaskRow = {
   project_path: string | null;
   department_id: string | null;
   workflow_pack_key?: string | null;
+  workflow_meta_json?: string | null;
 };
 
 interface BatchDeps {
@@ -79,6 +81,7 @@ interface BatchDeps {
     policySnapshotHash: string | null;
     policyResolutionJson: string;
   };
+  getTaskContinuationContext?: (taskId: string) => string;
   ensureClaudeMd: (projectPath: string, worktreePath: string) => void;
   getProviderModelConfig: () => Record<
     string,
@@ -93,6 +96,7 @@ interface BatchDeps {
     model?: string,
     reasoningLevel?: string,
     cliAccountPoolId?: string | null,
+    runtimeOptions?: unknown,
   ) => {
     on: (event: "close", listener: (code: number | null) => void) => void;
   };
@@ -150,6 +154,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
     createWorktree,
     logsDir,
     ensureTaskExecutionSession,
+    getTaskContinuationContext = () => "",
     ensureClaudeMd,
     getProviderModelConfig,
     spawnCliAgent,
@@ -563,6 +568,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
             targetDeptName,
           );
           const executionSession = ensureTaskExecutionSession(delegatedTaskId, execAgent.id, execProvider);
+          const continuationCtx = getTaskContinuationContext(delegatedTaskId);
           const canonicalExecutionPolicy = previewCanonicalRouting({
             text: [delegatedTitle, delegatedDescription].filter(Boolean).join("\n"),
             projectPath: projPath,
@@ -615,6 +621,7 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
             `[Task Session] id=${executionSession.sessionId} owner=${executionSession.agentId} provider=${executionSession.provider}`,
             "Task-scoped session: keep continuity only within this delegated task.",
             spawnPrompt,
+            continuationCtx,
             worktreeNote,
             siblingWorktreeBlock,
           ].join("\n");
@@ -731,6 +738,11 @@ export function createSubtaskDelegationBatch(deps: BatchDeps) {
                 delegatePolicy.model,
                 delegatePolicy.reasoningLevel,
                 execAgent.cli_account_pool_id ?? null,
+                resolveAgyRuntimeOptions({
+                  provider: execProvider,
+                  workflowMetaJson: parentTask.workflow_meta_json,
+                  continuationContext: continuationCtx,
+                }),
               );
             } catch (error) {
               failDelegatedLaunch(error, "cli_spawn");

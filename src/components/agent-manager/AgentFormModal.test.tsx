@@ -149,16 +149,16 @@ describe("AgentFormModal canonical cutover", () => {
     expect(screen.queryByLabelText("Reasoning Level")).not.toBeInTheDocument();
   });
 
-  it("keeps provider-specific model controls out of the modal for gemini", async () => {
+  it("keeps provider-specific model controls out of the modal for agy", async () => {
     const user = userEvent.setup();
     render(<ModalHarness />);
 
-    await user.selectOptions(screen.getByLabelText("CLI Provider"), "gemini");
+    await user.selectOptions(screen.getByLabelText("CLI Provider"), "agy");
 
     expect(
       screen.getByText("Model and reasoning selection are controlled by centralized provider policy."),
     ).toBeInTheDocument();
-    expect(screen.queryByLabelText("Gemini Model")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("AGY Model")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Reasoning Level")).not.toBeInTheDocument();
   });
 });

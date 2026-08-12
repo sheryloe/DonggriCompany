@@ -1,6 +1,7 @@
 {
   "version": "walk-normalize-v2",
   "generated_by": "corepack pnpm run agents:sprites:check",
+  "asset_pack": "legacy",
   "source_sheet": "public/generated/agent-visual-profiles/agent-visual-profile-sheet-v1.png",
   "runtime_sprites": 44,
   "directions": ["D", "L", "B", "R"],

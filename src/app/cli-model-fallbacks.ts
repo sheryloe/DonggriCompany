@@ -8,12 +8,9 @@ const CODEX_FALLBACK_MODELS: CliModelInfo[] = [
   { slug: "gpt-5.1-codex-mini", displayName: "GPT-5.1 Codex Mini" },
 ];
 
-const GEMINI_FALLBACK_MODELS: CliModelInfo[] = [
-  { slug: "gemini-3-pro-preview", displayName: "Gemini 3 Pro Preview" },
-  { slug: "gemini-3-flash-preview", displayName: "Gemini 3 Flash Preview" },
-  { slug: "gemini-2.5-pro", displayName: "Gemini 2.5 Pro" },
-  { slug: "gemini-2.5-flash", displayName: "Gemini 2.5 Flash" },
-  { slug: "gemini-2.5-flash-lite", displayName: "Gemini 2.5 Flash Lite" },
+const AGY_FALLBACK_MODELS: CliModelInfo[] = [
+  { slug: "Gemini 3.1 Pro (High)", displayName: "Gemini 3.1 Pro (High)" },
+  { slug: "Gemini 3.5 Flash (Medium)", displayName: "Gemini 3.5 Flash (Medium)" },
 ];
 
 function dedupeModels(models: readonly CliModelInfo[]): CliModelInfo[] {
@@ -36,7 +33,7 @@ function dedupeModels(models: readonly CliModelInfo[]): CliModelInfo[] {
 
 function providerFallbackModels(provider: string): CliModelInfo[] {
   if (provider === "codex") return CODEX_FALLBACK_MODELS;
-  if (provider === "gemini") return GEMINI_FALLBACK_MODELS;
+  if (provider === "agy" || provider === "gemini" || provider === "antigravity") return AGY_FALLBACK_MODELS;
   return [];
 }
 

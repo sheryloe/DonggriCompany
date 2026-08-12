@@ -7,6 +7,7 @@ import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-a
 import { ensureVideoPreprodRemotionBestPracticesSkill } from "../../../workflow/core/video-skill-bootstrap.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
+import { resolveAgyRuntimeOptions } from "../../../workflow/agents/agy-runtime-options.ts";
 import { previewCanonicalRouting } from "../../../company/canonical-policy.ts";
 import { evaluateExecutionPathGate } from "../../../workflow/core/execution-path-gate.ts";
 
@@ -32,6 +33,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
     spawnCliAgent,
     handleTaskRunComplete,
     resolveLang,
+    getTaskContinuationContext,
     pickL,
     l,
   } = ctx;
@@ -152,6 +154,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
           title: string;
           description: string | null;
           workflow_pack_key: string | null;
+          workflow_meta_json: string | null;
           project_id: string | null;
           department_id: string | null;
           project_path: string | null;
@@ -205,6 +208,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
     }
     const logPath = path.join(logsDir, `${taskId}.log`);
     const executionSession = ensureTaskExecutionSession(taskId, agent.id, provider);
+    const continuationCtx = getTaskContinuationContext(taskId);
     const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(provider);
     const roleLabel =
       { team_leader: "Team Leader", senior: "Senior", junior: "Junior", intern: "Intern" }[agent.role] || agent.role;
@@ -246,6 +250,7 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
         "This session is scoped to this task only.",
         `[Task] ${task.title}`,
         task.description ? `\n${task.description}` : "",
+        continuationCtx,
         workflowPackGuidance ? `\n[Workflow Pack Execution Rules]\n${workflowPackGuidance}` : "",
         `\n[Canonical Policy]\nversion=${canonicalExecutionPolicy.policyVersion}\nfamily=${canonicalExecutionPolicy.family}\nstage=${canonicalExecutionPolicy.stage}\ntier=${canonicalExecutionPolicy.tier}\nspecialization=${canonicalExecutionPolicy.specialization ?? "none"}`,
         `NOTE: You are working in an isolated Git worktree branch (climpire/${taskId.slice(0, 8)}). Do not commit, push, merge, reset, clean, stash, or rewrite history. Leave edits in the worktree; approved Git mutation is handled by the Donggri Ver.1 review gate.`,
@@ -332,6 +337,11 @@ export function registerAgentSpawnRoute(ctx: RuntimeContext): void {
       spawnModel,
       spawnReasoningLevel,
       agent.cli_account_pool_id ?? null,
+      resolveAgyRuntimeOptions({
+        provider,
+        workflowMetaJson: task.workflow_meta_json,
+        continuationContext: continuationCtx,
+      }),
     );
     child.on("close", (code: number | null) => {
       handleTaskRunComplete(taskId, code ?? 1);

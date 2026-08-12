@@ -37,7 +37,11 @@ interface AgentDetailProps {
   pixelAgentMode?: PixelAgentModeSettings;
 }
 
-const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "gemini", "jules"];
+const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "agy", "jules", "gemini", "antigravity"];
+
+function normalizeAgentCliProvider(provider: Agent["cli_provider"]): Agent["cli_provider"] {
+  return provider === "gemini" || provider === "antigravity" ? "agy" : provider;
+}
 
 export default function AgentDetail({
   agent,
@@ -58,7 +62,7 @@ export default function AgentDetail({
   const { t, language } = useI18n();
   const [tab, setTab] = useState<"info" | "tasks" | "alba" | "memory">("info");
   const [editingCli, setEditingCli] = useState(false);
-  const [selectedCli, setSelectedCli] = useState(agent.cli_provider);
+  const [selectedCli, setSelectedCli] = useState(normalizeAgentCliProvider(agent.cli_provider));
   const [selectedOAuthAccountId, setSelectedOAuthAccountId] = useState(agent.oauth_account_id ?? "");
   const [selectedCliAccountPoolId, setSelectedCliAccountPoolId] = useState(agent.cli_account_pool_id ?? "");
   const [cliAccountPools, setCliAccountPools] = useState<CliAccountPoolView[]>([]);
@@ -84,10 +88,10 @@ export default function AgentDetail({
   }, [subtasks]);
 
   const statusCfg = STATUS_CONFIG[agent.status] ?? STATUS_CONFIG.idle;
-  const oauthProviderKey =
-    selectedCli === "copilot" ? "github-copilot" : selectedCli === "antigravity" ? "antigravity" : null;
-  const requiresOAuthAccount = selectedCli === "copilot" || selectedCli === "antigravity";
-  const requiresCliPool = CLI_POOL_PROVIDERS.includes(selectedCli);
+  const oauthProviderKey = selectedCli === "copilot" ? "github-copilot" : null;
+  const requiresOAuthAccount = selectedCli === "copilot";
+  const supportsCliPool = CLI_POOL_PROVIDERS.includes(selectedCli);
+  const requiresCliPool = supportsCliPool;
 
   const activeOAuthAccounts = useMemo(() => {
     if (!oauthProviderKey || !oauthStatus) return [];
@@ -97,7 +101,10 @@ export default function AgentDetail({
   }, [oauthProviderKey, oauthStatus]);
 
   const selectedCliAccountPools = useMemo(
-    () => cliAccountPools.filter((pool) => pool.provider === selectedCli),
+    () =>
+      cliAccountPools.filter(
+        (pool) => pool.provider === selectedCli || (selectedCli === "agy" && (pool.provider === "gemini" || pool.provider === "antigravity")),
+      ),
     [cliAccountPools, selectedCli],
   );
   const canonicalSummary = useMemo(() => {
@@ -137,7 +144,7 @@ export default function AgentDetail({
     pixelAgentMode?.density === "compact" ? "간결" : pixelAgentMode?.density === "showcase" ? "쇼케이스" : "균형";
 
   useEffect(() => {
-    setSelectedCli(agent.cli_provider);
+    setSelectedCli(normalizeAgentCliProvider(agent.cli_provider));
     setSelectedOAuthAccountId(agent.oauth_account_id ?? "");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
   }, [agent]);
@@ -175,8 +182,8 @@ export default function AgentDetail({
   }, [editingCli, requiresOAuthAccount]);
 
   useEffect(() => {
-    if (!editingCli && !CLI_POOL_PROVIDERS.includes(agent.cli_provider)) return;
-    if (editingCli && !requiresCliPool) return;
+    if (!editingCli && !CLI_POOL_PROVIDERS.includes(normalizeAgentCliProvider(agent.cli_provider))) return;
+    if (editingCli && !supportsCliPool) return;
     let cancelled = false;
     setCliAccountPoolsLoading(true);
     api
@@ -191,7 +198,7 @@ export default function AgentDetail({
     return () => {
       cancelled = true;
     };
-  }, [editingCli, selectedCli, agent.cli_provider, requiresCliPool]);
+  }, [editingCli, selectedCli, agent.cli_provider, supportsCliPool]);
 
   useEffect(() => {
     if (!requiresOAuthAccount) {
@@ -205,14 +212,14 @@ export default function AgentDetail({
   }, [requiresOAuthAccount, activeOAuthAccounts, selectedOAuthAccountId]);
 
   useEffect(() => {
-    if (!requiresCliPool) {
+    if (!supportsCliPool) {
       if (selectedCliAccountPoolId) setSelectedCliAccountPoolId("");
       return;
     }
     if (selectedCliAccountPools.length === 0) return;
     const exists = selectedCliAccountPools.some((pool) => pool.accountPoolId === selectedCliAccountPoolId);
-    if (!exists) setSelectedCliAccountPoolId(selectedCliAccountPools[0].accountPoolId);
-  }, [requiresCliPool, selectedCliAccountPoolId, selectedCliAccountPools]);
+    if (!exists && requiresCliPool) setSelectedCliAccountPoolId(selectedCliAccountPools[0].accountPoolId);
+  }, [requiresCliPool, selectedCliAccountPoolId, selectedCliAccountPools, supportsCliPool]);
 
   const handleSaveCli = useCallback(async () => {
     setSavingCli(true);
@@ -223,8 +230,8 @@ export default function AgentDetail({
         cli_model: null,
         cli_reasoning_level: null,
         run_mode: "standard",
-        cli_account_pool_id: requiresCliPool
-          ? selectedCliAccountPoolId || selectedCliAccountPools[0]?.accountPoolId || null
+        cli_account_pool_id: supportsCliPool
+          ? selectedCliAccountPoolId || (requiresCliPool ? selectedCliAccountPools[0]?.accountPoolId : null) || null
           : null,
       });
       onAgentUpdated?.();
@@ -243,11 +250,12 @@ export default function AgentDetail({
     selectedCliAccountPoolId,
     selectedCliAccountPools,
     selectedOAuthAccountId,
+    supportsCliPool,
   ]);
 
   const handleCancelCliEdit = useCallback(() => {
     setEditingCli(false);
-    setSelectedCli(agent.cli_provider);
+    setSelectedCli(normalizeAgentCliProvider(agent.cli_provider));
     setSelectedOAuthAccountId(agent.oauth_account_id ?? "");
     setSelectedCliAccountPoolId(agent.cli_account_pool_id ?? "");
   }, [agent.cli_account_pool_id, agent.cli_provider, agent.oauth_account_id]);
@@ -350,7 +358,9 @@ export default function AgentDetail({
                         }}
                         className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
                       >
-                        {Object.entries(CLI_LABELS).map(([key, label]) => (
+                        {Object.entries(CLI_LABELS)
+                          .filter(([key]) => key !== "gemini" && key !== "antigravity")
+                          .map(([key, label]) => (
                           <option key={key} value={key}>
                             {label}
                           </option>
@@ -388,7 +398,7 @@ export default function AgentDetail({
                             })}
                           </span>
                         ))}
-                      {requiresCliPool &&
+                      {supportsCliPool &&
                         (cliAccountPoolsLoading ? (
                           <span className="text-[10px] text-slate-400">
                             {t({

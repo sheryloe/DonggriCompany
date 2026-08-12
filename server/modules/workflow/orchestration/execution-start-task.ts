@@ -7,6 +7,7 @@ import { resolveVideoArtifactSpecForTask } from "../packs/video-artifact.ts";
 import { buildAgentPromptProfileBlock } from "../agents/agent-profile.ts";
 import { resolveProviderExecutionPolicy } from "../agents/provider-policy-resolver.ts";
 import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
+import { resolveAgyRuntimeOptions } from "../agents/agy-runtime-options.ts";
 import { previewCanonicalRouting } from "../../company/canonical-policy.ts";
 import { buildCanonicalCapabilityLabel } from "../../company/canonical-display.ts";
 import { buildGoalCommandPromptBlock } from "../goal-commands.ts";
@@ -464,6 +465,11 @@ export function createExecutionStartTaskTools(deps: CreateExecutionStartTaskTool
         executionPolicy.model,
         executionPolicy.reasoningLevel,
         execAgent.cli_account_pool_id ?? null,
+        resolveAgyRuntimeOptions({
+          provider,
+          workflowMetaJson: taskData.workflow_meta_json,
+          continuationContext: continuationCtx,
+        }),
       );
       child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
         const forcedAfterFinalOutput = Boolean((child as any).__clawForcedAfterFinalOutput);

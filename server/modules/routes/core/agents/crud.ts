@@ -66,7 +66,7 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       return false;
     }
   })();
-  const CLI_ACCOUNT_POOL_PROVIDERS = new Set(["codex", "gemini", "jules"]);
+  const CLI_ACCOUNT_POOL_PROVIDERS = new Set(["codex", "agy", "jules"]);
   const agentPackExpr = hasAgentWorkflowPackColumn ? "COALESCE(a.workflow_pack_key, 'development')" : "'development'";
   const workflowProfileExpr = hasAgentWorkflowProfileColumn ? "workflow_profile" : "NULL AS workflow_profile";
   const agentProfileExpr = hasAgentProfileJsonColumn ? "agent_profile_json" : "NULL AS agent_profile_json";
@@ -112,6 +112,19 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
 
   function normalizeText(value: unknown): string {
     return typeof value === "string" ? value.trim() : "";
+  }
+
+  function normalizeCliProviderInput(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const provider = value.trim().toLowerCase();
+    if (provider === "gemini" || provider === "antigravity") return "agy";
+    return ["claude", "codex", "agy", "jules", "opencode", "kimi", "copilot", "api"].includes(provider)
+      ? provider
+      : null;
+  }
+
+  function cliAccountPoolProviderLookupKeys(provider: string): string[] {
+    return provider === "agy" ? ["agy", "antigravity", "gemini"] : [provider];
   }
 
   function normalizeIncomingRole(
@@ -169,9 +182,14 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
   function hasCliAccountPool(provider: string, accountPoolId: string): boolean {
     if (!hasCliAccountPoolsTable) return false;
     try {
+      const providerKeys = cliAccountPoolProviderLookupKeys(provider);
       const row = db
-        .prepare("SELECT 1 AS ok FROM cli_account_pools WHERE provider = ? AND account_pool_id = ? LIMIT 1")
-        .get(provider, accountPoolId) as { ok?: number } | undefined;
+        .prepare(
+          `SELECT 1 AS ok FROM cli_account_pools
+           WHERE provider IN (${providerKeys.map(() => "?").join(", ")}) AND account_pool_id = ?
+           LIMIT 1`,
+        )
+        .get(...providerKeys, accountPoolId) as { ok?: number } | undefined;
       return Number(row?.ok ?? 0) === 1;
     } catch {
       return false;
@@ -441,14 +459,8 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
         if (!deptExists) return res.status(400).json({ error: "department_not_found" });
       }
 
-      const cli_provider =
-        typeof body.cli_provider === "string" &&
-        ["claude", "codex", "gemini", "jules", "opencode", "kimi", "copilot", "antigravity", "api"].includes(
-          body.cli_provider,
-        )
-          ? body.cli_provider
-          : "claude";
-      const supportsCliModelOverride = ["claude", "codex", "gemini", "opencode", "kimi"].includes(cli_provider);
+      const cli_provider = normalizeCliProviderInput(body.cli_provider) ?? "claude";
+      const supportsCliModelOverride = ["claude", "codex", "agy", "opencode", "kimi"].includes(cli_provider);
       const supportsCliReasoningOverride = cli_provider === "codex";
       let cli_model: string | null = null;
       if ("cli_model" in body) {
@@ -732,13 +744,16 @@ export function registerAgentCrudRoutes(ctx: RuntimeContext): void {
       | string
       | null
       | undefined;
-    const nextProvider = nextProviderRaw ?? "claude";
-    const nextOAuthProvider =
-      nextProvider === "copilot" ? "github" : nextProvider === "antigravity" ? "google_antigravity" : null;
-    const supportsCliModelOverride = ["claude", "codex", "gemini", "opencode", "kimi"].includes(nextProvider);
+    const nextProvider = normalizeCliProviderInput(nextProviderRaw) ?? "claude";
+    const nextOAuthProvider = nextProvider === "copilot" ? "github" : null;
+    const supportsCliModelOverride = ["claude", "codex", "agy", "opencode", "kimi"].includes(nextProvider);
     const supportsCliReasoningOverride = nextProvider === "codex";
     const providerChanged = "cli_provider" in body && nextProvider !== String(existing.cli_provider ?? "claude");
     const nextProviderSupportsPool = CLI_ACCOUNT_POOL_PROVIDERS.has(nextProvider);
+
+    if ("cli_provider" in body) {
+      body.cli_provider = nextProvider;
+    }
 
     if (!nextOAuthProvider && !("oauth_account_id" in body) && "cli_provider" in body) {
       body.oauth_account_id = null;

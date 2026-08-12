@@ -47,12 +47,12 @@ const DONGGRI_SKILL_DISPLAY: Record<string, DonggriSkillDisplay> = {
     ],
   },
   "donggri-gemini-cli-operations": {
-    title: "Gemini CLI 운영",
-    description: "Gemini CLI, Gemini Code Assist, MCP, quota, agent mode 작업을 안전하게 점검하는 Skill입니다.",
+    title: "AGY CLI 운영",
+    description: "AGY CLI, Google model selection, MCP, quota, agent mode 작업을 안전하게 점검하는 Skill입니다.",
     whenToUse: [
-      "Gemini CLI 계정, 사용량, quota 상태를 확인해야 할 때 사용합니다.",
-      "Gemini 기반 조사나 보조 실행을 Donggri 규칙에 맞춰 연결할 때 사용합니다.",
-      "Codex와 Gemini 역할을 분리해서 하이브리드 운영해야 할 때 사용합니다.",
+      "AGY CLI 계정, 사용량, quota 상태를 확인해야 할 때 사용합니다.",
+      "AGY 기반 조사나 보조 실행을 Donggri 규칙에 맞춰 연결할 때 사용합니다.",
+      "Codex와 AGY 역할을 분리해서 하이브리드 운영해야 할 때 사용합니다.",
     ],
   },
   "donggri-google-stitch-design": {
@@ -167,8 +167,8 @@ export function getSkillDetailWhenToUse(
 export function getOAuthProviderDisplayName(provider: string): string {
   const normalized = provider.toLowerCase();
   if (normalized === "github-copilot" || normalized === "copilot") return "GitHub Copilot";
-  if (normalized === "google" || normalized === "antigravity") return "Google Antigravity";
-  if (normalized === "gemini") return "Gemini";
+  if (normalized === "google" || normalized === "antigravity") return "AGY OAuth";
+  if (normalized === "gemini") return "AGY CLI";
   if (normalized === "codex") return "Codex";
   if (normalized === "github") return "GitHub";
   return provider;
@@ -177,7 +177,7 @@ export function getOAuthProviderDisplayName(provider: string): string {
 export function getSupportedTargetDisplayName(target: string): string {
   if (target === "donggri") return "Donggri";
   if (target === "codex") return "Codex 앱";
-  if (target === "gemini") return "Gemini";
+  if (target === "gemini") return "AGY";
   return target;
 }
 
@@ -188,7 +188,7 @@ export function getPlatformDisplayName(name: string): string {
   if (normalized.includes("linux")) return "Linux";
   if (normalized.includes("codex")) return "Codex";
   if (normalized.includes("claude")) return "Claude Code";
-  if (normalized.includes("gemini")) return "Gemini CLI";
+  if (normalized.includes("gemini")) return "AGY CLI";
   if (normalized.includes("cursor")) return "Cursor";
   if (normalized.includes("vscode") || normalized.includes("vs code")) return "VS Code";
   if (normalized.includes("web")) return "웹";

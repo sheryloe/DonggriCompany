@@ -8,7 +8,22 @@ import { resolveProviderRuntimeKind } from "./provider-runtime-kind.ts";
 type CliRuntimeDeps = {
   db: any;
   logsDir: string;
-  buildAgentArgs: (provider: string, model?: string, reasoningLevel?: string) => string[];
+  buildAgentArgs: (
+    provider: string,
+    model?: string,
+    reasoningLevel?: string,
+    opts?: {
+      noTools?: boolean;
+      agy?: {
+        continueConversation?: boolean;
+        conversationId?: string | null;
+        projectId?: string | null;
+        printTimeout?: string | null;
+        logFile?: string | null;
+        addDirs?: string[];
+      };
+    },
+  ) => string[];
   clearCliOutputDedup: (taskId: string) => void;
   normalizeStreamChunk: (chunk: Buffer, options?: { dropCliNoise?: boolean }) => string;
   shouldSkipDuplicateCliOutput: (taskId: string, stream: "stdout" | "stderr", text: string) => boolean;
@@ -20,6 +35,14 @@ type CliRuntimeDeps = {
   activeProcesses: Map<string, ChildProcess>;
   createSubtaskFromCli: (taskId: string, toolUseId: string, title: string) => void;
   completeSubtaskFromCli: (toolUseId: string) => void;
+};
+
+type CliRuntimeOptions = {
+  continueConversation?: boolean;
+  agyConversationId?: string | null;
+  agyProjectId?: string | null;
+  antigravityConversationId?: string | null;
+  antigravityProjectId?: string | null;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -252,7 +275,9 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
       ? [
           path.join(process.env.ProgramFiles || "C:\\Program Files", "nodejs"),
           path.join(process.env.LOCALAPPDATA || "", "Programs", "nodejs"),
+          path.join(process.env.LOCALAPPDATA || "", "agy", "bin"),
           path.join(process.env.APPDATA || "", "npm"),
+          path.join("G:\\Donggri_DevDrive", "tools", "antigravity"),
         ].filter(Boolean)
       : [
           "/opt/homebrew/bin",
@@ -480,19 +505,19 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
     }
   }
 
-  function ensureGeminiRunProfile(
+  function ensureAgyRunProfile(
     taskId: string,
     cleanEnv: NodeJS.ProcessEnv,
     safeWrite: (text: string) => boolean,
   ): void {
     try {
       const sharedHome = (process.env.HOME || os.homedir() || "").trim() || os.homedir();
-      const connectedPoolHome = resolveConnectedCliProfileHome("gemini");
+      const connectedPoolHome = resolveConnectedCliProfileHome("agy");
       const sourceHomeCandidates = [connectedPoolHome, sharedHome].filter((v): v is string => Boolean(v));
       const sourceGeminiDirs = sourceHomeCandidates.map((home) => path.join(home, ".gemini"));
 
       const dataRoot = path.dirname(logsDir);
-      const runHome = path.join(dataRoot, ".cli-homes", "gemini", taskId);
+      const runHome = path.join(dataRoot, ".cli-homes", "agy", taskId);
       const runGeminiDir = path.join(runHome, ".gemini");
       fs.mkdirSync(runGeminiDir, { recursive: true });
       fs.mkdirSync(path.join(runGeminiDir, "tmp"), { recursive: true });
@@ -520,6 +545,16 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
       copyFirstFound("oauth_creds.json", path.join(runGeminiDir, "oauth_creds.json"), sourceGeminiDirs);
       copyFirstFound("settings.json", path.join(runGeminiDir, "settings.json"), sourceGeminiDirs);
       copyFirstFound("projects.json", path.join(runGeminiDir, "projects.json"), sourceGeminiDirs);
+      copyFirstFound(
+        path.join("antigravity-cli", "settings.json"),
+        path.join(runGeminiDir, "antigravity-cli", "settings.json"),
+        sourceGeminiDirs,
+      );
+      copyFirstFound(
+        path.join("antigravity-cli", "installation_id"),
+        path.join(runGeminiDir, "antigravity-cli", "installation_id"),
+        sourceGeminiDirs,
+      );
       copyFirstFound(
         path.join(".config", "gcloud", "application_default_credentials.json"),
         path.join(runHome, ".config", "gcloud", "application_default_credentials.json"),
@@ -554,14 +589,14 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
           security.auth = auth;
           nextSettings.security = security;
           fs.writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2), { encoding: "utf8", mode: 0o600 });
-          safeWrite("[Claw-Empire] Gemini auth mode auto-set to oauth-personal for this task run.\n");
+          safeWrite("[Dongri-grigri] AGY auth mode auto-set to oauth-personal for this task run.\n");
         }
       }
 
       cleanEnv.HOME = runHome;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      safeWrite(`[Claw-Empire] Gemini profile prep warning: ${msg}\n`);
+      safeWrite(`[Dongri-grigri] AGY profile prep warning: ${msg}\n`);
     }
   }
 
@@ -574,6 +609,7 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
     model?: string,
     reasoningLevel?: string,
     cliAccountPoolId?: string | null,
+    runtimeOptions?: CliRuntimeOptions,
   ): ChildProcess {
     clearCliOutputDedup(taskId);
     // Save prompt for debugging
@@ -593,8 +629,9 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
     cleanEnv.FORCE_COLOR = "0";
     cleanEnv.CI = "1";
     if (!cleanEnv.TERM) cleanEnv.TERM = "dumb";
-    if (provider === "gemini" && runtimeKind === "cli_stream") {
-      ensureGeminiRunProfile(taskId, cleanEnv, safeWrite);
+    const isAgyCliProvider = provider === "agy" || provider === "gemini" || provider === "antigravity";
+    if (isAgyCliProvider && runtimeKind === "cli_stream") {
+      ensureAgyRunProfile(taskId, cleanEnv, safeWrite);
     }
 
     const poolEnv = resolveCliAccountPoolEnv({
@@ -646,11 +683,36 @@ export function createCliRuntimeTools(deps: CliRuntimeDeps) {
         `[Claw-Empire] CLI account env: provider=${provider} kind=${runtimeKind} pool=${poolEnv.poolId ?? "default"} selected_by=${poolEnv.selectedBy} home=${effectiveHome || "(empty)"}\n`,
       );
       if (runtimeKind === "cli_stream") {
-        const args = buildAgentArgs(provider, model, reasoningLevel);
+        const agyLogPath = isAgyCliProvider ? `${logPath}.agy.log` : null;
+        const args = buildAgentArgs(provider, model, reasoningLevel, {
+          agy: isAgyCliProvider
+            ? {
+                continueConversation: runtimeOptions?.continueConversation === true,
+                conversationId: runtimeOptions?.agyConversationId ?? runtimeOptions?.antigravityConversationId ?? null,
+                projectId: runtimeOptions?.agyProjectId ?? runtimeOptions?.antigravityProjectId ?? null,
+                logFile: agyLogPath,
+                addDirs: [logsDir],
+              }
+            : undefined,
+        });
+        if (isAgyCliProvider) {
+          shouldWritePrompt = false;
+          args.push(
+            "--print",
+            [
+              "Read the full task prompt from this file, then execute it exactly:",
+              promptPath,
+              "Use that file as the authoritative instruction for this run.",
+            ].join("\n"),
+          );
+          safeWrite(
+            `[AGY CLI] prompt_file=${promptPath} log_file=${agyLogPath ?? "(default)"} continue=${runtimeOptions?.continueConversation === true ? "true" : "false"}\n`,
+          );
+        }
         child = spawn(args[0], args.slice(1), {
           cwd: projectPath,
           env: cleanEnv,
-          shell: process.platform === "win32",
+          shell: process.platform === "win32" && !isAgyCliProvider,
           stdio: ["pipe", "pipe", "pipe"],
           detached: process.platform !== "win32",
           windowsHide: true,

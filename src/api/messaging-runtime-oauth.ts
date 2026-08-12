@@ -411,7 +411,7 @@ export interface OAuthProviderStatus {
 }
 
 export type OAuthConnectProvider = "github-copilot" | "antigravity";
-export type OfficeExecutionProvider = "codex" | "gemini" | "claude" | "jules";
+export type OfficeExecutionProvider = "codex" | "agy" | "claude" | "jules";
 
 export interface OfficeOAuthSessionStatus {
   provider: string;
@@ -545,7 +545,7 @@ export type CliAccountPoolStatus = "connected" | "auth_required" | "install_requ
 
 export interface CliAccountPoolView {
   id: string;
-  provider: OfficeExecutionProvider;
+  provider: OfficeExecutionProvider | "gemini" | "antigravity";
   accountPoolId: string;
   label: string;
   profileHome: string;

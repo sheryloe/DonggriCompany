@@ -22,7 +22,11 @@ import { StackedSpriteIcon } from "./agent-manager/EmojiPicker";
 import type { AgentManagerProps, FormData } from "./agent-manager/types";
 import { pickRandomSpritePair } from "./agent-manager/utils";
 
-const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "gemini", "jules"];
+const CLI_POOL_PROVIDERS: Agent["cli_provider"][] = ["codex", "agy", "jules", "gemini", "antigravity"];
+
+function normalizeAgentCliProvider(provider: Agent["cli_provider"]): Agent["cli_provider"] {
+  return provider === "gemini" || provider === "antigravity" ? "agy" : provider;
+}
 
 export default function AgentManager({
   agents,
@@ -203,7 +207,7 @@ export default function AgentManager({
         name_zh: agent.name_zh || "",
         department_id: agent.department_id || "",
         role: agent.role,
-        cli_provider: agent.cli_provider,
+        cli_provider: normalizeAgentCliProvider(agent.cli_provider),
         cli_account_pool_id: agent.cli_account_pool_id ?? "",
         workflow_role: workflowProfile?.role ?? workflowDefaults.workflow_role,
         review_lenses_text: (workflowProfile?.review_lenses ?? []).join(", ") || workflowDefaults.review_lenses_text,
@@ -231,11 +235,18 @@ export default function AgentManager({
     setSaving(true);
     try {
       const departmentId = form.department_id.trim();
-      const providerPools = cliAccountPools.filter((pool) => pool.provider === form.cli_provider);
-      const normalizedCliAccountPoolId = CLI_POOL_PROVIDERS.includes(form.cli_provider)
-        ? form.cli_account_pool_id.trim() || providerPools[0]?.accountPoolId || null
+      const normalizedProvider = normalizeAgentCliProvider(form.cli_provider);
+      const providerPools = cliAccountPools.filter(
+        (pool) =>
+          pool.provider === normalizedProvider ||
+          (normalizedProvider === "agy" && (pool.provider === "gemini" || pool.provider === "antigravity")),
+      );
+      const supportsCliPool = CLI_POOL_PROVIDERS.includes(form.cli_provider);
+      const requiresCliPool = supportsCliPool;
+      const normalizedCliAccountPoolId = supportsCliPool
+        ? form.cli_account_pool_id.trim() || (requiresCliPool ? providerPools[0]?.accountPoolId : null) || null
         : null;
-      if (CLI_POOL_PROVIDERS.includes(form.cli_provider) && !normalizedCliAccountPoolId) {
+      if (requiresCliPool && !normalizedCliAccountPoolId) {
         setSaving(false);
         return;
       }
@@ -258,7 +269,7 @@ export default function AgentManager({
         name_ja: form.name_ja.trim(),
         name_zh: form.name_zh.trim(),
         role: form.role,
-        cli_provider: form.cli_provider,
+        cli_provider: normalizedProvider,
         cli_account_pool_id: normalizedCliAccountPoolId,
         workflow_profile: compatibilityWorkflowProfile,
         avatar_emoji: form.avatar_emoji || "BOT",

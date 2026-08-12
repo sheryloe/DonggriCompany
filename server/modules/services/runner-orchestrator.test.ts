@@ -29,13 +29,13 @@ describe("OfficeRunnerOrchestrator", () => {
       broadcast: (type, payload) => events.push({ type, payload }),
     });
 
-    const requests: Array<{ provider: "jules" | "codex" | "gemini"; pool: string }> = [
+    const requests: Array<{ provider: "jules" | "codex" | "agy"; pool: string }> = [
       { provider: "jules", pool: "pool-1" },
       { provider: "codex", pool: "pool-2" },
-      { provider: "gemini", pool: "pool-3" },
+      { provider: "agy", pool: "pool-3" },
       { provider: "jules", pool: "pool-4" },
       { provider: "codex", pool: "pool-5" },
-      { provider: "gemini", pool: "pool-6" },
+      { provider: "agy", pool: "pool-6" },
     ];
 
     const results = requests.map((entry) =>
@@ -58,7 +58,7 @@ describe("OfficeRunnerOrchestrator", () => {
 
     const promoted = orchestrator
       .listRunners()
-      .find((runner) => runner.provider === "gemini" && runner.accountPoolId === "pool-6");
+      .find((runner) => runner.provider === "agy" && runner.accountPoolId === "pool-6");
     expect(promoted?.status).toBe("active");
     expect(orchestrator.listQueue().filter((item) => item.status === "queued")).toHaveLength(0);
     expect(events.length).toBeGreaterThan(0);

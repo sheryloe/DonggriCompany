@@ -104,7 +104,7 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
       return { text: "", error: `unsupported_provider:${requestedProvider}` };
     }
     const julesOneShotFallback = requestedRuntimeKind === "async_session";
-    const provider = julesOneShotFallback ? "gemini" : requestedProvider;
+    const provider = julesOneShotFallback ? "agy" : requestedProvider;
     const timeoutMs = opts.timeoutMs ?? 180_000;
     const projectPath = opts.projectPath || process.cwd();
     const streamTaskId = opts.streamTaskId ?? null;

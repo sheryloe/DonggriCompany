@@ -139,10 +139,9 @@ const DEFAULT_PROVIDER_MODEL_CONFIG: Record<string, ProviderModelConfig> = {
     subModel: "gpt-5.3-codex",
     subModelReasoningLevel: "high",
   },
-  gemini: { model: "gemini-3-pro-preview" },
+  agy: { model: "Gemini 3.1 Pro (High)" },
   opencode: { model: "github-copilot/claude-sonnet-4.6" },
   copilot: { model: "github-copilot/claude-sonnet-4.6" },
-  antigravity: { model: "google/antigravity-gemini-3-pro" },
 };
 
 let cachedSnapshot: CanonicalSnapshot | null = null;

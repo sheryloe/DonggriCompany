@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import * as api from "../../api";
 import type { TFunction } from "./types";
 
@@ -48,10 +48,10 @@ export default function GoogleOAuthAppConfig({ t }: { t: TFunction }) {
       <div className="flex items-center gap-2">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
           {t({
-            ko: "Google OAuth App (Antigravity)",
-            en: "Google OAuth App (Antigravity)",
-            ja: "Google OAuth App (Antigravity)",
-            zh: "Google OAuth App (Antigravity)",
+            ko: "Google OAuth App (AGY)",
+            en: "Google OAuth App (AGY)",
+            ja: "Google OAuth App (AGY)",
+            zh: "Google OAuth App (AGY)",
           })}
         </h4>
         {saved && (
@@ -63,10 +63,10 @@ export default function GoogleOAuthAppConfig({ t }: { t: TFunction }) {
 
       <p className="text-[11px] leading-relaxed text-slate-500">
         {t({
-          ko: "Antigravity에서 사용할 Google OAuth Client ID와 Client Secret을 설정합니다. 저장 후 다시 연결하면 새 값으로 OAuth가 시작됩니다.",
-          en: "Configure the Google OAuth Client ID and Client Secret used by Antigravity. Reconnect after saving to start OAuth with the new values.",
-          ja: "Configure the Google OAuth Client ID and Client Secret used by Antigravity. Reconnect after saving to start OAuth with the new values.",
-          zh: "Configure the Google OAuth Client ID and Client Secret used by Antigravity. Reconnect after saving to start OAuth with the new values.",
+          ko: "AGY Google OAuth Client ID와 Client Secret을 설정합니다. 저장 후 다시 연결하면 새 값으로 OAuth가 시작됩니다.",
+          en: "Configure the Google OAuth Client ID and Client Secret used by AGY. Reconnect after saving to start OAuth with the new values.",
+          ja: "Configure the Google OAuth Client ID and Client Secret used by AGY. Reconnect after saving to start OAuth with the new values.",
+          zh: "Configure the Google OAuth Client ID and Client Secret used by AGY. Reconnect after saving to start OAuth with the new values.",
         })}
       </p>
 

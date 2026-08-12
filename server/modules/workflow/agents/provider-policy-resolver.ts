@@ -34,13 +34,16 @@ function normalizeOptionalString(value: unknown): string | undefined {
 }
 
 export function resolveProviderExecutionPolicy(input: ResolveProviderExecutionPolicyInput): ProviderExecutionPolicy {
-  const provider = String(input.provider ?? "")
+  const providerRaw = String(input.provider ?? "")
     .trim()
     .toLowerCase();
+  const provider = providerRaw === "gemini" || providerRaw === "antigravity" ? "agy" : providerRaw;
   const providerConfig = provider ? input.providerModelConfig?.[provider] : undefined;
-  const canonicalProvider = String(input.canonicalOverride?.provider ?? input.canonicalOverride?.subProvider ?? "")
+  const canonicalProviderRaw = String(input.canonicalOverride?.provider ?? input.canonicalOverride?.subProvider ?? "")
     .trim()
     .toLowerCase();
+  const canonicalProvider =
+    canonicalProviderRaw === "gemini" || canonicalProviderRaw === "antigravity" ? "agy" : canonicalProviderRaw;
   const canonicalOverride =
     input.canonicalOverride && (!canonicalProvider || !provider || canonicalProvider === provider)
       ? input.canonicalOverride

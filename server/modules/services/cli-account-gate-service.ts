@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import { isExecutionProvider, type ExecutionProvider } from "./oauth-gate-service.ts";
+import { isExecutionProvider, normalizeExecutionProvider, type ExecutionProvider } from "./oauth-gate-service.ts";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
 
@@ -380,9 +380,12 @@ export class CliAccountGateService {
 
     const now = this.nowMs();
     const existing = this.getPoolRow(normalizedProvider, normalizedPool);
-    const id = existing?.id ?? randomUUID();
+    const id = existing?.provider === normalizedProvider ? existing.id : randomUUID();
     const nextLabel = (label ?? existing?.label ?? `${normalizedProvider}-${normalizedPool}`).trim();
-    const profileHome = existing?.profile_home ?? this.buildProfileHome(normalizedProvider, normalizedPool);
+    const profileHome =
+      existing?.provider === normalizedProvider
+        ? existing.profile_home
+        : this.buildProfileHome(normalizedProvider, normalizedPool);
     this.db
       .prepare(
         `INSERT INTO cli_account_pools (
@@ -406,16 +409,17 @@ export class CliAccountGateService {
     const now = this.nowMs();
     this.db
       .prepare("UPDATE cli_account_pools SET label = ?, updated_at = ? WHERE provider = ? AND account_pool_id = ?")
-      .run(nextLabel || row.label, now, normalizedProvider, normalizedPool);
+      .run(nextLabel || row.label, now, row.provider, normalizedPool);
     return this.toView(this.mustGetPoolRow(normalizedProvider, normalizedPool));
   }
 
   deletePool(provider: string, accountPoolId: string): void {
     const normalizedProvider = normalizeProvider(provider);
     const normalizedPool = normalizePool(accountPoolId);
+    const row = this.mustGetPoolRow(normalizedProvider, normalizedPool);
     this.db
       .prepare("DELETE FROM cli_account_pools WHERE provider = ? AND account_pool_id = ?")
-      .run(normalizedProvider, normalizedPool);
+      .run(row.provider, normalizedPool);
   }
 
   verifyPool(provider: string, accountPoolId: string): CliAccountVerifyResponse {
@@ -509,7 +513,7 @@ export class CliAccountGateService {
 
     const commandMap: Record<ExecutionProvider, string> = {
       codex: "codex login --device-auth",
-      gemini: "gemini",
+      agy: "agy",
       claude: "claude",
       // In Docker, localhost callback ports from browser cannot reach container process.
       // Force manual code flow to avoid redirect failures on 127.0.0.1:<random-port>.
@@ -517,7 +521,7 @@ export class CliAccountGateService {
     };
     const noteMap: Record<ExecutionProvider, string | null> = {
       codex: null,
-      gemini: "Interactive shell opens. Complete Gemini login in that session.",
+      agy: "Interactive shell opens. Complete AGY login or model selection in that session.",
       claude: "Interactive shell opens. Complete Claude authentication in that session.",
       jules: "Manual code login mode is used to avoid localhost callback issues in Docker.",
     };
@@ -590,13 +594,16 @@ export class CliAccountGateService {
   }
 
   private getPoolRow(provider: string, accountPoolId: string): CliAccountPoolRow | null {
+    const providerKeys = provider === "agy" ? ["agy", "antigravity", "gemini"] : [provider];
     const row = this.db
       .prepare(
         `SELECT id, provider, account_pool_id, label, profile_home, status, last_verified_at, last_error, created_at, updated_at
          FROM cli_account_pools
-         WHERE provider = ? AND account_pool_id = ?`,
+         WHERE provider IN (${providerKeys.map(() => "?").join(", ")}) AND account_pool_id = ?
+         ORDER BY CASE provider WHEN ? THEN 0 ELSE 1 END
+         LIMIT 1`,
       )
-      .get(provider, accountPoolId) as CliAccountPoolRow | undefined;
+      .get(...providerKeys, accountPoolId, provider) as CliAccountPoolRow | undefined;
     return row ?? null;
   }
 
@@ -634,9 +641,8 @@ export class CliAccountGateService {
   }
 }
 
-function normalizeProvider(raw: unknown): string {
-  if (typeof raw !== "string") return "";
-  return raw.trim().toLowerCase();
+function normalizeProvider(raw: unknown): ExecutionProvider | "" {
+  return normalizeExecutionProvider(raw);
 }
 
 function normalizePool(raw: unknown): string {
@@ -675,9 +681,10 @@ function isLegacyGeneratedOfficeProfileHome(raw: string): boolean {
 }
 
 function isBinaryInstalled(provider: string): boolean {
+  const binary = provider === "agy" ? "agy" : provider;
   const command = process.platform === "win32" ? "where" : "which";
   try {
-    execFileSync(command, [provider], { stdio: "ignore", timeout: 3000 });
+    execFileSync(command, [binary], { stdio: "ignore", timeout: 3000 });
     return true;
   } catch {
     return false;
@@ -864,7 +871,7 @@ function extractCodexUsageSummary(account: CodexForecastAccount): string | null 
 function hasAuthArtifact(provider: string, profileHome: string): boolean {
   const markers: Record<ExecutionProvider, string[]> = {
     codex: [".codex/auth.json"],
-    gemini: [".gemini/oauth_creds.json", ".config/gcloud/application_default_credentials.json"],
+    agy: [".gemini/antigravity-cli/settings.json", ".gemini/antigravity-cli/installation_id"],
     claude: [".claude.json", ".claude/auth.json"],
     jules: [".jules/auth.json", ".jules/credentials.json", ".jules/cache/oauth_creds.json"],
   };

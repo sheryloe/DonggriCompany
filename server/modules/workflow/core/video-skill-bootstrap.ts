@@ -8,7 +8,7 @@ type DbLike = {
   };
 };
 
-type InstallableProvider = "claude" | "codex" | "gemini" | "opencode" | "kimi" | "copilot" | "antigravity";
+type InstallableProvider = "claude" | "codex" | "agy" | "gemini" | "opencode" | "kimi" | "copilot" | "antigravity";
 
 const REMOTION_SKILL_REPO = "remotion-dev/skills";
 const REMOTION_SKILL_ID = "remotion-best-practices";
@@ -21,7 +21,8 @@ const SKILLS_NPX_CMD = process.platform === "win32" ? "npx.cmd" : "npx";
 const INSTALL_AGENT_BY_PROVIDER: Record<InstallableProvider, string> = {
   claude: "claude-code",
   codex: "codex",
-  gemini: "gemini-cli",
+  agy: "antigravity",
+  gemini: "antigravity",
   opencode: "opencode",
   kimi: "kimi-code",
   copilot: "github-copilot",
@@ -31,15 +32,17 @@ const INSTALL_AGENT_BY_PROVIDER: Record<InstallableProvider, string> = {
 const installFailCooldownUntilByProvider = new Map<string, number>();
 
 function normalizeProvider(provider: string | null | undefined): string {
-  return String(provider ?? "")
+  const normalized = String(provider ?? "")
     .trim()
     .toLowerCase();
+  return normalized === "gemini" || normalized === "antigravity" ? "agy" : normalized;
 }
 
 function isInstallableProvider(provider: string): provider is InstallableProvider {
   return (
     provider === "claude" ||
     provider === "codex" ||
+    provider === "agy" ||
     provider === "gemini" ||
     provider === "opencode" ||
     provider === "kimi" ||

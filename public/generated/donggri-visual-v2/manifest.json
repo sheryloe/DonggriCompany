@@ -1,0 +1,33 @@
+{
+  "asset_pack": "donggri_visual_v2",
+  "brand_surface_name": "Dongri-grigri",
+  "created_at_kst": "2026-07-13",
+  "runtime_sprite_directory": "public/sprites/donggri-visual-v2",
+  "styleboard": "public/generated/donggri-visual-v2/styleboard/donggri-visual-v2-styleboard.png",
+  "derived_assets": {
+    "character_roster": "public/generated/donggri-visual-v2/characters/character-roster.png",
+    "portrait_cards": "public/generated/donggri-visual-v2/portraits/portrait-cards.png",
+    "office_scene": "public/generated/donggri-visual-v2/office/office-renewal-v3.png",
+    "props_atlas": "public/generated/donggri-visual-v2/props/office-renewal-v3-props-atlas.png",
+    "department_panels": "public/generated/donggri-visual-v2/panels/department-panels.png",
+    "manager_panels": "public/generated/donggri-visual-v2/ui/manager-panels.png",
+    "runtime_props_atlas": "public/sprites/donggri-visual-v2/office-renewal-v3-props-atlas.png"
+  },
+  "source_manifest": "assets/generated/game_asset_pipeline/donggri-visual-v2-styleboard/manifest.json",
+  "sprite_manifest": "assets/generated/game_asset_pipeline/donggri-visual-v2-sprites/manifest.json",
+  "compatibility": {
+    "legacy_pack_unchanged": true,
+    "visual_asset_pack_key": "donggri_visual_v2",
+    "directions": [
+      "D",
+      "L",
+      "B",
+      "R"
+    ],
+    "frames_per_direction": 3,
+    "sprite_count": 44,
+    "v2_runtime_replaces_seeded_copy": true,
+    "legacy_backup_path": "E:/DonggriPlatform_Asset/archive/DonggriCompany/20260713-donggri-visual-v2-agy-runtime-remediation/public-sprites-donggri-visual-v2-seeded-copy"
+  },
+  "runtime_sprite_manifest": "assets/generated/game_asset_pipeline/donggri-visual-v2-sprites/manifest.json"
+}

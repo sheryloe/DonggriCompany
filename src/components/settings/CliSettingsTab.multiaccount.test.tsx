@@ -7,7 +7,7 @@ import { DEFAULT_SETTINGS } from "../../types";
 import CliSettingsTab from "./CliSettingsTab";
 import type { LocalSettings } from "./types";
 
-const providers: OfficeExecutionProvider[] = ["codex", "gemini", "claude", "jules"];
+const providers: OfficeExecutionProvider[] = ["codex", "agy", "claude", "jules"];
 
 function createVerifyResponse(provider: OfficeExecutionProvider): CliAccountVerifyResponse {
   return {
@@ -75,7 +75,7 @@ describe("CliSettingsTab multi-account", () => {
         cliAuthBusyKey={null}
         selectedPoolByProvider={{
           codex: "codex-main",
-          gemini: "gemini-main",
+          agy: "agy-main",
           claude: "claude-main",
           jules: "jules-main",
         }}
@@ -116,7 +116,7 @@ describe("CliSettingsTab multi-account", () => {
         officeRunnerQueue={[]}
         runnerMeta={{ maxActive: 5, idleTtlMs: 900000, dockerEnabled: false }}
         cliAuthBusyKey={null}
-        selectedPoolByProvider={{ codex: "", gemini: "", claude: "", jules: "" }}
+        selectedPoolByProvider={{ codex: "", agy: "", claude: "", jules: "" }}
         form={{ ...(DEFAULT_SETTINGS as LocalSettings), language: "ko" }}
         setForm={vi.fn()}
         persistSettings={vi.fn()}
@@ -125,7 +125,7 @@ describe("CliSettingsTab multi-account", () => {
         onCreatePool={vi.fn(async () => undefined)}
         onUpdatePool={vi.fn(async () => undefined)}
         onDeletePool={vi.fn(async () => undefined)}
-        onVerifyPool={vi.fn(async () => createVerifyResponse("gemini"))}
+        onVerifyPool={vi.fn(async () => createVerifyResponse("agy"))}
         onCopyLoginCommand={vi.fn(async () => undefined)}
         onActivateRunner={vi.fn(async () => undefined)}
         onDeactivateRunner={vi.fn(async () => undefined)}
@@ -186,7 +186,7 @@ describe("CliSettingsTab multi-account", () => {
           officeRunnerQueue={[]}
           runnerMeta={{ maxActive: 5, idleTtlMs: 900000, dockerEnabled: false }}
           cliAuthBusyKey={null}
-          selectedPoolByProvider={{ codex: "", gemini: "", claude: "", jules: "" }}
+          selectedPoolByProvider={{ codex: "", agy: "", claude: "", jules: "" }}
           form={form}
           setForm={setForm}
           persistSettings={persistSettings}
@@ -270,7 +270,7 @@ describe("CliSettingsTab multi-account", () => {
         cliAuthBusyKey={null}
         selectedPoolByProvider={{
           codex: "codex-main",
-          gemini: "",
+          agy: "",
           claude: "",
           jules: "",
         }}
@@ -332,7 +332,7 @@ describe("CliSettingsTab multi-account", () => {
         officeRunnerQueue={[]}
         runnerMeta={{ maxActive: 5, idleTtlMs: 900000, dockerEnabled: false }}
         cliAuthBusyKey={null}
-        selectedPoolByProvider={{ codex: "codex-main", gemini: "", claude: "", jules: "" }}
+        selectedPoolByProvider={{ codex: "codex-main", agy: "", claude: "", jules: "" }}
         form={{ ...(DEFAULT_SETTINGS as LocalSettings), language: "ko" }}
         setForm={vi.fn()}
         persistSettings={vi.fn()}

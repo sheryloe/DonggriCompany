@@ -108,8 +108,7 @@ function isOAuthBackedProviderReady(
   activeOAuthByProvider: Map<string, Set<string>> | null,
 ): boolean {
   const provider = normalizeText(agent.cli_provider).toLowerCase();
-  const requiredOAuthProvider =
-    provider === "copilot" ? "github" : provider === "antigravity" ? "google_antigravity" : null;
+  const requiredOAuthProvider = provider === "copilot" ? "github" : null;
   if (!requiredOAuthProvider || !activeOAuthByProvider) return true;
   const activeAccounts = activeOAuthByProvider.get(requiredOAuthProvider);
   if (!activeAccounts || activeAccounts.size <= 0) return false;

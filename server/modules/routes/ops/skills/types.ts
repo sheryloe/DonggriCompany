@@ -10,7 +10,7 @@ export interface SkillEntry {
   description?: string;
   requiredProviders?: string[];
   requiredOAuth?: string[];
-  supportedTargets?: Array<"donggri" | "codex" | "gemini">;
+  supportedTargets?: Array<"donggri" | "codex" | "agy" | "gemini">;
   codexInstalled?: boolean;
   codexInstallable?: boolean;
   sourceUrl?: string;
@@ -27,7 +27,7 @@ export interface SkillDetail {
   audits: Array<{ name: string; status: string }>;
 }
 
-export type SkillLearnProvider = "claude" | "codex" | "gemini" | "opencode" | "kimi";
+export type SkillLearnProvider = "claude" | "codex" | "agy" | "gemini" | "opencode" | "kimi";
 export type SkillHistoryProvider = SkillLearnProvider | "copilot" | "antigravity" | "api";
 export type SkillLearnStatus = "queued" | "running" | "succeeded" | "failed";
 

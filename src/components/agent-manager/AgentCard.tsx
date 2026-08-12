@@ -73,6 +73,7 @@ export default function AgentCard({
             size={pixelModeEnabled ? 58 : 52}
             rounded="xl"
             className={pixelModeEnabled ? "pixel-agent-portrait" : ""}
+            visualAssetPack={pixelAgentMode?.visualAssetPack}
           />
           <div
             className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 ${STATUS_DOT[agent.status] ?? STATUS_DOT.idle}`}

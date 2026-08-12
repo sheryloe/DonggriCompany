@@ -1,12 +1,14 @@
 export type ProviderRuntimeKind = "cli_stream" | "http_stream" | "async_session" | "api";
 
 const PROVIDER_RUNTIME_KIND_MAP: Record<string, ProviderRuntimeKind> = {
+  agy: "cli_stream",
   api: "api",
-  antigravity: "http_stream",
   copilot: "http_stream",
   jules: "async_session",
   claude: "cli_stream",
   codex: "cli_stream",
+  // Legacy records are normalized at write boundaries, but still execute through AGY.
+  antigravity: "cli_stream",
   gemini: "cli_stream",
   opencode: "cli_stream",
   kimi: "cli_stream",

@@ -1,0 +1,9 @@
+{
+  "schema_version": "2026-07-15.master95.format-debt-fingerprint.v1",
+  "source_ref": "storage/codex-control/quality/master-95/delivery/FORMAT_DEBT_BASELINE.json",
+  "prettier_version": "3.8.1",
+  "glob": "**/*.{ts,tsx,js,mjs,cjs,json,yml,yaml,css,scss,html}",
+  "file_count": 104,
+  "canonical_list_sha256": "98a1c8d2fd465ff566cabcebcb0261adfab6d74a855218800ce6b3a781c25b48",
+  "policy": "exact-match-only-new-or-removed-drift-fails"
+}

@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import { isExecutionProvider } from "./oauth-gate-service.ts";
+import { isExecutionProvider, normalizeExecutionProvider } from "./oauth-gate-service.ts";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
 
-export type RunnerProvider = "codex" | "gemini" | "claude" | "jules";
+export type RunnerProvider = "codex" | "agy" | "claude" | "jules";
 export type RunnerStatus = "active" | "idle" | "stopping" | "error";
 export type RunnerQueueStatus = "queued" | "running" | "done" | "failed" | "canceled";
 
@@ -150,7 +150,7 @@ export class OfficeRunnerOrchestrator {
     accountPoolId: string,
     requestPayload: ActivateRunnerRequestPayload,
   ): RunnerRequestResult {
-    const normalizedProvider = provider.trim().toLowerCase();
+    const normalizedProvider = normalizeExecutionProvider(provider);
     if (!isExecutionProvider(normalizedProvider)) {
       throw new Error(`unsupported_runner_provider:${provider}`);
     }
@@ -198,7 +198,7 @@ export class OfficeRunnerOrchestrator {
   }
 
   deactivateRunner(provider: string, accountPoolId: string): OfficeRunnerStatusView | null {
-    const normalizedProvider = provider.trim().toLowerCase();
+    const normalizedProvider = normalizeExecutionProvider(provider);
     const pool = accountPoolId.trim();
     const existing = this.getRunner(normalizedProvider, pool);
     if (!existing) return null;

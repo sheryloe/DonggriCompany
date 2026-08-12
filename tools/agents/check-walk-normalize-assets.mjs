@@ -13,13 +13,37 @@ import {
 } from "./walk-normalize-config.mjs";
 
 const projectRoot = process.cwd();
-const spritesRoot = path.join(projectRoot, "public/sprites");
-const reportPath = path.join(projectRoot, "public/generated/agent-visual-profiles/walk-animation-smoke-v1.json");
+const validAssetPacks = new Set(["legacy", "donggri_visual_v2"]);
 const alphaThreshold = 8;
 const maxFrameDriftPx = 10;
 const minBottomGap = 3;
 const maxBottomGap = 18;
 const maxCenterDrift = 20;
+
+function readAssetPackArg(argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--pack") return argv[index + 1] ?? "legacy";
+    if (arg.startsWith("--pack=")) return arg.slice("--pack=".length);
+  }
+  return "legacy";
+}
+
+const assetPack = readAssetPackArg(process.argv.slice(2));
+if (!validAssetPacks.has(assetPack)) {
+  console.error(`Unsupported sprite asset pack: ${assetPack}`);
+  process.exitCode = 1;
+  process.exit();
+}
+
+const spritesRoot =
+  assetPack === "donggri_visual_v2"
+    ? path.join(projectRoot, "public/sprites/donggri-visual-v2")
+    : path.join(projectRoot, "public/sprites");
+const reportPath =
+  assetPack === "donggri_visual_v2"
+    ? path.join(projectRoot, "public/generated/donggri-visual-v2/walk-animation-smoke-v1.json")
+    : path.join(projectRoot, "public/generated/agent-visual-profiles/walk-animation-smoke-v1.json");
 
 function findAlphaBounds(data, width, height, channels) {
   let minX = width;
@@ -162,7 +186,11 @@ async function main() {
   }
   const report = {
     version: walkNormalizeVersion,
-    generated_by: "corepack pnpm run agents:sprites:check",
+    generated_by:
+      assetPack === "donggri_visual_v2"
+        ? "corepack pnpm run agents:sprites:check -- --pack donggri_visual_v2"
+        : "corepack pnpm run agents:sprites:check",
+    asset_pack: assetPack,
     source_sheet: sourceSheet.path,
     runtime_sprites: sourceSheet.runtimeMaxSprites,
     directions: walkNormalizeDirections,

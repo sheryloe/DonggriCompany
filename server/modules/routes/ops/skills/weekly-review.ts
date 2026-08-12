@@ -72,9 +72,9 @@ function buildReport(ctx: RuntimeContext): WeeklyReviewReport {
         category: "official_docs",
       },
       {
-        key: "gemini-cli",
-        title: "Gemini CLI Docs",
-        url: "https://google-gemini.github.io/gemini-cli/docs/",
+        key: "agy-cli",
+        title: "AGY CLI install and docs",
+        url: "https://antigravity.google/cli/install.sh",
         category: "official_docs",
       },
       {
@@ -98,7 +98,7 @@ function buildReport(ctx: RuntimeContext): WeeklyReviewReport {
       {
         key: "community-watch",
         title: "Choi.ai and community thread watchlist",
-        url: "https://www.google.com/search?q=choi.ai+codex+gemini+upgrade+thread",
+        url: "https://www.google.com/search?q=choi.ai+codex+agy+upgrade+thread",
         category: "community_watch",
       },
     ],
@@ -110,7 +110,7 @@ function buildReport(ctx: RuntimeContext): WeeklyReviewReport {
       {
         skill_key: "donggri-weekly-skill-scout",
         category: "donggri-operations",
-        reason: "Weekly review needs a repeatable research and approval workflow for new Codex/Gemini capabilities.",
+        reason: "Weekly review needs a repeatable research and approval workflow for new Codex/AGY capabilities.",
         approval_status: "pending",
       },
       {

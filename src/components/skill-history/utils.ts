@@ -4,11 +4,10 @@ import type { Agent, AgentRole } from "../../types";
 export const PROVIDER_ORDER: SkillHistoryProvider[] = [
   "claude",
   "codex",
-  "gemini",
+  "agy",
   "opencode",
   "kimi",
   "copilot",
-  "antigravity",
   "api",
 ];
 
@@ -24,11 +23,10 @@ const ROLE_ORDER: Record<AgentRole, number> = {
 export function providerLabel(provider: SkillHistoryProvider): string {
   if (provider === "claude") return "Claude Code";
   if (provider === "codex") return "Codex";
-  if (provider === "gemini") return "Gemini";
+  if (provider === "agy" || provider === "gemini" || provider === "antigravity") return "AGY CLI";
   if (provider === "opencode") return "OpenCode";
   if (provider === "kimi") return "Kimi Code";
   if (provider === "copilot") return "GitHub Copilot";
-  if (provider === "antigravity") return "Antigravity";
   return "API Provider";
 }
 

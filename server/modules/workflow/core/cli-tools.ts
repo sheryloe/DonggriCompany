@@ -9,6 +9,20 @@ type CreateCliToolsDeps = {
   cliOutputDedupWindowMs: number;
 };
 
+type BuildAntigravityArgsOptions = {
+  continueConversation?: boolean;
+  conversationId?: string | null;
+  projectId?: string | null;
+  printTimeout?: string | null;
+  logFile?: string | null;
+  addDirs?: string[];
+};
+
+type BuildAgentArgsOptions = {
+  noTools?: boolean;
+  agy?: BuildAntigravityArgsOptions;
+};
+
 export function createCliTools(deps: CreateCliToolsDeps) {
   const { nowMs, cliOutputDedupWindowMs } = deps;
 
@@ -17,7 +31,9 @@ export function createCliTools(deps: CreateCliToolsDeps) {
       ? [
           path.join(process.env.ProgramFiles || "C:\\Program Files", "nodejs"),
           path.join(process.env.LOCALAPPDATA || "", "Programs", "nodejs"),
+          path.join(process.env.LOCALAPPDATA || "", "agy", "bin"),
           path.join(process.env.APPDATA || "", "npm"),
+          path.join("G:\\Donggri_DevDrive", "tools", "antigravity"),
         ].filter(Boolean)
       : [
           "/opt/homebrew/bin",
@@ -78,12 +94,73 @@ export function createCliTools(deps: CreateCliToolsDeps) {
     return parts.join(path.delimiter);
   }
 
-  function buildAgentArgs(
-    provider: string,
-    model?: string,
-    reasoningLevel?: string,
-    opts: { noTools?: boolean } = {},
-  ): string[] {
+  function readEnvString(...keys: string[]): string | null {
+    for (const key of keys) {
+      const value = String(process.env[key] ?? "").trim();
+      if (value) return value;
+    }
+    return null;
+  }
+
+  function readEnvFlag(...keys: string[]): boolean {
+    const value = readEnvString(...keys);
+    if (!value) return false;
+    return /^(1|true|yes|on)$/i.test(value);
+  }
+
+  function normalizeAgyCliModel(model?: string): string {
+    const configured = String(model ?? "").trim() || readEnvString("AGY_CLI_MODEL", "ANTIGRAVITY_CLI_MODEL") || "";
+    const normalized = configured.toLowerCase();
+    if (!normalized) return "Gemini 3.1 Pro (High)";
+    if (
+      normalized === "google/antigravity-gemini-3-pro" ||
+      normalized === "antigravity-gemini-3-pro" ||
+      normalized === "gemini-3-pro" ||
+      normalized === "gemini-3.1-pro" ||
+      normalized === "gemini-3.1-pro-high"
+    ) {
+      return "Gemini 3.1 Pro (High)";
+    }
+    if (
+      normalized === "google/antigravity-gemini-3-flash" ||
+      normalized === "antigravity-gemini-3-flash" ||
+      normalized === "gemini-3-flash" ||
+      normalized === "gemini-3.5-flash"
+    ) {
+      return "Gemini 3.5 Flash (Medium)";
+    }
+    return configured;
+  }
+
+  function buildAgyArgs(model?: string, opts: BuildAntigravityArgsOptions = {}): string[] {
+    const args = ["agy", "--model", normalizeAgyCliModel(model)];
+    const conversationId =
+      String(opts.conversationId ?? "").trim() ||
+      readEnvString("AGY_CLI_CONVERSATION_ID", "ANTIGRAVITY_CLI_CONVERSATION_ID");
+    const projectId =
+      String(opts.projectId ?? "").trim() || readEnvString("AGY_CLI_PROJECT_ID", "ANTIGRAVITY_CLI_PROJECT_ID");
+    const printTimeout =
+      String(opts.printTimeout ?? "").trim() ||
+      readEnvString("AGY_CLI_PRINT_TIMEOUT", "ANTIGRAVITY_CLI_PRINT_TIMEOUT") ||
+      "5m";
+    const logFile = String(opts.logFile ?? "").trim();
+    const shouldContinue =
+      opts.continueConversation === true || readEnvFlag("AGY_CLI_CONTINUE", "ANTIGRAVITY_CLI_CONTINUE");
+
+    if (conversationId) args.push("--conversation", conversationId);
+    else if (shouldContinue) args.push("--continue");
+    if (projectId) args.push("--project", projectId);
+    args.push("--sandbox");
+    for (const dir of opts.addDirs ?? []) {
+      const normalizedDir = String(dir ?? "").trim();
+      if (normalizedDir) args.push("--add-dir", normalizedDir);
+    }
+    if (logFile) args.push("--log-file", logFile);
+    args.push("--print-timeout", printTimeout);
+    return args;
+  }
+
+  function buildAgentArgs(provider: string, model?: string, reasoningLevel?: string, opts: BuildAgentArgsOptions = {}): string[] {
     const { noTools = false } = opts;
     switch (provider) {
       case "codex": {
@@ -113,16 +190,10 @@ export function createCliTools(deps: CreateCliToolsDeps) {
         if (noTools) args.push("--tools=");
         return args;
       }
-      case "gemini": {
-        const args = ["gemini"];
-        if (model) args.push("-m", model);
-        if (noTools) {
-          args.push("--approval-mode", "plan", "--output-format=stream-json");
-        } else {
-          args.push("--approval-mode", "plan", "--output-format=stream-json");
-        }
-        return args;
-      }
+      case "agy":
+      case "gemini":
+      case "antigravity":
+        return buildAgyArgs(model, opts.agy);
       case "kimi": {
         const args = ["kimi", "--print", "--output-format=stream-json"];
         if (model) args.push("-m", model);
@@ -135,7 +206,6 @@ export function createCliTools(deps: CreateCliToolsDeps) {
         return args;
       }
       case "copilot":
-      case "antigravity":
         throw new Error(`${provider} uses HTTP agent (not CLI spawn)`);
       default:
         throw new Error(`unsupported CLI provider: ${provider}`);

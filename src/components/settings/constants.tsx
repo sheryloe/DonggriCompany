@@ -1,19 +1,20 @@
 import type { ApiProviderType, OAuthConnectProvider } from "../../api";
-import { AntigravityLogo, CliChatGPTLogo, CliClaudeLogo, CliGeminiLogo, CliKimiLogo, GitHubCopilotLogo } from "./Logos";
+import { AntigravityLogo, CliChatGPTLogo, CliClaudeLogo, CliKimiLogo, GitHubCopilotLogo } from "./Logos";
 
 export const CLI_INFO: Record<string, { label: string; icon: React.ReactNode }> = {
   claude: { label: "Claude Code", icon: <CliClaudeLogo /> },
   codex: { label: "Codex CLI", icon: <CliChatGPTLogo /> },
-  gemini: { label: "Gemini CLI", icon: <CliGeminiLogo /> },
+  agy: { label: "AGY CLI", icon: <AntigravityLogo /> },
+  gemini: { label: "AGY CLI", icon: <AntigravityLogo /> },
   opencode: { label: "OpenCode", icon: <span className="text-sm font-semibold">OC</span> },
   kimi: { label: "Kimi Code", icon: <CliKimiLogo /> },
   copilot: { label: "GitHub Copilot", icon: <GitHubCopilotLogo /> },
-  antigravity: { label: "Antigravity", icon: <AntigravityLogo /> },
+  antigravity: { label: "AGY CLI", icon: <AntigravityLogo /> },
 };
 
 export const OAUTH_INFO: Record<string, { label: string }> = {
   "github-copilot": { label: "GitHub" },
-  antigravity: { label: "Antigravity" },
+  antigravity: { label: "AGY OAuth" },
 };
 
 export const CONNECTABLE_PROVIDERS: Array<{
@@ -23,7 +24,7 @@ export const CONNECTABLE_PROVIDERS: Array<{
   description: string;
 }> = [
   { id: "github-copilot", label: "GitHub", Logo: GitHubCopilotLogo, description: "GitHub OAuth with Copilot support" },
-  { id: "antigravity", label: "Antigravity", Logo: AntigravityLogo, description: "Google OAuth for Antigravity" },
+  { id: "antigravity", label: "AGY", Logo: AntigravityLogo, description: "Google OAuth for AGY CLI" },
 ];
 
 export const API_TYPE_PRESETS: Record<ApiProviderType, { label: string; base_url: string }> = {

@@ -222,6 +222,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
   const getAgentDisplayName = __ctx.getAgentDisplayName;
   const getProviderModelConfig = __ctx.getProviderModelConfig;
   const getRecentConversationContext = __ctx.getRecentConversationContext;
+  const getTaskContinuationContext = __ctx.getTaskContinuationContext;
   const handleTaskRunComplete = __ctx.handleTaskRunComplete;
   const hasExplicitWarningFixRequest = __ctx.hasExplicitWarningFixRequest;
   const getNextHttpAgentPid = __ctx.getNextHttpAgentPid;
@@ -1180,6 +1181,7 @@ export function registerRoutesPartB(ctx: RuntimeContext): RouteCollabExports {
     createWorktree,
     logsDir,
     ensureTaskExecutionSession,
+    getTaskContinuationContext,
     ensureClaudeMd,
     getProviderModelConfig,
     spawnCliAgent,

@@ -11,7 +11,7 @@ import AgentProfileBuilder from "./AgentProfileBuilder";
 import EmojiPicker from "./EmojiPicker";
 import type { FormData } from "./types";
 
-const CLI_POOL_PROVIDERS: FormData["cli_provider"][] = ["codex", "gemini", "jules"];
+const CLI_POOL_PROVIDERS: FormData["cli_provider"][] = ["codex", "agy", "jules", "gemini", "antigravity"];
 const SPRITE_PREVIEW_LABELS: Record<"D" | "L" | "R", string> = {
   D: "앞",
   L: "왼쪽",
@@ -94,14 +94,22 @@ export default function AgentFormModal({
   const [registering, setRegistering] = useState(false);
   const [registered, setRegistered] = useState(false);
 
-  const requiresCliPool = CLI_POOL_PROVIDERS.includes(form.cli_provider);
+  const supportsCliPool = CLI_POOL_PROVIDERS.includes(form.cli_provider);
+  const normalizedCliProvider =
+    form.cli_provider === "gemini" || form.cli_provider === "antigravity" ? "agy" : form.cli_provider;
+  const requiresCliPool = supportsCliPool;
   const selectedProviderPools = useMemo(
-    () => cliAccountPools.filter((pool) => pool.provider === form.cli_provider),
-    [cliAccountPools, form.cli_provider],
+    () =>
+      cliAccountPools.filter(
+        (pool) =>
+          pool.provider === normalizedCliProvider ||
+          (normalizedCliProvider === "agy" && (pool.provider === "gemini" || pool.provider === "antigravity")),
+      ),
+    [cliAccountPools, normalizedCliProvider],
   );
   const providerDisplayName = useMemo(() => {
     if (form.cli_provider === "codex") return "Codex";
-    if (form.cli_provider === "gemini") return "Gemini";
+    if (form.cli_provider === "agy" || form.cli_provider === "gemini" || form.cli_provider === "antigravity") return "AGY";
     if (form.cli_provider === "claude") return "Claude";
     if (form.cli_provider === "opencode") return "OpenCode";
     if (form.cli_provider === "kimi") return "Kimi";
@@ -122,7 +130,7 @@ export default function AgentFormModal({
   }, [form.sprite_number]);
 
   useEffect(() => {
-    if (!requiresCliPool) {
+    if (!supportsCliPool) {
       if (form.cli_account_pool_id) {
         setForm({ ...form, cli_account_pool_id: "" });
       }
@@ -131,11 +139,12 @@ export default function AgentFormModal({
     if (selectedProviderPools.length <= 0) return;
     const exists = selectedProviderPools.some((pool) => pool.accountPoolId === form.cli_account_pool_id);
     if (exists) return;
+    if (!requiresCliPool) return;
     setForm({
       ...form,
       cli_account_pool_id: selectedProviderPools[0].accountPoolId,
     });
-  }, [form, requiresCliPool, selectedProviderPools, setForm]);
+  }, [form, requiresCliPool, selectedProviderPools, setForm, supportsCliPool]);
 
   const inputClass =
     "w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500";
@@ -336,7 +345,7 @@ export default function AgentFormModal({
               </p>
             </div>
 
-            {requiresCliPool ? (
+            {supportsCliPool ? (
               <div className="space-y-2 rounded-lg border p-3" style={{ borderColor: "var(--th-card-border)" }}>
                 <div className="flex items-center justify-between gap-2">
                   <label

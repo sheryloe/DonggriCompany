@@ -118,6 +118,7 @@ function buildSkillLearnLabel(repo: string, skillId: string): string {
 function resolveAgentSkillDir(agent: string): string | null {
   if (agent === "claude-code") return path.join(process.cwd(), ".claude", "skills");
   if (agent === "codex") return path.join(process.cwd(), ".codex", "skills");
+  if (agent === "agy") return path.join(process.cwd(), ".gemini", "antigravity-cli", "skills");
   if (agent === "gemini-cli") return path.join(process.cwd(), ".gemini", "skills");
   if (agent === "kimi-code") return path.join(process.cwd(), ".kimi", "skills");
   if (agent === "opencode") return path.join(process.cwd(), ".opencode", "skills");

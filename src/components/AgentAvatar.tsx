@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { CSSProperties } from "react";
 import type { Agent } from "../types";
 import { buildAgentSpriteUrl } from "./office-view/spriteAssets";
+import type { AgentSpriteAssetPack } from "./office-view/spriteAssets";
 
 const AUTO_SPRITE_START = 1;
 const AUTO_SPRITE_COUNT = 44;
@@ -58,6 +59,7 @@ interface AgentAvatarProps {
   rounded?: "full" | "xl" | "2xl";
   imageFit?: "cover" | "contain";
   imagePosition?: CSSProperties["objectPosition"];
+  visualAssetPack?: AgentSpriteAssetPack;
 }
 
 /** Sprite-based avatar — pass either `agents` or `spriteMap` */
@@ -70,6 +72,7 @@ export default function AgentAvatar({
   rounded = "full",
   imageFit = "cover",
   imagePosition = "center",
+  visualAssetPack = "legacy",
 }: AgentAvatarProps) {
   const map = spriteMap ?? (agents ? buildSpriteMap(agents) : new Map());
   const spriteNum = resolveSpriteNum(agent, map);
@@ -83,7 +86,7 @@ export default function AgentAvatar({
         style={{ width: size, height: size }}
       >
         <img
-          src={buildAgentSpriteUrl(spriteNum, "D", 1)}
+          src={buildAgentSpriteUrl(spriteNum, "D", 1, visualAssetPack)}
           alt={agent?.name ?? ""}
           className={`w-full h-full ${imageFit === "contain" ? "object-contain" : "object-cover"}`}
           style={{ imageRendering: "pixelated", objectPosition: imagePosition }}

@@ -11,6 +11,11 @@ const PACKAGE_JSON_PATH = path.resolve(process.cwd(), "package.json");
 const MODE = process.argv.includes("--write") ? "write" : "check";
 
 const METHODS = ["get", "post", "put", "patch", "delete"];
+const DISCOVERED_ROUTE_FILES = [
+  "server/modules/routes/ops/control-plane.ts",
+  "server/modules/routes/ops/control-tower.ts",
+  "server/modules/routes/ops/image-workbench.ts",
+];
 const PUBLIC_API_PATHS = new Set(["/api/health", "/api/auth/session", "/api/openapi.json"]);
 const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
 const JSON_MEDIA_TYPES = ["application/json"];
@@ -416,7 +421,9 @@ function ensureLocalMutationOriginContract(pathname, method, operation, doc) {
   const hasOriginParameter = operation.parameters.some((parameter) => {
     if (!parameter || typeof parameter !== "object") return false;
     if (parameter.$ref === "#/components/parameters/LocalControlPlaneMutationOrigin") return true;
-    return String(parameter.name ?? "").toLowerCase() === "origin" && String(parameter.in ?? "").toLowerCase() === "header";
+    return (
+      String(parameter.name ?? "").toLowerCase() === "origin" && String(parameter.in ?? "").toLowerCase() === "header"
+    );
   });
   if (!hasOriginParameter) {
     operation.parameters.push({ $ref: "#/components/parameters/LocalControlPlaneMutationOrigin" });
@@ -424,7 +431,11 @@ function ensureLocalMutationOriginContract(pathname, method, operation, doc) {
   const note =
     "Control Plane mutations are local UI only. Authentication alone is not sufficient; the request must include an allowed local Origin header.";
   const currentDescription = typeof operation.description === "string" ? operation.description : "";
-  operation.description = currentDescription.includes(note) ? currentDescription : currentDescription ? `${currentDescription}\n\n${note}` : note;
+  operation.description = currentDescription.includes(note)
+    ? currentDescription
+    : currentDescription
+      ? `${currentDescription}\n\n${note}`
+      : note;
 }
 
 function isProtectedOperation(pathname, method, operation, doc) {
@@ -469,6 +480,84 @@ function ensureOperationErrorResponses(pathname, method, operation, doc) {
   }
   if (MUTATING_METHODS.has(method) && !operation.responses["409"]) {
     operation.responses["409"] = { $ref: STANDARD_ERROR_RESPONSE_REFS["409"] };
+  }
+}
+
+function normalizeExpressPath(routePath) {
+  return routePath.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+}
+
+function discoverExpressRoutes() {
+  const routes = new Map();
+  for (const relativeFile of DISCOVERED_ROUTE_FILES) {
+    const absoluteFile = path.resolve(process.cwd(), relativeFile);
+    if (!fs.existsSync(absoluteFile)) continue;
+    const raw = fs.readFileSync(absoluteFile, "utf8");
+    const stringConstants = new Map(
+      [...raw.matchAll(/\bconst\s+([A-Za-z0-9_]+)\s*=\s*["']([^"']+)["'];/g)].map((match) => [match[1], match[2]]),
+    );
+    const addRoute = (method, routePath) => {
+      const constantPrefix = routePath.match(/^\$\{([A-Za-z0-9_]+)\}/);
+      if (constantPrefix && stringConstants.has(constantPrefix[1])) {
+        routePath = `${stringConstants.get(constantPrefix[1])}${routePath.slice(constantPrefix[0].length)}`;
+      }
+      if (!routePath.startsWith("/api/")) return;
+      const normalizedPath = normalizeExpressPath(routePath);
+      routes.set(`${method.toLowerCase()} ${normalizedPath}`, {
+        method: method.toLowerCase(),
+        pathname: normalizedPath,
+        source_file: relativeFile,
+      });
+    };
+    for (const match of raw.matchAll(/\bapp\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/g)) {
+      addRoute(match[1], match[2]);
+    }
+    for (const match of raw.matchAll(/\b(post|put|patch|del|delete)\.call\(\s*app\s*,\s*["'`]([^"'`]+)["'`]/g)) {
+      addRoute(match[1] === "del" ? "delete" : match[1], match[2]);
+    }
+  }
+  return [...routes.values()].sort((a, b) => `${a.pathname} ${a.method}`.localeCompare(`${b.pathname} ${b.method}`));
+}
+
+function ensurePathParameters(pathname, operation) {
+  const names = [...pathname.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+  if (names.length === 0) return;
+  operation.parameters ??= [];
+  for (const name of names) {
+    const exists = operation.parameters.some((parameter) => {
+      if (!parameter || typeof parameter !== "object" || parameter.$ref) return false;
+      return parameter.name === name && parameter.in === "path";
+    });
+    if (!exists) {
+      operation.parameters.push({
+        name,
+        in: "path",
+        required: true,
+        schema: {
+          type: "string",
+        },
+      });
+    }
+  }
+}
+
+function ensureDiscoveredRouteOperations(doc) {
+  doc.paths ??= {};
+  for (const route of discoverExpressRoutes()) {
+    doc.paths[route.pathname] ??= {};
+    if (!doc.paths[route.pathname][route.method]) {
+      doc.paths[route.pathname][route.method] = {
+        tags: route.pathname.startsWith("/api/control-plane/") ? ["control-plane"] : ["default"],
+        summary: `${route.method.toUpperCase()} ${route.pathname}`,
+        description: `Discovered from ${route.source_file}. Keep this operation documented or remove the route.`,
+        responses: {
+          200: {
+            description: `${route.method.toUpperCase()} ${route.pathname}`,
+          },
+        },
+      };
+    }
+    ensurePathParameters(route.pathname, doc.paths[route.pathname][route.method]);
   }
 }
 
@@ -545,6 +634,7 @@ function normalizeOpenApiDoc(doc) {
   ensureStandardErrorResponses(doc);
   ensureSecuritySchemes(doc);
   doc.paths ??= {};
+  ensureDiscoveredRouteOperations(doc);
 
   for (const [pathname, pathItem] of Object.entries(doc.paths)) {
     if (!pathItem || typeof pathItem !== "object") continue;

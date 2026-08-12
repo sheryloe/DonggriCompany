@@ -181,6 +181,72 @@ describe("project module routes", () => {
     expect(res.body.job.prompt_markdown).toContain("Approved results must be copied");
   });
 
+  it("updates image asset job review metadata and approval timestamps", async () => {
+    const created = await request(app)
+      .post("/api/projects/project-1/assets/jobs")
+      .send({
+        module_key: "character-image",
+        asset_key: "hero-agent",
+        asset_brief: "Original animated developer character.",
+      })
+      .expect(201);
+
+    const updated = await request(app)
+      .patch(`/api/projects/project-1/assets/jobs/${created.body.job.id}`)
+      .send({
+        status: "approved",
+        source_files: ["assets/generated/game_asset_pipeline/donggri-visual-v2-characters/hero-agent-source.png"],
+        published_files: ["public/generated/donggri-visual-v2/characters/hero-agent.png"],
+        review: {
+          visual_pack: "donggri_visual_v2",
+          pass: true,
+        },
+      })
+      .expect(200);
+
+    expect(updated.body.job).toMatchObject({
+      status: "approved",
+      source_files: ["assets/generated/game_asset_pipeline/donggri-visual-v2-characters/hero-agent-source.png"],
+      published_files: ["public/generated/donggri-visual-v2/characters/hero-agent.png"],
+      review: {
+        visual_pack: "donggri_visual_v2",
+        pass: true,
+      },
+      approved_at: 1_700_000_000_000,
+    });
+  });
+
+  it("rejects approval when the asset job has no source or published files", async () => {
+    const created = await request(app)
+      .post("/api/projects/project-1/assets/jobs")
+      .send({
+        module_key: "character-image",
+        asset_key: "empty-agent",
+        asset_brief: "Original animated developer character.",
+      })
+      .expect(201);
+
+    await request(app)
+      .patch(`/api/projects/project-1/assets/jobs/${created.body.job.id}`)
+      .send({
+        status: "approved",
+        review: {
+          visual_pack: "donggri_visual_v2",
+          pass: true,
+        },
+      })
+      .expect(400)
+      .expect((response) => {
+        expect(response.body.error).toBe("asset_job_files_required");
+      });
+
+    const listed = await request(app).get("/api/projects/project-1/assets/jobs").expect(200);
+    expect(listed.body.jobs[0]).toMatchObject({
+      status: "draft",
+      approved_at: null,
+    });
+  });
+
   it("stores project component events with project isolation", async () => {
     const secondProjectDir = fs.mkdtempSync(path.join(os.tmpdir(), "donggri-module-test-second-"));
     seedSecondProject(db!, secondProjectDir);

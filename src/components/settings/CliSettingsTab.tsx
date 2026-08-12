@@ -24,10 +24,14 @@ type CodexSyncMetaByPool = Record<
 
 const PROVIDER_INFO: Record<OfficeExecutionProvider, { label: string; icon: string }> = {
   codex: { label: "Codex CLI", icon: "C" },
-  gemini: { label: "Gemini CLI", icon: "G" },
+  agy: { label: "AGY CLI", icon: "A" },
   claude: { label: "Claude CLI", icon: "A" },
   jules: { label: "Jules CLI", icon: "J" },
 };
+
+function isPoolForProvider(poolProvider: string, provider: OfficeExecutionProvider): boolean {
+  return poolProvider === provider || (provider === "agy" && (poolProvider === "gemini" || poolProvider === "antigravity"));
+}
 
 function statusChipClass(status: CliPoolStatus): string {
   if (status === "connected") return "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
@@ -280,7 +284,7 @@ export default function CliSettingsTab(props: CliSettingsTabProps) {
       <div className="grid gap-4 xl:grid-cols-2">
         {props.officeExecutionProviders.map((provider) => {
           const info = PROVIDER_INFO[provider] ?? { label: provider, icon: provider.slice(0, 1).toUpperCase() };
-          const pools = props.cliAccountPools.filter((pool) => pool.provider === provider);
+          const pools = props.cliAccountPools.filter((pool) => isPoolForProvider(pool.provider, provider));
           const selectedPoolId = props.selectedPoolByProvider[provider] ?? pools[0]?.accountPoolId ?? "";
           const selectedPool = pools.find((pool) => pool.accountPoolId === selectedPoolId) ?? pools[0] ?? null;
           const runner = selectedPool

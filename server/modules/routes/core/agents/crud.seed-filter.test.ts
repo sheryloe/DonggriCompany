@@ -902,7 +902,7 @@ describe("agent CRUD seed filter", () => {
     }
   });
 
-  it("POST /api/agents saves valid gemini cli_account_pool_id", () => {
+  it("POST /api/agents normalizes legacy gemini provider to agy while preserving pool id", () => {
     const { db, routes } = createHarness();
     try {
       db.prepare(
@@ -928,7 +928,7 @@ describe("agent CRUD seed filter", () => {
 
       expect(res.statusCode).toBe(201);
       const payload = res.payload as { agent?: { cli_provider?: string; cli_account_pool_id?: string | null } };
-      expect(payload.agent?.cli_provider).toBe("gemini");
+      expect(payload.agent?.cli_provider).toBe("agy");
       expect(payload.agent?.cli_account_pool_id).toBe("gemini-main");
     } finally {
       db.close();

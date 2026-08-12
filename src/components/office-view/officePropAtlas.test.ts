@@ -2,9 +2,12 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  DONGGRI_VISUAL_V2_OFFICE_PROP_ATLAS_URL,
+  LEGACY_OFFICE_PROP_ATLAS_URL,
   OFFICE_PROP_ATLAS_SIZE,
   OFFICE_PROP_ATLAS_URL,
   OFFICE_PROP_FRAMES,
+  getOfficePropAtlasUrl,
   isOfficePropFrameInsideAtlas,
 } from "./officePropAtlas";
 
@@ -50,7 +53,10 @@ describe("office renewal prop atlas", () => {
   });
 
   it("points to a repo-local generated asset", () => {
-    expect(OFFICE_PROP_ATLAS_URL).toBe("/sprites/office-renewal-v2/office-props-atlas.png");
-    expect(existsSync(join(process.cwd(), "public", OFFICE_PROP_ATLAS_URL))).toBe(true);
+    expect(OFFICE_PROP_ATLAS_URL).toBe(LEGACY_OFFICE_PROP_ATLAS_URL);
+    expect(getOfficePropAtlasUrl("legacy")).toBe(LEGACY_OFFICE_PROP_ATLAS_URL);
+    expect(getOfficePropAtlasUrl("donggri_visual_v2")).toBe(DONGGRI_VISUAL_V2_OFFICE_PROP_ATLAS_URL);
+    expect(existsSync(join(process.cwd(), "public", LEGACY_OFFICE_PROP_ATLAS_URL))).toBe(true);
+    expect(existsSync(join(process.cwd(), "public", DONGGRI_VISUAL_V2_OFFICE_PROP_ATLAS_URL))).toBe(true);
   });
 });

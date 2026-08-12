@@ -3,11 +3,25 @@ import type { DatabaseSync } from "node:sqlite";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
 
-export type ExecutionProvider = "codex" | "gemini" | "claude" | "jules";
-const EXECUTION_PROVIDERS = new Set<ExecutionProvider>(["codex", "gemini", "claude", "jules"]);
+export type ExecutionProvider = "codex" | "agy" | "claude" | "jules";
+export type LegacyExecutionProvider = "gemini" | "antigravity";
+const EXECUTION_PROVIDERS = new Set<ExecutionProvider>(["codex", "agy", "claude", "jules"]);
+const LEGACY_EXECUTION_PROVIDER_ALIASES = new Set<LegacyExecutionProvider>(["gemini", "antigravity"]);
 
-export function isExecutionProvider(value: string): value is ExecutionProvider {
-  return EXECUTION_PROVIDERS.has(value as ExecutionProvider);
+export function normalizeExecutionProvider(raw: unknown): ExecutionProvider | "" {
+  if (typeof raw !== "string") return "";
+  const value = raw.trim().toLowerCase();
+  if (value === "gemini" || value === "antigravity") return "agy";
+  return EXECUTION_PROVIDERS.has(value as ExecutionProvider) ? (value as ExecutionProvider) : "";
+}
+
+export function isExecutionProvider(value: string): value is ExecutionProvider | LegacyExecutionProvider {
+  const normalized = value.trim().toLowerCase();
+  return EXECUTION_PROVIDERS.has(normalized as ExecutionProvider) || LEGACY_EXECUTION_PROVIDER_ALIASES.has(normalized as LegacyExecutionProvider);
+}
+
+function providerLookupKeys(provider: string): string[] {
+  return provider === "agy" ? ["agy", "antigravity", "gemini"] : [provider];
 }
 
 export interface OAuthSessionRow {
@@ -72,6 +86,7 @@ export class OAuthGateService {
   }
 
   connectSession(provider: string, accountPoolId: string): OAuthSessionRow {
+    provider = normalizeExecutionProvider(provider) || provider;
     const now = this.nowMs();
     const existing = this.getSession(provider, accountPoolId);
     const id = existing?.id ?? randomUUID();
@@ -95,6 +110,7 @@ export class OAuthGateService {
   }
 
   disconnectSession(provider: string, accountPoolId: string): OAuthSessionRow {
+    provider = normalizeExecutionProvider(provider) || provider;
     const now = this.nowMs();
     const existing = this.getSession(provider, accountPoolId);
     const id = existing?.id ?? randomUUID();
@@ -114,7 +130,8 @@ export class OAuthGateService {
   }
 
   async ensureProviderPoolConnected(provider: string, accountPoolId: string): Promise<OAuthSessionRow | null> {
-    if (!isExecutionProvider(provider)) return null;
+    provider = normalizeExecutionProvider(provider);
+    if (!provider) return null;
 
     const session = this.getSession(provider, accountPoolId);
     if (!session || session.status === "disconnected") {
@@ -154,7 +171,7 @@ export class OAuthGateService {
                              last_error_at = NULL,
                              updated_at = ?
                          WHERE provider = ? AND account_pool_id = ?`;
-      this.db.prepare(updateSql).run(nextExpiresAt, now, now, provider, accountPoolId);
+      this.db.prepare(updateSql).run(nextExpiresAt, now, now, session.provider, accountPoolId);
       return this.mustGetSession(provider, accountPoolId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -180,15 +197,18 @@ export class OAuthGateService {
   }
 
   private getSession(provider: string, accountPoolId: string): OAuthSessionRow | null {
+    const providers = providerLookupKeys(provider);
     const row = this.db
       .prepare(
         `SELECT id, provider, account_pool_id, status, token_expires_at,
                 refresh_token_expires_at, last_refreshed_at, refresh_fail_count, last_error, last_error_at,
                 created_at, updated_at
          FROM oauth_sessions
-         WHERE provider = ? AND account_pool_id = ?`,
+         WHERE provider IN (${providers.map(() => "?").join(", ")}) AND account_pool_id = ?
+         ORDER BY CASE provider WHEN ? THEN 0 ELSE 1 END
+         LIMIT 1`,
       )
-      .get(provider, accountPoolId) as OAuthSessionRow | undefined;
+      .get(...providers, accountPoolId, provider) as OAuthSessionRow | undefined;
     return row ?? null;
   }
 
@@ -207,8 +227,7 @@ export function normalizePoolId(raw: unknown): string {
 }
 
 export function normalizeProvider(raw: unknown): string {
-  if (typeof raw !== "string") return "";
-  return raw.trim().toLowerCase();
+  return normalizeExecutionProvider(raw);
 }
 
 export function normalizeRunnerBodyProviderAndPool(body: unknown): { provider: string; accountPoolId: string } {

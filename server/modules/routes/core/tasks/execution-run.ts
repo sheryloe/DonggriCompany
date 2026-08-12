@@ -5,6 +5,7 @@ import type { AgentRow } from "../../shared/types.ts";
 import { resolveConstrainedAgentScopeForTask } from "./execution-run-auto-assign.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
+import { isAgyProvider, resolveAgyRuntimeOptions } from "../../../workflow/agents/agy-runtime-options.ts";
 import { buildAgentPromptProfileBlock } from "../../../workflow/agents/agent-profile.ts";
 import { buildWorkflowPackExecutionGuidance } from "../../../workflow/packs/execution-guidance.ts";
 import { resolveVideoArtifactSpecForTask } from "../../../workflow/packs/video-artifact.ts";
@@ -442,7 +443,7 @@ export function registerTaskRunRoute(deps: TaskRunRouteDeps): void {
       : projectContext
         ? `[Project Structure]\n${projectContext.length > 4000 ? projectContext.slice(0, 4000) + "\n... (truncated)" : projectContext}`
         : "";
-    const needsPlanInstruction = provider === "gemini" || provider === "copilot" || provider === "antigravity";
+    const needsPlanInstruction = isAgyProvider(provider) || provider === "copilot";
     const subtaskInstruction = needsPlanInstruction
       ? `\n\n${pickL(
           l(
@@ -751,6 +752,11 @@ Whenever you complete a subtask, report it in this format:
       mainModel,
       mainReasoningLevel,
       agent.cli_account_pool_id ?? null,
+      resolveAgyRuntimeOptions({
+        provider,
+        workflowMetaJson: task.workflow_meta_json,
+        continuationContext: continuationCtx,
+      }),
     );
 
     child.on("close", (code: number | null) => {

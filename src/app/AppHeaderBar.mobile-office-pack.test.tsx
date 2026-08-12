@@ -75,7 +75,7 @@ describe("AppHeaderBar mobile office pack selector", () => {
     window.addEventListener("donggri:manual-search-focus", listener);
 
     render(<AppHeaderBar {...props} currentView="manual" viewTitle="메뉴얼" />);
-    await user.click(screen.getByRole("button", { name: /메뉴얼 검색/i }));
+    await user.click(screen.getByRole("button", { name: /매뉴얼 검색/i }));
 
     expect(listener).toHaveBeenCalledTimes(1);
     window.removeEventListener("donggri:manual-search-focus", listener);

@@ -8,12 +8,11 @@ export const ROLES: AgentRole[] = ["team_leader", "senior", "junior"];
 export const CLI_PROVIDERS: CliProvider[] = [
   "claude",
   "codex",
-  "gemini",
+  "agy",
   "jules",
   "opencode",
   "kimi",
   "copilot",
-  "antigravity",
   "api",
 ];
 

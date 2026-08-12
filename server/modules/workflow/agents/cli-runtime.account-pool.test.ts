@@ -44,12 +44,14 @@ function createHarness(): RuntimeHarness {
   };
 }
 
-function writeAuthArtifact(profileHome: string, provider: "codex" | "gemini" | "jules" = "codex"): void {
+function writeAuthArtifact(profileHome: string, provider: "codex" | "agy" | "gemini" | "jules" = "codex"): void {
   const relativePath =
-    provider === "gemini" ? path.join(".gemini", "oauth_creds.json") : path.join(`.${provider}`, "auth.json");
+    provider === "agy" || provider === "gemini"
+      ? path.join(".gemini", "antigravity-cli", "settings.json")
+      : path.join(`.${provider}`, "auth.json");
   const authPath = path.join(profileHome, relativePath);
   fs.mkdirSync(path.dirname(authPath), { recursive: true });
-  fs.writeFileSync(authPath, JSON.stringify({ token: "test" }), "utf8");
+  fs.writeFileSync(authPath, JSON.stringify({ selectedAuthType: "oauth-personal", token: "test" }), "utf8");
 }
 
 async function waitForClose(
@@ -150,6 +152,92 @@ describe("spawnCliAgent codex cli account pool", () => {
     expect(logs.some((entry) => entry.includes("RUN FAILED"))).toBe(false);
   });
 
+  it("passes AGY prompt file instructions and session options through CLI spawn", async () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+
+    const scriptPath = path.join(harness.logsDir, "print-argv.js");
+    fs.writeFileSync(
+      scriptPath,
+      [
+        'const fs = require("node:fs");',
+        "const args = process.argv.slice(2);",
+        'const printArg = args[args.indexOf("--print") + 1] || "";',
+        'const promptPath = printArg.split(/\\r?\\n/).find((line) => line.endsWith(".prompt.txt")) || "";',
+        'process.stdout.write(`ARGV=${JSON.stringify(args)}\\n`);',
+        'process.stdout.write(`PROMPT_EXISTS=${promptPath ? fs.existsSync(promptPath) : false}\\n`);',
+        'process.stdout.write(`PROMPT_TEXT=${promptPath ? fs.readFileSync(promptPath, "utf8") : ""}\\n`);',
+      ].join("\n"),
+      "utf8",
+    );
+
+    const buildAgentArgsCalls: unknown[][] = [];
+    const runtime = createCliRuntimeTools({
+      db: harness.db as any,
+      logsDir: harness.logsDir,
+      buildAgentArgs: (...args: unknown[]) => {
+        buildAgentArgsCalls.push(args);
+        return ["node", scriptPath];
+      },
+      clearCliOutputDedup: () => {},
+      normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
+      shouldSkipDuplicateCliOutput: () => false,
+      broadcast: () => {},
+      TASK_RUN_IDLE_TIMEOUT_MS: 0,
+      TASK_RUN_HARD_TIMEOUT_MS: 0,
+      killPidTree: (pid: number) => {
+        try {
+          if (process.platform === "win32") {
+            execFileSync("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore" });
+          } else {
+            process.kill(pid);
+          }
+        } catch {
+          // ignore
+        }
+      },
+      appendTaskLog: () => {},
+      activeProcesses: new Map(),
+      createSubtaskFromCli: () => {},
+      completeSubtaskFromCli: () => {},
+    });
+
+    const logPath = path.join(harness.logsDir, "task-agy.log");
+    const child = runtime.spawnCliAgent(
+      "task-agy",
+      "agy",
+      "full prompt body for agy",
+      harness.logsDir,
+      logPath,
+      "Gemini 3.1 Pro (High)",
+      undefined,
+      null,
+      {
+        continueConversation: true,
+        antigravityConversationId: "conv-123",
+        antigravityProjectId: "ag-project-1",
+      },
+    );
+    await waitForClose(child);
+
+    const logText = fs.readFileSync(logPath, "utf8");
+
+    expect(logText).toContain("PROMPT_EXISTS=true");
+    expect(logText).toContain("full prompt body for agy");
+    expect(logText).toContain("[AGY CLI] prompt_file=");
+    expect(logText).toContain("--print");
+    expect(logText).toContain("Read the full task prompt from this file");
+    expect(buildAgentArgsCalls[0]?.[0]).toBe("agy");
+    expect(buildAgentArgsCalls[0]?.[3]).toMatchObject({
+      agy: {
+        continueConversation: true,
+        conversationId: "conv-123",
+        projectId: "ag-project-1",
+        addDirs: [harness.logsDir],
+      },
+    });
+  });
+
   it("normalizes legacy app-scoped profile_home to repo-scoped office account directory", () => {
     const harness = createHarness();
     cleanups.push(() => harness.close());
@@ -240,13 +328,13 @@ describe("spawnCliAgent codex cli account pool", () => {
 
     const scriptPath = path.join(harness.logsDir, "print-auto-home.js");
     fs.writeFileSync(scriptPath, "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);", "utf8");
-    const profileHome = path.join(harness.logsDir, "gemini-main-home");
+    const profileHome = path.join(harness.logsDir, "agy-main-home");
     fs.mkdirSync(profileHome, { recursive: true });
-    writeAuthArtifact(profileHome, "gemini");
+    writeAuthArtifact(profileHome, "agy");
     harness.db
       .prepare(
         `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
-         VALUES (?, 'gemini', 'gemini-main', 'Main Gemini', ?, 'connected', 1, 1)`,
+         VALUES (?, 'agy', 'agy-main', 'Main AGY', ?, 'connected', 1, 1)`,
       )
       .run(randomUUID(), profileHome);
 
@@ -274,12 +362,12 @@ describe("spawnCliAgent codex cli account pool", () => {
     });
 
     const logPath = path.join(harness.logsDir, "task-3.log");
-    const child = runtime.spawnCliAgent("task-3", "gemini", "test prompt", harness.logsDir, logPath);
+    const child = runtime.spawnCliAgent("task-3", "agy", "test prompt", harness.logsDir, logPath);
     await waitForClose(child);
     const logText = fs.readFileSync(logPath, "utf8");
 
     expect(logText).toContain(`ENV_HOME=${profileHome}`);
-    expect(logText).toContain("provider=gemini");
+    expect(logText).toContain("provider=agy");
     expect(logText).toContain("selected_by=auto");
   });
 

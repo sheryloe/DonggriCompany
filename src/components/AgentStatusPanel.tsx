@@ -32,7 +32,7 @@ function fmtTime(ts: number | null | undefined): string {
 function displayCliProvider(provider: CliProcessInfo["provider"]): string {
   if (provider === "claude") return "Claude";
   if (provider === "codex") return "Codex";
-  if (provider === "gemini") return "Gemini";
+  if (provider === "agy" || provider === "gemini" || provider === "antigravity") return "AGY";
   if (provider === "kimi") return "Kimi";
   if (provider === "node") return "Node";
   if (provider === "python") return "Python";

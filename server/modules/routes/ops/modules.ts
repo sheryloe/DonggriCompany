@@ -14,6 +14,7 @@ const MODULE_CATEGORIES = new Set([
   "operations",
 ]);
 const IMAGE_MODULE_TYPES = new Set(["image_prompt_pack", "game_asset_pipeline"]);
+const ASSET_JOB_STATUSES = new Set(["draft", "generating", "generated", "needs_review", "approved", "published", "failed"]);
 const DEPARTMENT_COMPONENT_IDS = new Set([
   "pmo",
   "planning",
@@ -406,6 +407,20 @@ function rowToAssetJob(row: Record<string, unknown>) {
   };
 }
 
+function normalizeStringList(value: unknown): string[] | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item) => item.length > 0 && item.length <= 400);
+}
+
+function normalizeReviewPatch(value: unknown): Record<string, unknown> | null {
+  if (value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
 function rowToProjectComponentEvent(row: ProjectComponentEventRow | Record<string, unknown>) {
   return {
     id: String(row.id),
@@ -764,5 +779,77 @@ export function registerModuleRoutes(ctx: Pick<RuntimeContext, "app" | "db" | "n
     );
     const row = db.prepare("SELECT * FROM asset_jobs WHERE id = ?").get(id) as Record<string, unknown> | undefined;
     return res.status(201).json({ ok: true, job: row ? rowToAssetJob(row) : null });
+  });
+
+  app.patch("/api/projects/:id/assets/jobs/:jobId", (req, res) => {
+    const projectId = String(req.params.id ?? "").trim();
+    const jobId = String(req.params.jobId ?? "").trim();
+    if (!getProject(db, projectId)) return res.status(404).json({ error: "project_not_found" });
+    const row = db
+      .prepare("SELECT * FROM asset_jobs WHERE id = ? AND project_id = ?")
+      .get(jobId, projectId) as Record<string, unknown> | undefined;
+    if (!row) return res.status(404).json({ error: "asset_job_not_found" });
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const status = typeof body.status === "string" ? body.status.trim() : "";
+    if (status && !ASSET_JOB_STATUSES.has(status)) return res.status(400).json({ error: "invalid_asset_job_status" });
+
+    const sourceFiles = normalizeStringList(body.source_files);
+    const publishedFiles = normalizeStringList(body.published_files);
+    const reviewPatch = normalizeReviewPatch(body.review);
+    const currentReview = safeJson(row.review_json, {}) as Record<string, unknown>;
+    const nextReview = reviewPatch == null ? currentReview : { ...currentReview, ...reviewPatch };
+    const now = nowMs();
+
+    const nextStatus = status || String(row.status);
+    const nextSourceFiles = sourceFiles ?? normalizeStringList(safeJson(row.source_files_json, [])) ?? [];
+    const nextPublishedFiles = publishedFiles ?? normalizeStringList(safeJson(row.published_files_json, [])) ?? [];
+    if (nextStatus === "approved" && nextSourceFiles.length === 0 && nextPublishedFiles.length === 0) {
+      return res.status(400).json({ error: "asset_job_files_required" });
+    }
+    if (nextStatus === "published" && nextPublishedFiles.length === 0) {
+      return res.status(400).json({ error: "asset_job_published_files_required" });
+    }
+    const approvedAt =
+      (nextStatus === "approved" || nextStatus === "published") && row.approved_at == null
+        ? now
+        : row.approved_at == null
+          ? null
+          : Number(row.approved_at);
+    const publishedAt =
+      nextStatus === "published" && row.published_at == null
+        ? now
+        : row.published_at == null
+          ? null
+          : Number(row.published_at);
+
+    db.prepare(
+      `
+      UPDATE asset_jobs
+      SET status = ?,
+          source_files_json = ?,
+          published_files_json = ?,
+          review_json = ?,
+          approved_at = ?,
+          published_at = ?,
+          updated_at = ?
+      WHERE id = ? AND project_id = ?
+    `,
+    ).run(
+      nextStatus,
+      JSON.stringify(nextSourceFiles),
+      JSON.stringify(nextPublishedFiles),
+      JSON.stringify(nextReview),
+      approvedAt,
+      publishedAt,
+      now,
+      jobId,
+      projectId,
+    );
+
+    const updated = db.prepare("SELECT * FROM asset_jobs WHERE id = ? AND project_id = ?").get(jobId, projectId) as
+      | Record<string, unknown>
+      | undefined;
+    return res.json({ ok: true, job: updated ? rowToAssetJob(updated) : null });
   });
 }

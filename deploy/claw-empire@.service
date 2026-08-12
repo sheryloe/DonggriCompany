@@ -1,23 +1,22 @@
 [Unit]
-Description=Claw-Empire service
-Documentation=https://github.com/GreenSheep01201/claw-empire
+Description=DonggriCompany service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=%i
-WorkingDirectory=%h/claw-empire
-EnvironmentFile=-%h/claw-empire/deploy/.env.production
-ExecStartPre=/usr/bin/env bash -lc 'mkdir -p %h/claw-empire/logs'
-ExecStart=/usr/bin/env bash -lc 'cd %h/claw-empire && pnpm run start'
+WorkingDirectory=%h/DonggriCompany
+EnvironmentFile=-%h/DonggriCompany/deploy/.env.production
+ExecStartPre=/usr/bin/env bash -lc 'mkdir -p %h/DonggriCompany/logs'
+ExecStart=/usr/bin/env bash -lc 'cd %h/DonggriCompany && corepack pnpm run start'
 Restart=on-failure
 RestartSec=10
 KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=30
-StandardOutput=append:%h/claw-empire/logs/claw-empire.log
-StandardError=append:%h/claw-empire/logs/claw-empire.err
+StandardOutput=append:%h/DonggriCompany/logs/donggricompany.log
+StandardError=append:%h/DonggriCompany/logs/donggricompany.err
 NoNewPrivileges=true
 PrivateTmp=true
 

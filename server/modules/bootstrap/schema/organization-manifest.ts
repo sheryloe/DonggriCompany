@@ -795,7 +795,7 @@ export const LEGACY_BUILTIN_AGENT_SIGNATURES: LegacyBuiltinAgentSignature[] = [
     name: "Luna",
     department_id: "design",
     role: "junior",
-    cli_provider: "gemini",
+    cli_provider: "agy",
     personality: "UI designer",
   },
   {

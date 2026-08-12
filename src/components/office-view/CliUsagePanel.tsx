@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import type { CliPoolUsageEntry, CliSessionUsageEntry, CliUsageEntry, CliUsageWindow } from "../../api";
 import type { UiLanguage } from "../../i18n";
 import type { CliStatusMap } from "../../types";
@@ -36,14 +36,14 @@ const ChatGPTLogo = () => (
   </svg>
 );
 
-const GeminiLogo = () => (
+const AgyLogo = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
     <path
       d="M12 0C12 6.627 6.627 12 0 12c6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"
-      fill="url(#gemini_grad)"
+      fill="url(#agy_grad)"
     />
     <defs>
-      <linearGradient id="gemini_grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+      <linearGradient id="agy_grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
         <stop stopColor="#4285F4" />
         <stop offset="1" stopColor="#886FBF" />
       </linearGradient>
@@ -67,9 +67,9 @@ const CLI_DISPLAY: Array<{ key: string; name: string; icon: ReactNode; color: st
     bgColor: "bg-emerald-500/15 border-emerald-400/30",
   },
   {
-    key: "gemini",
-    name: "Gemini",
-    icon: <GeminiLogo />,
+    key: "agy",
+    name: "AGY",
+    icon: <AgyLogo />,
     color: "text-blue-300",
     bgColor: "bg-blue-500/15 border-blue-400/30",
   },
@@ -83,16 +83,9 @@ const CLI_DISPLAY: Array<{ key: string; name: string; icon: ReactNode; color: st
   {
     key: "copilot",
     name: "Copilot",
-    icon: "🚀",
+    icon: "??",
     color: "text-amber-300",
     bgColor: "bg-amber-500/15 border-amber-400/30",
-  },
-  {
-    key: "antigravity",
-    name: "Antigravity",
-    icon: "🌌",
-    color: "text-pink-300",
-    bgColor: "bg-pink-500/15 border-pink-400/30",
   },
 ];
 

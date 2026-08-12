@@ -12,13 +12,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN corepack enable
 
 # Install CLI providers used by Claw-Empire agent runtime
+ARG CLAUDE_CODE_VERSION=2.1.209
+ARG CODEX_VERSION=0.144.4
+ARG CODEX_MULTI_AUTH_VERSION=2.6.1
+ARG GEMINI_CLI_VERSION=0.50.0
+ARG JULES_VERSION=0.1.42
+ARG OPENCODE_VERSION=1.17.20
 RUN npm install -g \
-  @anthropic-ai/claude-code \
-  @openai/codex \
-  codex-multi-auth \
-  @google/gemini-cli \
-  @google/jules \
-  opencode-ai
+  @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+  @openai/codex@${CODEX_VERSION} \
+  codex-multi-auth@${CODEX_MULTI_AUTH_VERSION} \
+  @google/gemini-cli@${GEMINI_CLI_VERSION} \
+  @google/jules@${JULES_VERSION} \
+  opencode-ai@${OPENCODE_VERSION}
 
 # Create unprivileged runtime user
 ARG APP_UID=10001

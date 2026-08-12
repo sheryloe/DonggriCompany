@@ -2,6 +2,7 @@ import { post, request } from "./core";
 
 import type {
   AssetJob,
+  AssetJobStatus,
   ProjectComponentEvent,
   ProjectModuleApplyRun,
   ProjectModuleBinding,
@@ -149,5 +150,26 @@ export async function createProjectAssetJob(
     ok: boolean;
     job: AssetJob;
   };
+  return response.job;
+}
+
+export async function updateProjectAssetJob(
+  projectId: string,
+  jobId: string,
+  input: {
+    status?: AssetJobStatus;
+    source_files?: string[];
+    published_files?: string[];
+    review?: Record<string, unknown>;
+  },
+): Promise<AssetJob> {
+  const response = await request<{ ok: boolean; job: AssetJob }>(
+    `/api/projects/${encodeURIComponent(projectId)}/assets/jobs/${encodeURIComponent(jobId)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
   return response.job;
 }

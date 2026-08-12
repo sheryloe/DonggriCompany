@@ -53,7 +53,7 @@ describe("Sidebar app shell", () => {
       </I18nProvider>,
     );
 
-    for (const label of ["사무실", "프로젝트", "마스터 에이전트", "업무", "Skill", "Memory", "설정"]) {
+    for (const label of ["사무실", "프로젝트", "마스터 에이전트", "업무", "이미지 작업", "Skill", "Memory", "설정"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
 
@@ -70,7 +70,7 @@ describe("Sidebar app shell", () => {
     expect(screen.queryByText("CloudOps")).not.toBeInTheDocument();
     expect(screen.queryByText("8bit RPG Command Map")).not.toBeInTheDocument();
     expect(screen.queryByText("Control Hub")).not.toBeInTheDocument();
-    expect(container.querySelectorAll("nav .sidebar-nav-icon")).toHaveLength(7);
+    expect(container.querySelectorAll("nav .sidebar-nav-icon")).toHaveLength(8);
     expect(container.querySelectorAll("nav .sidebar-nav-icon img")).toHaveLength(0);
   });
 });

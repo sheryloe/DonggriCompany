@@ -115,56 +115,36 @@ export function registerModelRoutes(ctx: RuntimeContext): void {
     }
   }
 
-  function fetchGeminiModels(): CliModelInfoServer[] {
+  function fetchAgyModels(): CliModelInfoServer[] {
     const FALLBACK: CliModelInfoServer[] = [
-      { slug: "gemini-3-pro-preview", displayName: "Gemini 3 Pro Preview" },
-      { slug: "gemini-3-flash-preview", displayName: "Gemini 3 Flash Preview" },
-      { slug: "gemini-2.5-pro", displayName: "Gemini 2.5 Pro" },
-      { slug: "gemini-2.5-flash", displayName: "Gemini 2.5 Flash" },
-      { slug: "gemini-2.5-flash-lite", displayName: "Gemini 2.5 Flash Lite" },
+      { slug: "Gemini 3.1 Pro (High)", displayName: "Gemini 3.1 Pro (High)" },
+      { slug: "Gemini 3.5 Flash (Medium)", displayName: "Gemini 3.5 Flash (Medium)" },
     ];
 
     try {
-      const geminiPath = execFileSync("which", ["gemini"], {
+      const whichCmd = process.platform === "win32" ? "where" : "which";
+      const agyPath = execFileSync(whichCmd, ["agy"], {
         stdio: "pipe",
         timeout: 5000,
         encoding: "utf8",
-      }).trim();
-      if (!geminiPath) return FALLBACK;
+      })
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean);
+      if (!agyPath) return FALLBACK;
 
-      const realPath = fs.realpathSync(geminiPath);
-      let dir = path.dirname(realPath);
-      let configPath = "";
-      for (let i = 0; i < 10; i++) {
-        const candidate = path.join(
-          dir,
-          "node_modules",
-          "@google",
-          "gemini-cli-core",
-          "dist",
-          "src",
-          "config",
-          "defaultModelConfigs.js",
-        );
-        if (fs.existsSync(candidate)) {
-          configPath = candidate;
-          break;
-        }
-        const parent = path.dirname(dir);
-        if (parent === dir) break;
-        dir = parent;
-      }
-
-      if (!configPath) return FALLBACK;
-
-      const content = fs.readFileSync(configPath, "utf8");
+      const content = execFileSync(agyPath, ["models"], {
+        stdio: "pipe",
+        timeout: 10_000,
+        encoding: "utf8",
+      });
       const models: CliModelInfoServer[] = [];
-      const entryRegex = /["']([a-z][a-z0-9._-]+)["']\s*:\s*\{([^}]*extends\s*:\s*["']chat-base[^"']*["'][^}]*)\}/g;
-      let match;
-      while ((match = entryRegex.exec(content)) !== null) {
-        const slug = match[1];
-        if (slug.startsWith("chat-base")) continue;
-        models.push({ slug, displayName: slug });
+      for (const rawLine of content.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || !/gemini/i.test(line)) continue;
+        const label = line.replace(/^[*>\-\s]+/, "").trim();
+        if (!label) continue;
+        models.push({ slug: label, displayName: label });
       }
 
       return models.length > 0 ? models : FALLBACK;
@@ -239,14 +219,16 @@ export function registerModelRoutes(ctx: RuntimeContext): void {
         "claude-haiku-4-5",
       ].map(toModelInfo),
       codex: codexFallback,
-      gemini: fetchGeminiModels(),
+      agy: fetchAgyModels(),
       opencode: [],
     };
 
     const normalized: Record<string, CliModelInfoServer[]> = {};
 
     for (const [provider, fallbackModels] of Object.entries(defaults)) {
-      const source = Array.isArray(parsed[provider]) ? (parsed[provider] as unknown[]) : [];
+      const rawSource =
+        provider === "agy" ? (parsed.agy ?? parsed.gemini ?? parsed.antigravity) : parsed[provider];
+      const source = Array.isArray(rawSource) ? (rawSource as unknown[]) : [];
       const normalizedSource = source
         .map(normalizeCliModelEntry)
         .filter((entry): entry is CliModelInfoServer => !!entry);
@@ -255,6 +237,7 @@ export function registerModelRoutes(ctx: RuntimeContext): void {
 
     for (const [provider, list] of Object.entries(parsed)) {
       if (provider in normalized) continue;
+      if (provider === "gemini" || provider === "antigravity") continue;
       if (!Array.isArray(list)) continue;
       const normalizedList = list.map(normalizeCliModelEntry).filter((entry): entry is CliModelInfoServer => !!entry);
       normalized[provider] = dedupeCliModelList(normalizedList);
@@ -325,7 +308,7 @@ export function registerModelRoutes(ctx: RuntimeContext): void {
         "claude-sonnet-4-5",
         "claude-haiku-4-5",
       ].map(toModelInfo),
-      gemini: fetchGeminiModels(),
+      agy: fetchAgyModels(),
       opencode: [],
     };
 

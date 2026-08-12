@@ -27,7 +27,7 @@ import StrategicMaintenanceSettingsTab from "./settings/StrategicMaintenanceSett
 import type { AccountDraftMap, AccountDraftPatch, LocalSettings, SettingsTab } from "./settings/types";
 import { useApiProvidersState } from "./settings/useApiProvidersState";
 
-const OFFICE_EXECUTION_PROVIDERS: OfficeExecutionProvider[] = ["codex", "gemini", "claude", "jules"];
+const OFFICE_EXECUTION_PROVIDERS: OfficeExecutionProvider[] = ["codex", "agy", "claude", "jules"];
 
 type RunnerMeta = {
   maxActive: number;
@@ -48,7 +48,7 @@ interface SettingsPanelProps {
 function buildDefaultPoolSelection(): Record<OfficeExecutionProvider, string> {
   return {
     codex: "codex-main",
-    gemini: "gemini-main",
+    agy: "agy-main",
     claude: "claude-main",
     jules: "jules-main",
   };
@@ -58,7 +58,7 @@ function pickNextPoolId(provider: OfficeExecutionProvider, pools: CliAccountPool
   const base = `${provider}-main`;
   const poolIds = new Set(
     pools
-      .filter((pool) => pool.provider === provider)
+      .filter((pool) => isPoolForProvider(pool.provider, provider))
       .map((pool) => pool.accountPoolId.trim())
       .filter(Boolean),
   );
@@ -70,9 +70,13 @@ function pickNextPoolId(provider: OfficeExecutionProvider, pools: CliAccountPool
   return `${base}-${Date.now()}`;
 }
 
+function isPoolForProvider(poolProvider: string, provider: OfficeExecutionProvider): boolean {
+  return poolProvider === provider || (provider === "agy" && (poolProvider === "gemini" || poolProvider === "antigravity"));
+}
+
 function providerLabel(provider: OfficeExecutionProvider): string {
   if (provider === "codex") return "Codex";
-  if (provider === "gemini") return "Gemini";
+  if (provider === "agy") return "AGY";
   if (provider === "claude") return "Claude";
   return "Jules";
 }
@@ -209,7 +213,7 @@ export default function SettingsPanel({
       const next = { ...prev };
       for (const provider of OFFICE_EXECUTION_PROVIDERS) {
         const poolIds = pools
-          .filter((row) => row.provider === provider)
+          .filter((row) => isPoolForProvider(row.provider, provider))
           .map((row) => row.accountPoolId)
           .filter(Boolean);
         if (poolIds.length === 0) {

@@ -10,7 +10,7 @@ import { createCrossDeptCooperationTools } from "./cross-dept-cooperation.ts";
 
 type ProviderCase = {
   provider: "api" | "copilot" | "antigravity";
-  launchKind: "api" | "http";
+  launchKind: "api" | "http" | "cli";
 };
 
 type SeededAgents = {
@@ -106,7 +106,7 @@ describe("createCrossDeptCooperationTools", () => {
   it.each<ProviderCase>([
     { provider: "api", launchKind: "api" },
     { provider: "copilot", launchKind: "http" },
-    { provider: "antigravity", launchKind: "http" },
+    { provider: "antigravity", launchKind: "cli" },
   ])("routes $provider collaboration tasks through the $launchKind launcher", ({ provider, launchKind }) => {
     db = new DatabaseSync(":memory:");
     applyBaseSchema(db);
@@ -117,7 +117,7 @@ describe("createCrossDeptCooperationTools", () => {
 
     const launchApiProviderAgent = vi.fn();
     const launchHttpAgent = vi.fn();
-    const spawnCliAgent = vi.fn();
+    const spawnCliAgent = vi.fn(() => ({ on: vi.fn() }));
     const appendTaskLog = vi.fn();
 
     const { startCrossDeptCooperation } = createCrossDeptCooperationTools({
@@ -206,21 +206,25 @@ describe("createCrossDeptCooperationTools", () => {
     expect(String(decisionLog?.[2] ?? "")).toContain("fallback_reason=");
     expect(String(decisionLog?.[2] ?? "")).toContain("authority_reason=");
     expect(String(decisionLog?.[2] ?? "")).toContain("blocking_reason=");
-    expect(spawnCliAgent).not.toHaveBeenCalled();
-
     if (launchKind === "api") {
       expect(launchApiProviderAgent).toHaveBeenCalledTimes(1);
       expect(launchHttpAgent).not.toHaveBeenCalled();
-    } else {
+      expect(spawnCliAgent).not.toHaveBeenCalled();
+    } else if (launchKind === "http") {
       expect(launchHttpAgent).toHaveBeenCalledTimes(1);
       expect(launchApiProviderAgent).not.toHaveBeenCalled();
+      expect(spawnCliAgent).not.toHaveBeenCalled();
+    } else {
+      expect(spawnCliAgent).toHaveBeenCalledTimes(1);
+      expect(launchApiProviderAgent).not.toHaveBeenCalled();
+      expect(launchHttpAgent).not.toHaveBeenCalled();
     }
   });
 
   it.each<ProviderCase>([
     { provider: "api", launchKind: "api" },
     { provider: "copilot", launchKind: "http" },
-    { provider: "antigravity", launchKind: "http" },
+    { provider: "antigravity", launchKind: "cli" },
   ])("finalizes linked subtasks for $provider collaboration runs", ({ provider }) => {
     db = new DatabaseSync(":memory:");
     applyBaseSchema(db);
@@ -240,6 +244,9 @@ describe("createCrossDeptCooperationTools", () => {
       const onComplete = args[8] as ((exitCode: number) => void) | undefined;
       onComplete?.(0);
     });
+    const spawnCliAgent = vi.fn(() => ({
+      on: (_event: "close", listener: (code: number | null) => void) => listener(0),
+    }));
 
     const { startCrossDeptCooperation } = createCrossDeptCooperationTools({
       db,
@@ -280,7 +287,7 @@ describe("createCrossDeptCooperationTools", () => {
         provider: currentProvider,
       })),
       getProviderModelConfig: vi.fn(() => ({})),
-      spawnCliAgent: vi.fn(),
+      spawnCliAgent,
       launchApiProviderAgent,
       launchHttpAgent,
       getNextHttpAgentPid: vi.fn(() => 4242),

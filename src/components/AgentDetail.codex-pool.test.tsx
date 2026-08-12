@@ -201,7 +201,7 @@ describe("AgentDetail cli execution settings", () => {
     );
   });
 
-  it("does not render gemini model selector and still saves execution pool", async () => {
+  it("does not render AGY model selector and still saves legacy gemini pool through agy", async () => {
     const user = userEvent.setup();
     const updateAgentMock = vi.spyOn(api, "updateAgent").mockResolvedValue();
     vi.spyOn(api, "getCliAccountPools").mockResolvedValue([
@@ -248,7 +248,7 @@ describe("AgentDetail cli execution settings", () => {
     expect(updateAgentMock).toHaveBeenCalledWith(
       "agent-g1",
       expect.objectContaining({
-        cli_provider: "gemini",
+        cli_provider: "agy",
         cli_account_pool_id: "gemini-main",
         cli_model: null,
         cli_reasoning_level: null,

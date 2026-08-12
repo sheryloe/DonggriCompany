@@ -77,6 +77,7 @@ interface SubtaskDelegationDeps {
     policySnapshotHash: string | null;
     policyResolutionJson: string;
   };
+  getTaskContinuationContext?: (taskId: string) => string;
   ensureClaudeMd: (projectPath: string, worktreePath: string) => void;
   getProviderModelConfig: () => Record<
     string,
@@ -91,6 +92,7 @@ interface SubtaskDelegationDeps {
     model?: string,
     reasoningLevel?: string,
     cliAccountPoolId?: string | null,
+    runtimeOptions?: unknown,
   ) => {
     on: (event: "close", listener: (code: number | null) => void) => void;
   };
@@ -153,6 +155,7 @@ export function initializeSubtaskDelegation(deps: SubtaskDelegationDeps) {
     createWorktree,
     logsDir,
     ensureTaskExecutionSession,
+    getTaskContinuationContext,
     ensureClaudeMd,
     getProviderModelConfig,
     spawnCliAgent,
@@ -610,6 +613,7 @@ export function initializeSubtaskDelegation(deps: SubtaskDelegationDeps) {
     createWorktree,
     logsDir,
     ensureTaskExecutionSession,
+    getTaskContinuationContext,
     ensureClaudeMd,
     getProviderModelConfig,
     spawnCliAgent,

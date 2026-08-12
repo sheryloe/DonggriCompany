@@ -170,14 +170,13 @@ export function localizeAuditStatus(status: string, t: TFunction): string {
   return status;
 }
 
-export const LEARN_PROVIDER_ORDER: SkillLearnProvider[] = ["claude", "codex", "gemini", "opencode", "kimi"];
+export const LEARN_PROVIDER_ORDER: SkillLearnProvider[] = ["claude", "codex", "agy", "opencode", "kimi"];
 export const LEARNED_PROVIDER_ORDER: SkillHistoryProvider[] = [
   "claude",
   "codex",
-  "gemini",
+  "agy",
   "opencode",
   "copilot",
-  "antigravity",
   "api",
 ];
 
@@ -200,7 +199,7 @@ export function roleLabel(role: AgentRole, t: TFunction): string {
 export function providerLabel(provider: SkillLearnProvider): string {
   if (provider === "claude") return "Claude Code";
   if (provider === "codex") return "Codex";
-  if (provider === "gemini") return "Gemini CLI";
+  if (provider === "agy" || provider === "gemini") return "AGY CLI";
   if (provider === "kimi") return "Kimi Code";
   return "OpenCode";
 }
@@ -208,11 +207,10 @@ export function providerLabel(provider: SkillLearnProvider): string {
 export function learnedProviderLabel(provider: SkillHistoryProvider): string {
   if (provider === "claude") return "Claude Code";
   if (provider === "codex") return "Codex CLI";
-  if (provider === "gemini") return "Gemini CLI";
+  if (provider === "agy" || provider === "gemini" || provider === "antigravity") return "AGY CLI";
   if (provider === "opencode") return "OpenCode";
   if (provider === "kimi") return "Kimi Code";
   if (provider === "copilot") return "GitHub Copilot";
-  if (provider === "antigravity") return "Antigravity";
   return "API Provider";
 }
 
@@ -222,17 +220,15 @@ export function cliProviderIcon(provider: SkillHistoryProvider) {
       ? "CL"
       : provider === "codex"
         ? "CX"
-        : provider === "gemini"
-          ? "GM"
+        : provider === "agy" || provider === "gemini" || provider === "antigravity"
+          ? "AG"
           : provider === "opencode"
             ? "OC"
             : provider === "kimi"
               ? "KM"
               : provider === "copilot"
                 ? "GH"
-                : provider === "antigravity"
-                  ? "AG"
-                  : "API";
+                : "API";
   return <span className="text-[9px] font-semibold text-slate-200">{label}</span>;
 }
 

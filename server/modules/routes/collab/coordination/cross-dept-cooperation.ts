@@ -5,6 +5,7 @@ import { getDepartmentPromptForPack } from "../../../workflow/packs/department-s
 import { resolveWorkflowPackKeyForTask } from "../../../workflow/packs/task-pack-resolver.ts";
 import { resolveProviderRuntimeKind } from "../../../workflow/agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../../../workflow/agents/provider-policy-resolver.ts";
+import { resolveAgyRuntimeOptions } from "../../../workflow/agents/agy-runtime-options.ts";
 import { previewCanonicalRouting } from "../../../company/canonical-policy.ts";
 import { resolveCanonicalIdentity } from "../../../company/canonical-identity.ts";
 import { resolveConstrainedAgentScopeForTask } from "../../core/tasks/execution-run-auto-assign.ts";
@@ -50,6 +51,7 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
     logsDir,
     getDeptRoleConstraint,
     getRecentConversationContext,
+    getTaskContinuationContext = () => "",
     buildAvailableSkillsPromptBlock,
     buildTaskExecutionPrompt,
     hasExplicitWarningFixRequest,
@@ -613,6 +615,7 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
                 project_id: string | null;
                 project_path: string | null;
                 workflow_pack_key: string | null;
+                workflow_meta_json: string | null;
               }
             | undefined;
           if (crossTaskData) {
@@ -652,6 +655,7 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
             const deptPrompt = typeof deptPromptRaw === "string" ? deptPromptRaw.trim() : "";
             const deptPromptBlock = deptPrompt ? `[Department Shared Prompt]\n${deptPrompt}` : "";
             const crossConversationCtx = getRecentConversationContext(execAgent.id);
+            const continuationCtx = getTaskContinuationContext(crossTaskId);
             const taskLang = resolveLang(crossTaskData.description ?? crossTaskData.title);
             const availableSkillsPromptBlock = buildAvailableSkillsPromptBlock(execProvider);
             const spawnPrompt = buildTaskExecutionPrompt(
@@ -660,6 +664,7 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
                 `[Task] ${crossTaskData.title}`,
                 crossTaskData.description ? `\n${crossTaskData.description}` : "",
                 crossConversationCtx,
+                continuationCtx,
                 `\n---`,
                 `Agent: ${execAgent.name} (${roleLabel}, ${crossDeptName})`,
                 execAgent.personality ? `Personality: ${execAgent.personality}` : "",
@@ -750,6 +755,11 @@ export function createCrossDeptCooperationTools(deps: CrossDeptCooperationDeps) 
                 crossPolicy.model,
                 crossPolicy.reasoningLevel,
                 execAgent.cli_account_pool_id ?? null,
+                resolveAgyRuntimeOptions({
+                  provider: execProvider,
+                  workflowMetaJson: crossTaskData.workflow_meta_json,
+                  continuationContext: continuationCtx,
+                }),
               );
               child.on("close", (code: number | null) => finalizeCrossDeptRun(code ?? 1));
             }

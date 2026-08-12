@@ -52,7 +52,7 @@ type DonggriSkillManifestEntry = {
   description?: string;
   requiredProviders?: string[];
   requiredOAuth?: string[];
-  supportedTargets?: Array<"donggri" | "codex" | "gemini">;
+  supportedTargets?: Array<"donggri" | "codex" | "agy" | "gemini">;
   sourceUrl?: string;
 };
 

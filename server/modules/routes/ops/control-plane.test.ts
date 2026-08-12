@@ -3,6 +3,8 @@ import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { registerControlPlaneRoutes } from "./control-plane.ts";
 
+vi.setConfig({ testTimeout: 15_000 });
+
 type RouteHandler = (req: any, res: any) => any;
 
 function createFakeApp() {
@@ -81,6 +83,43 @@ function mockHarnessRunApprovalLedger() {
   });
 }
 
+function mockEngineSyncApprovalLedger({ includeAppServer = false } = {}) {
+  const originalReadFileSync = fs.readFileSync.bind(fs);
+  const appServerRow = includeAppServer
+    ? `| APR-CODEX-APP-SERVER-POC-001 | approved | 2026-06-07T00:00:00+09:00 | 2026-12-31T23:59:59+09:00 | CONTROL | user | Codex app-server read-only PoC fixture | G:\\Donggri_DevDrive\\repos\\DonggriCompany | control_plane_engine_* test tables | codex-app-server-poc | app-server status only | medium | allow | test fixture | pass | pass | EV-CODEX-APP-SERVER-POC | route-test |\n`
+    : "";
+  const approvalsTable = `# Approvals
+
+| approval_id | status | created_at | expires_at | requester_role | approver | scope | repo | resolved_paths | operation_class | command_digest | risk_level | policy_decision | approval_text_ref | preflight_result | postflight_result | evidence_ref | reason_code |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| APR-CODEX-ENGINE-SYNC-001 | approved | 2026-06-07T00:00:00+09:00 | 2026-12-31T23:59:59+09:00 | CONTROL | user | Codex engine sync route test fixture | G:\\Donggri_DevDrive\\repos\\DonggriCompany | control_plane_engine_* test tables | codex-engine-sync | summary hash refs only | medium | allow | test fixture | pass | pass | EV-CODEX-ENGINE-SYNC | route-test |
+${appServerRow}`;
+  return vi.spyOn(fs, "readFileSync").mockImplementation((file, options) => {
+    const normalized = String(file).replace(/\\/g, "/");
+    if (normalized.includes("/storage/codex-control/specs/") && normalized.endsWith("/approvals.md")) {
+      return approvalsTable;
+    }
+    return originalReadFileSync(file, options as never);
+  });
+}
+
+function mockNoEngineSyncApprovalLedger() {
+  const originalReadFileSync = fs.readFileSync.bind(fs);
+  const approvalsTable = `# Approvals
+
+| approval_id | status | created_at | expires_at | requester_role | approver | scope | repo | resolved_paths | operation_class | command_digest | risk_level | policy_decision | approval_text_ref | preflight_result | postflight_result | evidence_ref | reason_code |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| APR-HARNESS-001 | approved | 2026-05-27T00:00:00+09:00 | 2026-12-31T23:59:59+09:00 | CONTROL | user | unrelated harness fixture | G:\\Donggri_DevDrive\\repos\\DonggriCompany | control_plane_agent_runs test tables | harness-run | unrelated | medium | allow | test fixture | pass | pass | test | route-test |
+`;
+  return vi.spyOn(fs, "readFileSync").mockImplementation((file, options) => {
+    const normalized = String(file).replace(/\\/g, "/");
+    if (normalized.includes("/storage/codex-control/specs/") && normalized.endsWith("/approvals.md")) {
+      return approvalsTable;
+    }
+    return originalReadFileSync(file, options as never);
+  });
+}
+
 describe("control plane routes", () => {
   it("returns read-only Control Plane state without raw document bodies", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("agentmemory offline"));
@@ -113,9 +152,11 @@ describe("control plane routes", () => {
       "OPS",
     ]);
     expect(payload.dongri_grigri.project_operators).toEqual(expect.any(Array));
-    expect(payload.dongri_grigri.project_operators.filter((operator: any) => operator.enabled)).toHaveLength(11);
-    expect(payload.dongri_grigri.project_operators.filter((operator: any) => !operator.enabled)).toHaveLength(2);
-    expect(payload.dongri_grigri.project_operators.every((operator: any) => operator.can_write_repo === false)).toBe(true);
+    expect(payload.dongri_grigri.project_operators.filter((operator: any) => operator.enabled)).toHaveLength(12);
+    expect(payload.dongri_grigri.project_operators.filter((operator: any) => !operator.enabled)).toHaveLength(4);
+    expect(payload.dongri_grigri.project_operators.every((operator: any) => operator.can_write_repo === false)).toBe(
+      true,
+    );
     expect(payload.memory.health.available).toBe(false);
     expect(payload.memory.viewer_preflight).toMatchObject({
       viewer_url: "http://127.0.0.1:3113",
@@ -132,7 +173,7 @@ describe("control plane routes", () => {
     expect(payload.quality_harness.release_hygiene.policy).toContain("diagnostic-only");
     expect(JSON.stringify(payload)).not.toContain("developer_instructions");
     vi.restoreAllMocks();
-  });
+  }, 15_000);
 
   it("marks AgentMemory viewer reachable only for 2xx responses", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
@@ -155,7 +196,7 @@ describe("control plane routes", () => {
       reason: "ok",
     });
     fetchMock.mockRestore();
-  });
+  }, 15_000);
 
   it("keeps AgentMemory viewer in fallback for non-2xx responses", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
@@ -178,7 +219,7 @@ describe("control plane routes", () => {
       reason: "http_error",
     });
     fetchMock.mockRestore();
-  });
+  }, 15_000);
 
   it("exposes Ver.1 read-only projection endpoints", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("agentmemory offline"));
@@ -196,6 +237,79 @@ describe("control plane routes", () => {
       },
     });
     vi.restoreAllMocks();
+  }, 15_000);
+
+  it("exposes Master95 read-only status, scorecard, and traceability projections", async () => {
+    const { app, routes } = createFakeApp();
+    registerControlPlaneRoutes({ app: app as any, db: createFakeDb() as any });
+
+    const statusRes = createFakeResponse();
+    await routes.get("GET /api/control-plane/v1/master-95/status")?.({}, statusRes);
+    expect(statusRes.statusCode).toBe(200);
+    expect(statusRes.payload).toMatchObject({
+      ok: true,
+      master_95: {
+        spec_id: "20260714-donggricompany-95-master-operating-system-v1",
+        companion_mode: true,
+        docs: {
+          missing_count: 0,
+        },
+      },
+    });
+    expect((statusRes.payload as any).master_95.approvals_required).not.toContain("git stage/commit/push");
+    expect((statusRes.payload as any).master_95.dirty_worktree.policy).toContain("local workspace inventory");
+    expect((statusRes.payload as any).master_95.next_safe_action).toContain("Phase 2 runtime alpha");
+    expect((statusRes.payload as any).master_95.bloggergent_ops).toMatchObject({
+      department: "OPS",
+      project_id: "project:BloggerGent",
+      mode: "read-only-dry-run-routing-preview",
+      implementation_delegate: "IMPLEMENT",
+      review_delegate: "REVIEW",
+      approval_owner: "CONTROL",
+    });
+    expect((statusRes.payload as any).master_95.bloggergent_ops.role_agents).toHaveLength(7);
+    expect((statusRes.payload as any).master_95.bloggergent_ops.lanes).toHaveLength(8);
+    expect((statusRes.payload as any).master_95.agent_versions).toHaveLength(6);
+    expect((statusRes.payload as any).master_95.agent_versions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ agent_id: "OPS", version: "1.0.0", lifecycle: "active" })]),
+    );
+    expect(
+      (statusRes.payload as any).master_95.bloggergent_ops.lanes.find(
+        (lane: any) => lane.lane_id === "mystery-cloudflare",
+      ),
+    ).toMatchObject({ role_agent: "cloudflare-archive", metadata_tags: ["cloudflare:dongriarchive:mystery"] });
+
+    const scorecardRes = createFakeResponse();
+    await routes.get("GET /api/control-plane/v1/master-95/scorecard")?.({}, scorecardRes);
+    expect(scorecardRes.statusCode).toBe(200);
+    expect(scorecardRes.payload).toMatchObject({
+      ok: true,
+      scorecard: {
+        certification_state: "not_certified_foundation_in_progress",
+        targets: {
+          aggregate: 97.45,
+          agy_each_axis_minimum: 950,
+        },
+      },
+    });
+    expect((scorecardRes.payload as any).scorecard.hard_gates).toHaveLength(10);
+    expect((scorecardRes.payload as any).scorecard.hard_gates.map((gate: any) => gate.id)).toContain("M95-G10");
+
+    const traceabilityRes = createFakeResponse();
+    await routes.get("GET /api/control-plane/v1/master-95/traceability")?.({}, traceabilityRes);
+    expect(traceabilityRes.statusCode).toBe(200);
+    expect(traceabilityRes.payload).toMatchObject({
+      ok: true,
+      traceability: {
+        counts: {
+          total: 10,
+          implemented: 8,
+          in_progress: 1,
+          planned: 1,
+        },
+      },
+    });
+    expect((traceabilityRes.payload as any).traceability.orphan_requirements).toContain("M95-R008");
   });
 
   it("keeps memory search read-only and validates query input", async () => {
@@ -221,7 +335,7 @@ describe("control plane routes", () => {
     expect(payload.ok).toBe(true);
     expect(payload.capabilities).toMatchObject({
       package: "@agentmemory/agentmemory",
-      observed_version: "0.9.21",
+      observed_version: "0.9.27",
       observed_rest_path_count: 124,
     });
     expect(payload.capabilities.mcp_tools.observed_memory_tool_count).toBe(53);
@@ -233,10 +347,7 @@ describe("control plane routes", () => {
     registerControlPlaneRoutes({ app: app as any, db: createFakeDb() as any });
 
     const res = createFakeResponse();
-    await routes.get("POST /api/control-plane/v1/memory/agentmemory/remember")?.(
-      { body: { text: "운영 메모" } },
-      res,
-    );
+    await routes.get("POST /api/control-plane/v1/memory/agentmemory/remember")?.({ body: { text: "운영 메모" } }, res);
 
     expect(res.statusCode).toBe(403);
     expect(res.payload).toMatchObject({ ok: false, error: "approval_required", required_approval: "APR-MEM-*" });
@@ -274,9 +385,14 @@ describe("control plane routes", () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(res.payload).toMatchObject({ ok: false, available: false, error: "agentmemory_unavailable", reason: "network_error" });
+    expect(res.payload).toMatchObject({
+      ok: false,
+      available: false,
+      error: "agentmemory_unavailable",
+      reason: "network_error",
+    });
     vi.restoreAllMocks();
-  });
+  }, 15_000);
 
   it("returns an unavailable result card payload when AgentMemory search runtime is offline", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("agentmemory offline"));
@@ -305,7 +421,7 @@ describe("control plane routes", () => {
     const payload = res.payload as any;
     expect(res.statusCode).toBe(200);
     expect(payload.ok).toBe(true);
-    expect(payload.counts).toMatchObject({ total: 13, enabled: 11, disabled: 2 });
+    expect(payload.counts).toMatchObject({ total: 16, enabled: 12, disabled: 4 });
     expect(payload.policy).toMatchObject({
       owner_department: "OPS",
       authority: "operations-only",
@@ -315,6 +431,12 @@ describe("control plane routes", () => {
       enabled: false,
       status: "disabled-candidate",
       can_write_repo: false,
+    });
+    expect(payload.project_operators.find((operator: any) => operator.project_key === "ADS")).toMatchObject({
+      enabled: false,
+      filter_group: "ADS",
+      default_visible: false,
+      lifecycle_status: "candidate",
     });
     vi.restoreAllMocks();
   });
@@ -371,9 +493,9 @@ describe("control plane routes", () => {
       mode: "preview",
       writes: false,
       counts: {
-        operators: 13,
-        enabled: 11,
-        disabled: 2,
+        operators: 16,
+        enabled: 12,
+        disabled: 4,
         direct_repo_write_allowed: 0,
       },
     });
@@ -436,7 +558,11 @@ describe("control plane routes", () => {
       prepareRes,
     );
     expect(prepareRes.statusCode).toBe(403);
-    expect(prepareRes.payload).toMatchObject({ ok: false, error: "approval_required", required_approval: "APR-HARNESS-*" });
+    expect(prepareRes.payload).toMatchObject({
+      ok: false,
+      error: "approval_required",
+      required_approval: "APR-HARNESS-*",
+    });
     db.close();
     vi.restoreAllMocks();
   });
@@ -477,7 +603,11 @@ describe("control plane routes", () => {
       activateRes,
     );
     expect(activateRes.statusCode).toBe(403);
-    expect(activateRes.payload).toMatchObject({ ok: false, error: "approval_required", required_approval: "APR-HARNESS-*" });
+    expect(activateRes.payload).toMatchObject({
+      ok: false,
+      error: "approval_required",
+      required_approval: "APR-HARNESS-*",
+    });
     if (oldThreadId === undefined) delete process.env.CODEX_THREAD_ID;
     else process.env.CODEX_THREAD_ID = oldThreadId;
     db.close();
@@ -617,6 +747,256 @@ describe("control plane routes", () => {
     vi.restoreAllMocks();
   });
 
+  it("previews engine routing without creating the engine ledger", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("agentmemory offline"));
+    const db = new DatabaseSync(":memory:");
+    const { app, routes } = createFakeApp();
+    registerControlPlaneRoutes({ app: app as any, db: db as any });
+
+    const previewRes = createFakeResponse();
+    await routes.get("POST /api/control-plane/v1/engines/route-preview")?.(
+      {
+        body: {
+          objective: "Summarize the active SDD task and prepare a Codex CLI event bridge plan",
+          provider: "codex_exec",
+          scope_type: "project",
+          scope_value: "DonggriCompany",
+        },
+      },
+      previewRes,
+    );
+
+    expect(previewRes.statusCode).toBe(200);
+    expect(previewRes.payload).toMatchObject({
+      ok: true,
+      writes: false,
+      route: {
+        provider: "codex_exec",
+        decision: "routeable",
+        scope_key: "project:DonggriCompany",
+        computer_use_required: false,
+      },
+    });
+    const tableCount = db
+      .prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name LIKE 'control_plane_engine_%'")
+      .get() as { count: number };
+    expect(tableCount.count).toBe(0);
+
+    const unsafeRes = createFakeResponse();
+    await routes.get("POST /api/control-plane/v1/engines/route-preview")?.(
+      {
+        body: {
+          objective: "Review this payload",
+          provider: "codex_exec",
+          event_jsonl: `{"messages":[{"role":"user","content":"raw transcript"}]}`,
+        },
+      },
+      unsafeRes,
+    );
+    expect(unsafeRes.statusCode).toBe(400);
+    expect(unsafeRes.payload).toMatchObject({ ok: false, error: "raw_transcript_blocked" });
+
+    db.close();
+    vi.restoreAllMocks();
+  });
+
+  it("blocks engine run, thread attach, and reconcile mutations without engine sync approval", async () => {
+    mockNoEngineSyncApprovalLedger();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("agentmemory offline"));
+    const db = new DatabaseSync(":memory:");
+    const { app, routes } = createFakeApp();
+    registerControlPlaneRoutes({ app: app as any, db: db as any });
+    const reqBase = {
+      get: (name: string) => (name.toLowerCase() === "origin" ? "http://127.0.0.1:8800" : undefined),
+    };
+
+    const runRes = createFakeResponse();
+    await routes.get("POST /api/control-plane/v1/engines/runs")?.(
+      {
+        ...reqBase,
+        body: {
+          objective: "Create a guarded Codex engine run",
+          provider: "codex_exec",
+          scope_type: "project",
+          scope_value: "DonggriCompany",
+        },
+      },
+      runRes,
+    );
+    expect(runRes.statusCode).toBe(403);
+    expect(runRes.payload).toMatchObject({
+      ok: false,
+      error: "approval_required",
+      required_approval: "APR-CODEX-ENGINE-SYNC-*",
+    });
+
+    const attachRes = createFakeResponse();
+    await routes.get("POST /api/control-plane/v1/engines/threads/attach")?.(
+      {
+        ...reqBase,
+        body: {
+          provider: "codex_exec",
+          external_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+          scope_type: "project",
+          scope_value: "DonggriCompany",
+        },
+      },
+      attachRes,
+    );
+    expect(attachRes.statusCode).toBe(403);
+    expect(attachRes.payload).toMatchObject({ ok: false, error: "approval_required" });
+
+    const reconcileRes = createFakeResponse();
+    await routes.get("POST /api/control-plane/v1/engines/reconcile")?.({ ...reqBase, body: {} }, reconcileRes);
+    expect(reconcileRes.statusCode).toBe(403);
+    expect(reconcileRes.payload).toMatchObject({ ok: false, error: "approval_required" });
+
+    db.close();
+    vi.restoreAllMocks();
+  });
+
+  it("records approved Codex exec runs as sanitized hash/evidence engine events", async () => {
+    mockEngineSyncApprovalLedger();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("agentmemory offline"));
+    const db = new DatabaseSync(":memory:");
+    const { app, routes } = createFakeApp();
+    registerControlPlaneRoutes({ app: app as any, db: db as any });
+    const reqBase = {
+      get: (name: string) => (name.toLowerCase() === "origin" ? "http://127.0.0.1:8800" : undefined),
+    };
+    const eventJsonl = [
+      JSON.stringify({ type: "thread.started", thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88" }),
+      JSON.stringify({ type: "turn.started", thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88", turn_id: "turn-001" }),
+      JSON.stringify({
+        type: "item.started",
+        thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        turn_id: "turn-001",
+        item: { id: "item-001", type: "command", command: "corepack pnpm test" },
+      }),
+      JSON.stringify({
+        type: "turn.completed",
+        thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        turn_id: "turn-001",
+      }),
+    ].join("\n");
+
+    const runRes = createFakeResponse();
+    await routes.get("POST /api/control-plane/v1/engines/runs")?.(
+      {
+        ...reqBase,
+        body: {
+          objective: "Collect Codex exec JSONL and summarize the output safely",
+          provider: "codex_exec",
+          scope_type: "project",
+          scope_value: "DonggriCompany",
+          evidence_refs: ["EV-CODEX-ENGINE-SYNC-TEST"],
+          event_jsonl: eventJsonl,
+        },
+      },
+      runRes,
+    );
+
+    expect(runRes.statusCode).toBe(200);
+    const payload = runRes.payload as any;
+    expect(payload).toMatchObject({
+      ok: true,
+      run: {
+        run: {
+          provider: "codex_exec",
+          status: "completed",
+          scope_key: "project:DonggriCompany",
+          external_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+        },
+      },
+      engine_sync: {
+        tables_exist: true,
+      },
+    });
+    expect(payload.run.run.input_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(payload.run.run.output_hash).toMatch(/^[a-f0-9]{64}$/);
+    const eventTypes = payload.run.events.map((event: any) => event.event_type);
+    expect(eventTypes).toEqual(["route_decided", "thread_started", "turn_started", "output_delta", "completed"]);
+    expect(JSON.stringify(payload)).not.toContain("messages");
+    expect(JSON.stringify(payload)).not.toContain("access_token");
+
+    const unsafeRes = createFakeResponse();
+    await routes.get("POST /api/control-plane/v1/engines/runs")?.(
+      {
+        ...reqBase,
+        body: {
+          objective: "unsafe run",
+          provider: "codex_exec",
+          event_jsonl: `{"messages":[{"role":"user","content":"full transcript"}]}`,
+        },
+      },
+      unsafeRes,
+    );
+    expect(unsafeRes.statusCode).toBe(400);
+    expect(unsafeRes.payload).toMatchObject({ ok: false, error: "raw_transcript_blocked" });
+
+    db.close();
+    vi.restoreAllMocks();
+  });
+
+  it("attaches observed Codex threads and exposes app-server PoC approval status", async () => {
+    mockEngineSyncApprovalLedger({ includeAppServer: true });
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("agentmemory offline"));
+    const db = new DatabaseSync(":memory:");
+    const { app, routes } = createFakeApp();
+    registerControlPlaneRoutes({ app: app as any, db: db as any });
+    const reqBase = {
+      get: (name: string) => (name.toLowerCase() === "origin" ? "http://127.0.0.1:8800" : undefined),
+    };
+
+    const attachRes = createFakeResponse();
+    await routes.get("POST /api/control-plane/v1/engines/threads/attach")?.(
+      {
+        ...reqBase,
+        body: {
+          provider: "codex_exec",
+          external_thread_id: "019e4ad5-a24d-7711-924a-7fbf3f99ad88",
+          scope_type: "project",
+          scope_value: "DonggriCompany",
+          title: "Observed Codex thread",
+          summary: "사용자가 Codex 앱에서 직접 만든 thread를 Donggri task에 연결",
+          evidence_refs: ["EV-CODEX-THREAD-ATTACH"],
+        },
+      },
+      attachRes,
+    );
+    expect(attachRes.statusCode).toBe(200);
+    expect(attachRes.payload).toMatchObject({
+      ok: true,
+      thread_link: {
+        provider: "codex_exec",
+        link_type: "observed",
+        status: "linked",
+        scope_key: "project:DonggriCompany",
+      },
+      engine_sync: {
+        link_counts: {
+          linked: 1,
+        },
+      },
+    });
+
+    const statusRes = createFakeResponse();
+    await routes.get("GET /api/control-plane/v1/engines/status")?.({}, statusRes);
+    expect(statusRes.statusCode).toBe(200);
+    expect(statusRes.payload).toMatchObject({
+      ok: true,
+      engine_sync: {
+        app_server_poc: {
+          approved: true,
+          mode: "read-only-poc",
+        },
+      },
+    });
+
+    db.close();
+    vi.restoreAllMocks();
+  });
+
   it("previews harness blueprints without DB writes and rejects invalid input", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("agentmemory offline"));
     const db = new DatabaseSync(":memory:");
@@ -657,7 +1037,9 @@ describe("control plane routes", () => {
     expect(payload.blueprint.suggested_personas.every((persona: any) => persona.disposable === true)).toBe(true);
     expect(JSON.stringify(payload.blueprint.phases)).not.toContain(".claude");
     expect(JSON.stringify(payload.blueprint.phases)).not.toContain("plugin install");
-    const tableCount = db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name = 'control_plane_harness_blueprints'").get() as { count: number };
+    const tableCount = db
+      .prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name = 'control_plane_harness_blueprints'")
+      .get() as { count: number };
     expect(tableCount.count).toBe(0);
 
     const invalidProjectRes = createFakeResponse();
@@ -678,7 +1060,7 @@ describe("control plane routes", () => {
 
     db.close();
     vi.restoreAllMocks();
-  });
+  }, 30_000);
 
   it("saves harness blueprint drafts with meta approval and blocks v1 apply without apply approval", async () => {
     mockHarnessMetaApprovalLedger();

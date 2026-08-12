@@ -292,7 +292,7 @@ export async function getActiveAgents(): Promise<ActiveAgentInfo[]> {
 export interface CliProcessInfo {
   pid: number;
   ppid: number | null;
-  provider: "claude" | "codex" | "gemini" | "opencode" | "kimi" | "node" | "python";
+  provider: "claude" | "codex" | "agy" | "gemini" | "antigravity" | "opencode" | "kimi" | "node" | "python";
   executable: string;
   command: string;
   is_tracked: boolean;

@@ -209,6 +209,11 @@ export function mergeSettingsWithDefaults(settings?: Partial<CompanySettings> | 
     incomingPixelDensity === "compact" || incomingPixelDensity === "balanced" || incomingPixelDensity === "showcase"
       ? incomingPixelDensity
       : defaultPixelAgentMode.density;
+  const incomingVisualAssetPack = settings?.pixelAgentMode?.visualAssetPack;
+  const visualAssetPack =
+    incomingVisualAssetPack === "donggri_visual_v2" || incomingVisualAssetPack === "legacy"
+      ? incomingVisualAssetPack
+      : (defaultPixelAgentMode.visualAssetPack ?? "donggri_visual_v2");
   const mergedMessengerChannels = MESSENGER_CHANNELS.reduce<MessengerChannelsConfig>((acc, channel) => {
     const defaults = DEFAULT_SETTINGS.messengerChannels?.[channel] ?? {
       token: "",
@@ -243,6 +248,7 @@ export function mergeSettingsWithDefaults(settings?: Partial<CompanySettings> | 
       ...(settings?.pixelAgentMode ?? {}),
       density: pixelAgentDensity,
       officeTheme: "donggri_cloud_lab",
+      visualAssetPack,
     },
     messengerChannels: mergedMessengerChannels,
   };

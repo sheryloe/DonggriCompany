@@ -1,5 +1,5 @@
 import { Gamepad2, MonitorCog, Palette, Sparkles } from "lucide-react";
-import type { PixelAgentDensity, PixelAgentModeSettings } from "../../types";
+import type { PixelAgentDensity, PixelAgentModeSettings, PixelAgentVisualAssetPack } from "../../types";
 import type { LocalSettings, SetLocalSettings, TFunction } from "./types";
 
 interface PixelAgentModeSettingsTabProps {
@@ -39,12 +39,25 @@ const DENSITY_OPTIONS: Array<{
   },
 ];
 
+const ASSET_PACK_OPTIONS: Array<{ value: PixelAgentVisualAssetPack; titleKo: string; detailKo: string }> = [
+  {
+    value: "donggri_visual_v2",
+    titleKo: "Visual V2",
+    detailKo: "새 Dongri-grigri 이미지젠 V2 팩을 우선 사용합니다.",
+  },
+];
+
 function normalizePixelAgentMode(raw: PixelAgentModeSettings | undefined): PixelAgentModeSettings {
   const density = raw?.density && DENSITY_OPTIONS.some((option) => option.value === raw.density) ? raw.density : "balanced";
+  const visualAssetPack =
+    raw?.visualAssetPack && ASSET_PACK_OPTIONS.some((option) => option.value === raw.visualAssetPack)
+      ? raw.visualAssetPack
+      : "donggri_visual_v2";
   return {
     enabled: raw?.enabled === true,
     density,
     officeTheme: "donggri_cloud_lab",
+    visualAssetPack,
   };
 }
 
@@ -169,6 +182,46 @@ export default function PixelAgentModeSettingsTab({
                 zh: "클라우드 노드, 큐, 알림 비콘을 추상 픽셀 오브젝트로 표현합니다.",
               })}
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="rounded-xl border px-4 py-3"
+        style={{ borderColor: "var(--th-card-border)", background: "var(--th-bg-surface)" }}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: "var(--th-text-primary)" }}>
+              <Sparkles className="h-4 w-4 text-amber-300" aria-hidden="true" />
+              에셋 팩
+            </div>
+            <p className="mt-1 max-w-[64ch] text-xs leading-relaxed" style={{ color: "var(--th-text-muted)" }}>
+              기존 이미지는 유지하고 Visual V2는 별도 경로에서 안전하게 비교합니다.
+            </p>
+          </div>
+          <div className="grid min-w-[240px] grid-cols-2 gap-2">
+            {ASSET_PACK_OPTIONS.map((option) => {
+              const active = settings.visualAssetPack === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => patchSettings({ visualAssetPack: option.value })}
+                  className={`rounded-lg border px-3 py-2 text-left transition active:translate-y-px ${
+                    active ? "border-amber-300/70 bg-amber-300/15" : "border-slate-700/70 bg-slate-950/20"
+                  }`}
+                  aria-pressed={active}
+                >
+                  <span className="block text-xs font-semibold" style={{ color: "var(--th-text-primary)" }}>
+                    {option.titleKo}
+                  </span>
+                  <span className="mt-1 block text-[11px] leading-snug" style={{ color: "var(--th-text-muted)" }}>
+                    {option.detailKo}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

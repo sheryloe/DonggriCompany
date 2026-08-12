@@ -148,7 +148,7 @@ export interface SkillEntry {
   description?: string;
   requiredProviders?: string[];
   requiredOAuth?: string[];
-  supportedTargets?: Array<"donggri" | "codex" | "gemini">;
+  supportedTargets?: Array<"donggri" | "codex" | "agy" | "gemini">;
   codexInstalled?: boolean;
   codexInstallable?: boolean;
   sourceUrl?: string;
@@ -243,7 +243,7 @@ export async function getSkillDetail(source: string, skillId: string): Promise<S
   return j.detail;
 }
 
-export type SkillLearnProvider = "claude" | "codex" | "gemini" | "opencode" | "kimi";
+export type SkillLearnProvider = "claude" | "codex" | "agy" | "gemini" | "opencode" | "kimi";
 export type SkillLearnStatus = "queued" | "running" | "succeeded" | "failed";
 export type SkillHistoryProvider = SkillLearnProvider | "copilot" | "antigravity" | "api";
 

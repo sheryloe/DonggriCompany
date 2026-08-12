@@ -190,33 +190,20 @@ export function createUsageCliTools(deps: CreateUsageCliToolsDeps) {
       },
     },
     {
-      name: "gemini",
-      authHint: "Run: gemini auth login",
+      name: "agy",
+      authHint: "Run: agy",
       getVersion: () => {
         try {
-          const whichCmd = process.platform === "win32" ? "where" : "which";
-          const geminiPath = execFileSync(whichCmd, ["gemini"], { encoding: "utf8", timeout: 3000 })
-            .split("\n")[0]
-            .trim();
-          if (!geminiPath) return null;
-          const realPath = fs.realpathSync(geminiPath);
-          let dir = path.dirname(realPath);
-          for (let i = 0; i < 10; i++) {
-            const pkgPath = path.join(dir, "node_modules", "@google", "gemini-cli", "package.json");
-            if (fs.existsSync(pkgPath)) {
-              const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-              return pkg.version ?? null;
-            }
-            const parent = path.dirname(dir);
-            if (parent === dir) break;
-            dir = parent;
-          }
+          return execFileSync("agy", ["--version"], { encoding: "utf8", timeout: 3000 }).trim() || null;
         } catch {
           /* ignore */
         }
         return null;
       },
       checkAuth: () => {
+        if (jsonHasKey(path.join(os.homedir(), ".gemini", "antigravity-cli", "settings.json"), "selectedAuthType"))
+          return true;
+        if (fileExistsNonEmpty(path.join(os.homedir(), ".gemini", "antigravity-cli", "installation_id"))) return true;
         if (readGeminiCredsFromKeychain()) return true;
         if (jsonHasKey(path.join(os.homedir(), ".gemini", "oauth_creds.json"), "access_token")) return true;
         const appData = process.env.APPDATA;

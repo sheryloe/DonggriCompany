@@ -202,16 +202,19 @@ export async function processSprite(imageBase64: string): Promise<{
 export async function registerSprite(
   sprites: Record<string, string>,
   spriteNumber: number,
+  packKey?: "legacy" | "donggri_visual_v2",
 ): Promise<{
   ok: boolean;
   spriteNumber: number;
+  packKey?: "legacy" | "donggri_visual_v2";
   saved: string[];
 }> {
   return post<{
     ok: boolean;
     spriteNumber: number;
+    packKey?: "legacy" | "donggri_visual_v2";
     saved: string[];
-  }>("/api/sprites/register", { sprites, spriteNumber });
+  }>("/api/sprites/register", { sprites, spriteNumber, packKey });
 }
 
 // Tasks

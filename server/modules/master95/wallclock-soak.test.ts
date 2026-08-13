@@ -4,6 +4,7 @@ import {
   evaluateMaster95WallClockSoak,
   type DonggriV1WallClockSoakSample,
   type Master95WallClockSoakSample,
+  validateDonggriV1WallClockSoakRecoveryResume,
 } from "./wallclock-soak.js";
 
 const policy = {
@@ -120,5 +121,60 @@ describe("Master95 wall-clock soak", () => {
       critical_loss: 0,
       budget_exceeded_count: 0,
     });
+  });
+
+  it("accepts recovery only when state and append-only journal continuity match", () => {
+    const fixture: DonggriV1WallClockSoakSample[] = samples(3).map((sample) => ({
+      ...sample,
+      ...binding,
+      recovery_attempted: false,
+      recovery_succeeded: false,
+      critical_loss_count: 0,
+      budget_exceeded_count: 0,
+    }));
+    const previousState = {
+      candidate_id: binding.candidate_id,
+      source_epoch: binding.source_epoch,
+      collector_pid: 4100,
+      sample_count: fixture.length,
+      last_sample_at: fixture.at(-1)!.sampled_at,
+    };
+
+    expect(
+      validateDonggriV1WallClockSoakRecoveryResume({
+        binding,
+        previous_state: previousState,
+        samples: fixture,
+      }),
+    ).toEqual({
+      previous_collector_pid: 4100,
+      sample_count: 3,
+      last_sample_at: fixture.at(-1)!.sampled_at,
+    });
+
+    expect(() =>
+      validateDonggriV1WallClockSoakRecoveryResume({
+        binding,
+        previous_state: { ...previousState, sample_count: 2 },
+        samples: fixture,
+      }),
+    ).toThrow("soak_recovery_state_sample_count_mismatch");
+    expect(() =>
+      validateDonggriV1WallClockSoakRecoveryResume({
+        binding,
+        previous_state: { ...previousState, source_epoch: `sha256:${"9".repeat(64)}` },
+        samples: fixture,
+      }),
+    ).toThrow("soak_recovery_source_epoch_mismatch");
+
+    const sequenceGap = structuredClone(fixture);
+    sequenceGap[2].sequence = 4;
+    expect(() =>
+      validateDonggriV1WallClockSoakRecoveryResume({
+        binding,
+        previous_state: previousState,
+        samples: sequenceGap,
+      }),
+    ).toThrow("soak_sequence_gap");
   });
 });

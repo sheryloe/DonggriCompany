@@ -35,6 +35,53 @@ export const DonggriV1WallClockSoakSampleSchema = Master95WallClockSoakSampleSch
 
 export type DonggriV1WallClockSoakSample = z.infer<typeof DonggriV1WallClockSoakSampleSchema>;
 
+const DonggriV1WallClockSoakRecoveryStateSchema = z
+  .object({
+    candidate_id: DonggriV1CandidateBindingSchema.shape.candidate_id,
+    source_epoch: DonggriV1CandidateBindingSchema.shape.source_epoch,
+    collector_pid: z.number().int().positive(),
+    sample_count: z.number().int().nonnegative(),
+    last_sample_at: z.string().datetime().nullable(),
+  })
+  .passthrough();
+
+export function validateDonggriV1WallClockSoakRecoveryResume(input: {
+  binding: DonggriV1CandidateBinding;
+  previous_state: unknown;
+  samples: unknown[];
+}) {
+  const binding = DonggriV1CandidateBindingSchema.parse(input.binding);
+  const previousState = DonggriV1WallClockSoakRecoveryStateSchema.parse(input.previous_state);
+  if (previousState.candidate_id !== binding.candidate_id) throw new Error("soak_recovery_candidate_mismatch");
+  if (previousState.source_epoch !== binding.source_epoch) throw new Error("soak_recovery_source_epoch_mismatch");
+
+  const samples = input.samples.map((sample) => DonggriV1WallClockSoakSampleSchema.parse(sample));
+  if (samples.length === 0) throw new Error("soak_recovery_journal_empty");
+  const lastSample = samples.at(-1)!;
+  evaluateDonggriV1WallClockSoak({
+    binding,
+    policy: {
+      required_hours: 72,
+      sample_interval_seconds: 60,
+      coverage_minimum: 0.99,
+      availability_minimum: 0.99,
+      p95_latency_ms_maximum: 2000,
+      maximum_gap_seconds: 180,
+    },
+    samples,
+    evaluated_at: lastSample.sampled_at,
+  });
+  if (previousState.sample_count !== samples.length) throw new Error("soak_recovery_state_sample_count_mismatch");
+  if (previousState.last_sample_at !== lastSample.sampled_at) {
+    throw new Error("soak_recovery_state_last_sample_mismatch");
+  }
+  return {
+    previous_collector_pid: previousState.collector_pid,
+    sample_count: samples.length,
+    last_sample_at: lastSample.sampled_at,
+  };
+}
+
 export function evaluateMaster95WallClockSoak(input: {
   policy: Master95WallClockSoakPolicy;
   samples: unknown[];

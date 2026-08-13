@@ -10,6 +10,7 @@ import {
   evaluateDonggriV1WallClockSoak,
   type DonggriV1WallClockSoakSample,
   type Master95WallClockSoakPolicy,
+  validateDonggriV1WallClockSoakRecoveryResume,
 } from "../../server/modules/master95/wallclock-soak.js";
 import { resolveReleaseIdentity } from "../../server/modules/release/release-identity.js";
 
@@ -46,6 +47,20 @@ const approvalLedgerPath = path.join(
 );
 const samplesPath = path.join(runtimeRoot, "wallclock-soak-samples.jsonl");
 const statePath = path.join(runtimeRoot, "wallclock-soak-state.json");
+const DEFAULT_API_ENDPOINT = "http://127.0.0.1:8790/api/health";
+const DEFAULT_WEB_ENDPOINT = "http://127.0.0.1:8810/";
+
+export function resolveDonggriV1SoakEndpoints(
+  environment: NodeJS.ProcessEnv = process.env,
+): Readonly<{ api: string; web: string }> {
+  const api = environment.DONGGRI_V1_SOAK_API_ENDPOINT ?? DEFAULT_API_ENDPOINT;
+  const web = environment.DONGGRI_V1_SOAK_WEB_ENDPOINT ?? DEFAULT_WEB_ENDPOINT;
+  if (api !== DEFAULT_API_ENDPOINT) throw new Error("soak_api_endpoint_must_be_exact_loopback_8790");
+  if (web !== DEFAULT_WEB_ENDPOINT) throw new Error("soak_web_endpoint_must_be_exact_loopback_8810");
+  return Object.freeze({ api, web });
+}
+
+const endpoints = resolveDonggriV1SoakEndpoints();
 const policy: Master95WallClockSoakPolicy = {
   required_hours: 72,
   sample_interval_seconds: 60,
@@ -65,13 +80,29 @@ async function inspect(url: string) {
   }
 }
 
-function readSamples(): DonggriV1WallClockSoakSample[] {
-  if (!fs.existsSync(samplesPath)) return [];
-  return fs
-    .readFileSync(samplesPath, "utf8")
+export function didDonggriV1SoakRecoverySucceed(input: {
+  recovery_attempted: boolean;
+  web: { ok: boolean };
+  api: { ok: boolean };
+}): boolean {
+  return input.recovery_attempted && input.web.ok && input.api.ok;
+}
+
+export function parseDonggriV1SoakSampleJournal(text: string): unknown[] {
+  return text
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+}
+
+function readSamples(): DonggriV1WallClockSoakSample[] {
+  if (!fs.existsSync(samplesPath)) return [];
+  return parseDonggriV1SoakSampleJournal(fs.readFileSync(samplesPath, "utf8")) as DonggriV1WallClockSoakSample[];
+}
+
+function readPreviousState(): unknown | null {
+  if (!fs.existsSync(statePath)) return null;
+  return JSON.parse(fs.readFileSync(statePath, "utf8"));
 }
 
 function readCollectorPid() {
@@ -82,7 +113,7 @@ function readCollectorPid() {
 
 function requireRuntimeApproval() {
   const ledger = fs.readFileSync(approvalLedgerPath, "utf8");
-  const section = ledger.match(/^#{2,3} APR-V1-RUNTIME-001\s*\r?\n([\s\S]*?)(?=^#{2,3}\s|\z)/m)?.[1] ?? "";
+  const section = ledger.match(/^#{2,3} APR-V1-RUNTIME-001\s*\r?\n([\s\S]*?)(?=^#{2,3}\s|(?![\s\S]))/m)?.[1] ?? "";
   if (!/policy_decision:\s*`?approved`?/i.test(section)) {
     throw new Error("APR-V1-RUNTIME-001_required");
   }
@@ -111,7 +142,7 @@ function buildStatus(
     certification_claimed: false,
     execution_mode: "actual-wall-clock-local-read-only-observation",
     collector_pid: collectorPid,
-    endpoints: { web: "http://127.0.0.1:8800/", api: "http://127.0.0.1:8790/api/health" },
+    endpoints,
     runtime_evidence: {
       root: runtimeRoot,
       samples: samplesPath,
@@ -136,25 +167,22 @@ function persistStatus(report: ReturnType<typeof buildStatus>) {
   return report;
 }
 
-async function recordOne(collectorPid = process.pid) {
+async function recordOne(collectorPid = process.pid, recoveryAttempted = false) {
   const samples = readSamples();
   const now = Date.now();
   const last = samples.at(-1);
-  if (last && now - Date.parse(last.sampled_at) < 30_000) {
+  if (!recoveryAttempted && last && now - Date.parse(last.sampled_at) < 30_000) {
     return persistStatus(buildStatus(samples, new Date(now).toISOString(), collectorPid));
   }
-  const [web, api] = await Promise.all([
-    inspect("http://127.0.0.1:8800/"),
-    inspect("http://127.0.0.1:8790/api/health"),
-  ]);
+  const [web, api] = await Promise.all([inspect(endpoints.web), inspect(endpoints.api)]);
   const sample: DonggriV1WallClockSoakSample = {
     ...binding,
     sequence: samples.length + 1,
     sampled_at: new Date(now).toISOString(),
     web,
     api,
-    recovery_attempted: false,
-    recovery_succeeded: false,
+    recovery_attempted: recoveryAttempted,
+    recovery_succeeded: didDonggriV1SoakRecoverySucceed({ recovery_attempted: recoveryAttempted, web, api }),
     critical_loss_count: 0,
     budget_exceeded_count: 0,
   };
@@ -164,10 +192,29 @@ async function recordOne(collectorPid = process.pid) {
   return persistStatus(buildStatus(samples, new Date(now).toISOString(), collectorPid));
 }
 
-function collectorAlreadyRunning() {
-  if (!fs.existsSync(statePath)) return false;
-  const pid = readCollectorPid();
-  if (!pid || pid === process.pid) return false;
+export function classifyDonggriV1SoakCollectorStart(input: {
+  binding: DonggriV1CandidateBinding;
+  previous_state: unknown | null;
+  samples: unknown[];
+  current_pid: number;
+  is_process_running: (pid: number) => boolean;
+}) {
+  if (input.previous_state === null) return { recovery_attempted: false, previous_collector_pid: null };
+  const validated = validateDonggriV1WallClockSoakRecoveryResume({
+    binding: input.binding,
+    previous_state: input.previous_state,
+    samples: input.samples,
+  });
+  if (validated.previous_collector_pid === input.current_pid) {
+    throw new Error("wallclock_soak_state_references_current_collector");
+  }
+  if (input.is_process_running(validated.previous_collector_pid)) {
+    throw new Error("wallclock_soak_collector_already_running");
+  }
+  return { recovery_attempted: true, previous_collector_pid: validated.previous_collector_pid };
+}
+
+function isProcessRunning(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
@@ -177,8 +224,15 @@ function collectorAlreadyRunning() {
 }
 
 async function daemon() {
-  if (collectorAlreadyRunning()) throw new Error("wallclock_soak_collector_already_running");
-  await recordOne();
+  const samples = readSamples();
+  const collectorStart = classifyDonggriV1SoakCollectorStart({
+    binding,
+    previous_state: readPreviousState(),
+    samples,
+    current_pid: process.pid,
+    is_process_running: isProcessRunning,
+  });
+  await recordOne(process.pid, collectorStart.recovery_attempted);
   process.stdout.write(
     `[dongri-v1-wallclock-soak] collector started candidate=${binding.candidate_id} pid=${process.pid}\n`,
   );
@@ -200,20 +254,27 @@ function selfTest() {
     component_status: report.component_status,
     certification_claimed: report.certification_claimed,
     runtime_write_performed: false,
+    endpoints,
   };
 }
 
-if (process.argv.includes("--daemon")) {
-  requireRuntimeApproval();
-  await daemon();
-} else if (process.argv.includes("--record-one")) {
-  requireRuntimeApproval();
-  process.stdout.write(`${JSON.stringify(await recordOne(), null, 2)}\n`);
-} else if (process.argv.includes("--status")) {
-  process.stdout.write(`${JSON.stringify(buildStatus(readSamples()), null, 2)}\n`);
-} else if (process.argv.includes("--self-test")) {
-  process.stdout.write(`${JSON.stringify(selfTest(), null, 2)}\n`);
-} else {
-  process.stderr.write("Use --status, --self-test, --record-one, or --daemon.\n");
-  process.exitCode = 2;
+export async function runDonggriV1WallClockSoakCommand(args = process.argv.slice(2)) {
+  if (args.includes("--daemon")) {
+    requireRuntimeApproval();
+    await daemon();
+  } else if (args.includes("--record-one")) {
+    requireRuntimeApproval();
+    process.stdout.write(`${JSON.stringify(await recordOne(), null, 2)}\n`);
+  } else if (args.includes("--status")) {
+    process.stdout.write(`${JSON.stringify(buildStatus(readSamples()), null, 2)}\n`);
+  } else if (args.includes("--self-test")) {
+    process.stdout.write(`${JSON.stringify(selfTest(), null, 2)}\n`);
+  } else {
+    process.stderr.write("Use --status, --self-test, --record-one, or --daemon.\n");
+    process.exitCode = 2;
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await runDonggriV1WallClockSoakCommand();
 }

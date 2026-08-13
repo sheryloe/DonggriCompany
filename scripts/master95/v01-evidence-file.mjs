@@ -1,3 +1,5 @@
+/* global process */
+
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -52,6 +54,59 @@ export function assertV01NewReportPath(absolutePath, field) {
 
 export function assertV01NewRuntimePath(absolutePath, field) {
   return assertNewPathWithinRoot(absolutePath, V01_RUNTIME_ROOT, field);
+}
+
+export function writeV01EvidencePairCreateNew({ outputPath, serialized }) {
+  assert(path.isAbsolute(outputPath), "evidence_pair_output_path_must_be_absolute");
+  assert(typeof serialized === "string" && serialized.length > 0, "evidence_pair_serialized_required");
+
+  const sidecarPath = `${outputPath}.sha256`;
+  const digest = sha256(serialized);
+  const sidecar = `${digest}  ${path.basename(outputPath)}\n`;
+  const claimed = [];
+  const descriptors = [];
+  try {
+    const outputDescriptor = fs.openSync(outputPath, "wx");
+    claimed.push(outputPath);
+    descriptors.push(outputDescriptor);
+
+    const sidecarDescriptor = fs.openSync(sidecarPath, "wx");
+    claimed.push(sidecarPath);
+    descriptors.push(sidecarDescriptor);
+
+    fs.writeFileSync(outputDescriptor, serialized, "utf8");
+    fs.fsyncSync(outputDescriptor);
+    fs.writeFileSync(sidecarDescriptor, sidecar, "utf8");
+    fs.fsyncSync(sidecarDescriptor);
+
+    while (descriptors.length > 0) fs.closeSync(descriptors.pop());
+    assert(fs.readFileSync(outputPath, "utf8") === serialized, "evidence_pair_output_readback_mismatch");
+    assert(fs.readFileSync(sidecarPath, "utf8") === sidecar, "evidence_pair_sidecar_readback_mismatch");
+    return { output_path: outputPath, sidecar_path: sidecarPath, sha256: digest };
+  } catch (error) {
+    while (descriptors.length > 0) {
+      try {
+        fs.closeSync(descriptors.pop());
+      } catch {
+        // Preserve the first failure while closing only handles opened by this invocation.
+      }
+    }
+    const rollbackFailures = [];
+    for (const claimedPath of claimed.reverse()) {
+      try {
+        fs.unlinkSync(claimedPath);
+      } catch (rollbackError) {
+        rollbackFailures.push(
+          `${path.basename(claimedPath)}:${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+        );
+      }
+    }
+    if (rollbackFailures.length > 0) {
+      const firstMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`${firstMessage};evidence_pair_rollback_failed:${rollbackFailures.join(",")}`, { cause: error });
+    }
+    throw error;
+  }
 }
 
 export function verifyV01EvidenceArtifact(artifact, field) {

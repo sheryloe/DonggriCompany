@@ -1,3 +1,5 @@
+/* global HTMLElement, URL, document, fetch, getComputedStyle, process, window */
+
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -6,13 +8,17 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { collectThemeContrastAcrossViews } from "../qa/office-theme-requirements-lib/contrast-audit.mjs";
 import { waitForAppSettled } from "../qa/office-theme-requirements-lib/theme-helpers.mjs";
-import { assertV01NewReportPath, assertV01NewRuntimePath } from "./v01-evidence-file.mjs";
+import {
+  assertV01NewReportPath,
+  assertV01NewRuntimePath,
+  writeV01EvidencePairCreateNew,
+} from "./v01-evidence-file.mjs";
+import { validateV01SmokeAuthority } from "./v01-smoke-authority.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..", "..");
 const controlRoot = "G:\\Donggri_DevDrive";
 const approvalLedger = `${controlRoot}\\storage\\codex-control\\specs\\20260725-donggricompany-v1-stabilization-certification-v1\\approvals.md`;
-const requiredApproval = "APR-V1-ALPHA1-SMOKE-001";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -45,25 +51,26 @@ function canonicalJson(value) {
   return `${JSON.stringify(canonicalize(value), null, 2)}\n`;
 }
 
-function requireCleanCandidate() {
+function candidateGitState() {
+  const gitSha = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+    windowsHide: true,
+  })
+    .trim()
+    .toLowerCase();
   const status = execFileSync("git", ["-C", repoRoot, "status", "--porcelain=v1", "--untracked-files=all"], {
     encoding: "utf8",
     windowsHide: true,
   }).trim();
-  assert(status.length === 0, "a11y_candidate_worktree_dirty");
+  return { git_sha: gitSha, clean: status.length === 0 };
 }
 
-function candidateBinding() {
+function candidateBinding(gitSha) {
   const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
   const expectedCandidateId = `dongri-grigri-v01-${String(pkg.version ?? "").replace(/^1\.0\.0-/, "")}`;
   const binding = {
     candidate_id: String(pkg.donggriRelease?.candidateId ?? ""),
-    candidate_sha: execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      windowsHide: true,
-    })
-      .trim()
-      .toLowerCase(),
+    candidate_sha: gitSha,
     source_epoch: String(pkg.donggriRelease?.sourceEpoch ?? "").toLowerCase(),
   };
   assert(/^1\.0\.0-(alpha|beta|rc)\.\d+$/.test(String(pkg.version ?? "")), "a11y_product_version_invalid");
@@ -73,15 +80,14 @@ function candidateBinding() {
   return binding;
 }
 
-function requireApproval(approvalId) {
-  assert(approvalId === requiredApproval, "a11y_approval_id_invalid");
-  const ledger = fs.readFileSync(approvalLedger, "utf8");
-  const start = ledger.search(new RegExp(`^#{2,3}\\s+${approvalId}\\s*$`, "m"));
-  assert(start >= 0, "a11y_approval_not_recorded");
-  const tail = ledger.slice(start);
-  const next = tail.slice(1).search(/\r?\n#{2,3}\s+/);
-  const section = next < 0 ? tail : tail.slice(0, next + 1);
-  assert(/^- policy_decision:\s*`approved`\s*$/m.test(section), "a11y_approval_not_approved");
+export function validateRuntimeReleaseIdentity(payload, binding) {
+  assert(payload && typeof payload === "object" && !Array.isArray(payload), "a11y_runtime_health_payload_invalid");
+  const identity = payload.release_identity;
+  assert(identity && typeof identity === "object" && !Array.isArray(identity), "a11y_runtime_release_identity_missing");
+  assert(identity.candidate_id === binding.candidate_id, "a11y_runtime_candidate_id_mismatch");
+  assert(identity.git_sha === binding.candidate_sha, "a11y_runtime_git_sha_mismatch");
+  assert(identity.source_epoch === binding.source_epoch, "a11y_runtime_source_epoch_mismatch");
+  return identity;
 }
 
 function boundedInputs(baseUrlInput, artifactRootInput, outputInput) {
@@ -333,15 +339,38 @@ export function summarizeV01AccessibilityAutomation(input) {
 
 async function main() {
   const approvalId = argumentValue("--approval");
+  const manifestPathInput = argumentValue("--manifest");
+  const freezeRecordPathInput = argumentValue("--freeze-record");
   const baseUrlInput = argumentValue("--base-url");
   const artifactRootInput = argumentValue("--artifact-root");
   const outputInput = argumentValue("--output");
-  requireApproval(approvalId);
-  requireCleanCandidate();
+  const gitState = candidateGitState();
+  const binding = candidateBinding(gitState.git_sha);
+  validateV01SmokeAuthority({
+    approvalId,
+    ledgerPath: approvalLedger,
+    manifestPath: manifestPathInput,
+    freezeRecordPath: freezeRecordPathInput,
+    component: "accessibility_automation",
+    commandArgs: process.argv.slice(2),
+    candidate: {
+      candidate_id: binding.candidate_id,
+      git_sha: binding.candidate_sha,
+      source_epoch: binding.source_epoch,
+      worktree: repoRoot,
+      clean: gitState.clean,
+    },
+  });
   const bounded = boundedInputs(baseUrlInput, artifactRootInput, outputInput);
-  const binding = candidateBinding();
   const healthResponse = await fetch(`${bounded.baseUrl}/api/health`);
   assert(healthResponse.ok, "a11y_runtime_health_failed");
+  let healthPayload;
+  try {
+    healthPayload = await healthResponse.json();
+  } catch {
+    throw new Error("a11y_runtime_health_json_invalid");
+  }
+  validateRuntimeReleaseIdentity(healthPayload, binding);
 
   fs.mkdirSync(bounded.artifactRoot, { recursive: true });
   const trace = [];
@@ -406,11 +435,7 @@ async function main() {
     }
     const serialized = canonicalJson(report);
     fs.mkdirSync(path.dirname(bounded.output), { recursive: true });
-    fs.writeFileSync(bounded.output, serialized, { encoding: "utf8", flag: "wx" });
-    fs.writeFileSync(`${bounded.output}.sha256`, `${sha256(serialized)}  ${path.basename(bounded.output)}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-    });
+    writeV01EvidencePairCreateNew({ outputPath: bounded.output, serialized });
     process.stdout.write(
       `${JSON.stringify({
         ok: report.component_status !== "fail",

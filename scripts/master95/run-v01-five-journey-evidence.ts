@@ -12,7 +12,12 @@ import { MASTER95_CONTROL_TOWER_JOURNEYS } from "../../server/modules/master95/d
 import { resolveReleaseIdentity } from "../../server/modules/release/release-identity.ts";
 import { controlTowerV2JourneyOperation } from "../../server/modules/routes/ops/control-plane-v2-control-tower.ts";
 import { createControlPlaneV2Runtime } from "../../server/modules/routes/ops/control-plane-v2-runtime.ts";
-import { assertV01NewReportPath, assertV01NewRuntimePath } from "./v01-evidence-file.mjs";
+import {
+  assertV01NewReportPath,
+  assertV01NewRuntimePath,
+  writeV01EvidencePairCreateNew,
+} from "./v01-evidence-file.mjs";
+import { validateV01SmokeAuthority } from "./v01-smoke-authority.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const controlRoot = "G:\\Donggri_DevDrive";
@@ -24,7 +29,6 @@ const approvalLedger = path.join(
   "20260725-donggricompany-v1-stabilization-certification-v1",
   "approvals.md",
 );
-const requiredApproval = "APR-V1-ALPHA1-SMOKE-001";
 const rootProjectId = "project:BloggerGent";
 const isolationProjectId = "project:CardNewsAgent";
 const repetitionsPerJourney = 4;
@@ -73,35 +77,19 @@ function canonicalJson(value: unknown): string {
   return `${JSON.stringify(canonicalize(value), null, 2)}\n`;
 }
 
-function currentGitSha(): string {
-  const value = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
+function candidateGitState(): { git_sha: string; clean: boolean } {
+  const gitSha = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
     encoding: "utf8",
     windowsHide: true,
   })
     .trim()
     .toLowerCase();
-  assert(/^[0-9a-f]{40}$/.test(value), "candidate_git_sha_invalid");
-  return value;
-}
-
-function requireCleanCandidate(): void {
   const status = execFileSync("git", ["-C", repoRoot, "status", "--porcelain=v1", "--untracked-files=all"], {
     encoding: "utf8",
     windowsHide: true,
   }).trim();
-  assert(status.length === 0, "five_journey_candidate_worktree_dirty");
-}
-
-function requireApprovedLedgerEntry(approvalId: string): void {
-  assert(approvalId === requiredApproval, "five_journey_approval_id_invalid");
-  const ledger = fs.readFileSync(approvalLedger, "utf8");
-  const headingPattern = new RegExp(`^#{2,3}\\s+${approvalId.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*$`, "m");
-  const heading = headingPattern.exec(ledger);
-  assert(heading?.index !== undefined, "five_journey_approval_not_recorded");
-  const tail = ledger.slice(heading.index + heading[0].length);
-  const nextHeading = tail.search(/\r?\n#{2,3}\s+/);
-  const section = nextHeading < 0 ? tail : tail.slice(0, nextHeading);
-  assert(/^- policy_decision:\s*`approved`\s*$/m.test(section), "five_journey_approval_not_approved");
+  assert(/^[0-9a-f]{40}$/.test(gitSha), "candidate_git_sha_invalid");
+  return { git_sha: gitSha, clean: status.length === 0 };
 }
 
 function boundedPaths(
@@ -184,13 +172,13 @@ export function summarizeFiveJourneyEvidence(input: {
 
 async function main(): Promise<void> {
   const approvalId = argumentValue("--approval");
+  const manifestPathInput = argumentValue("--manifest");
+  const freezeRecordPathInput = argumentValue("--freeze-record");
   const runtimeRootInput = argumentValue("--runtime-root");
   const outputInput = argumentValue("--output");
-  requireApprovedLedgerEntry(approvalId);
-  requireCleanCandidate();
-  const { runtimeRoot, output } = boundedPaths(runtimeRootInput, outputInput);
 
-  const candidateSha = currentGitSha();
+  const gitState = candidateGitState();
+  const candidateSha = gitState.git_sha;
   const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
     donggriRelease?: { candidateId?: string };
   };
@@ -204,6 +192,22 @@ async function main(): Promise<void> {
     DONGRI_RELEASE_GIT_SHA: candidateSha,
   });
   assert(release.candidate_id === expectedCandidateId, "five_journey_candidate_id_mismatch");
+  validateV01SmokeAuthority({
+    approvalId,
+    ledgerPath: approvalLedger,
+    manifestPath: manifestPathInput,
+    freezeRecordPath: freezeRecordPathInput,
+    component: "five_journey",
+    commandArgs: process.argv.slice(2),
+    candidate: {
+      candidate_id: release.candidate_id,
+      git_sha: candidateSha,
+      source_epoch: release.source_epoch,
+      worktree: repoRoot,
+      clean: gitState.clean,
+    },
+  });
+  const { runtimeRoot, output } = boundedPaths(runtimeRootInput, outputInput);
   const sourceAdapter = new ControlPlaneSourceAdapter({
     controlRoot,
     sourceEpoch: release.source_epoch,
@@ -427,11 +431,7 @@ async function main(): Promise<void> {
     };
     const serialized = canonicalJson(report);
     fs.mkdirSync(path.dirname(output), { recursive: true });
-    fs.writeFileSync(output, serialized, { encoding: "utf8", flag: "wx" });
-    fs.writeFileSync(`${output}.sha256`, `${sha256(serialized)}  ${path.basename(output)}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-    });
+    writeV01EvidencePairCreateNew({ outputPath: output, serialized });
     process.stdout.write(
       `${JSON.stringify({
         ok: pass,

@@ -123,7 +123,7 @@
     "master95:dev:local:resilient": "concurrently --restart-tries 12 --restart-after exponential -n web,api -c cyan,magenta \"cross-env VITE_DEV=1 vite --host 127.0.0.1 --port 8800\" \"cross-env VITE_DEV=1 HOST=127.0.0.1 PORT=8790 APP_DATA_DIR=data nodemon --exitcrash --delay 1000ms --watch server --ext ts --exec tsx server/index.ts\"",
     "master95:ux-audit": "node scripts/master95/check-ux-completeness.mjs",
     "master95:ux-audit:certify": "node scripts/master95/check-ux-completeness.mjs --require-proven",
-    "master95:ux-audit:self-test": "node --test scripts/master95/ux-audit-contract.test.mjs scripts/master95/build-v01-ux-audit.test.mjs scripts/master95/build-v01-owner-study.test.mjs scripts/master95/build-v01-accessibility-evidence.test.mjs scripts/master95/run-v01-accessibility-automation.test.mjs && tsx --test scripts/master95/run-v01-five-journey-evidence.test.ts",
+    "master95:ux-audit:self-test": "node --test scripts/master95/ux-audit-contract.test.mjs scripts/master95/build-v01-ux-audit.test.mjs scripts/master95/build-v01-owner-study.test.mjs scripts/master95/build-v01-accessibility-evidence.test.mjs scripts/master95/v01-smoke-authority.test.mjs scripts/master95/v01-evidence-file.test.mjs scripts/master95/run-v01-accessibility-automation.test.mjs && tsx --test scripts/master95/run-v01-five-journey-evidence.test.ts",
     "master95:ux-audit:v01:build": "node scripts/master95/build-v01-ux-audit.mjs",
     "master95:ux-audit:v01:five-journey": "tsx scripts/master95/run-v01-five-journey-evidence.ts",
     "master95:ux-audit:v01:owner-study": "node scripts/master95/build-v01-owner-study.mjs",

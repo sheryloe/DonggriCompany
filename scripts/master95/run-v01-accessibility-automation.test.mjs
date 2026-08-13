@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { summarizeV01AccessibilityAutomation } from "./run-v01-accessibility-automation.mjs";
+import {
+  summarizeV01AccessibilityAutomation,
+  validateRuntimeReleaseIdentity,
+} from "./run-v01-accessibility-automation.mjs";
 
 function input() {
   return {
@@ -43,4 +46,55 @@ test("promotes browser errors to critical findings", () => {
   const result = summarizeV01AccessibilityAutomation(value);
   assert.equal(result.component_status, "fail");
   assert.equal(result.measurement.critical_findings[0].code, "browser-page-error");
+});
+
+test("accepts only the exact validated runtime release identity", () => {
+  const binding = {
+    candidate_id: "dongri-grigri-v01-alpha.2",
+    candidate_sha: "1".repeat(40),
+    source_epoch: `sha256:${"2".repeat(64)}`,
+  };
+  assert.equal(
+    validateRuntimeReleaseIdentity(
+      {
+        release_identity: {
+          candidate_id: binding.candidate_id,
+          git_sha: binding.candidate_sha,
+          source_epoch: binding.source_epoch,
+        },
+      },
+      binding,
+    ).candidate_id,
+    binding.candidate_id,
+  );
+});
+
+test("rejects stale or wrong runtime release identity before browser evidence", () => {
+  const binding = {
+    candidate_id: "dongri-grigri-v01-alpha.2",
+    candidate_sha: "1".repeat(40),
+    source_epoch: `sha256:${"2".repeat(64)}`,
+  };
+  const exact = {
+    candidate_id: binding.candidate_id,
+    git_sha: binding.candidate_sha,
+    source_epoch: binding.source_epoch,
+  };
+  assert.throws(() => validateRuntimeReleaseIdentity({}, binding), /a11y_runtime_release_identity_missing/);
+  assert.throws(
+    () => validateRuntimeReleaseIdentity({ release_identity: { ...exact, candidate_id: "stale" } }, binding),
+    /a11y_runtime_candidate_id_mismatch/,
+  );
+  assert.throws(
+    () => validateRuntimeReleaseIdentity({ release_identity: { ...exact, git_sha: "9".repeat(40) } }, binding),
+    /a11y_runtime_git_sha_mismatch/,
+  );
+  assert.throws(
+    () =>
+      validateRuntimeReleaseIdentity(
+        { release_identity: { ...exact, source_epoch: `sha256:${"8".repeat(64)}` } },
+        binding,
+      ),
+    /a11y_runtime_source_epoch_mismatch/,
+  );
 });

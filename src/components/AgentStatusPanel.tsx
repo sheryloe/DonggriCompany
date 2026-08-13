@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 import type { Agent } from "../types";
 import type { ActiveAgentInfo, CliProcessInfo } from "../api";
 import type { UiLanguage } from "../i18n";
@@ -41,6 +42,8 @@ function displayCliProvider(provider: CliProcessInfo["provider"]): string {
 
 export default function AgentStatusPanel({ agents, uiLanguage, onClose }: AgentStatusPanelProps) {
   const t = (text: { ko: string; en: string; ja?: string; zh?: string }) => pickLang(uiLanguage, text);
+  const dialogRef = useAccessibleDialog(onClose);
+  const titleId = useId();
   const [activeAgents, setActiveAgents] = useState<ActiveAgentInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [killing, setKilling] = useState<Set<string>>(new Set());
@@ -151,6 +154,11 @@ export default function AgentStatusPanel({ agents, uiLanguage, onClose }: AgentS
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         className={`relative mx-4 w-full rounded-2xl border border-blue-500/30 bg-slate-900 shadow-2xl shadow-blue-500/10 ${
           inspectorMode ? "max-w-3xl" : "max-w-lg"
         }`}
@@ -160,7 +168,7 @@ export default function AgentStatusPanel({ agents, uiLanguage, onClose }: AgentS
         <div className="flex items-center justify-between border-b border-slate-700/50 px-6 py-4">
           <div className="flex items-center gap-3">
             <span className="text-2xl">&#x1F6E0;</span>
-            <h2 className="text-lg font-bold text-white">
+            <h2 id={titleId} className="text-lg font-bold text-white">
               {t({ ko: "활성 에이전트", en: "Active Agents", ja: "アクティブエージェント", zh: "活跃代理" })}
             </h2>
             <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400">
@@ -214,6 +222,12 @@ export default function AgentStatusPanel({ agents, uiLanguage, onClose }: AgentS
             </button>
             <button
               onClick={onClose}
+              aria-label={t({
+                ko: "에이전트 상태 창 닫기",
+                en: "Close agent status",
+                ja: "エージェント状態を閉じる",
+                zh: "关闭智能体状态",
+              })}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
             >
               &#x2715;

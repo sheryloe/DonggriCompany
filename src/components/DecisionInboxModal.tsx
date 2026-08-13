@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 import type { UiLanguage } from "../i18n";
 import { pickLang } from "../i18n";
 import type { Agent } from "../types";
@@ -163,6 +164,8 @@ export default function DecisionInboxModal({
   onOpenChat,
 }: DecisionInboxModalProps) {
   const t = (text: { ko: string; en: string; ja?: string; zh?: string }) => pickLang(uiLanguage, text);
+  const dialogRef = useAccessibleDialog(onClose);
+  const titleId = useId();
   const isKorean = uiLanguage.startsWith("ko");
   const spriteMap = useMemo(() => buildSpriteMap(agents), [agents]);
   const agentById = useMemo(() => {
@@ -307,12 +310,17 @@ export default function DecisionInboxModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         className="relative mx-4 w-full max-w-3xl rounded-2xl border border-indigo-500/30 bg-slate-900 shadow-2xl shadow-indigo-500/10"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-700/50 px-6 py-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-white">
+            <h2 id={titleId} className="text-lg font-bold text-white">
               {t({ ko: "미결 의사결정", en: "Pending Decisions", ja: "未決定", zh: "待决事项" })}
             </h2>
             <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs font-medium text-indigo-300">
@@ -328,6 +336,7 @@ export default function DecisionInboxModal({
             </button>
             <button
               onClick={onClose}
+              aria-label={t({ ko: "의사결정 창 닫기", en: "Close decisions", ja: "意思決定を閉じる", zh: "关闭决策" })}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
             >
               ×

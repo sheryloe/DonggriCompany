@@ -20,8 +20,11 @@
 /* ─── Dark Theme: 심야작업 오피스 (late-night coding session) ─── */
 :root,
 [data-theme="dark"] {
-  --th-font-display: "Pretendard", "Noto Sans KR", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
-  --th-font-body: "Pretendard", "Noto Sans KR", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+  --th-font-display:
+    "Pretendard", "Noto Sans KR", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+  --th-font-body:
+    "Pretendard", "Noto Sans KR", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui,
+    sans-serif;
   --th-font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --th-bg-primary: #0a0a18;
   --th-bg-secondary: #10102a;
@@ -676,6 +679,8 @@ pre,
 
 /* ── White text on colored backgrounds should stay white ── */
 [data-theme="light"] .bg-blue-600 .text-white,
+[data-theme="light"] .bg-indigo-600 .text-white,
+[data-theme="light"] .bg-indigo-700 .text-white,
 [data-theme="light"] .bg-red-600 .text-white,
 [data-theme="light"] .bg-emerald-600 .text-white,
 [data-theme="light"] .bg-emerald-700 .text-white,
@@ -684,6 +689,8 @@ pre,
   color: #ffffff !important;
 }
 [data-theme="light"] .bg-blue-600.text-white,
+[data-theme="light"] .bg-indigo-600.text-white,
+[data-theme="light"] .bg-indigo-700.text-white,
 [data-theme="light"] .bg-red-600.text-white,
 [data-theme="light"] .bg-emerald-600.text-white,
 [data-theme="light"] .bg-emerald-700.text-white,

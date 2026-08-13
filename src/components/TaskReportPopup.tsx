@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 import type { Agent, Department } from "../types";
 import type { TaskReportDetail, TaskReportDocument, TaskReportQualityEvidence, TaskReportTeamSection } from "../api";
 import { archiveTaskReport, getTaskReportDetail } from "../api";
@@ -54,6 +55,8 @@ function evidenceValue(value: string | null | undefined): string {
 
 export default function TaskReportPopup({ report, agents, departments, uiLanguage, onClose }: TaskReportPopupProps) {
   const t = (text: { ko: string; en: string; ja?: string; zh?: string }) => pickLang(uiLanguage, text);
+  const dialogRef = useAccessibleDialog(onClose);
+  const titleId = useId();
 
   const [currentReport, setCurrentReport] = useState<TaskReportDetail>(report);
   const [refreshingArchive, setRefreshingArchive] = useState(false);
@@ -426,6 +429,11 @@ export default function TaskReportPopup({ report, agents, departments, uiLanguag
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         className="relative mx-4 w-full max-w-4xl rounded-2xl border border-emerald-500/30 bg-slate-900 shadow-2xl shadow-emerald-500/10"
         onClick={(e) => e.stopPropagation()}
       >
@@ -433,7 +441,7 @@ export default function TaskReportPopup({ report, agents, departments, uiLanguag
           <div className="min-w-0">
             <div className="mb-1 flex items-center gap-2">
               <span className="text-xl">&#x1F4CB;</span>
-              <h2 className="truncate text-lg font-bold text-white">
+              <h2 id={titleId} className="truncate text-lg font-bold text-white">
                 {t({
                   ko: "작업 완료 보고서",
                   en: "Task Completion Report",
@@ -447,6 +455,12 @@ export default function TaskReportPopup({ report, agents, departments, uiLanguag
           </div>
           <button
             onClick={onClose}
+            aria-label={t({
+              ko: "업무 보고서 창 닫기",
+              en: "Close task report",
+              ja: "タスクレポートを閉じる",
+              zh: "关闭任务报告",
+            })}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
           >
             &#x2715;

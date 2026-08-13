@@ -44,6 +44,17 @@ const baseReport = {
 };
 
 describe("TaskReportPopup", () => {
+  it("exposes a named modal dialog and close control", () => {
+    render(
+      <I18nProvider language="en">
+        <TaskReportPopup report={baseReport as any} agents={[]} departments={[]} uiLanguage="en" onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("dialog", { name: "작업 완료 보고서" })).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByRole("button", { name: "업무 보고서 창 닫기" })).toBeInTheDocument();
+  });
+
   it("shows final branch verification logs in the report popup", () => {
     render(
       <I18nProvider language="en">

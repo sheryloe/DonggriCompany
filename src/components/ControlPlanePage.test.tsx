@@ -1379,6 +1379,20 @@ describe("ControlPlanePage", () => {
     expect(screen.queryByRole("heading", { name: "Control Hub" })).not.toBeInTheDocument();
   });
 
+  it("labels the five critical Runner controls independently of placeholders", async () => {
+    const user = userEvent.setup();
+    render(<ControlPlanePage />);
+
+    await screen.findByRole("heading", { name: "Office Control Platform" });
+    await user.click(screen.getByRole("button", { name: "Runner" }));
+
+    expect(screen.getByRole("textbox", { name: "수동 Thread ID" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Thread 범위" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "실행 목표" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "연결할 Thread ID" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Evidence 참조" })).toBeInTheDocument();
+  });
+
   it("opens the read-only projection and bounded durable Master95 operations panel from a dedicated tab", async () => {
     const user = userEvent.setup();
     render(<ControlPlanePage />);

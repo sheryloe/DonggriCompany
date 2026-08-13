@@ -48,5 +48,7 @@ describe("ReportHistory", () => {
     await waitFor(() => {
       expect(screen.getByAltText("Ari")).toBeInTheDocument();
     });
+    expect(screen.getByRole("dialog", { name: "작업 보고서 이력" })).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByRole("button", { name: "보고서 이력 창 닫기" })).toBeInTheDocument();
   });
 });

@@ -1256,31 +1256,37 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
                 </div>
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-[1fr_220px]">
-                <input
-                  value={manualThreadId}
-                  onChange={(event) => setManualThreadId(event.target.value)}
-                  placeholder={currentThreadId || latestSessionThreadId || "thread id 수동 입력"}
-                  className="min-w-0 rounded-lg border px-3 py-2 font-mono text-xs outline-none focus:border-cyan-400/60"
-                  style={{
-                    borderColor: "var(--th-border)",
-                    background: "var(--th-bg-surface)",
-                    color: "var(--th-text-primary)",
-                  }}
-                />
-                <select
-                  value={threadScope}
-                  onChange={(event) => setThreadScope(event.target.value as "root" | "project" | "spec")}
-                  className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
-                  style={{
-                    borderColor: "var(--th-border)",
-                    background: "var(--th-bg-surface)",
-                    color: "var(--th-text-primary)",
-                  }}
-                >
-                  <option value="project">project:DonggriCompany</option>
-                  <option value="root">root</option>
-                  <option value="spec">spec:{selectedActiveSpec.id ?? "active"}</option>
-                </select>
+                <label className="min-w-0 text-[11px] font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                  수동 Thread ID
+                  <input
+                    value={manualThreadId}
+                    onChange={(event) => setManualThreadId(event.target.value)}
+                    placeholder={currentThreadId || latestSessionThreadId || "thread id 수동 입력"}
+                    className="mt-1 w-full min-w-0 rounded-lg border px-3 py-2 font-mono text-xs outline-none focus:border-cyan-400/60"
+                    style={{
+                      borderColor: "var(--th-border)",
+                      background: "var(--th-bg-surface)",
+                      color: "var(--th-text-primary)",
+                    }}
+                  />
+                </label>
+                <label className="text-[11px] font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                  Thread 범위
+                  <select
+                    value={threadScope}
+                    onChange={(event) => setThreadScope(event.target.value as "root" | "project" | "spec")}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+                    style={{
+                      borderColor: "var(--th-border)",
+                      background: "var(--th-bg-surface)",
+                      color: "var(--th-text-primary)",
+                    }}
+                  >
+                    <option value="project">project:DonggriCompany</option>
+                    <option value="root">root</option>
+                    <option value="spec">spec:{selectedActiveSpec.id ?? "active"}</option>
+                  </select>
+                </label>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
@@ -1380,17 +1386,20 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
               </div>
 
               <div className="mt-3 grid gap-2 md:grid-cols-[1fr_180px]">
-                <textarea
-                  value={engineObjective}
-                  onChange={(event) => setEngineObjective(event.target.value)}
-                  rows={3}
-                  className="min-w-0 resize-none rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
-                  style={{
-                    borderColor: "var(--th-border)",
-                    background: "var(--th-bg-surface)",
-                    color: "var(--th-text-primary)",
-                  }}
-                />
+                <label className="min-w-0 text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                  실행 목표
+                  <textarea
+                    value={engineObjective}
+                    onChange={(event) => setEngineObjective(event.target.value)}
+                    rows={3}
+                    className="mt-1 w-full min-w-0 resize-none rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60"
+                    style={{
+                      borderColor: "var(--th-border)",
+                      background: "var(--th-bg-surface)",
+                      color: "var(--th-text-primary)",
+                    }}
+                  />
+                </label>
                 <label className="text-xs font-semibold" style={{ color: "var(--th-text-secondary)" }}>
                   실행 표면
                   <select
@@ -1412,28 +1421,34 @@ export default function ControlPlanePage({ initialTab = "root", compactHeader = 
                 </label>
               </div>
               <div className="mt-2 grid gap-2 md:grid-cols-[1fr_220px]">
-                <input
-                  value={engineAttachThreadId}
-                  onChange={(event) => setEngineAttachThreadId(event.target.value)}
-                  placeholder={currentThreadId || "Codex thread id 연결"}
-                  className="min-w-0 rounded-lg border px-3 py-2 font-mono text-xs outline-none focus:border-cyan-400/60"
-                  style={{
-                    borderColor: "var(--th-border)",
-                    background: "var(--th-bg-surface)",
-                    color: "var(--th-text-primary)",
-                  }}
-                />
-                <input
-                  value={engineEvidenceRef}
-                  onChange={(event) => setEngineEvidenceRef(event.target.value)}
-                  placeholder="EV-CODEX-ENGINE-SYNC"
-                  className="rounded-lg border px-3 py-2 text-xs outline-none focus:border-cyan-400/60"
-                  style={{
-                    borderColor: "var(--th-border)",
-                    background: "var(--th-bg-surface)",
-                    color: "var(--th-text-primary)",
-                  }}
-                />
+                <label className="min-w-0 text-[11px] font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                  연결할 Thread ID
+                  <input
+                    value={engineAttachThreadId}
+                    onChange={(event) => setEngineAttachThreadId(event.target.value)}
+                    placeholder={currentThreadId || "Codex thread id 연결"}
+                    className="mt-1 w-full min-w-0 rounded-lg border px-3 py-2 font-mono text-xs outline-none focus:border-cyan-400/60"
+                    style={{
+                      borderColor: "var(--th-border)",
+                      background: "var(--th-bg-surface)",
+                      color: "var(--th-text-primary)",
+                    }}
+                  />
+                </label>
+                <label className="text-[11px] font-semibold" style={{ color: "var(--th-text-secondary)" }}>
+                  Evidence 참조
+                  <input
+                    value={engineEvidenceRef}
+                    onChange={(event) => setEngineEvidenceRef(event.target.value)}
+                    placeholder="EV-CODEX-ENGINE-SYNC"
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-xs outline-none focus:border-cyan-400/60"
+                    style={{
+                      borderColor: "var(--th-border)",
+                      background: "var(--th-bg-surface)",
+                      color: "var(--th-text-primary)",
+                    }}
+                  />
+                </label>
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -180,6 +180,12 @@ describe("OfficeView 8bit office role activity spaces", () => {
 
     expect(screen.getByRole("region", { name: "Dongri-grigri 8bit 사무실" })).toBeInTheDocument();
     expect(screen.getByTestId("pixel-office-map")).toBeInTheDocument();
+    expect(screen.getByTestId("pixel-office-map")).toHaveClass(
+      "focus-visible:outline",
+      "focus-visible:outline-2",
+      "focus-visible:outline-offset-4",
+      "focus-visible:outline-cyan-400",
+    );
     expect(screen.getByRole("heading", { level: 1, name: "Dongri-grigri 사무실" })).toBeInTheDocument();
     const shell = container.querySelector(".pixel-office-shell");
     expect(shell).toHaveAttribute("data-focus", "overview");

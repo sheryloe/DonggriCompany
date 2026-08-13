@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 import type { Agent, Department } from "../types";
 import type { TaskReportSummary, TaskReportDetail } from "../api";
 import type { UiLanguage } from "../i18n";
@@ -36,6 +37,8 @@ function projectNameFromSummary(report: TaskReportSummary): string {
 
 export default function ReportHistory({ agents, departments, uiLanguage, onClose }: ReportHistoryProps) {
   const t = (text: { ko: string; en: string; ja?: string; zh?: string }) => pickLang(uiLanguage, text);
+  const dialogRef = useAccessibleDialog(onClose);
+  const titleId = useId();
   const [reports, setReports] = useState<TaskReportSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<TaskReportDetail | null>(null);
@@ -106,6 +109,11 @@ export default function ReportHistory({ agents, departments, uiLanguage, onClose
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         className="relative mx-4 w-full max-w-2xl rounded-2xl border border-emerald-500/30 bg-slate-900 shadow-2xl shadow-emerald-500/10"
         onClick={(e) => e.stopPropagation()}
       >
@@ -113,12 +121,18 @@ export default function ReportHistory({ agents, departments, uiLanguage, onClose
         <div className="flex items-center justify-between border-b border-slate-700/50 px-6 py-4">
           <div className="flex items-center gap-3">
             <span className="text-2xl">&#x1F4CA;</span>
-            <h2 className="text-lg font-bold text-white">
+            <h2 id={titleId} className="text-lg font-bold text-white">
               {t({ ko: "작업 보고서 이력", en: "Report History", ja: "レポート履歴", zh: "报告历史" })}
             </h2>
           </div>
           <button
             onClick={onClose}
+            aria-label={t({
+              ko: "보고서 이력 창 닫기",
+              en: "Close report history",
+              ja: "レポート履歴を閉じる",
+              zh: "关闭报告历史",
+            })}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
           >
             &#x2715;

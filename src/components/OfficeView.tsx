@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Brain, BriefcaseBusiness, Building2, FolderKanban, Gauge, ShieldCheck, UsersRound, type LucideIcon } from "lucide-react";
+import {
+  Brain,
+  BriefcaseBusiness,
+  Building2,
+  FolderKanban,
+  Gauge,
+  ShieldCheck,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import {
   type AnimatedSprite,
   type Application,
@@ -79,7 +88,14 @@ interface HudPanel {
 }
 
 const OFFICE_COMMANDS: OfficeCommand[] = [
-  { mode: "overview", label: "요약", caption: "전체 사무실", camera: "shared", target: "whole-office", icon: Building2 },
+  {
+    mode: "overview",
+    label: "요약",
+    caption: "전체 사무실",
+    camera: "shared",
+    target: "whole-office",
+    icon: Building2,
+  },
   {
     mode: "pipeline",
     label: "업무 흐름",
@@ -551,7 +567,8 @@ export default function OfficeView({
       return;
     }
 
-    if (hostX && movedX && nextLeft !== null) hostX.scrollTo({ left: nextLeft, top: hostX.scrollTop, behavior: "auto" });
+    if (hostX && movedX && nextLeft !== null)
+      hostX.scrollTo({ left: nextLeft, top: hostX.scrollTop, behavior: "auto" });
     if (hostY && movedY && nextTop !== null) hostY.scrollTo({ left: hostY.scrollLeft, top: nextTop, behavior: "auto" });
   }, []);
 
@@ -744,7 +761,8 @@ export default function OfficeView({
     return onOpenControlPlane;
   }, [focusMode, handleOpenMemory, handleOpenProjects, onOpenControlPlane, onOpenTasks]);
 
-  const secondaryAction = focusMode === "overview" || focusMode === "pipeline" || focusMode === "ops" ? onOpenTasks : undefined;
+  const secondaryAction =
+    focusMode === "overview" || focusMode === "pipeline" || focusMode === "ops" ? onOpenTasks : undefined;
 
   return (
     <section
@@ -815,7 +833,7 @@ export default function OfficeView({
           <div
             ref={containerRef}
             data-testid="pixel-office-map"
-            className="pixel-office-map mx-auto min-h-[500px] outline-none"
+            className="pixel-office-map mx-auto min-h-[500px] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-400"
             tabIndex={0}
             aria-label="픽셀 사무실 canvas"
             style={{ lineHeight: 0 }}
@@ -832,7 +850,11 @@ export default function OfficeView({
         <aside
           className="rounded-xl border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]"
           aria-label="선택된 운영 패널"
-          style={{ borderColor: "var(--th-panel-border)", background: "var(--th-panel-bg)", color: "var(--th-text-primary)" }}
+          style={{
+            borderColor: "var(--th-panel-border)",
+            background: "var(--th-panel-bg)",
+            color: "var(--th-text-primary)",
+          }}
         >
           <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-600 dark:text-cyan-300">
             {panel.eyebrow}
@@ -879,7 +901,10 @@ export default function OfficeView({
                       <div className="text-[11px] font-black" style={{ color: "var(--th-text-heading)" }}>
                         {row.label}
                       </div>
-                      <div className="mt-1 line-clamp-2 text-xs leading-5" style={{ color: "var(--th-text-secondary)" }}>
+                      <div
+                        className="mt-1 line-clamp-2 text-xs leading-5"
+                        style={{ color: "var(--th-text-secondary)" }}
+                      >
                         {row.detail}
                       </div>
                     </div>
@@ -930,7 +955,11 @@ export default function OfficeView({
                     type="button"
                     onClick={handleOpenProjects}
                     className="rounded-lg border px-3 py-2 text-left text-sm font-bold transition hover:border-cyan-300 hover:bg-cyan-300/10 active:translate-y-px"
-                    style={{ borderColor: "var(--th-border)", background: "var(--th-bg-surface)", color: "var(--th-text-primary)" }}
+                    style={{
+                      borderColor: "var(--th-border)",
+                      background: "var(--th-bg-surface)",
+                      color: "var(--th-text-primary)",
+                    }}
                   >
                     {project}
                     <span className="ml-2 text-[11px] font-medium" style={{ color: "var(--th-text-muted)" }}>

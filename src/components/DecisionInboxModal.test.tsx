@@ -72,6 +72,26 @@ function buildReviewRoundItem(): DecisionInboxItem {
 }
 
 describe("DecisionInboxModal", () => {
+  it("exposes a named modal dialog and close control", () => {
+    render(
+      <DecisionInboxModal
+        open
+        loading={false}
+        items={[]}
+        agents={[]}
+        busyKey={null}
+        uiLanguage="en"
+        onClose={vi.fn()}
+        onRefresh={vi.fn()}
+        onReplyOption={vi.fn()}
+        onOpenChat={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "미결 의사결정" })).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByRole("button", { name: "의사결정 창 닫기" })).toBeInTheDocument();
+  });
+
   it("renders option analysis details and planner source for review-round decisions", () => {
     render(
       <DecisionInboxModal

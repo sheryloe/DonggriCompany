@@ -7,7 +7,7 @@ import { detectBrowserLanguage, normalizeLanguage } from "../i18n";
 import type { Agent, CompanySettings, CompanyStats, Department, MeetingPresence, SubTask, Task } from "../types";
 import { DEFAULT_SETTINGS } from "../types";
 import { ROOM_THEMES_STORAGE_KEY } from "./constants";
-import { mapWorkflowDecisionItemsRaw } from "./decision-inbox";
+import { mergeDecisionInboxItems } from "./decision-inbox";
 import { normalizeOfficeWorkflowPack } from "./office-workflow-pack";
 import type { RoomThemeMap } from "./types";
 import { normalizeSubtaskTitleForUi } from "./subtask-title-normalizer";
@@ -61,7 +61,7 @@ export function useAppBootstrapData({
       const sett = await api.getSettings();
       const activePackKey = normalizeOfficeWorkflowPack(sett.officeWorkflowPack ?? "development");
       const includeSeedAgents = activePackKey !== "development";
-      const [depts, ags, tks, sts, subs, presence, decisionItems] = await Promise.all([
+      const [depts, ags, tks, sts, subs, presence, decisionItems, allMessages] = await Promise.all([
         api.getDepartments({ workflowPackKey: activePackKey }),
         api.getAgents({ includeSeed: includeSeedAgents }),
         api.getTasks(),
@@ -69,6 +69,7 @@ export function useAppBootstrapData({
         api.getActiveSubtasks(),
         api.getMeetingPresence().catch(() => []),
         api.getDecisionInbox().catch(() => []),
+        api.getMessages({ limit: 500 }).catch(() => []),
       ]);
       setDepartments(depts);
       setAgents(ags);
@@ -128,7 +129,14 @@ export function useAppBootstrapData({
         })),
       );
       setMeetingPresence(presence);
-      setDecisionInboxItems(mapWorkflowDecisionItemsRaw(decisionItems ?? []));
+      setDecisionInboxItems(
+        mergeDecisionInboxItems({
+          workflowItems: decisionItems ?? [],
+          messages: allMessages,
+          agents: ags,
+          language: nextSettings.language,
+        }),
+      );
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {

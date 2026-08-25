@@ -1,7 +1,7 @@
 {
   "name": "donggri-company",
   "version": "1.0.0-alpha.2",
-  "description": "DonggriCompany - local-first Dongri-grigri office control platform.",
+  "description": "Dongri-grigri - local-first Control Plane operations command center.",
   "donggriRelease": {
     "schemaVersion": "1.0.0",
     "productId": "dongri-grigri",
@@ -42,6 +42,10 @@
     "agents:sprites": "node tools/agents/build-agent-sprites-from-sheet.mjs",
     "agents:sprites:check": "node tools/agents/check-walk-normalize-assets.mjs",
     "preflight:public": "bash scripts/preflight-public.sh",
+    "public:verify": "node scripts/verify-public-readiness.mjs",
+    "public:verify:self-test": "node scripts/verify-public-readiness.mjs --self-test && node --test scripts/verify-public-readiness.test.mjs",
+    "smoke:command-loop": "node scripts/smoke-command-loop.mjs",
+    "smoke:command-loop:self-test": "node --test scripts/smoke-command-loop.test.mjs",
     "audit:verify": "node scripts/verify-security-audit-log.mjs",
     "gmail:intake:oauth": "node scripts/gmail-intake-oauth.mjs",
     "google:intake:oauth": "node scripts/gmail-intake-oauth.mjs",

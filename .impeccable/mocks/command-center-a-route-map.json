@@ -1,0 +1,10 @@
+{
+  "id": "A",
+  "direction": "Swiss civic information system",
+  "composition": "Seoul-transit-inspired operational route map",
+  "image": "command-center-a-route-map.png",
+  "prompt_summary": "A flat 1600x1000 Korean-first Dongri-grigri command center with numbered navigation, a dominant project route map, approval strip, evidence rail, and bottom timeline; warm white, charcoal, and service red; no cards, office scene, neon, or invented metrics.",
+  "approved": true,
+  "approved_at": "2026-08-14 KST",
+  "approval_ref": "2026-08-14 user selected the subway-like route-map direction"
+}

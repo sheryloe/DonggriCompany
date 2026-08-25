@@ -1,7 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import * as api from "../api";
-import { buildDecisionInboxItems } from "../components/chat/decision-inbox";
 import type { DecisionInboxItem } from "../components/chat/decision-inbox";
 import { LANGUAGE_USER_SET_STORAGE_KEY, normalizeLanguage, pickLang } from "../i18n";
 import { normalizeOfficeWorkflowPack } from "./office-workflow-pack";
@@ -15,7 +14,7 @@ import type {
   Task,
   WorkflowPackKey,
 } from "../types";
-import { mapWorkflowDecisionItemsLocalized } from "./decision-inbox";
+import { mergeDecisionInboxItems } from "./decision-inbox";
 import { mergeSettingsWithDefaults, syncClientLanguage } from "./utils";
 import type { ProjectMetaPayload } from "./types";
 
@@ -37,6 +36,17 @@ interface UseAppActionsParams {
   setDecisionInboxItems: Dispatch<SetStateAction<DecisionInboxItem[]>>;
   setDecisionReplyBusyKey: Dispatch<SetStateAction<string | null>>;
   setCliStatus: Dispatch<SetStateAction<CliStatusMap | null>>;
+}
+
+type CreateTaskInput = Parameters<typeof api.createTask>[0];
+
+export async function createTaskAndRefresh(
+  input: CreateTaskInput,
+  dependencies: Pick<typeof api, "createTask" | "getTasks" | "getStats"> = api,
+): Promise<{ taskId: string; tasks: Task[]; stats: CompanyStats }> {
+  const taskId = await dependencies.createTask(input);
+  const [tasks, stats] = await Promise.all([dependencies.getTasks(), dependencies.getStats()]);
+  return { taskId, tasks, stats };
 }
 
 export function useAppActions({
@@ -143,13 +153,13 @@ export function useAppActions({
       workflow_meta_json?: Record<string, unknown> | string;
     }) => {
       try {
-        await api.createTask(input as Parameters<typeof api.createTask>[0]);
-        const tks = await api.getTasks();
-        setTasks(tks);
-        const sts = await api.getStats();
-        setStats(sts);
+        const created = await createTaskAndRefresh(input as CreateTaskInput);
+        setTasks(created.tasks);
+        setStats(created.stats);
+        return created.taskId;
       } catch (error) {
         console.error("Create task failed:", error);
+        throw error;
       }
     },
     [setTasks, setStats],
@@ -207,6 +217,7 @@ export function useAppActions({
         await refreshTasksAndAgents();
       } catch (error) {
         console.error("Run task failed:", error);
+        throw error;
       }
     },
     [refreshTasksAndAgents],
@@ -317,12 +328,14 @@ export function useAppActions({
         api.getMessages({ limit: 500 }),
         api.getDecisionInbox(),
       ]);
-      const agentDecisionItems = buildDecisionInboxItems(allMessages, agents);
-      const workflowItems = mapWorkflowDecisionItemsLocalized(workflowDecisionItems, settings.language);
-      const merged = [...workflowItems, ...agentDecisionItems];
-      const deduped = new Map<string, DecisionInboxItem>();
-      for (const item of merged) deduped.set(item.id, item);
-      setDecisionInboxItems(Array.from(deduped.values()).sort((a, b) => b.createdAt - a.createdAt));
+      setDecisionInboxItems(
+        mergeDecisionInboxItems({
+          workflowItems: workflowDecisionItems,
+          messages: allMessages,
+          agents,
+          language: settings.language,
+        }),
+      );
     } catch (error) {
       console.error("Load decision inbox failed:", error);
     } finally {

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveReleaseIdentity } from "../modules/release/release-identity.ts";
+import { resolveDonggriControlRoot } from "./control-root.ts";
 
 export const SERVER_DIRNAME = path.dirname(fileURLToPath(import.meta.url));
 
@@ -55,6 +56,10 @@ if (
 }
 export const RELEASE_IDENTITY = resolveReleaseIdentity(path.resolve(SERVER_DIRNAME, "..", ".."));
 export const PKG_VERSION: string = RELEASE_IDENTITY.product_version;
+export const DONGGRI_CONTROL_ROOT = resolveDonggriControlRoot({
+  envValue: process.env.DONGGRI_CONTROL_ROOT,
+  repoRoot: path.resolve(SERVER_DIRNAME, "..", ".."),
+});
 
 export const PORT = Number(process.env.PORT ?? 8790);
 export const HOST = process.env.HOST ?? "127.0.0.1";

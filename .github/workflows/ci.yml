@@ -101,6 +101,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Verify public repository readiness
+        run: |
+          pnpm run public:verify
+          pnpm run smoke:command-loop:self-test
+
       - name: Run format check
         run: pnpm run format:check
 

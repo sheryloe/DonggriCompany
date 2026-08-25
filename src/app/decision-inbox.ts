@@ -1,6 +1,7 @@
 import type { DecisionInboxRouteItem } from "../api";
 import { normalizeLanguage, pickLang, type UiLanguage } from "../i18n";
-import type { DecisionInboxItem } from "../components/chat/decision-inbox";
+import { buildDecisionInboxItems, type DecisionInboxItem } from "../components/chat/decision-inbox";
+import type { Agent, Message } from "../types";
 import {
   buildFallbackDecisionOptionAnalysis,
   type DecisionOptionAnalysis,
@@ -210,4 +211,19 @@ export function mapWorkflowDecisionItemsLocalized(
       mapWorkflowOption(option, option.label ?? localizedOptionLabel(item.kind, option.action, option.number, locale)),
     ),
   }));
+}
+
+export function mergeDecisionInboxItems(input: {
+  workflowItems: DecisionInboxRouteItem[];
+  messages: Message[];
+  agents: Agent[];
+  language?: string;
+}): DecisionInboxItem[] {
+  const workflowItems = input.language
+    ? mapWorkflowDecisionItemsLocalized(input.workflowItems, input.language)
+    : mapWorkflowDecisionItemsRaw(input.workflowItems);
+  const agentItems = buildDecisionInboxItems(input.messages, input.agents);
+  const deduped = new Map<string, DecisionInboxItem>();
+  for (const item of [...workflowItems, ...agentItems]) deduped.set(item.id, item);
+  return Array.from(deduped.values()).sort((a, b) => b.createdAt - a.createdAt);
 }

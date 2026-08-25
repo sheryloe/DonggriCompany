@@ -19,12 +19,34 @@ import { UPDATE_BANNER_DISMISS_STORAGE_KEY } from "./constants";
 import type { OAuthCallbackResult, RoomThemeMap, View } from "./types";
 import { mergeSettingsWithDefaults } from "./utils";
 
+const VALID_VIEWS: ReadonlySet<View> = new Set([
+  "office",
+  "agents",
+  "dashboard",
+  "controlPlane",
+  "projects",
+  "departments",
+  "memory",
+  "tasks",
+  "skills",
+  "modules",
+  "departmentComponents",
+  "manual",
+  "settings",
+]);
+
+function readInitialView(): View {
+  if (typeof window === "undefined") return "office";
+  const requested = new URLSearchParams(window.location.search).get("view");
+  return requested && VALID_VIEWS.has(requested as View) ? (requested as View) : "office";
+}
+
 export type AppDomainInitialRoomThemes = {
   themes: RoomThemeMap;
 };
 
 export function useAppDomainState({ initialRoomThemes }: { initialRoomThemes: AppDomainInitialRoomThemes }) {
-  const [view, setView] = useState<View>("office");
+  const [view, setView] = useState<View>(readInitialView);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -57,7 +79,7 @@ export function useAppDomainState({ initialRoomThemes }: { initialRoomThemes: Ap
     content: string;
   } | null>(null);
 
-  const viewRef = useRef<View>("office");
+  const viewRef = useRef<View>(view);
   viewRef.current = view;
   const agentsRef = useRef<Agent[]>(agents);
   agentsRef.current = agents;

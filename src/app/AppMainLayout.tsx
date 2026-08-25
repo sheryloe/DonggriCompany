@@ -27,6 +27,7 @@ import {
 } from "./office-workflow-pack";
 import { resolvePackAgentViews, resolvePackDepartmentsForDisplay } from "./office-pack-display";
 import { applyOfficePackToTaskInput, filterTasksByOfficePack, type TaskCreateInput } from "./task-workflow-pack";
+import CommandCenter from "./CommandCenter";
 
 const OfficeView = lazy(() => import("../components/OfficeView"));
 const ControlPlanePage = lazy(() => import("../components/ControlPlanePage"));
@@ -115,7 +116,7 @@ interface AppMainLayoutProps {
     assigned_agent_id?: string;
     workflow_pack_key?: WorkflowPackKey;
     workflow_meta_json?: Record<string, unknown> | string;
-  }) => Promise<void>;
+  }) => Promise<string>;
   onUpdateTask: (id: string, data: Partial<Task>) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
   onAssignTask: (taskId: string, agentId: string) => Promise<void>;
@@ -266,12 +267,54 @@ export default function AppMainLayout({
   }, [customRoomThemes, displayDepartments, generatedOfficePresentation, officePackKey, officeScopedAgents]);
 
   const tasksForActivePack = useMemo(() => filterTasksByOfficePack(tasks, officePackKey), [tasks, officePackKey]);
-  const handleCreateTaskForActivePack = useCallback(
+  const createTaskForActivePack = useCallback(
     async (input: TaskCreateInput) => {
-      await onCreateTask(applyOfficePackToTaskInput(input, officePackKey));
+      return onCreateTask(applyOfficePackToTaskInput(input, officePackKey));
     },
     [onCreateTask, officePackKey],
   );
+  const handleCreateTaskForActivePack = useCallback(
+    async (input: TaskCreateInput) => {
+      await createTaskForActivePack(input);
+    },
+    [createTaskForActivePack],
+  );
+
+  const isLegacyExperience = typeof window !== "undefined" && window.location.pathname.startsWith("/old");
+
+  if (!isLegacyExperience) {
+    return (
+      <I18nProvider language={uiLanguage}>
+        <CommandCenter
+          connected={connected}
+          tasks={tasks}
+          agents={agents}
+          stats={stats}
+          decisionInboxCount={decisionInboxCount}
+          decisionInboxLoading={decisionInboxLoading}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          onOpenDecisionInbox={onOpenDecisionInbox}
+          onCreateCommand={async ({ title, departmentId, runAfterCreate }) => {
+            const taskId = await createTaskForActivePack({
+              title,
+              department_id: departmentId,
+              task_type: "general",
+              priority: 3,
+            });
+            if (runAfterCreate) await onRunTask(taskId);
+            return taskId;
+          }}
+          onRunTask={onRunTask}
+          onStopTask={onStopTask}
+          onResumeTask={onResumeTask}
+          onOpenTerminal={onOpenTerminal}
+        >
+          {children}
+        </CommandCenter>
+      </I18nProvider>
+    );
+  }
 
   const showOperationsDashboard = view === "office" || view === "dashboard";
   const useWideContent =

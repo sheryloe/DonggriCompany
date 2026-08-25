@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import type { Express } from "express";
 import { z } from "zod";
-import { RELEASE_IDENTITY } from "../../../config/runtime.ts";
+import { DONGGRI_CONTROL_ROOT, RELEASE_IDENTITY } from "../../../config/runtime.ts";
 import {
   ControlPlaneSourceAdapter,
   type ControlPlaneActiveSpecSource,
@@ -18,10 +18,11 @@ import { MASTER95_BLOGGERGENT_LANES, MASTER95_BLOGGERGENT_ROLE_AGENTS } from "..
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import { registerControlPlaneV2RuntimeRoutes } from "./control-plane-v2-runtime.ts";
 import { createLegacyControlPlaneV1MutationGuard } from "./control-plane-v2.ts";
+import { buildControlPlaneDashboardState } from "./control-plane-dashboard.ts";
 import { createMaster95ControlTowerRuntimeLoader, registerMaster95ControlTowerRoutes } from "./control-tower.ts";
 import { registerMaster95ImageWorkbenchRoutes } from "./image-workbench.ts";
 
-const CONTROL_ROOT = "G:\\Donggri_DevDrive";
+const CONTROL_ROOT = DONGGRI_CONTROL_ROOT;
 const REPO_ESTATE_ROOT = path.join(CONTROL_ROOT, "repos");
 const RUNTIME_PROJECTION_APP = path.join(REPO_ESTATE_ROOT, "DonggriCompany");
 const CODEX_CONTROL_ROOT = path.join(CONTROL_ROOT, "storage", "codex-control");
@@ -32,6 +33,11 @@ const CONTROL_PLANE_SOURCE_ADAPTER = new ControlPlaneSourceAdapter({
 });
 const CONTROL_PLANE_FAST_TEST_MODE =
   process.env.CONTROL_PLANE_FAST_TEST_MODE === "1" || process.env.VITEST === "true" || process.env.NODE_ENV === "test";
+const CONTROL_PLANE_DASHBOARD_TTL_MS = 15_000;
+let controlPlaneDashboardCache: {
+  expires_at: number;
+  value: ReturnType<typeof buildControlPlaneDashboardState>;
+} | null = null;
 const AGENTMEMORY_URL = "http://127.0.0.1:3111";
 const AGENTMEMORY_VIEWER_URL = "http://127.0.0.1:3113";
 const AGENTMEMORY_RUNTIME_PATH = "G:\\Donggr_Runtime\\agentmemory";
@@ -5865,6 +5871,36 @@ export function registerControlPlaneRoutes(
       res.json(await buildControlPlaneState(db));
     } catch (error) {
       res.status(500).json({ ok: false, error: "control_plane_state_failed", message: safeError(error) });
+    }
+  });
+
+  app.get("/api/control-plane/dashboard", (_req, res) => {
+    try {
+      const now = Date.now();
+      if (controlPlaneDashboardCache && controlPlaneDashboardCache.expires_at > now) {
+        res.setHeader("x-dongri-dashboard-cache", "hit");
+        res.json(controlPlaneDashboardCache.value);
+        return;
+      }
+      const source = CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot();
+      const registry = buildRegistryProjects(db, source);
+      const enabledByKey = new Map(source.projects.map((project) => [project.key, project.enabled]));
+      const value = buildControlPlaneDashboardState(
+        source,
+        registry.projects.map((project) => ({
+          ...project,
+          enabled: enabledByKey.get(project.key) ?? true,
+        })),
+        {
+          data_mode: process.env.E2E_ISOLATED_RUNTIME === "1" ? "isolated" : "local",
+          refresh_interval_ms: CONTROL_PLANE_DASHBOARD_TTL_MS,
+        },
+      );
+      controlPlaneDashboardCache = { value, expires_at: now + CONTROL_PLANE_DASHBOARD_TTL_MS };
+      res.setHeader("x-dongri-dashboard-cache", "miss");
+      res.json(value);
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "control_plane_dashboard_failed", message: safeError(error) });
     }
   });
 

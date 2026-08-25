@@ -1,67 +1,47 @@
-# Contributing to Claw-Empire
+# Contributing to Dongri-grigri
 
-Thanks for contributing.
+Thank you for helping improve Dongri-grigri.
 
-## Branch Model
+## Branch and pull request model
 
-- `main`: release/stable branch (maintainers only, protected)
-- `dev`: integration branch for day-to-day PRs (protected)
-- `feature/*`, `fix/*`, `docs/*`, `chore/*`: working branches from contributors/forks
-- `hotfix/*`: emergency production fixes (maintainers), merged to `main` first, then back-merged to `dev`
-
-## PR Target Rules
-
-- External contributors: open PRs to `dev`
-- Maintainer normal work: open PRs to `dev`
-- Maintainer emergency hotfix: PR to `main` allowed only for production incidents
-- After any hotfix to `main`, back-merge `main -> dev` immediately
-
-## Review and Merge Rules
-
-- Use PR-only merges for both `main` and `dev` (no direct pushes)
-- Require at least 1 approval before merge
-- Require CI checks to pass before merge
-- Prefer `Squash and merge` for a clean history
-
-## Release Flow
-
-1. Feature/fix PRs merge into `dev`
-2. When stable, open release PR `dev -> main`
-3. After merge to `main`, tag/release as needed
-4. Keep `dev` synced with any direct hotfix merged to `main`
-
-## Suggested GitHub Branch Protection
-
-Configure both `main` and `dev`:
-
-- `Require a pull request before merging`
-- `Require approvals` (recommended: 1+)
-- `Require status checks to pass before merging`
-- `Restrict direct pushes`
-
-## Quick Commands
-
-Create a working branch:
+- `main` is the only long-lived branch.
+- Create a short-lived branch in your fork from the latest `main`.
+- Open every contribution as a pull request targeting `main`.
+- Do not include runtime databases, logs, screenshots, generated `dist`, coverage, backups, or secrets.
+- Prefer a focused change with tests and an explicit verification note.
 
 ```bash
-git checkout dev
-git pull origin dev
-git checkout -b feature/my-change
+git switch main
+git pull --ff-only origin main
+git switch -c feature/short-description
+git push -u origin feature/short-description
+gh pr create --base main --fill
 ```
 
-Push and open PR to `dev`:
+## Local checks
+
+Run the checks proportional to your change. UI and API contract changes should run the complete set.
 
 ```bash
-git push origin feature/my-change
-gh pr create --base dev --fill
+corepack pnpm install --frozen-lockfile
+corepack pnpm run public:verify
+corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false
+corepack pnpm run test:web
+corepack pnpm run test:api
+corepack pnpm run openapi:check
+corepack pnpm run build
 ```
 
-Hotfix back-merge (`main -> dev`):
+Docker is not required for this contribution path. Runtime, browser, Soak, Pilot, deployment, and migration evidence are separate maintainer-controlled gates.
 
-```bash
-git checkout dev
-git pull origin dev
-git merge origin/main
-git push origin dev
-```
+## Product rules
 
+- Keep the visible brand `Dongri-grigri` and user-facing copy Korean-first.
+- Treat root Control Plane documents as the source of truth; do not introduce a second registry.
+- Use real task, project, agent, approval, evidence, or runtime records. Do not fabricate operational activity.
+- Preserve `/old` as a compatibility route unless a separately reviewed migration removes it.
+- Keep keyboard, mobile, light/dark theme, 200% reflow, and reduced-motion behavior intact.
+
+## Review expectations
+
+At least one maintainer approval and passing required checks are expected before merge. Security-sensitive, destructive, deployment, or schema-changing work needs an explicit maintainer-owned scope and evidence plan.

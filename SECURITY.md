@@ -1,36 +1,30 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-Security fixes are primarily applied to the latest stable line.
+Dongri-grigri is currently a public Alpha. Security fixes are applied to the latest `1.0.0-alpha.x` source on `main`; no stable production line is claimed yet.
 
-| Version | Supported |
-| --- | --- |
-| 2.0.x | Yes |
-| < 2.0.0 | No |
+| Version                | Security fixes |
+| ---------------------- | -------------- |
+| latest `1.0.0-alpha.x` | Yes            |
+| older snapshots        | No             |
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-Please do not open public GitHub issues for security vulnerabilities.
+Do not open a public issue with exploit details. Use [GitHub Private Vulnerability Reporting](https://github.com/sheryloe/DonggriCompany/security/advisories/new).
 
-Use GitHub Private Vulnerability Reporting for this fork:
+If private reporting is unavailable, open a minimal issue without technical details and request a private maintainer channel.
 
-- https://github.com/sheryloe/DonggriCompany/security/advisories/new
-
-If private reporting is unavailable in your environment, open a minimal issue without exploit details and ask a maintainer for a private channel.
-
-## Response Expectations
+## Response targets
 
 - Initial triage target: within 72 hours
-- Follow-up status updates: provided during investigation
-- Fix publication: coordinated with impact and patch readiness
+- Follow-up: during active investigation
+- Publication: coordinated with impact, patch readiness, and disclosure safety
+
+These are response targets, not a service-level agreement.
 
 ## Scope
 
-Typical in-scope areas include:
+In-scope areas include authentication and sessions, OAuth/token handling, webhook secret validation, command execution boundaries, Control Plane mutation authorization, worktree operations, update flows, and secret exposure through logs or configuration.
 
-- Auth/session boundaries
-- OAuth token handling and encryption flows
-- `/api/inbox` secret validation and webhook handling
-- Command execution paths, worktree operations, and update flows
-- Secrets handling in logs/configuration
+The default Command Center dashboard endpoint is read-only and must expose only compact source-bound summaries—never secrets, raw configuration, transcripts, or mutation capability.

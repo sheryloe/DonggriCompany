@@ -4,6 +4,15 @@ import type { ControlPlaneDashboardState } from "../../api/control-plane-dashboa
 import type { Task } from "../../types";
 import CommandCenterViews from "./CommandCenterViews";
 
+vi.mock("../../api/continuity", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/continuity")>();
+  return {
+    ...actual,
+    getTaskContinuityCheckpoints: vi.fn().mockResolvedValue([]),
+    getCliAccountPools: vi.fn().mockResolvedValue([]),
+  };
+});
+
 const dashboard: ControlPlaneDashboardState = {
   ok: true,
   generated_at: "2026-08-14T00:00:00.000Z",
@@ -33,6 +42,7 @@ const dashboard: ControlPlaneDashboardState = {
   projects: [
     {
       key: "DonggriCompany",
+      path: "G:\\Donggri_DevDrive\\repos\\DonggriCompany",
       summary: "runtime",
       lifecycle_status: "active",
       enabled: true,
@@ -63,6 +73,7 @@ function renderView(view: "today" | "projects" | "tasks" | "agents" | "system", 
   render(
     <CommandCenterViews
       connected
+      connectionState="connected"
       view={view}
       selectedId={selectedId}
       tasks={[task]}
@@ -96,12 +107,13 @@ describe("CommandCenterViews", () => {
     renderView(view);
     expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
   });
-  it("renders project and task detail without leaving the shell", () => {
+  it("renders project and task detail without leaving the shell", async () => {
     renderView("projects", "DonggriCompany");
     expect(screen.getByRole("complementary", { name: "DonggriCompany 상세" })).toBeInTheDocument();
     cleanup();
     renderView("tasks", "task-1");
     expect(screen.getByRole("complementary", { name: "공개 후보 검토 상세" })).toBeInTheDocument();
+    expect(await screen.findByText("프로젝트 경로를 확인하세요.")).toBeInTheDocument();
   });
   it("selects the DonggriCompany active spec instead of the first global spec", () => {
     renderView("today");

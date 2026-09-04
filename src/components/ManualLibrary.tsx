@@ -17,11 +17,11 @@ const manualSections: ManualSection[] = [
     title: "빠른 시작",
     summary: "로컬 서버 실행, 상태 확인, 첫 화면 진입까지 가장 짧은 운영 경로입니다.",
     steps: [
-      "Control root는 G:\\Donggri_DevDrive, repo estate root는 G:\\Donggri_DevDrive\\repos입니다.",
+      "Control root가 따로 있으면 DONGGRI_CONTROL_ROOT에 절대경로를 지정하고, 없으면 저장소 로컬 저하 모드로 시작합니다.",
       "서버는 API 8790, Web 8800을 기본으로 사용합니다.",
       "첫 화면은 Dongri-grigri 운영실이며 Control Plane은 운영실 내부 상태로 표시됩니다.",
     ],
-    example: "corepack pnpm run dev:local\nInvoke-RestMethod http://127.0.0.1:8790/api/health",
+    example: "corepack pnpm run dev:local\ncurl.exe http://127.0.0.1:8790/api/health",
     tags: ["서버", "시작", "운영실"],
   },
   {

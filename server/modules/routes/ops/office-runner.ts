@@ -1,33 +1,21 @@
-import { randomUUID } from "node:crypto";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import {
   OAuthGateError,
   ensureRunnerBodyProviderAndPool,
   isExecutionProvider,
 } from "../../services/oauth-gate-service.ts";
-import { OfficeRunnerOrchestrator, type ActivateRunnerRequestPayload } from "../../services/runner-orchestrator.ts";
+import { OfficeRunnerOrchestrator, RUNNER_SUPERVISOR_UNBOUND } from "../../services/runner-orchestrator.ts";
+import type { RunnerSupervisor } from "../../services/runner-supervisor.ts";
 import { CliAccountGateError, CliAccountGateService } from "../../services/cli-account-gate-service.ts";
 
-type CliRunRow = {
-  id: string;
-  provider: string;
-  account_pool_id: string;
-  runner_key: string;
-  prompt: string | null;
-  project_path: string | null;
-  status: "queued" | "running" | "done" | "failed" | "canceled";
-  queue_item_id: string | null;
-  started_at: number | null;
-  ended_at: number | null;
-  error_message: string | null;
-  created_at: number;
-  updated_at: number;
+export type OfficeRunnerRouteOptions = {
+  supervisor?: RunnerSupervisor;
 };
 
-export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
+export function registerOfficeRunnerRoutes(ctx: RuntimeContext, options: OfficeRunnerRouteOptions = {}): void {
   const { app, db, nowMs, broadcast } = ctx;
   const cliAccountGateService = new CliAccountGateService({ db, nowMs });
-  const runnerOrchestrator = new OfficeRunnerOrchestrator({ db, nowMs, broadcast });
+  const runnerOrchestrator = new OfficeRunnerOrchestrator({ db, nowMs, broadcast, supervisor: options.supervisor });
   const getResponseLang = () => resolveRunnerApiLanguage(db);
 
   const pruneInterval = Math.min(Math.max(runnerOrchestrator.getConfig().idleTtlMs, 60_000), 300_000);
@@ -48,6 +36,7 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
       maxActive: runnerOrchestrator.getConfig().maxActive,
       idleTtlMs: runnerOrchestrator.getConfig().idleTtlMs,
       dockerEnabled: runnerOrchestrator.getConfig().dockerEnabled,
+      readiness: runnerOrchestrator.getReadiness(),
       runners: runnerOrchestrator.listRunners(),
     });
   });
@@ -172,14 +161,14 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
     }
   });
 
-  app.post("/api/office/runners/activate", (req, res) => {
+  app.post("/api/office/runners/activate", async (req, res) => {
     try {
       const { provider, accountPoolId } = ensureRunnerBodyProviderAndPool(req.body);
       if (!isExecutionProvider(provider)) {
         return res.status(400).json({ error: "unsupported_provider", provider });
       }
       cliAccountGateService.ensureProviderPoolReady(provider, accountPoolId);
-      const result = runnerOrchestrator.requestRunner(provider, accountPoolId, { kind: "activate" });
+      const result = await runnerOrchestrator.requestRunner(provider, accountPoolId, { kind: "activate" });
       res.json({
         ok: true,
         status: result.status,
@@ -191,13 +180,13 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
     }
   });
 
-  app.post("/api/office/runners/deactivate", (req, res) => {
+  app.post("/api/office/runners/deactivate", async (req, res) => {
     try {
       const { provider, accountPoolId } = ensureRunnerBodyProviderAndPool(req.body);
       if (!isExecutionProvider(provider)) {
         return res.status(400).json({ error: "unsupported_provider", provider });
       }
-      const runner = runnerOrchestrator.deactivateRunner(provider, accountPoolId);
+      const runner = await runnerOrchestrator.deactivateRunner(provider, accountPoolId);
       if (!runner) {
         const lang = getResponseLang();
         return res.status(404).json({
@@ -219,34 +208,14 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
         return res.status(400).json({ error: "unsupported_provider", provider });
       }
       cliAccountGateService.ensureProviderPoolReady(provider, accountPoolId);
-
-      const prompt = typeof payload.prompt === "string" ? payload.prompt.trim() : "";
-      const projectPath = typeof payload.projectPath === "string" ? payload.projectPath.trim() : "";
-      const now = nowMs();
-      const runId = randomUUID();
-      const runnerKey = `${provider}:${accountPoolId}`;
-      db.prepare(
-        `INSERT INTO office_cli_runs (
-            id, provider, account_pool_id, runner_key, prompt, project_path,
-            status, queue_item_id, started_at, ended_at, error_message, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, NULL, ?, ?)`,
-      ).run(runId, provider, accountPoolId, runnerKey, prompt || null, projectPath || null, now, now);
-
-      const runnerRequest: ActivateRunnerRequestPayload = {
+      const runId = typeof payload.runId === "string" ? payload.runId : "";
+      const dispatchId = typeof payload.dispatchId === "string" ? payload.dispatchId : undefined;
+      const result = await runnerOrchestrator.requestRunner(provider, accountPoolId, {
         kind: "cli_run",
         runId,
-        payload: { prompt, projectPath },
-      };
-      const result = runnerOrchestrator.requestRunner(provider, accountPoolId, runnerRequest);
-      if (result.queueItem?.id) {
-        db.prepare("UPDATE office_cli_runs SET queue_item_id = ?, updated_at = ? WHERE id = ?").run(
-          result.queueItem.id,
-          nowMs(),
-          runId,
-        );
-      }
-      const run = getCliRunById(db, runId);
-      res.json({ ok: true, status: result.status, run, runner: result.runner, queueItem: result.queueItem });
+        dispatchId,
+      });
+      res.json({ ok: true, status: result.status, runner: result.runner, queueItem: result.queueItem });
     } catch (error) {
       handleRunnerRouteError(res, error, getResponseLang());
     }
@@ -262,25 +231,15 @@ export function registerOfficeRunnerRoutes(ctx: RuntimeContext): void {
       cliAccountGateService.ensureProviderPoolReady(provider, accountPoolId);
       const result = runnerOrchestrator.requestRunner(provider, accountPoolId, {
         kind: "probe_run",
-        payload,
+        runId: typeof payload.runId === "string" ? payload.runId : "",
+        dispatchId: typeof payload.dispatchId === "string" ? payload.dispatchId : undefined,
       });
-      res.json({ ok: true, status: result.status, runner: result.runner, queueItem: result.queueItem });
+      const resolved = await result;
+      res.json({ ok: true, status: resolved.status, runner: resolved.runner, queueItem: resolved.queueItem });
     } catch (error) {
       handleRunnerRouteError(res, error, getResponseLang());
     }
   });
-}
-
-function getCliRunById(db: Pick<RuntimeContext["db"], "prepare">, runId: string): CliRunRow | null {
-  const row = db
-    .prepare(
-      `SELECT id, provider, account_pool_id, runner_key, prompt, project_path,
-              status, queue_item_id, started_at, ended_at, error_message, created_at, updated_at
-       FROM office_cli_runs
-       WHERE id = ?`,
-    )
-    .get(runId) as CliRunRow | undefined;
-  return row ?? null;
 }
 
 function handleRunnerRouteError(
@@ -324,6 +283,43 @@ function handleRunnerRouteError(
     });
     return;
   }
+  if (message === RUNNER_SUPERVISOR_UNBOUND) {
+    res.status(503).json({
+      error: RUNNER_SUPERVISOR_UNBOUND,
+      message: localizeRunnerApiMessage(RUNNER_SUPERVISOR_UNBOUND, message, lang),
+      retryable: false,
+    });
+    return;
+  }
+  if (
+    message === "runner_supervisor_shutting_down" ||
+    message === "runner_supervisor_boot_reconcile_failed" ||
+    message === "runner_supervisor_child_state_uncertain"
+  ) {
+    res.status(503).json({
+      error: message,
+      message: localizeRunnerApiMessage(message, message, lang),
+      retryable: false,
+    });
+    return;
+  }
+  if (message === "continuity_run_id_required") {
+    res.status(400).json({ error: message, message: localizeRunnerApiMessage(message, message, lang) });
+    return;
+  }
+  if (message === "continuity_run_missing") {
+    res.status(404).json({ error: message, message: localizeRunnerApiMessage(message, message, lang) });
+    return;
+  }
+  if (
+    message === "continuity_run_dispatch_mismatch" ||
+    message === "continuity_run_runner_identity_mismatch" ||
+    message === "runner_start_ownership_uncertain" ||
+    message.startsWith("runner_run_not_startable:")
+  ) {
+    res.status(409).json({ error: message, message: localizeRunnerApiMessage(message, message, lang) });
+    return;
+  }
   res
     .status(500)
     .json({ error: "runner_route_failed", message: localizeRunnerApiMessage("runner_route_failed", message, lang) });
@@ -357,6 +353,15 @@ function localizeRunnerApiMessage(code: string, fallback: string, lang: "ko" | "
   if (code === "account_pool_required") return "계정풀이 필요합니다.";
   if (code === "unsupported_provider") return "지원하지 않는 provider입니다.";
   if (code === "runner_not_found") return "요청한 러너를 찾을 수 없습니다.";
+  if (code === RUNNER_SUPERVISOR_UNBOUND) return "Runner Supervisor가 연결되지 않아 CLI 실행이 비활성화되어 있습니다.";
+  if (code === "runner_supervisor_shutting_down")
+    return "Runner Supervisor가 종료 중이라 새 실행을 시작할 수 없습니다.";
+  if (code === "runner_supervisor_boot_reconcile_failed")
+    return "Runner Supervisor 시작 상태 복구가 실패하여 실행이 차단되었습니다.";
+  if (code === "runner_supervisor_child_state_uncertain")
+    return "Runner 자식 프로세스 상태가 불확실하여 새 실행이 차단되었습니다.";
+  if (code === "continuity_run_id_required") return "사전 예약된 연속 실행 ID가 필요합니다.";
+  if (code === "continuity_run_missing") return "사전 예약된 연속 실행을 찾을 수 없습니다.";
   if (code === "runner_route_failed") return "러너 처리 중 오류가 발생했습니다.";
   return fallback;
 }

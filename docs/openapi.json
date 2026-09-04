@@ -46,6 +46,9 @@
     },
     {
       "name": "control-plane"
+    },
+    {
+      "name": "continuity"
     }
   ],
   "components": {
@@ -169,6 +172,785 @@
         },
         "required": ["id", "name"],
         "additionalProperties": true
+      },
+      "ContinuityProvider": {
+        "type": "string",
+        "enum": ["codex", "claude"]
+      },
+      "ContinuityStatus": {
+        "type": "string",
+        "enum": [
+          "ready_for_transfer",
+          "target_validating",
+          "approval_required",
+          "accepted",
+          "resuming",
+          "running",
+          "completed",
+          "checkpoint_conflict",
+          "provider_unavailable",
+          "auth_required",
+          "dispatch_uncertain",
+          "stale",
+          "failed",
+          "canceled"
+        ]
+      },
+      "ContinuityCheckpoint": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [1]
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "previous_checkpoint_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "task_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_run_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_provider": {
+            "type": "string",
+            "enum": ["codex", "claude"]
+          },
+          "source_account_pool_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_account_label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_provider": {
+            "type": "string",
+            "enum": ["codex", "claude"]
+          },
+          "target_account_pool_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_account_label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_run_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "provider_native_session_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "dispatch_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready_for_transfer",
+              "target_validating",
+              "approval_required",
+              "accepted",
+              "resuming",
+              "running",
+              "completed",
+              "checkpoint_conflict",
+              "provider_unavailable",
+              "auth_required",
+              "dispatch_uncertain",
+              "stale",
+              "failed",
+              "canceled"
+            ]
+          },
+          "objective": {
+            "type": "string",
+            "minLength": 1
+          },
+          "acceptance_criteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "completed": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "pending": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "next_safe_action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "workspace": {
+            "type": "object",
+            "properties": {
+              "canonical_project_path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "git_root": {
+                "type": "string",
+                "minLength": 1
+              },
+              "branch": {
+                "type": "string",
+                "nullable": true
+              },
+              "head": {
+                "type": "string",
+                "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+              },
+              "dirty": {
+                "type": "boolean"
+              },
+              "changed_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "workspace_digest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "captured_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "canonical_project_path",
+              "git_root",
+              "branch",
+              "head",
+              "dirty",
+              "changed_paths",
+              "workspace_digest",
+              "captured_at"
+            ],
+            "additionalProperties": false
+          },
+          "verification": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["passed", "failed", "skipped", "unavailable"]
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["command", "status", "summary"],
+              "additionalProperties": false
+            }
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "approval_ref": {
+            "type": "string",
+            "nullable": true
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "created_by": {
+            "type": "string",
+            "minLength": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "schema_version",
+          "checkpoint_id",
+          "previous_checkpoint_id",
+          "sequence",
+          "project_id",
+          "task_id",
+          "source_run_id",
+          "source_provider",
+          "target_provider",
+          "status",
+          "objective",
+          "acceptance_criteria",
+          "completed",
+          "pending",
+          "blockers",
+          "next_safe_action",
+          "workspace",
+          "verification",
+          "evidence_refs",
+          "approval_ref",
+          "idempotency_key",
+          "created_by",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "ContinuityMutationResult": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["created", "replay", "idempotency_conflict"]
+          },
+          "checkpoint": {
+            "type": "object",
+            "properties": {
+              "schema_version": {
+                "type": "integer",
+                "enum": [1]
+              },
+              "checkpoint_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "previous_checkpoint_id": {
+                "type": "string",
+                "nullable": true
+              },
+              "sequence": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_run_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_provider": {
+                "type": "string",
+                "enum": ["codex", "claude"]
+              },
+              "source_account_pool_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_account_label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target_provider": {
+                "type": "string",
+                "enum": ["codex", "claude"]
+              },
+              "target_account_pool_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target_account_label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target_run_id": {
+                "type": "string",
+                "nullable": true
+              },
+              "provider_native_session_id": {
+                "type": "string",
+                "nullable": true
+              },
+              "dispatch_id": {
+                "type": "string",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ready_for_transfer",
+                  "target_validating",
+                  "approval_required",
+                  "accepted",
+                  "resuming",
+                  "running",
+                  "completed",
+                  "checkpoint_conflict",
+                  "provider_unavailable",
+                  "auth_required",
+                  "dispatch_uncertain",
+                  "stale",
+                  "failed",
+                  "canceled"
+                ]
+              },
+              "objective": {
+                "type": "string",
+                "minLength": 1
+              },
+              "acceptance_criteria": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "completed": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "pending": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "blockers": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "next_safe_action": {
+                "type": "string",
+                "minLength": 1
+              },
+              "workspace": {
+                "type": "object",
+                "properties": {
+                  "canonical_project_path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "git_root": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "branch": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "head": {
+                    "type": "string",
+                    "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                  },
+                  "dirty": {
+                    "type": "boolean"
+                  },
+                  "changed_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "workspace_digest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "captured_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "canonical_project_path",
+                  "git_root",
+                  "branch",
+                  "head",
+                  "dirty",
+                  "changed_paths",
+                  "workspace_digest",
+                  "captured_at"
+                ],
+                "additionalProperties": false
+              },
+              "verification": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["passed", "failed", "skipped", "unavailable"]
+                    },
+                    "summary": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["command", "status", "summary"],
+                  "additionalProperties": false
+                }
+              },
+              "evidence_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "approval_ref": {
+                "type": "string",
+                "nullable": true
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "created_by": {
+                "type": "string",
+                "minLength": 1
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "schema_version",
+              "checkpoint_id",
+              "previous_checkpoint_id",
+              "sequence",
+              "project_id",
+              "task_id",
+              "source_run_id",
+              "source_provider",
+              "target_provider",
+              "status",
+              "objective",
+              "acceptance_criteria",
+              "completed",
+              "pending",
+              "blockers",
+              "next_safe_action",
+              "workspace",
+              "verification",
+              "evidence_refs",
+              "approval_ref",
+              "idempotency_key",
+              "created_by",
+              "created_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": ["status"],
+        "additionalProperties": false
+      },
+      "ContinuityCheckpointList": {
+        "type": "object",
+        "properties": {
+          "checkpoints": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "schema_version": {
+                  "type": "integer",
+                  "enum": [1]
+                },
+                "checkpoint_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "previous_checkpoint_id": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "sequence": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "project_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "task_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_run_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_provider": {
+                  "type": "string",
+                  "enum": ["codex", "claude"]
+                },
+                "source_account_pool_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_account_label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target_provider": {
+                  "type": "string",
+                  "enum": ["codex", "claude"]
+                },
+                "target_account_pool_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target_account_label": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target_run_id": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "provider_native_session_id": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "dispatch_id": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready_for_transfer",
+                    "target_validating",
+                    "approval_required",
+                    "accepted",
+                    "resuming",
+                    "running",
+                    "completed",
+                    "checkpoint_conflict",
+                    "provider_unavailable",
+                    "auth_required",
+                    "dispatch_uncertain",
+                    "stale",
+                    "failed",
+                    "canceled"
+                  ]
+                },
+                "objective": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "acceptance_criteria": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "completed": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "pending": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "blockers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "next_safe_action": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "workspace": {
+                  "type": "object",
+                  "properties": {
+                    "canonical_project_path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "git_root": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "head": {
+                      "type": "string",
+                      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                    },
+                    "dirty": {
+                      "type": "boolean"
+                    },
+                    "changed_paths": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "workspace_digest": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "captured_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "canonical_project_path",
+                    "git_root",
+                    "branch",
+                    "head",
+                    "dirty",
+                    "changed_paths",
+                    "workspace_digest",
+                    "captured_at"
+                  ],
+                  "additionalProperties": false
+                },
+                "verification": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["passed", "failed", "skipped", "unavailable"]
+                      },
+                      "summary": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": ["command", "status", "summary"],
+                    "additionalProperties": false
+                  }
+                },
+                "evidence_refs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "approval_ref": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "idempotency_key": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "created_by": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "schema_version",
+                "checkpoint_id",
+                "previous_checkpoint_id",
+                "sequence",
+                "project_id",
+                "task_id",
+                "source_run_id",
+                "source_provider",
+                "target_provider",
+                "status",
+                "objective",
+                "acceptance_criteria",
+                "completed",
+                "pending",
+                "blockers",
+                "next_safe_action",
+                "workspace",
+                "verification",
+                "evidence_refs",
+                "approval_ref",
+                "idempotency_key",
+                "created_by",
+                "created_at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["checkpoints"],
+        "additionalProperties": false
       },
       "StrategicMaintenanceSettings": {
         "type": "object",
@@ -4250,6 +5032,3529 @@
         }
       }
     },
+    "/api/continuity/checkpoints/recent": {
+      "get": {
+        "tags": ["continuity"],
+        "summary": "List recent continuity checkpoints",
+        "description": "Returns recent sanitized Codex/Claude continuity checkpoint rows. Checkpoints contain task/run identity, workspace evidence, status, and blockers; raw prompts, credentials, tokens, and complete transcripts are forbidden by the checkpoint contract.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent checkpoint rows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checkpoints": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "schema_version": {
+                            "type": "integer",
+                            "enum": [1]
+                          },
+                          "checkpoint_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "previous_checkpoint_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sequence": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "project_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "task_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source_run_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source_provider": {
+                            "type": "string",
+                            "enum": ["codex", "claude"]
+                          },
+                          "source_account_pool_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source_account_label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "target_provider": {
+                            "type": "string",
+                            "enum": ["codex", "claude"]
+                          },
+                          "target_account_pool_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "target_account_label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "target_run_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "provider_native_session_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "dispatch_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ready_for_transfer",
+                              "target_validating",
+                              "approval_required",
+                              "accepted",
+                              "resuming",
+                              "running",
+                              "completed",
+                              "checkpoint_conflict",
+                              "provider_unavailable",
+                              "auth_required",
+                              "dispatch_uncertain",
+                              "stale",
+                              "failed",
+                              "canceled"
+                            ]
+                          },
+                          "objective": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "acceptance_criteria": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "completed": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "pending": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "blockers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "next_safe_action": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "workspace": {
+                            "type": "object",
+                            "properties": {
+                              "canonical_project_path": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "git_root": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "branch": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "head": {
+                                "type": "string",
+                                "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                              },
+                              "dirty": {
+                                "type": "boolean"
+                              },
+                              "changed_paths": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "workspace_digest": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "captured_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "canonical_project_path",
+                              "git_root",
+                              "branch",
+                              "head",
+                              "dirty",
+                              "changed_paths",
+                              "workspace_digest",
+                              "captured_at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "verification": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "command": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": ["passed", "failed", "skipped", "unavailable"]
+                                },
+                                "summary": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": ["command", "status", "summary"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "evidence_refs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "approval_ref": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "idempotency_key": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "created_by": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "schema_version",
+                          "checkpoint_id",
+                          "previous_checkpoint_id",
+                          "sequence",
+                          "project_id",
+                          "task_id",
+                          "source_run_id",
+                          "source_provider",
+                          "target_provider",
+                          "status",
+                          "objective",
+                          "acceptance_criteria",
+                          "completed",
+                          "pending",
+                          "blockers",
+                          "next_safe_action",
+                          "workspace",
+                          "verification",
+                          "evidence_refs",
+                          "approval_ref",
+                          "idempotency_key",
+                          "created_by",
+                          "created_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["checkpoints"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "checkpoints": []
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/continuity/tasks/{taskId}/checkpoints": {
+      "get": {
+        "tags": ["continuity"],
+        "summary": "List the continuity checkpoint chain for a task",
+        "description": "Returns the persisted checkpoint chain for one task in sequence order.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task checkpoint chain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checkpoints": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "schema_version": {
+                            "type": "integer",
+                            "enum": [1]
+                          },
+                          "checkpoint_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "previous_checkpoint_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sequence": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "project_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "task_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source_run_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source_provider": {
+                            "type": "string",
+                            "enum": ["codex", "claude"]
+                          },
+                          "source_account_pool_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source_account_label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "target_provider": {
+                            "type": "string",
+                            "enum": ["codex", "claude"]
+                          },
+                          "target_account_pool_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "target_account_label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "target_run_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "provider_native_session_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "dispatch_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ready_for_transfer",
+                              "target_validating",
+                              "approval_required",
+                              "accepted",
+                              "resuming",
+                              "running",
+                              "completed",
+                              "checkpoint_conflict",
+                              "provider_unavailable",
+                              "auth_required",
+                              "dispatch_uncertain",
+                              "stale",
+                              "failed",
+                              "canceled"
+                            ]
+                          },
+                          "objective": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "acceptance_criteria": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "completed": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "pending": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "blockers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "next_safe_action": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "workspace": {
+                            "type": "object",
+                            "properties": {
+                              "canonical_project_path": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "git_root": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "branch": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "head": {
+                                "type": "string",
+                                "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                              },
+                              "dirty": {
+                                "type": "boolean"
+                              },
+                              "changed_paths": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "workspace_digest": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "captured_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "canonical_project_path",
+                              "git_root",
+                              "branch",
+                              "head",
+                              "dirty",
+                              "changed_paths",
+                              "workspace_digest",
+                              "captured_at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "verification": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "command": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": ["passed", "failed", "skipped", "unavailable"]
+                                },
+                                "summary": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": ["command", "status", "summary"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "evidence_refs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "approval_ref": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "idempotency_key": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "created_by": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "schema_version",
+                          "checkpoint_id",
+                          "previous_checkpoint_id",
+                          "sequence",
+                          "project_id",
+                          "task_id",
+                          "source_run_id",
+                          "source_provider",
+                          "target_provider",
+                          "status",
+                          "objective",
+                          "acceptance_criteria",
+                          "completed",
+                          "pending",
+                          "blockers",
+                          "next_safe_action",
+                          "workspace",
+                          "verification",
+                          "evidence_refs",
+                          "approval_ref",
+                          "idempotency_key",
+                          "created_by",
+                          "created_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["checkpoints"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "checkpoints": []
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/continuity/checkpoints": {
+      "post": {
+        "tags": ["continuity"],
+        "summary": "Create a continuity checkpoint",
+        "description": "Creates a sanitized ready_for_transfer checkpoint for an actual task/source run and explicit source/target account pools. This records local continuity state only and does not execute Codex, Claude, Docker, or a Supervisor.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "project_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "project_path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "task_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "source_run_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "source_provider": {
+                    "type": "string",
+                    "enum": ["codex", "claude"]
+                  },
+                  "source_account_pool_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "source_account_label": {
+                    "type": "string"
+                  },
+                  "target_provider": {
+                    "type": "string",
+                    "enum": ["codex", "claude"]
+                  },
+                  "target_account_pool_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "target_account_label": {
+                    "type": "string"
+                  },
+                  "objective": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "acceptance_criteria": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "completed": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "pending": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "blockers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "next_safe_action": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "created_by": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "project_id",
+                  "project_path",
+                  "task_id",
+                  "source_run_id",
+                  "source_provider",
+                  "source_account_pool_id",
+                  "target_provider",
+                  "target_account_pool_id",
+                  "objective",
+                  "acceptance_criteria",
+                  "completed",
+                  "pending",
+                  "next_safe_action",
+                  "created_by",
+                  "idempotency_key"
+                ],
+                "additionalProperties": true
+              },
+              "example": {
+                "project_id": "DonggriCompany",
+                "project_path": "G:\\Donggri_DevDrive\\repos\\DonggriCompany",
+                "task_id": "task:real-id",
+                "source_run_id": "run:real-source-id",
+                "source_provider": "codex",
+                "source_account_pool_id": "pool:codex-primary",
+                "target_provider": "claude",
+                "target_account_pool_id": "pool:claude-primary",
+                "objective": "Continue the approved task from its latest checkpoint",
+                "acceptance_criteria": ["Preserve workspace identity"],
+                "completed": [],
+                "pending": ["Run local verification"],
+                "next_safe_action": "Validate workspace and target readiness",
+                "created_by": "user",
+                "idempotency_key": "continuity-create-unique-request-id"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["created", "replay", "idempotency_conflict"]
+                    },
+                    "checkpoint": {
+                      "type": "object",
+                      "properties": {
+                        "schema_version": {
+                          "type": "integer",
+                          "enum": [1]
+                        },
+                        "checkpoint_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "previous_checkpoint_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sequence": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "project_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "task_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_run_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "source_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "target_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_run_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "provider_native_session_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dispatch_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ready_for_transfer",
+                            "target_validating",
+                            "approval_required",
+                            "accepted",
+                            "resuming",
+                            "running",
+                            "completed",
+                            "checkpoint_conflict",
+                            "provider_unavailable",
+                            "auth_required",
+                            "dispatch_uncertain",
+                            "stale",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "objective": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "acceptance_criteria": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "completed": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "blockers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "next_safe_action": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "workspace": {
+                          "type": "object",
+                          "properties": {
+                            "canonical_project_path": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "git_root": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "branch": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "head": {
+                              "type": "string",
+                              "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                            },
+                            "dirty": {
+                              "type": "boolean"
+                            },
+                            "changed_paths": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "workspace_digest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "captured_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "canonical_project_path",
+                            "git_root",
+                            "branch",
+                            "head",
+                            "dirty",
+                            "changed_paths",
+                            "workspace_digest",
+                            "captured_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "verification": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": ["passed", "failed", "skipped", "unavailable"]
+                              },
+                              "summary": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["command", "status", "summary"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "evidence_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "approval_ref": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "idempotency_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_by": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "checkpoint_id",
+                        "previous_checkpoint_id",
+                        "sequence",
+                        "project_id",
+                        "task_id",
+                        "source_run_id",
+                        "source_provider",
+                        "target_provider",
+                        "status",
+                        "objective",
+                        "acceptance_criteria",
+                        "completed",
+                        "pending",
+                        "blockers",
+                        "next_safe_action",
+                        "workspace",
+                        "verification",
+                        "evidence_refs",
+                        "approval_ref",
+                        "idempotency_key",
+                        "created_by",
+                        "created_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "status": "created"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Checkpoint created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["created", "replay", "idempotency_conflict"]
+                    },
+                    "checkpoint": {
+                      "type": "object",
+                      "properties": {
+                        "schema_version": {
+                          "type": "integer",
+                          "enum": [1]
+                        },
+                        "checkpoint_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "previous_checkpoint_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sequence": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "project_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "task_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_run_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "source_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "target_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_run_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "provider_native_session_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dispatch_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ready_for_transfer",
+                            "target_validating",
+                            "approval_required",
+                            "accepted",
+                            "resuming",
+                            "running",
+                            "completed",
+                            "checkpoint_conflict",
+                            "provider_unavailable",
+                            "auth_required",
+                            "dispatch_uncertain",
+                            "stale",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "objective": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "acceptance_criteria": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "completed": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "blockers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "next_safe_action": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "workspace": {
+                          "type": "object",
+                          "properties": {
+                            "canonical_project_path": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "git_root": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "branch": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "head": {
+                              "type": "string",
+                              "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                            },
+                            "dirty": {
+                              "type": "boolean"
+                            },
+                            "changed_paths": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "workspace_digest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "captured_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "canonical_project_path",
+                            "git_root",
+                            "branch",
+                            "head",
+                            "dirty",
+                            "changed_paths",
+                            "workspace_digest",
+                            "captured_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "verification": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": ["passed", "failed", "skipped", "unavailable"]
+                              },
+                              "summary": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["command", "status", "summary"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "evidence_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "approval_ref": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "idempotency_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_by": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "checkpoint_id",
+                        "previous_checkpoint_id",
+                        "sequence",
+                        "project_id",
+                        "task_id",
+                        "source_run_id",
+                        "source_provider",
+                        "target_provider",
+                        "status",
+                        "objective",
+                        "acceptance_criteria",
+                        "completed",
+                        "pending",
+                        "blockers",
+                        "next_safe_action",
+                        "workspace",
+                        "verification",
+                        "evidence_refs",
+                        "approval_ref",
+                        "idempotency_key",
+                        "created_by",
+                        "created_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "status": "created"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or sensitive checkpoint input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/continuity/checkpoints/{checkpointId}/validate": {
+      "post": {
+        "tags": ["continuity"],
+        "summary": "Validate workspace identity and target readiness",
+        "description": "Recollects the project workspace, compares its digest with the checkpoint, and resolves readiness for the exact target provider/account pool. A matching ready target advances to approval_required; drift and unavailable/auth states are persisted instead of dispatched.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "project_path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["project_path", "idempotency_key"],
+                "additionalProperties": false
+              },
+              "example": {
+                "project_path": "G:\\Donggri_DevDrive\\repos\\DonggriCompany",
+                "idempotency_key": "continuity-validate-unique-request-id"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation checkpoint appended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["created", "replay", "idempotency_conflict"]
+                    },
+                    "checkpoint": {
+                      "type": "object",
+                      "properties": {
+                        "schema_version": {
+                          "type": "integer",
+                          "enum": [1]
+                        },
+                        "checkpoint_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "previous_checkpoint_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sequence": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "project_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "task_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_run_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "source_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "target_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_run_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "provider_native_session_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dispatch_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ready_for_transfer",
+                            "target_validating",
+                            "approval_required",
+                            "accepted",
+                            "resuming",
+                            "running",
+                            "completed",
+                            "checkpoint_conflict",
+                            "provider_unavailable",
+                            "auth_required",
+                            "dispatch_uncertain",
+                            "stale",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "objective": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "acceptance_criteria": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "completed": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "blockers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "next_safe_action": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "workspace": {
+                          "type": "object",
+                          "properties": {
+                            "canonical_project_path": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "git_root": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "branch": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "head": {
+                              "type": "string",
+                              "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                            },
+                            "dirty": {
+                              "type": "boolean"
+                            },
+                            "changed_paths": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "workspace_digest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "captured_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "canonical_project_path",
+                            "git_root",
+                            "branch",
+                            "head",
+                            "dirty",
+                            "changed_paths",
+                            "workspace_digest",
+                            "captured_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "verification": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": ["passed", "failed", "skipped", "unavailable"]
+                              },
+                              "summary": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["command", "status", "summary"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "evidence_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "approval_ref": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "idempotency_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_by": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "checkpoint_id",
+                        "previous_checkpoint_id",
+                        "sequence",
+                        "project_id",
+                        "task_id",
+                        "source_run_id",
+                        "source_provider",
+                        "target_provider",
+                        "status",
+                        "objective",
+                        "acceptance_criteria",
+                        "completed",
+                        "pending",
+                        "blockers",
+                        "next_safe_action",
+                        "workspace",
+                        "verification",
+                        "evidence_refs",
+                        "approval_ref",
+                        "idempotency_key",
+                        "created_by",
+                        "created_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "status": "created"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid state or request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Checkpoint not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/continuity/checkpoints/{checkpointId}/accept": {
+      "post": {
+        "tags": ["continuity"],
+        "summary": "Accept a validated continuity checkpoint with server authority",
+        "description": "Requires an unexpired, hash-valid, one-use Control Plane approval receipt for operation continuity_transfer_accept. The receipt and preview must match the project, checkpoint target, workspace digest/source epoch, exact continuity scope, and command. Synthetic ui:* values are rejected. Approval consumption and the idempotency reservation are atomic. This endpoint does not issue an approval and does not dispatch a provider.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "approval_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Existing server-side approval id; ui:* references are forbidden."
+                  },
+                  "idempotency_key": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["approval_ref", "idempotency_key"],
+                "additionalProperties": false
+              },
+              "example": {
+                "approval_ref": "approval:server-issued-id",
+                "idempotency_key": "continuity-accept-unique-request-id"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approval consumed and accepted checkpoint appended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["created", "replay", "idempotency_conflict"]
+                    },
+                    "checkpoint": {
+                      "type": "object",
+                      "properties": {
+                        "schema_version": {
+                          "type": "integer",
+                          "enum": [1]
+                        },
+                        "checkpoint_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "previous_checkpoint_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sequence": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "project_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "task_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_run_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "source_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "target_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_run_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "provider_native_session_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dispatch_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ready_for_transfer",
+                            "target_validating",
+                            "approval_required",
+                            "accepted",
+                            "resuming",
+                            "running",
+                            "completed",
+                            "checkpoint_conflict",
+                            "provider_unavailable",
+                            "auth_required",
+                            "dispatch_uncertain",
+                            "stale",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "objective": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "acceptance_criteria": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "completed": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "blockers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "next_safe_action": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "workspace": {
+                          "type": "object",
+                          "properties": {
+                            "canonical_project_path": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "git_root": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "branch": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "head": {
+                              "type": "string",
+                              "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                            },
+                            "dirty": {
+                              "type": "boolean"
+                            },
+                            "changed_paths": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "workspace_digest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "captured_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "canonical_project_path",
+                            "git_root",
+                            "branch",
+                            "head",
+                            "dirty",
+                            "changed_paths",
+                            "workspace_digest",
+                            "captured_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "verification": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": ["passed", "failed", "skipped", "unavailable"]
+                              },
+                              "summary": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["command", "status", "summary"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "evidence_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "approval_ref": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "idempotency_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_by": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "checkpoint_id",
+                        "previous_checkpoint_id",
+                        "sequence",
+                        "project_id",
+                        "task_id",
+                        "source_run_id",
+                        "source_provider",
+                        "target_provider",
+                        "status",
+                        "objective",
+                        "acceptance_criteria",
+                        "completed",
+                        "pending",
+                        "blockers",
+                        "next_safe_action",
+                        "workspace",
+                        "verification",
+                        "evidence_refs",
+                        "approval_ref",
+                        "idempotency_key",
+                        "created_by",
+                        "created_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "status": "created"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Approval, preview, digest, scope, command, expiry, or state validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Checkpoint or approval not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/continuity/checkpoints/{checkpointId}/resume": {
+      "post": {
+        "tags": ["continuity"],
+        "summary": "Resume an accepted continuity checkpoint",
+        "description": "Accepts only an accepted checkpoint whose one-use approval has a completed, hash-consistent execution outcome and remains unexpired. Workspace identity and provider/account-pool readiness are rechecked immediately before dispatch. The production dispatcher is intentionally unbound in the current source candidate, so reaching the default dispatcher records dispatch_uncertain rather than proving live Codex/Claude execution.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "checkpointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotency_key": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["idempotency_key"],
+                "additionalProperties": false
+              },
+              "example": {
+                "idempotency_key": "continuity-resume-unique-request-id"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resume state appended; inspect checkpoint.status and blockers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["created", "replay", "idempotency_conflict"]
+                    },
+                    "checkpoint": {
+                      "type": "object",
+                      "properties": {
+                        "schema_version": {
+                          "type": "integer",
+                          "enum": [1]
+                        },
+                        "checkpoint_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "previous_checkpoint_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sequence": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "project_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "task_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_run_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "source_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "target_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_run_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "provider_native_session_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dispatch_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ready_for_transfer",
+                            "target_validating",
+                            "approval_required",
+                            "accepted",
+                            "resuming",
+                            "running",
+                            "completed",
+                            "checkpoint_conflict",
+                            "provider_unavailable",
+                            "auth_required",
+                            "dispatch_uncertain",
+                            "stale",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "objective": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "acceptance_criteria": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "completed": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "blockers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "next_safe_action": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "workspace": {
+                          "type": "object",
+                          "properties": {
+                            "canonical_project_path": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "git_root": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "branch": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "head": {
+                              "type": "string",
+                              "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                            },
+                            "dirty": {
+                              "type": "boolean"
+                            },
+                            "changed_paths": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "workspace_digest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "captured_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "canonical_project_path",
+                            "git_root",
+                            "branch",
+                            "head",
+                            "dirty",
+                            "changed_paths",
+                            "workspace_digest",
+                            "captured_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "verification": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": ["passed", "failed", "skipped", "unavailable"]
+                              },
+                              "summary": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["command", "status", "summary"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "evidence_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "approval_ref": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "idempotency_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_by": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "checkpoint_id",
+                        "previous_checkpoint_id",
+                        "sequence",
+                        "project_id",
+                        "task_id",
+                        "source_run_id",
+                        "source_provider",
+                        "target_provider",
+                        "status",
+                        "objective",
+                        "acceptance_criteria",
+                        "completed",
+                        "pending",
+                        "blockers",
+                        "next_safe_action",
+                        "workspace",
+                        "verification",
+                        "evidence_refs",
+                        "approval_ref",
+                        "idempotency_key",
+                        "created_by",
+                        "created_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "status": "created"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Approval outcome, expiry, state, workspace, or readiness validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Checkpoint or approval target not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/continuity/dispatches/{dispatchId}/reconcile": {
+      "post": {
+        "tags": ["continuity"],
+        "summary": "Reconcile an uncertain continuity dispatch",
+        "description": "Reconciles the latest dispatch_uncertain checkpoint by its reserved dispatch identity. Unknown results remain uncertain and are never converted into a blind respawn. The default production reconciler is unbound and therefore returns unknown until a real Supervisor integration is separately approved and registered.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dispatchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotency_key": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["idempotency_key"],
+                "additionalProperties": false
+              },
+              "example": {
+                "idempotency_key": "continuity-reconcile-unique-request-id"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reconciliation checkpoint appended; unknown remains dispatch_uncertain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["created", "replay", "idempotency_conflict"]
+                    },
+                    "checkpoint": {
+                      "type": "object",
+                      "properties": {
+                        "schema_version": {
+                          "type": "integer",
+                          "enum": [1]
+                        },
+                        "checkpoint_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "previous_checkpoint_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sequence": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "project_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "task_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_run_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "source_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_provider": {
+                          "type": "string",
+                          "enum": ["codex", "claude"]
+                        },
+                        "target_account_pool_id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_account_label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "target_run_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "provider_native_session_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dispatch_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ready_for_transfer",
+                            "target_validating",
+                            "approval_required",
+                            "accepted",
+                            "resuming",
+                            "running",
+                            "completed",
+                            "checkpoint_conflict",
+                            "provider_unavailable",
+                            "auth_required",
+                            "dispatch_uncertain",
+                            "stale",
+                            "failed",
+                            "canceled"
+                          ]
+                        },
+                        "objective": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "acceptance_criteria": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "completed": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "blockers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "next_safe_action": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "workspace": {
+                          "type": "object",
+                          "properties": {
+                            "canonical_project_path": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "git_root": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "branch": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "head": {
+                              "type": "string",
+                              "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+                            },
+                            "dirty": {
+                              "type": "boolean"
+                            },
+                            "changed_paths": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "workspace_digest": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            },
+                            "captured_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "canonical_project_path",
+                            "git_root",
+                            "branch",
+                            "head",
+                            "dirty",
+                            "changed_paths",
+                            "workspace_digest",
+                            "captured_at"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "verification": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": ["passed", "failed", "skipped", "unavailable"]
+                              },
+                              "summary": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["command", "status", "summary"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "evidence_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "approval_ref": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "idempotency_key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_by": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "checkpoint_id",
+                        "previous_checkpoint_id",
+                        "sequence",
+                        "project_id",
+                        "task_id",
+                        "source_run_id",
+                        "source_provider",
+                        "target_provider",
+                        "status",
+                        "objective",
+                        "acceptance_criteria",
+                        "completed",
+                        "pending",
+                        "blockers",
+                        "next_safe_action",
+                        "workspace",
+                        "verification",
+                        "evidence_refs",
+                        "approval_ref",
+                        "idempotency_key",
+                        "created_by",
+                        "created_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["status"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "status": "created"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid dispatch, state, identity, or request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "message": "Authentication is required."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "forbidden",
+                  "message": "You do not have permission to access this resource."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Dispatch not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "conflict",
+                  "message": "The request conflicts with current server state."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "too_many_requests",
+                  "message": "Rate limit exceeded."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": true
+                },
+                "example": {
+                  "error": "internal_error",
+                  "message": "Unexpected server error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/control-plane/memory/search": {
       "get": {
         "tags": ["control-plane"],
@@ -7192,10 +11497,20 @@
                 },
                 "example": {
                   "ok": true,
-                  "status": "healthy",
+                  "status": "ready",
+                  "checks": {
+                    "database": {
+                      "ok": true
+                    },
+                    "supervisor": {
+                      "ok": true
+                    },
+                    "reconciliation": {
+                      "ok": true
+                    }
+                  },
                   "version": "1.0.0-alpha.2",
-                  "app": "DonggriCompany",
-                  "dbPath": "/workspace/donggri-company.sqlite"
+                  "app": "Dongri-grigri"
                 }
               }
             }

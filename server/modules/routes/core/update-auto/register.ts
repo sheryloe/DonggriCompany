@@ -1,3 +1,5 @@
+import type { Request, Response } from "express";
+
 import type { RuntimeContext } from "../../../../types/runtime-context.ts";
 import { PKG_VERSION, RELEASE_IDENTITY } from "../../../../config/runtime.ts";
 import { isAuthenticated } from "../../../../security/auth.ts";
@@ -14,11 +16,597 @@ import {
   type UpdateStatusPayload,
 } from "./apply-update.ts";
 
-export function registerUpdateAutoRoutes(ctx: RuntimeContext): void {
+export type RuntimeDependencyReadiness = {
+  ready: boolean;
+  reason?: string;
+};
+
+export type RuntimeHealthOptions = {
+  supervisorReadiness?: () => RuntimeDependencyReadiness;
+  reconciliationReadiness?: () => RuntimeDependencyReadiness;
+};
+
+type RuntimeReadinessCheck = {
+  ok: boolean;
+  reason?: string;
+};
+
+const SAFE_READINESS_REASON_CODE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const SAFE_DEPENDENCY_READINESS_REASONS = {
+  supervisor: new Set([
+    "runner_supervisor_unbound",
+    "runner_supervisor_boot_reconcile_pending",
+    "runner_supervisor_boot_reconcile_failed",
+    "runner_supervisor_child_state_uncertain",
+    "runner_supervisor_shutting_down",
+  ]),
+  reconciliation: new Set([
+    "boot_reconciliation_pending",
+    "boot_reconciliation_failed",
+    "runner_supervisor_boot_reconcile_pending",
+    "runner_supervisor_boot_reconcile_failed",
+  ]),
+} satisfies Record<"supervisor" | "reconciliation", ReadonlySet<string>>;
+
+type RequiredColumnContract = {
+  type: "TEXT" | "INTEGER";
+  notnull: 0 | 1;
+  pk: 0 | 1 | 2;
+  defaultValue: string | null;
+};
+
+const textColumn = (
+  notnull: RequiredColumnContract["notnull"],
+  pk: RequiredColumnContract["pk"] = 0,
+): RequiredColumnContract => ({ type: "TEXT", notnull, pk, defaultValue: null });
+const integerColumn = (
+  notnull: RequiredColumnContract["notnull"],
+  pk: RequiredColumnContract["pk"] = 0,
+  defaultValue: string | null = null,
+): RequiredColumnContract => ({ type: "INTEGER", notnull, pk, defaultValue });
+
+const REQUIRED_CONTINUITY_COLUMNS = {
+  continuity_checkpoints: {
+    checkpoint_id: textColumn(0, 1),
+    previous_checkpoint_id: textColumn(0),
+    sequence: integerColumn(1),
+    project_id: textColumn(1),
+    task_id: textColumn(1),
+    source_run_id: textColumn(1),
+    source_provider: textColumn(1),
+    source_account_label: textColumn(1),
+    target_provider: textColumn(1),
+    target_account_label: textColumn(1),
+    status: textColumn(1),
+    workspace_digest: textColumn(1),
+    payload_json: textColumn(1),
+    payload_sha256: textColumn(1),
+    idempotency_key: textColumn(1),
+    schema_version: integerColumn(1),
+    captured_at: textColumn(1),
+    created_at: textColumn(1),
+  },
+  continuity_runs: {
+    run_id: textColumn(0, 1),
+    project_id: textColumn(1),
+    task_id: textColumn(1),
+    checkpoint_id: textColumn(0),
+    parent_run_id: textColumn(0),
+    provider: textColumn(1),
+    account_pool_id: textColumn(1),
+    provider_native_session_id: textColumn(0),
+    dispatch_id: textColumn(1),
+    pid: integerColumn(0),
+    process_started_at: textColumn(0),
+    process_fingerprint: textColumn(0),
+    owner_instance_id: textColumn(0),
+    lease_expires_at: textColumn(0),
+    status: textColumn(1),
+    state_version: integerColumn(1, 0, "0"),
+    heartbeat_at: textColumn(0),
+    last_event_sequence: integerColumn(1, 0, "0"),
+    created_at: textColumn(1),
+    updated_at: textColumn(1),
+  },
+  continuity_run_events: {
+    run_id: textColumn(1, 1),
+    sequence: integerColumn(1, 2),
+    event_type: textColumn(1),
+    payload_json: textColumn(1),
+    payload_sha256: textColumn(1),
+    occurred_at: textColumn(1),
+    created_at: textColumn(1),
+  },
+} as const satisfies Record<string, Record<string, RequiredColumnContract>>;
+
+const REQUIRED_TABLE_SQL_FRAGMENTS = {
+  continuity_checkpoints: [
+    "checkpoint_id text primary key",
+    "sequence integer not null check(sequence>0)",
+    "source_provider text not null check(source_provider in('codex','claude'))",
+    "target_provider text not null check(target_provider in('codex','claude'))",
+    "status text not null check(status in('ready_for_transfer','target_validating','approval_required','accepted','resuming','running','completed','checkpoint_conflict','provider_unavailable','auth_required','dispatch_uncertain','stale','failed','canceled'))",
+    "workspace_digest text not null check(length(workspace_digest)=64)",
+    "payload_sha256 text not null check(length(payload_sha256)=64)",
+    "idempotency_key text not null unique",
+    "schema_version integer not null check(schema_version=1)",
+    "unique(task_id,sequence)",
+    "foreign key(previous_checkpoint_id) references continuity_checkpoints(checkpoint_id)",
+  ],
+  continuity_runs: [
+    "run_id text primary key",
+    "project_id text not null check(length(trim(project_id))>0)",
+    "task_id text not null check(length(trim(task_id))>0)",
+    "checkpoint_id text references continuity_checkpoints(checkpoint_id) on delete restrict",
+    "parent_run_id text references continuity_runs(run_id) on delete restrict",
+    "provider text not null check(provider in('codex','claude'))",
+    "account_pool_id text not null check(length(trim(account_pool_id))>0)",
+    "dispatch_id text not null unique check(length(trim(dispatch_id))>0)",
+    "pid integer check(pid is null or pid>0)",
+    "process_fingerprint text check(process_fingerprint is null or length(process_fingerprint)=64)",
+    "owner_instance_id text check(owner_instance_id is null or length(trim(owner_instance_id))>0)",
+    "status text not null check(status in('reserved','starting','running','pause_requested','paused','dispatch_uncertain','stale','completed','failed','canceled'))",
+    "state_version integer not null default 0 check(state_version>=0)",
+    "last_event_sequence integer not null default 0 check(last_event_sequence>=0)",
+  ],
+  continuity_run_events: [
+    "run_id text not null references continuity_runs(run_id) on delete restrict",
+    "sequence integer not null check(sequence>0)",
+    "event_type text not null check(length(trim(event_type))>0)",
+    "payload_json text not null check(json_valid(payload_json))",
+    "payload_sha256 text not null check(length(payload_sha256)=64)",
+    "primary key(run_id,sequence)",
+  ],
+} as const;
+
+type RequiredIndexContract = {
+  table: keyof typeof REQUIRED_CONTINUITY_COLUMNS;
+  unique: boolean;
+  partial?: boolean;
+  columns: ReadonlyArray<{ name: string; desc?: boolean }>;
+  sqlFragments?: readonly string[];
+};
+
+const REQUIRED_INDEX_CONTRACTS: Record<string, RequiredIndexContract> = {
+  idx_continuity_checkpoints_task_sequence: {
+    table: "continuity_checkpoints",
+    unique: false,
+    columns: [{ name: "task_id" }, { name: "sequence", desc: true }],
+  },
+  idx_continuity_checkpoints_project_created: {
+    table: "continuity_checkpoints",
+    unique: false,
+    columns: [{ name: "project_id" }, { name: "created_at", desc: true }],
+  },
+  idx_continuity_checkpoints_status_created: {
+    table: "continuity_checkpoints",
+    unique: false,
+    columns: [{ name: "status" }, { name: "created_at", desc: true }],
+  },
+  uq_continuity_runs_dispatch: {
+    table: "continuity_runs",
+    unique: true,
+    columns: [{ name: "dispatch_id" }],
+  },
+  uq_continuity_runs_active_root_owner: {
+    table: "continuity_runs",
+    unique: true,
+    partial: true,
+    columns: [{ name: "project_id" }, { name: "task_id" }],
+    sqlFragments: [
+      "create unique index uq_continuity_runs_active_root_owner on continuity_runs(project_id,task_id)",
+      "where parent_run_id is null and status in('reserved','starting','running','pause_requested','paused','dispatch_uncertain','stale')",
+    ],
+  },
+  idx_continuity_runs_checkpoint_created: {
+    table: "continuity_runs",
+    unique: false,
+    columns: [{ name: "checkpoint_id" }, { name: "created_at", desc: true }],
+  },
+  idx_continuity_runs_task_created: {
+    table: "continuity_runs",
+    unique: false,
+    columns: [{ name: "project_id" }, { name: "task_id" }, { name: "created_at", desc: true }],
+  },
+  idx_continuity_runs_parent_created: {
+    table: "continuity_runs",
+    unique: false,
+    columns: [{ name: "parent_run_id" }, { name: "created_at", desc: true }],
+  },
+  idx_continuity_runs_status_heartbeat: {
+    table: "continuity_runs",
+    unique: false,
+    columns: [{ name: "status" }, { name: "heartbeat_at" }],
+  },
+  idx_continuity_runs_owner_lease: {
+    table: "continuity_runs",
+    unique: false,
+    columns: [{ name: "owner_instance_id" }, { name: "lease_expires_at" }],
+  },
+  idx_continuity_run_events_cursor: {
+    table: "continuity_run_events",
+    unique: false,
+    columns: [{ name: "run_id" }, { name: "sequence" }],
+  },
+};
+
+const REQUIRED_UNIQUE_CONTRACTS = [
+  { table: "continuity_checkpoints", columns: ["idempotency_key"] },
+  { table: "continuity_checkpoints", columns: ["task_id", "sequence"] },
+  { table: "continuity_runs", columns: ["dispatch_id"] },
+  { table: "continuity_run_events", columns: ["run_id", "sequence"] },
+] as const;
+
+const REQUIRED_FOREIGN_KEYS = [
+  {
+    table: "continuity_checkpoints",
+    from: "previous_checkpoint_id",
+    parentTable: "continuity_checkpoints",
+    to: "checkpoint_id",
+    onDelete: "NO ACTION",
+  },
+  {
+    table: "continuity_runs",
+    from: "checkpoint_id",
+    parentTable: "continuity_checkpoints",
+    to: "checkpoint_id",
+    onDelete: "RESTRICT",
+  },
+  {
+    table: "continuity_runs",
+    from: "parent_run_id",
+    parentTable: "continuity_runs",
+    to: "run_id",
+    onDelete: "RESTRICT",
+  },
+  {
+    table: "continuity_run_events",
+    from: "run_id",
+    parentTable: "continuity_runs",
+    to: "run_id",
+    onDelete: "RESTRICT",
+  },
+] as const;
+
+type RequiredTriggerContract = {
+  table: keyof typeof REQUIRED_CONTINUITY_COLUMNS;
+  fragments: readonly string[];
+};
+
+const REQUIRED_TRIGGER_CONTRACTS: Record<string, RequiredTriggerContract> = {
+  continuity_checkpoints_no_update: {
+    table: "continuity_checkpoints",
+    fragments: ["before update on continuity_checkpoints", "select raise(abort,'continuity_checkpoints_append_only')"],
+  },
+  continuity_checkpoints_no_delete: {
+    table: "continuity_checkpoints",
+    fragments: ["before delete on continuity_checkpoints", "select raise(abort,'continuity_checkpoints_append_only')"],
+  },
+  continuity_runs_no_delete: {
+    table: "continuity_runs",
+    fragments: ["before delete on continuity_runs", "select raise(abort,'continuity_runs_persistent')"],
+  },
+  continuity_runs_state_version_guard: {
+    table: "continuity_runs",
+    fragments: [
+      "before update of status on continuity_runs",
+      "when new.status<>old.status and new.state_version<>old.state_version+1",
+      "select raise(abort,'continuity_run_state_version_required')",
+    ],
+  },
+  continuity_run_events_next_sequence: {
+    table: "continuity_run_events",
+    fragments: [
+      "before insert on continuity_run_events",
+      "not exists(select 1 from continuity_runs where run_id=new.run_id)",
+      "then raise(abort,'continuity_run_missing')",
+      "new.sequence<>(select last_event_sequence+1 from continuity_runs where run_id=new.run_id)",
+      "then raise(abort,'continuity_run_event_sequence_non_monotonic')",
+    ],
+  },
+  continuity_run_events_advance_cursor: {
+    table: "continuity_run_events",
+    fragments: [
+      "after insert on continuity_run_events",
+      "update continuity_runs set last_event_sequence=new.sequence,updated_at=new.occurred_at where run_id=new.run_id",
+    ],
+  },
+  continuity_run_events_no_update: {
+    table: "continuity_run_events",
+    fragments: ["before update on continuity_run_events", "select raise(abort,'continuity_run_events_append_only')"],
+  },
+  continuity_run_events_no_delete: {
+    table: "continuity_run_events",
+    fragments: ["before delete on continuity_run_events", "select raise(abort,'continuity_run_events_append_only')"],
+  },
+};
+
+function normalizeSchemaSql(raw: unknown): string {
+  return String(raw ?? "")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--[^\r\n]*/g, " ")
+    .replace(/["`[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*([(),=<>+])\s*/g, "$1")
+    .trim()
+    .toLowerCase();
+}
+
+function readSchemaObject(
+  db: RuntimeContext["db"],
+  type: "table" | "index" | "trigger",
+  name: string,
+): { tableName: string; sql: string } | null {
+  const row = db.prepare("SELECT tbl_name, sql FROM sqlite_master WHERE type = ? AND name = ?").get(type, name) as
+    | { tbl_name?: unknown; sql?: unknown }
+    | undefined;
+  if (!row?.sql) return null;
+  return { tableName: String(row.tbl_name ?? ""), sql: normalizeSchemaSql(row.sql) };
+}
+
+function readIndexColumns(db: RuntimeContext["db"], indexName: string): Array<{ name: string; desc: boolean }> {
+  const quotedIndexName = `'${indexName.replaceAll("'", "''")}'`;
+  return (
+    db.prepare(`PRAGMA index_xinfo(${quotedIndexName})`).all() as Array<{
+      seqno?: unknown;
+      name?: unknown;
+      desc?: unknown;
+      key?: unknown;
+    }>
+  )
+    .filter((row) => Number(row.key) === 1)
+    .sort((left, right) => Number(left.seqno) - Number(right.seqno))
+    .map((row) => ({ name: String(row.name ?? ""), desc: Number(row.desc) === 1 }));
+}
+
+function indexColumnsMatch(
+  actual: ReadonlyArray<{ name: string; desc: boolean }>,
+  expected: ReadonlyArray<{ name: string; desc?: boolean }>,
+): boolean {
+  return (
+    actual.length === expected.length &&
+    actual.every(
+      (column, index) => column.name === expected[index]?.name && column.desc === Boolean(expected[index]?.desc),
+    )
+  );
+}
+
+function hasUniqueColumns(db: RuntimeContext["db"], tableName: string, expectedColumns: readonly string[]): boolean {
+  const indexes = db.prepare(`PRAGMA index_list(${tableName})`).all() as Array<{
+    name?: unknown;
+    unique?: unknown;
+    partial?: unknown;
+  }>;
+  return indexes.some((index) => {
+    if (Number(index.unique) !== 1 || Number(index.partial) !== 0) return false;
+    const name = String(index.name ?? "");
+    if (!name) return false;
+    return indexColumnsMatch(
+      readIndexColumns(db, name),
+      expectedColumns.map((column) => ({ name: column })),
+    );
+  });
+}
+
+function validateContinuitySchemaContracts(db: RuntimeContext["db"]): RuntimeReadinessCheck {
+  for (const [tableName, fragments] of Object.entries(REQUIRED_TABLE_SQL_FRAGMENTS)) {
+    const schema = readSchemaObject(db, "table", tableName);
+    const missingFragmentIndex = schema
+      ? fragments.findIndex((fragment) => !schema.sql.includes(normalizeSchemaSql(fragment)))
+      : 0;
+    if (!schema || missingFragmentIndex >= 0) {
+      return {
+        ok: false,
+        reason: `continuity_schema_contract_invalid:${tableName}:${missingFragmentIndex}`,
+      };
+    }
+  }
+
+  for (const contract of REQUIRED_UNIQUE_CONTRACTS) {
+    if (!hasUniqueColumns(db, contract.table, contract.columns)) {
+      return {
+        ok: false,
+        reason: `continuity_schema_unique_missing:${contract.table}:${contract.columns.join(",")}`,
+      };
+    }
+  }
+
+  for (const [indexName, contract] of Object.entries(REQUIRED_INDEX_CONTRACTS)) {
+    const index = (
+      db.prepare(`PRAGMA index_list(${contract.table})`).all() as Array<{
+        name?: unknown;
+        unique?: unknown;
+        partial?: unknown;
+      }>
+    ).find((candidate) => String(candidate.name ?? "") === indexName);
+    if (
+      !index ||
+      Number(index.unique) !== Number(contract.unique) ||
+      Number(index.partial) !== Number(Boolean(contract.partial)) ||
+      !indexColumnsMatch(readIndexColumns(db, indexName), contract.columns)
+    ) {
+      return { ok: false, reason: `continuity_schema_index_invalid:${indexName}` };
+    }
+    if (contract.sqlFragments) {
+      const schema = readSchemaObject(db, "index", indexName);
+      if (
+        !schema ||
+        schema.tableName !== contract.table ||
+        contract.sqlFragments.some((fragment) => !schema.sql.includes(normalizeSchemaSql(fragment)))
+      ) {
+        return { ok: false, reason: `continuity_schema_index_invalid:${indexName}` };
+      }
+    }
+  }
+
+  for (const contract of REQUIRED_FOREIGN_KEYS) {
+    const foreignKeys = db.prepare(`PRAGMA foreign_key_list(${contract.table})`).all() as Array<{
+      table?: unknown;
+      from?: unknown;
+      to?: unknown;
+      on_delete?: unknown;
+    }>;
+    const matches = foreignKeys.some(
+      (foreignKey) =>
+        String(foreignKey.table ?? "") === contract.parentTable &&
+        String(foreignKey.from ?? "") === contract.from &&
+        String(foreignKey.to ?? "") === contract.to &&
+        String(foreignKey.on_delete ?? "").toUpperCase() === contract.onDelete,
+    );
+    if (!matches) {
+      return {
+        ok: false,
+        reason: `continuity_schema_foreign_key_missing:${contract.table}:${contract.from}`,
+      };
+    }
+  }
+
+  for (const [triggerName, contract] of Object.entries(REQUIRED_TRIGGER_CONTRACTS)) {
+    const trigger = readSchemaObject(db, "trigger", triggerName);
+    if (
+      !trigger ||
+      trigger.tableName !== contract.table ||
+      contract.fragments.some((fragment) => !trigger.sql.includes(normalizeSchemaSql(fragment)))
+    ) {
+      return { ok: false, reason: `continuity_schema_trigger_invalid:${triggerName}` };
+    }
+  }
+
+  return { ok: true };
+}
+
+function readDependencyReadiness(
+  dependency: "supervisor" | "reconciliation",
+  probe: (() => RuntimeDependencyReadiness) | undefined,
+): RuntimeReadinessCheck {
+  if (!probe) return { ok: false, reason: `${dependency}_readiness_unbound` };
+
+  try {
+    const result = probe();
+    if (!result || typeof result.ready !== "boolean") {
+      return { ok: false, reason: `${dependency}_readiness_invalid` };
+    }
+    if (result.ready) {
+      return result.reason == null ? { ok: true } : { ok: false, reason: `${dependency}_readiness_invalid` };
+    }
+
+    const reason = result.reason;
+    if (
+      typeof reason !== "string" ||
+      !SAFE_READINESS_REASON_CODE.test(reason) ||
+      !SAFE_DEPENDENCY_READINESS_REASONS[dependency].has(reason)
+    ) {
+      return { ok: false, reason: `${dependency}_readiness_invalid` };
+    }
+    return { ok: false, reason };
+  } catch {
+    return { ok: false, reason: `${dependency}_readiness_probe_failed` };
+  }
+}
+
+export function evaluateDatabaseReadiness(db: RuntimeContext["db"]): RuntimeReadinessCheck {
+  try {
+    const quickCheckRows = db.prepare("PRAGMA quick_check(1)").all() as Array<Record<string, unknown>>;
+    const quickCheckValues = quickCheckRows.flatMap((row) => Object.values(row));
+    if (quickCheckValues.length !== 1 || String(quickCheckValues[0]).toLowerCase() !== "ok") {
+      return { ok: false, reason: "database_integrity_check_failed" };
+    }
+
+    const queryOnlyState = db.prepare("PRAGMA query_only").get() as { query_only?: unknown } | undefined;
+    if (Number(queryOnlyState?.query_only) !== 0) {
+      return { ok: false, reason: "database_query_only_enabled" };
+    }
+
+    const foreignKeyState = db.prepare("PRAGMA foreign_keys").get() as { foreign_keys?: unknown } | undefined;
+    if (Number(foreignKeyState?.foreign_keys) !== 1) {
+      return { ok: false, reason: "database_foreign_keys_disabled" };
+    }
+
+    if (db.prepare("PRAGMA foreign_key_check").get()) {
+      return { ok: false, reason: "database_foreign_key_violation" };
+    }
+
+    for (const [tableName, requiredColumns] of Object.entries(REQUIRED_CONTINUITY_COLUMNS)) {
+      const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+        name?: unknown;
+        type?: unknown;
+        notnull?: unknown;
+        dflt_value?: unknown;
+        pk?: unknown;
+      }>;
+      if (rows.length === 0) return { ok: false, reason: `continuity_schema_missing:${tableName}` };
+
+      const actualColumns = new Map(rows.map((row) => [String(row.name ?? ""), row]));
+      const requiredEntries = Object.entries(requiredColumns) as Array<[string, RequiredColumnContract]>;
+      const missingColumns = requiredEntries.map(([column]) => column).filter((column) => !actualColumns.has(column));
+      if (missingColumns.length > 0) {
+        return {
+          ok: false,
+          reason: `continuity_schema_columns_missing:${tableName}:${missingColumns.join(",")}`,
+        };
+      }
+
+      for (const [columnName, required] of requiredEntries) {
+        const actual = actualColumns.get(columnName);
+        const actualDefault = actual?.dflt_value == null ? null : String(actual.dflt_value).trim();
+        const mismatch =
+          String(actual?.type ?? "")
+            .trim()
+            .toUpperCase() !== required.type
+            ? "type"
+            : Number(actual?.notnull) !== required.notnull
+              ? "notnull"
+              : Number(actual?.pk) !== required.pk
+                ? "pk"
+                : actualDefault !== required.defaultValue
+                  ? "default"
+                  : null;
+        if (mismatch) {
+          return {
+            ok: false,
+            reason: `continuity_schema_column_contract_invalid:${tableName}:${columnName}:${mismatch}`,
+          };
+        }
+      }
+    }
+
+    const schemaContracts = validateContinuitySchemaContracts(db);
+    if (!schemaContracts.ok) return schemaContracts;
+
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "database_unavailable" };
+  }
+}
+
+export function evaluateRuntimeReadiness(
+  db: RuntimeContext["db"],
+  options: RuntimeHealthOptions = {},
+): {
+  ok: boolean;
+  status: "ready" | "not_ready";
+  checks: {
+    database: RuntimeReadinessCheck;
+    supervisor: RuntimeReadinessCheck;
+    reconciliation: RuntimeReadinessCheck;
+  };
+} {
+  const database = evaluateDatabaseReadiness(db);
+  const supervisor = readDependencyReadiness("supervisor", options.supervisorReadiness);
+  const reconciliation = readDependencyReadiness("reconciliation", options.reconciliationReadiness);
+  const ok = database.ok && supervisor.ok && reconciliation.ok;
+
+  return {
+    ok,
+    status: ok ? "ready" : "not_ready",
+    checks: { database, supervisor, reconciliation },
+  };
+}
+
+export function registerUpdateAutoRoutes(ctx: RuntimeContext, healthOptions: RuntimeHealthOptions = {}): void {
   const __ctx: RuntimeContext = ctx;
   const app = __ctx.app;
   const db = __ctx.db;
-  const dbPath = __ctx.dbPath;
   const appendTaskLog = __ctx.appendTaskLog;
   const activeProcesses = __ctx.activeProcesses;
   const notifyCeo = __ctx.notifyCeo;
@@ -361,13 +949,34 @@ export function registerUpdateAutoRoutes(ctx: RuntimeContext): void {
     await autoUpdateInFlight;
   }
 
-  const buildHealthPayload = () => ({
+  const buildLivenessPayload = () => ({
     ok: true,
+    status: "alive" as const,
     version: PKG_VERSION,
     release_identity: RELEASE_IDENTITY,
     app: "Dongri-grigri",
-    dbPath,
   });
+
+  const buildReadinessPayload = () => ({
+    ...evaluateRuntimeReadiness(db, healthOptions),
+    version: PKG_VERSION,
+    release_identity: RELEASE_IDENTITY,
+    app: "Dongri-grigri",
+  });
+
+  const buildHealthPayload = () => {
+    const readiness = buildReadinessPayload();
+    return {
+      ok: readiness.ok,
+      alive: true,
+      ready: readiness.ok,
+      status: readiness.status,
+      version: PKG_VERSION,
+      release_identity: RELEASE_IDENTITY,
+      app: "Dongri-grigri",
+      checks: readiness.checks,
+    };
+  };
 
   {
     const dep = validateAutoUpdateDependencies();
@@ -405,9 +1014,18 @@ export function registerUpdateAutoRoutes(ctx: RuntimeContext): void {
     }
   }
 
-  app.get("/health", (_req, res) => res.json(buildHealthPayload()));
-  app.get("/healthz", (_req, res) => res.json(buildHealthPayload()));
-  app.get("/api/health", (_req, res) => res.json(buildHealthPayload()));
+  app.get("/livez", (_req, res) => res.json(buildLivenessPayload()));
+  app.get("/readyz", (_req, res) => {
+    const payload = buildReadinessPayload();
+    return res.status(payload.ok ? 200 : 503).json(payload);
+  });
+  const sendHealth = (_req: Request, res: Response) => {
+    const payload = buildHealthPayload();
+    return res.status(payload.ready ? 200 : 503).json(payload);
+  };
+  app.get("/health", sendHealth);
+  app.get("/healthz", sendHealth);
+  app.get("/api/health", sendHealth);
   app.get("/api/update-status", async (req, res) => {
     const refresh = String(req.query?.refresh ?? "").trim() === "1";
     const status = await fetchUpdateStatus(refresh);

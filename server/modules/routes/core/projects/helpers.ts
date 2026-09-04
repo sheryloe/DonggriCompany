@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { execFile, spawn } from "node:child_process";
 
+import { resolveDonggriControlRoot } from "../../../../config/control-root.js";
+
 type NormalizeTextField = (value: unknown) => string | null;
 
 interface CreateProjectRouteHelpersOptions {
@@ -11,7 +13,13 @@ interface CreateProjectRouteHelpersOptions {
   normalizeTextField: NormalizeTextField;
 }
 
-const DONGGRI_REPO_ESTATE_ROOT = "G:\\Donggri_DevDrive\\repos";
+const DONGGRI_REPO_ESTATE_ROOT = path.join(
+  resolveDonggriControlRoot({
+    envValue: process.env.DONGGRI_CONTROL_ROOT,
+    repoRoot: process.cwd(),
+  }),
+  "repos",
+);
 
 export function createProjectRouteHelpers({ db, normalizeTextField }: CreateProjectRouteHelpersOptions) {
   function normalizeProjectPathInput(raw: unknown): string | null {

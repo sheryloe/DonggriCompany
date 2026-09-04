@@ -55,6 +55,7 @@ describe("buildControlPlaneDashboardState", () => {
     const result = buildControlPlaneDashboardState(source(), [
       {
         key: "DonggriCompany",
+        path: "G:\\Donggri_DevDrive\\repos\\DonggriCompany",
         summary: "runtime projection",
         status: "active",
         enabled: true,
@@ -63,6 +64,7 @@ describe("buildControlPlaneDashboardState", () => {
       },
       {
         key: "hidden",
+        path: "G:\\Donggri_DevDrive\\repos\\hidden",
         summary: null,
         status: "candidate",
         enabled: false,

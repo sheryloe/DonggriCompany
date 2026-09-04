@@ -4,16 +4,25 @@ import { fileURLToPath } from "node:url";
 
 export const REQUIRED_PUBLIC_FILES = [
   "README.md",
+  "README.en.md",
   "README_ko.md",
+  "README_zh.md",
   "CONTRIBUTING.md",
   "SECURITY.md",
   "PRODUCT.md",
   "docs/DESIGN.md",
   "docs/QUALITY-949.md",
+  "docs/ROADMAP.md",
   "docs/api.md",
   "docs/openapi.json",
   ".github/workflows/ci.yml",
+  ".github/pull_request_template.md",
+  ".github/ISSUE_TEMPLATE/config.yml",
+  ".github/ISSUE_TEMPLATE/feature_request.yml",
+  ".github/ISSUE_TEMPLATE/question.yml",
   ".env.example",
+  "docker-compose.yml",
+  "docker-compose.demo.yml",
   "scripts/smoke-command-loop.mjs",
   "scripts/smoke-command-loop.test.mjs",
   "src/api/control-plane-dashboard.ts",
@@ -28,11 +37,18 @@ export function evaluatePublicReadiness(readText, exists) {
   const readme = readText("README.md");
   const contributing = readText("CONTRIBUTING.md");
   const security = readText("SECURITY.md");
+  const roadmap = readText("docs/ROADMAP.md");
+  const pullRequestTemplate = readText(".github/pull_request_template.md");
+  const issueConfig = readText(".github/ISSUE_TEMPLATE/config.yml");
+  const featureTemplate = readText(".github/ISSUE_TEMPLATE/feature_request.yml");
+  const questionTemplate = readText(".github/ISSUE_TEMPLATE/question.yml");
   const api = readText("docs/api.md");
   const workflow = readText(".github/workflows/ci.yml");
   const quality = readText("docs/QUALITY-949.md");
   const packageJson = readText("package.json");
   const envExample = readText(".env.example");
+  const compose = readText("docker-compose.yml");
+  const demoCompose = readText("docker-compose.demo.yml");
   const smoke = readText("scripts/smoke-command-loop.mjs");
 
   const expectations = [
@@ -53,8 +69,32 @@ export function evaluatePublicReadiness(readText, exists) {
       "CONTRIBUTING.md: obsolete dev branch instructions remain",
     ],
     [
-      security.includes("public Alpha") && !security.includes("2.0.x"),
-      "SECURITY.md: supported line must match the current Alpha",
+      security.includes("unreleased Alpha source candidate") && !security.includes("currently a public Alpha"),
+      "SECURITY.md: supported line must state the unreleased Alpha candidate truth",
+    ],
+    [
+      pullRequestTemplate.includes("Base branch is `main`") &&
+        !pullRequestTemplate.includes("target `dev`") &&
+        !pullRequestTemplate.includes("main -> dev"),
+      "pull request template: main-only branch model is required",
+    ],
+    [
+      issueConfig.includes("sheryloe/DonggriCompany/security/advisories/new") &&
+        !issueConfig.includes("GreenSheep01201/claw-empire"),
+      "issue templates: security reporting must point to this repository",
+    ],
+    [
+      featureTemplate.includes("Dongri-grigri") &&
+        questionTemplate.includes("Dongri-grigri") &&
+        !featureTemplate.includes("Claw-Empire") &&
+        !questionTemplate.includes("Claw-Empire"),
+      "issue templates: visible product identity is inconsistent",
+    ],
+    [
+      roadmap.includes("atomic one-time approval consumption") &&
+        roadmap.includes("Runner Supervisor binding") &&
+        !roadmap.includes("backend-authoritative transit stations"),
+      "ROADMAP.md: pending integration gates must not be presented as implemented",
     ],
     [api.includes("/api/control-plane/dashboard"), "docs/api.md: compact dashboard route is missing"],
     [
@@ -66,6 +106,13 @@ export function evaluatePublicReadiness(readText, exists) {
     [
       envExample.includes("DONGGRI_CONTROL_ROOT=") && smoke.includes("SMOKE_PROJECT_PATH"),
       "portable local configuration: Control Plane root or disposable smoke project is missing",
+    ],
+    [
+      compose.includes("/livez") &&
+        demoCompose.includes("/livez") &&
+        !compose.includes("127.0.0.1:8900/api/health") &&
+        !demoCompose.includes("127.0.0.1:8900/api/health"),
+      "Docker healthcheck must use process liveness, not dependency readiness",
     ],
     [
       quality.includes("72-hour Soak credit: `0`") && quality.includes("clean-clone"),
@@ -101,10 +148,20 @@ function selfTest() {
     "Command Center /old public:verify Docker is optional DONGGRI_CONTROL_ROOT smoke:command-loop",
   );
   files.set("CONTRIBUTING.md", "only long-lived branch --base main");
-  files.set("SECURITY.md", "public Alpha");
+  files.set("SECURITY.md", "unreleased Alpha source candidate");
+  files.set("docs/ROADMAP.md", "atomic one-time approval consumption Runner Supervisor binding");
+  files.set(".github/pull_request_template.md", "Base branch is `main`");
+  files.set(
+    ".github/ISSUE_TEMPLATE/config.yml",
+    "https://github.com/sheryloe/DonggriCompany/security/advisories/new",
+  );
+  files.set(".github/ISSUE_TEMPLATE/feature_request.yml", "Dongri-grigri");
+  files.set(".github/ISSUE_TEMPLATE/question.yml", "Dongri-grigri");
   files.set("docs/api.md", "/api/control-plane/dashboard");
   files.set(".github/workflows/ci.yml", "pnpm run public:verify smoke:command-loop:self-test");
   files.set(".env.example", "DONGGRI_CONTROL_ROOT=");
+  files.set("docker-compose.yml", "/livez");
+  files.set("docker-compose.demo.yml", "/livez");
   files.set("scripts/smoke-command-loop.mjs", "SMOKE_PROJECT_PATH");
   files.set("docs/QUALITY-949.md", "72-hour Soak credit: `0` clean-clone");
   files.set("package.json", '"license": "Apache-2.0" "channel": "alpha"');

@@ -76,4 +76,96 @@ describe("createUsageCliTools.fetchGeminiUsage", () => {
     expect(usage.error).toBeNull();
     expect(usage.windows.map((window) => window.label)).toEqual(["gemini-3-flash", "gemini-3-pro"]);
   });
+
+  it("detects versions through resolved executables with minimal env and shell:false", async () => {
+    const resolverCalls: Array<{ command: string; argv: readonly string[]; allowedCommands: readonly string[] }> = [];
+    const execCalls: Array<{ executable: string; argv: readonly string[]; options: any }> = [];
+    const tools = createUsageCliTools({
+      jsonHasKey: () => false,
+      fileExistsNonEmpty: () => false,
+      readClaudeToken: () => null,
+      readCodexTokens: () => null,
+      readGeminiCredsFromKeychain: () => null,
+      freshGeminiToken: async () => null,
+      getGeminiProjectId: async () => null,
+      sourceEnv: {
+        PATH: process.env.PATH,
+        SystemRoot: process.env.SystemRoot,
+        DONGGRI_USAGE_SECRET: "must-not-reach-child",
+      },
+      platform: process.platform,
+      resolveExecutable: ((input: any) => {
+        resolverCalls.push({
+          command: input.command,
+          argv: [...(input.argv ?? [])],
+          allowedCommands: [...(input.allowedCommands ?? [])],
+        });
+        const executable = process.platform === "win32" ? `C:\\safe\\${input.command}.exe` : `/safe/${input.command}`;
+        return {
+          ok: true,
+          executable,
+          argv: [...(input.argv ?? [])],
+          commandPath: executable,
+          source: "native",
+          shell: false,
+        };
+      }) as any,
+      execFileCommand: ((executable: string, argv: readonly string[], options: any, callback: any) => {
+        execCalls.push({ executable, argv: [...argv], options });
+        queueMicrotask(() => callback(null, "1.2.3\n", ""));
+        return {};
+      }) as any,
+      providerLiveExecutionGate: (request) => request.gateId === "G-PROVIDER-LIVE",
+    });
+
+    const status = await tools.detectAllCli();
+
+    expect(status.claude).toMatchObject({ installed: true, version: "1.2.3", authenticated: false });
+    expect(status.kimi).toMatchObject({ installed: true, version: "1.2.3", authenticated: false });
+    expect(status.opencode).toMatchObject({ installed: true, version: "1.2.3", authenticated: false });
+    expect(resolverCalls.some((call) => call.command === "where" || call.command === "which")).toBe(false);
+    expect(
+      resolverCalls
+        .filter((call) => call.command === "kimi" || call.command === "opencode")
+        .every((call) => call.allowedCommands.length === 1 && call.allowedCommands[0] === call.command),
+    ).toBe(true);
+    expect(execCalls.length).toBeGreaterThan(0);
+    for (const call of execCalls) {
+      expect(call.options.shell).toBe(false);
+      expect(call.options.env.DONGGRI_USAGE_SECRET).toBeUndefined();
+    }
+  });
+
+  it("keeps status probes async and denies every child execution without the code gate", async () => {
+    const execFileCommand = vi.fn();
+    process.env.G_PROVIDER_LIVE = "true";
+    try {
+      const tools = createUsageCliTools({
+        jsonHasKey: () => false,
+        fileExistsNonEmpty: () => false,
+        readClaudeToken: () => null,
+        readCodexTokens: () => null,
+        readGeminiCredsFromKeychain: () => null,
+        freshGeminiToken: async () => null,
+        getGeminiProjectId: async () => null,
+        resolveExecutable: ((input: any) => ({
+          ok: true,
+          executable: process.platform === "win32" ? `C:\\safe\\${input.command}.exe` : `/safe/${input.command}`,
+          argv: [...(input.argv ?? [])],
+          commandPath: input.command,
+          source: "native",
+          shell: false,
+        })) as any,
+        execFileCommand: execFileCommand as any,
+      });
+
+      const status = await tools.detectAllCli();
+      expect(status.kimi).toMatchObject({ installed: true, version: null });
+      expect(status.opencode).toMatchObject({ installed: true, version: null });
+      expect(execFileCommand).not.toHaveBeenCalled();
+      await expect(tools.execWithTimeout("whoami", [], 10)).rejects.toThrow("cli_tool_command_not_allowed");
+    } finally {
+      delete process.env.G_PROVIDER_LIVE;
+    }
+  });
 });

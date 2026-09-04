@@ -1,13 +1,13 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { bootstrapSession } from "../api";
-import type { WSEvent, WSEventType } from "../types";
+import type { WebSocketConnectionState, WSEvent, WSEventType } from "../types";
 
 type Listener = (payload: unknown) => void;
 
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const listenersRef = useRef<Map<WSEventType, Set<Listener>>>(new Map());
-  const [connected, setConnected] = useState(false);
+  const [connectionState, setConnectionState] = useState<WebSocketConnectionState>("connecting");
 
   useEffect(() => {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -25,7 +25,9 @@ export function useWebSocket() {
           promptOnUnauthorized: false,
           force: forceBootstrap,
         });
+        if (!alive) return;
         if (!bootstrapped) {
+          if (forceBootstrap) setConnectionState("auth_recovering");
           reconnectTimer = setTimeout(() => {
             void connect();
           }, 2000);
@@ -33,36 +35,43 @@ export function useWebSocket() {
         }
         forceSessionBootstrap = false;
       } catch {
+        if (!alive) return;
         // Avoid force bootstrap busy-loop when unauthorized recovery itself fails.
         if (forceBootstrap) forceSessionBootstrap = false;
+        setConnectionState(forceBootstrap ? "auth_recovering" : "reconnecting");
         // ignore bootstrap errors; ws connect result will drive retry
         reconnectTimer = setTimeout(() => {
           void connect();
         }, 2000);
         return;
       }
-      ws = new WebSocket(url);
-      wsRef.current = ws;
+      const socket = new WebSocket(url);
+      ws = socket;
+      wsRef.current = socket;
 
-      ws.onopen = () => {
-        if (alive) setConnected(true);
+      socket.onopen = () => {
+        if (alive && wsRef.current === socket) setConnectionState("connected");
       };
-      ws.onclose = (event) => {
-        if (!alive) return;
-        setConnected(false);
+      socket.onclose = (event) => {
+        if (!alive || wsRef.current !== socket) return;
+        wsRef.current = null;
         if (event.code === 1008) {
           forceSessionBootstrap = true;
+          setConnectionState("auth_recovering");
+        } else {
+          setConnectionState("reconnecting");
         }
         reconnectTimer = setTimeout(() => {
           void connect();
         }, 2000);
       };
-      ws.onerror = () => ws.close();
-      ws.onmessage = (e) => {
-        if (!alive) return;
+      socket.onerror = () => socket.close();
+      socket.onmessage = (e) => {
+        if (!alive || wsRef.current !== socket) return;
         try {
-          const evt: WSEvent = JSON.parse(e.data);
-          const listeners = listenersRef.current.get(evt.type);
+          const evt = JSON.parse(e.data) as Partial<WSEvent>;
+          if (!evt || typeof evt !== "object" || typeof evt.type !== "string" || !("payload" in evt)) return;
+          const listeners = listenersRef.current.get(evt.type as WSEventType);
           if (listeners) {
             for (const fn of listeners) fn(evt.payload);
           }
@@ -77,6 +86,7 @@ export function useWebSocket() {
       alive = false;
       clearTimeout(reconnectTimer);
       ws?.close();
+      if (wsRef.current === ws) wsRef.current = null;
     };
   }, []);
 
@@ -90,5 +100,5 @@ export function useWebSocket() {
     };
   }, []);
 
-  return { connected, on };
+  return { connected: connectionState === "connected", connectionState, on };
 }

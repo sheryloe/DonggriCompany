@@ -59,6 +59,31 @@ describe("createProjectWithGitHubAutomation", () => {
     apiMocks.isApiRequestError.mockReturnValue(false);
   });
 
+  it("uses only the project root projected by the server", async () => {
+    apiMocks.browseProjectPath.mockResolvedValue({
+      current_path: "C:\\Users\\dev\\Projects",
+      parent_path: "C:\\Users\\dev",
+      entries: [],
+      truncated: false,
+    });
+
+    const { getDefaultProjectRoot, joinProjectPath } = await import("./github-project-flow");
+
+    await expect(getDefaultProjectRoot()).resolves.toBe("C:\\Users\\dev\\Projects");
+    expect(joinProjectPath("C:\\Users\\dev\\Projects", "demo-repo")).toBe(
+      "C:\\Users\\dev\\Projects\\demo-repo",
+    );
+  });
+
+  it("fails closed when the server cannot project a default project root", async () => {
+    apiMocks.browseProjectPath.mockRejectedValue(new Error("server unavailable"));
+
+    const { getDefaultProjectRoot, joinProjectPath } = await import("./github-project-flow");
+
+    await expect(getDefaultProjectRoot()).resolves.toBe("");
+    expect(joinProjectPath("", "demo-repo")).toBe("");
+  });
+
   it("rolls back remote repo and local clone when clone stage fails", async () => {
     apiMocks.cloneGitHubRepo.mockResolvedValue({
       clone_id: "clone-1",

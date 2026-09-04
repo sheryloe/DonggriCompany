@@ -14,6 +14,8 @@ import type {
   SubTask,
   Task,
   WorkflowPackKey,
+  WebSocketConnectionState,
+  WSEventType,
 } from "../types";
 import type { UpdateStatus } from "../api";
 import type { OAuthCallbackResult, RoomThemeMap, View } from "./types";
@@ -69,6 +71,8 @@ interface AppMainLayoutLabels {
 
 interface AppMainLayoutProps {
   connected: boolean;
+  connectionState?: WebSocketConnectionState;
+  on: (type: WSEventType, listener: (payload: unknown) => void) => () => void;
   view: View;
   setView: (view: View) => void;
   departments: Department[];
@@ -145,6 +149,8 @@ interface AppMainLayoutProps {
 
 export default function AppMainLayout({
   connected,
+  connectionState,
+  on,
   view,
   setView,
   departments,
@@ -287,6 +293,8 @@ export default function AppMainLayout({
       <I18nProvider language={uiLanguage}>
         <CommandCenter
           connected={connected}
+          connectionState={connectionState ?? (connected ? "connected" : "reconnecting")}
+          on={on}
           tasks={tasks}
           agents={agents}
           stats={stats}
@@ -295,12 +303,28 @@ export default function AppMainLayout({
           theme={theme}
           toggleTheme={toggleTheme}
           onOpenDecisionInbox={onOpenDecisionInbox}
-          onCreateCommand={async ({ title, departmentId, runAfterCreate }) => {
+          onCreateCommand={async ({
+            title,
+            departmentId,
+            projectId,
+            projectPath,
+            provider,
+            assignedAgentId,
+            runAfterCreate,
+          }) => {
             const taskId = await createTaskForActivePack({
               title,
               department_id: departmentId,
               task_type: "general",
               priority: 3,
+              project_id: projectId,
+              project_path: projectPath,
+              assigned_agent_id: assignedAgentId,
+              workflow_meta_json: {
+                continuity_version: 1,
+                requested_provider: provider,
+                handoff_state: "ready",
+              },
             });
             if (runAfterCreate) await onRunTask(taskId);
             return taskId;

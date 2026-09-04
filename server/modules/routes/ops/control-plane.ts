@@ -12,6 +12,7 @@ import {
   type ControlPlaneSourceFile,
   type ControlPlaneSourceSnapshot,
 } from "../../control-plane/source-adapter.ts";
+import { classifyDockerCommand } from "../../control-plane/docker-command-policy.ts";
 import { createMaster95DefaultAgentRegistry } from "../../master95/agent-registry.ts";
 import { readLivePilotProjection, type Master95RunSummary } from "../../master95/live-pilot-projection.ts";
 import { MASTER95_BLOGGERGENT_LANES, MASTER95_BLOGGERGENT_ROLE_AGENTS } from "../../master95/project-registry.ts";
@@ -4947,14 +4948,10 @@ function evaluateControlHook(body: Record<string, unknown>) {
     };
   }
   if (hook === "pre-docker") {
-    const composeConfigOnly = /\bdocker\s+compose\s+config\b/.test(operation);
-    const riskyDocker = /\b(up|down|prune|volume|rm|restart|build|push|pull)\b/.test(operation) && !composeConfigOnly;
+    const dockerDecision = classifyDockerCommand(operation);
     return {
       ok: true,
-      decision: riskyDocker ? "approval-required" : "allow",
-      reason_code: riskyDocker ? "E_DOCKER_APPROVAL_REQUIRED" : "DOCKER_CONFIG_OR_READ_ONLY",
-      operation_class: riskyDocker ? "docker-runtime-change" : "docker-read-only",
-      required_approval: riskyDocker ? "APR-DOCKER-001" : null,
+      ...dockerDecision,
       hook,
       task,
     };
@@ -5885,10 +5882,12 @@ export function registerControlPlaneRoutes(
       const source = CONTROL_PLANE_SOURCE_ADAPTER.readSnapshot();
       const registry = buildRegistryProjects(db, source);
       const enabledByKey = new Map(source.projects.map((project) => [project.key, project.enabled]));
+      const pathByKey = new Map(source.projects.map((project) => [project.key, project.path]));
       const value = buildControlPlaneDashboardState(
         source,
         registry.projects.map((project) => ({
           ...project,
+          path: pathByKey.get(project.key) ?? "",
           enabled: enabledByKey.get(project.key) ?? true,
         })),
         {

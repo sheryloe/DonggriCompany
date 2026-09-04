@@ -156,6 +156,32 @@ function normalizeMarkdownValue(value: string): string {
   return trimmed;
 }
 
+function isWindowsAbsolutePath(value: string): boolean {
+  return (
+    /^[A-Za-z]:[\\/]/.test(value) ||
+    /^\\\\/.test(value) ||
+    /^\/\/[^/\\]+[\\/][^/\\]+/.test(value) ||
+    /^\\[^\\]/.test(value)
+  );
+}
+
+function resolveProjectPath(controlRoot: string, projectPath: string): string {
+  const configured = projectPath.trim();
+  if (isWindowsAbsolutePath(configured) || path.posix.isAbsolute(configured)) {
+    return configured;
+  }
+
+  if (isWindowsAbsolutePath(controlRoot)) {
+    return path.win32.resolve(controlRoot, configured.replace(/\//g, "\\"));
+  }
+  return path.posix.resolve(controlRoot, configured.replace(/\\/g, "/"));
+}
+
+function resolveConfiguredPath(configuredPath: string): string {
+  const configured = configuredPath.trim();
+  return isWindowsAbsolutePath(configured) ? path.win32.normalize(configured) : path.resolve(configured);
+}
+
 function zodPath(pathParts: PropertyKey[]): string | null {
   return pathParts.length > 0 ? pathParts.map(String).join(".") : null;
 }
@@ -391,10 +417,10 @@ export class ControlPlaneSourceAdapter {
   private readonly now: () => Date;
 
   constructor(options: ControlPlaneSourceAdapterOptions = {}) {
-    this.controlRoot = path.resolve(options.controlRoot ?? "G:\\Donggri_DevDrive");
-    this.controlPlaneRoot = path.resolve(
-      options.controlPlaneRoot ?? path.join(this.controlRoot, "storage", "codex-control"),
-    );
+    this.controlRoot = resolveConfiguredPath(options.controlRoot ?? process.cwd());
+    this.controlPlaneRoot = options.controlPlaneRoot
+      ? resolveConfiguredPath(options.controlPlaneRoot)
+      : resolveProjectPath(this.controlRoot, "storage/codex-control");
     if (!/^sha256:[0-9a-f]{64}$/.test(options.sourceEpoch ?? "")) {
       throw new Error("candidate_source_epoch_required");
     }
@@ -503,7 +529,10 @@ export class ControlPlaneSourceAdapter {
       active_specs: parsedActiveSpecs.active_specs,
       active_spec: compatibilityActiveSpec,
       next_recommended_action: parsedActiveSpecs.next_recommended_action,
-      projects: parsedProjects.projects,
+      projects: parsedProjects.projects.map((project) => ({
+        ...project,
+        path: resolveProjectPath(this.controlRoot, project.path),
+      })),
       files: {
         projects: projectsFile,
         active_specs: activeSpecsFile,

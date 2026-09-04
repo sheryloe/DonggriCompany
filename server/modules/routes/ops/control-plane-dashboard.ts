@@ -2,6 +2,7 @@ import type { ControlPlaneSourceSnapshot } from "../../control-plane/source-adap
 
 export type DashboardRegistryProject = {
   key: string;
+  path: string;
   summary: string | null;
   status: string | null;
   enabled?: boolean | null;
@@ -44,6 +45,7 @@ export function buildControlPlaneDashboardState(
     })),
     projects: visibleProjects.map((project) => ({
       key: project.key,
+      path: project.path,
       summary: project.summary,
       lifecycle_status: project.status,
       enabled: project.enabled !== false,

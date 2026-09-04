@@ -580,6 +580,8 @@ export interface Task {
   workflow_meta_json?: string | null;
   output_format?: string | null;
   project_path: string | null;
+  /** Server-projected durable execution identity. A task ID is never a run ID. */
+  continuity_source_run_id?: string | null;
   policy_version?: string | null;
   policy_snapshot_found?: boolean;
   policy_snapshot_missing?: boolean;
@@ -832,6 +834,8 @@ export interface SubTask {
 }
 
 // WebSocket Events
+export type WebSocketConnectionState = "connecting" | "connected" | "reconnecting" | "auth_recovering";
+
 export type WSEventType =
   | "task_update"
   | "agent_status"
@@ -849,6 +853,8 @@ export type WSEventType =
   | "ceo_office_call"
   | "chat_stream"
   | "task_report"
+  | "continuity_event"
+  | "continuity_run_event"
   | "connected";
 
 export interface WSEvent {

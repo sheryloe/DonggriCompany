@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import type { DatabaseSync } from "node:sqlite";
+import { resolveDonggriControlRoot } from "../../../config/control-root.ts";
 import {
   isExactGitWorkingTreeRoot,
   isPathInsideCanonicalRoot,
@@ -94,18 +95,24 @@ function getDefaultAllowedRoots(): string[] {
   const projectRoot = path.resolve(process.cwd());
   pushRoot(projectRoot);
 
-  // Donggri Dev Drive keeps validation projects under a sibling runtime root.
-  const reposRoot = path.dirname(projectRoot);
-  pushRoot(path.join(reposRoot, "runtime"));
-  pushRoot(path.join(reposRoot, "runtime", path.basename(projectRoot)));
+  const controlRoot = resolveDonggriControlRoot({
+    envValue: process.env.DONGGRI_CONTROL_ROOT,
+    repoRoot: projectRoot,
+  });
+  const hasConfiguredControlRoot =
+    Boolean(process.env.DONGGRI_CONTROL_ROOT?.trim()) ||
+    (fs.existsSync(path.join(controlRoot, "AGENTS.md")) &&
+      fs.existsSync(path.join(controlRoot, "storage", "codex-control")));
 
-  // Desktop/server launchers may run from a bundled app directory instead of
-  // the repository root. Keep the canonical Dev Drive roots available when
-  // they exist so runtime validation projects do not get stranded.
-  const devDriveReposRoot = path.normalize("G:\\Donggri_DevDrive\\repos");
-  pushRoot(devDriveReposRoot);
-  pushRoot(path.join(devDriveReposRoot, "runtime"));
-  pushRoot(path.join(devDriveReposRoot, "runtime", "DonggriCompany"));
+  if (hasConfiguredControlRoot) {
+    pushRoot(path.join(controlRoot, "repos"));
+    pushRoot(path.join(controlRoot, "runtime"));
+  } else {
+    // A standalone clean clone has no Donggri root to infer. Permit only the
+    // clone itself and conventional user project roots that actually exist.
+    pushRoot(path.join(os.homedir(), "Projects"));
+    pushRoot(path.join(os.homedir(), "projects"));
+  }
 
   return roots;
 }

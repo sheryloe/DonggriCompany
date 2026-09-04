@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { resolveDonggriControlRoot } from "../../../config/control-root.ts";
 import { decryptSecret } from "../../../oauth/helpers.ts";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import { buildGitHubHttpsUrl, createGitHubAskPassEnv } from "../../shared/github-askpass.ts";
@@ -10,9 +11,29 @@ import { isValidGitHubRepoName, normalizeGitHubRepoName } from "./github-validat
 
 export type GitHubRouteDeps = Pick<RuntimeContext, "app" | "db" | "broadcast">;
 
+export function resolveGitHubDefaultProjectRoot(options: {
+  allowedRoots: string[];
+  controlRoot: string;
+  controlPlaneConfigured: boolean;
+  homeDir: string;
+}): string {
+  const configuredAllowedRoot = options.allowedRoots.find((candidate) => candidate.trim());
+  if (configuredAllowedRoot) return path.normalize(configuredAllowedRoot);
+  if (options.controlPlaneConfigured) return path.join(options.controlRoot, "repos");
+  return path.join(options.homeDir, "Projects");
+}
+
 export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
   const { app, db, broadcast } = deps;
-  const donggriRepoEstateRoot = "G:\\Donggri_DevDrive\\repos";
+  const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
+  const controlRoot = resolveDonggriControlRoot({
+    envValue: process.env.DONGGRI_CONTROL_ROOT,
+    repoRoot: repositoryRoot,
+  });
+  const controlPlaneConfigured =
+    Boolean(process.env.DONGGRI_CONTROL_ROOT?.trim()) ||
+    (fs.existsSync(path.join(controlRoot, "AGENTS.md")) &&
+      fs.existsSync(path.join(controlRoot, "storage", "codex-control")));
 
   function getGitHubAccessToken(): string | null {
     const row = db
@@ -43,11 +64,10 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     };
   }
 
-  function normalizeTargetPath(rawPath: unknown, fallbackRepoName = "repo"): string {
+  function normalizePathCandidate(rawPath: unknown): string | null {
     const candidate = typeof rawPath === "string" ? rawPath.trim() : "";
-    const defaultRoot = fs.existsSync(donggriRepoEstateRoot) ? donggriRepoEstateRoot : path.join(os.homedir(), "Projects");
-    const defaultTarget = path.join(defaultRoot, fallbackRepoName);
-    let targetPath = candidate || defaultTarget;
+    if (!candidate) return null;
+    let targetPath = candidate;
     if (targetPath === "~") targetPath = os.homedir();
     else if (targetPath.startsWith("~/")) targetPath = path.join(os.homedir(), targetPath.slice(2));
     else if (targetPath === "/Projects" || targetPath.startsWith("/Projects/")) {
@@ -75,7 +95,8 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
     for (const part of text.split(/[\n,;]+/)) {
       const trimmed = part.trim();
       if (!trimmed) continue;
-      const normalized = normalizeTargetPath(trimmed);
+      const normalized = normalizePathCandidate(trimmed);
+      if (!normalized) continue;
       const key = normalizePathForScopeCompare(normalized);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -85,6 +106,17 @@ export function registerGitHubRoutes(deps: GitHubRouteDeps): void {
   }
 
   const PROJECT_PATH_ALLOWED_ROOTS = parseProjectPathAllowedRoots(process.env.PROJECT_PATH_ALLOWED_ROOTS);
+  const DEFAULT_PROJECT_ROOT = resolveGitHubDefaultProjectRoot({
+    allowedRoots: PROJECT_PATH_ALLOWED_ROOTS,
+    controlRoot,
+    controlPlaneConfigured,
+    homeDir: os.homedir(),
+  });
+
+  function normalizeTargetPath(rawPath: unknown, fallbackRepoName = "repo"): string {
+    const candidate = normalizePathCandidate(rawPath);
+    return candidate ?? path.resolve(DEFAULT_PROJECT_ROOT, fallbackRepoName);
+  }
 
   function pathInsideRoot(candidatePath: string, rootPath: string): boolean {
     const rel = path.relative(normalizePathForScopeCompare(rootPath), normalizePathForScopeCompare(candidatePath));

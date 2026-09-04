@@ -2,13 +2,34 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createCliRuntimeTools } from "./cli-runtime.ts";
+import {
+  createCliRuntimeTools as createCliRuntimeToolsBase,
+  PROVIDER_LIVE_EXECUTION_GATE_ID,
+  type ProviderLiveExecutionGate,
+} from "./cli-runtime.ts";
 import { createCliTools } from "../core/cli-tools.ts";
 import { resolveCliAccountPoolEnv } from "./cli-account-pool-env.ts";
+import { resolveHostExecutable, type ResolveHostExecutableInput } from "./host-executable-resolver.ts";
+
+const approveTestProviderExecution: ProviderLiveExecutionGate = (request) =>
+  request.gateId === PROVIDER_LIVE_EXECUTION_GATE_ID;
+
+function resolveTestNodeExecutable(input: ResolveHostExecutableInput) {
+  return resolveHostExecutable({ ...input, allowedCommands: ["node"] });
+}
+
+function createCliRuntimeTools(deps: Parameters<typeof createCliRuntimeToolsBase>[0]) {
+  return createCliRuntimeToolsBase({
+    ...deps,
+    providerLiveExecutionGate: approveTestProviderExecution,
+    resolveExecutable: resolveTestNodeExecutable,
+    cliAccountProfileRoot: deps.cliAccountProfileRoot ?? path.join(deps.logsDir, "office-accounts"),
+  });
+}
 
 type RuntimeHarness = {
   db: DatabaseSync;
@@ -44,12 +65,41 @@ function createHarness(): RuntimeHarness {
   };
 }
 
-function writeAuthArtifact(profileHome: string, provider: "codex" | "gemini" | "jules" = "codex"): void {
+function writeAuthArtifact(profileHome: string, provider: "codex" | "claude" | "gemini" | "jules" = "codex"): void {
   const relativePath =
-    provider === "gemini" ? path.join(".gemini", "oauth_creds.json") : path.join(`.${provider}`, "auth.json");
+    provider === "gemini"
+      ? path.join(".gemini", "oauth_creds.json")
+      : provider === "claude"
+        ? path.join(".claude", ".credentials.json")
+        : path.join(`.${provider}`, "auth.json");
   const authPath = path.join(profileHome, relativePath);
   fs.mkdirSync(path.dirname(authPath), { recursive: true });
-  fs.writeFileSync(authPath, JSON.stringify({ token: "test" }), "utf8");
+  const payload =
+    provider === "codex"
+      ? { tokens: { access_token: "test-access", account_id: "test-account" } }
+      : provider === "claude"
+        ? { claudeAiOauth: { accessToken: "test-access", refreshToken: "test-refresh" } }
+        : provider === "gemini"
+          ? { access_token: "test-access", refresh_token: "test-refresh" }
+          : { access_token: "test-access", refresh_token: "test-refresh" };
+  fs.writeFileSync(authPath, JSON.stringify(payload), "utf8");
+}
+
+function registerConnectedPool(
+  harness: RuntimeHarness,
+  provider: "codex" | "claude" | "gemini" | "jules",
+  poolId = `${provider}-main`,
+): string {
+  const profileHome = path.join(harness.logsDir, "office-accounts", provider, poolId);
+  fs.mkdirSync(profileHome, { recursive: true });
+  writeAuthArtifact(profileHome, provider);
+  harness.db
+    .prepare(
+      `INSERT INTO cli_account_pools (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'connected', 1, 1)`,
+    )
+    .run(randomUUID(), provider, poolId, poolId, profileHome);
+  return profileHome;
 }
 
 async function waitForClose(
@@ -86,10 +136,11 @@ describe("spawnCliAgent codex cli account pool", () => {
       [
         "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);",
         "process.stdout.write(`ENV_USERPROFILE=${process.env.USERPROFILE ?? ''}\\n`);",
+        "process.stdout.write(`ENV_UNRELATED_SECRET=${process.env.DONGGRI_TEST_SECRET ?? ''}\\n`);",
       ].join("\n"),
       "utf8",
     );
-    const profileHome = path.join(harness.logsDir, "codex-main-home");
+    const profileHome = path.join(harness.logsDir, "office-accounts", "codex", "codex-main");
     fs.mkdirSync(profileHome, { recursive: true });
     writeAuthArtifact(profileHome, "codex");
     harness.db
@@ -100,6 +151,15 @@ describe("spawnCliAgent codex cli account pool", () => {
       .run(randomUUID(), profileHome);
 
     const logs: string[] = [];
+    const previousSentinel = process.env.DONGGRI_TEST_SECRET;
+    process.env.DONGGRI_TEST_SECRET = "must-not-reach-child";
+    cleanups.push(() => {
+      if (typeof previousSentinel === "string") process.env.DONGGRI_TEST_SECRET = previousSentinel;
+      else delete process.env.DONGGRI_TEST_SECRET;
+    });
+    const spawnSpy = vi.fn((executable: string, argv: readonly string[], options: any) =>
+      spawn(executable, [...argv], options),
+    ) as unknown as typeof spawn;
     const runtime = createCliRuntimeTools({
       db: harness.db as any,
       logsDir: harness.logsDir,
@@ -127,6 +187,7 @@ describe("spawnCliAgent codex cli account pool", () => {
       activeProcesses: new Map(),
       createSubtaskFromCli: () => {},
       completeSubtaskFromCli: () => {},
+      spawnProcess: spawnSpy,
     });
 
     const logPath = path.join(harness.logsDir, "task-1.log");
@@ -147,7 +208,12 @@ describe("spawnCliAgent codex cli account pool", () => {
     if (process.platform === "win32") {
       expect(logText).toContain(`ENV_USERPROFILE=${profileHome}`);
     }
+    expect(logText).toContain("ENV_UNRELATED_SECRET=");
+    expect(logText).not.toContain("must-not-reach-child");
+    expect(logText).toContain("shell=false");
     expect(logs.some((entry) => entry.includes("RUN FAILED"))).toBe(false);
+    expect(fs.readdirSync(harness.logsDir).filter((name) => name.endsWith(".prompt.txt"))).toEqual([]);
+    expect(spawnSpy).toHaveBeenCalledTimes(1);
   });
 
   it("normalizes legacy app-scoped profile_home to repo-scoped office account directory", () => {
@@ -174,6 +240,7 @@ describe("spawnCliAgent codex cli account pool", () => {
       provider: "codex",
       cliAccountPoolId: "codex-main",
       platform: "win32",
+      profileRoot: path.join(repoRoot, "data", "office-accounts"),
     });
 
     expect(resolved.ok).toBe(true);
@@ -183,12 +250,19 @@ describe("spawnCliAgent codex cli account pool", () => {
     }
   });
 
-  it("keeps existing HOME when cli account pool is not specified", async () => {
+  it("fails closed instead of inheriting process HOME when no authoritative pool exists", async () => {
     const harness = createHarness();
     cleanups.push(() => harness.close());
 
     const scriptPath = path.join(harness.logsDir, "print-home.js");
-    fs.writeFileSync(scriptPath, "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);", "utf8");
+    fs.writeFileSync(
+      scriptPath,
+      [
+        "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);",
+        "process.stdout.write(`ENV_USERPROFILE=${process.env.USERPROFILE ?? ''}\\n`);",
+      ].join("\n"),
+      "utf8",
+    );
 
     const previousHome = process.env.HOME;
     const forcedHome = path.join(harness.logsDir, "default-home");
@@ -199,6 +273,7 @@ describe("spawnCliAgent codex cli account pool", () => {
       else delete process.env.HOME;
     });
 
+    const spawnSpy = vi.fn() as unknown as typeof spawn;
     const runtime = createCliRuntimeTools({
       db: harness.db as any,
       logsDir: harness.logsDir,
@@ -224,6 +299,7 @@ describe("spawnCliAgent codex cli account pool", () => {
       activeProcesses: new Map(),
       createSubtaskFromCli: () => {},
       completeSubtaskFromCli: () => {},
+      spawnProcess: spawnSpy,
     });
 
     const logPath = path.join(harness.logsDir, "task-2.log");
@@ -231,7 +307,215 @@ describe("spawnCliAgent codex cli account pool", () => {
     await waitForClose(child);
     const logText = fs.readFileSync(logPath, "utf8");
 
-    expect(logText).toContain(`ENV_HOME=${forcedHome}`);
+    expect(logText).toContain("RUN FAILED (cli account pool)");
+    expect(logText).toContain("authoritative_cli_account_pool_required: provider=codex");
+    expect(logText).not.toContain(`ENV_HOME=${forcedHome}`);
+    expect(spawnSpy).not.toHaveBeenCalled();
+  });
+
+  it("fails before provider argument construction when the explicit Claude pool is absent", async () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+
+    let buildAgentArgsCalls = 0;
+    const taskLogs: string[] = [];
+    const runtime = createCliRuntimeTools({
+      db: harness.db as any,
+      logsDir: harness.logsDir,
+      buildAgentArgs: () => {
+        buildAgentArgsCalls += 1;
+        return ["node", "-e", "process.stdout.write('should-not-run')"];
+      },
+      clearCliOutputDedup: () => {},
+      normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
+      shouldSkipDuplicateCliOutput: () => false,
+      broadcast: () => {},
+      TASK_RUN_IDLE_TIMEOUT_MS: 0,
+      TASK_RUN_HARD_TIMEOUT_MS: 0,
+      killPidTree: () => {},
+      appendTaskLog: (_taskId, _kind, message) => {
+        taskLogs.push(message);
+      },
+      activeProcesses: new Map(),
+      createSubtaskFromCli: () => {},
+      completeSubtaskFromCli: () => {},
+    });
+
+    const logPath = path.join(harness.logsDir, "task-claude-explicit-pool.log");
+    const child = runtime.spawnCliAgent(
+      "task-claude-explicit-pool",
+      "claude",
+      "test prompt",
+      harness.logsDir,
+      logPath,
+      undefined,
+      undefined,
+      "claude-main",
+    );
+    await waitForClose(child);
+    const logText = fs.readFileSync(logPath, "utf8");
+
+    expect(buildAgentArgsCalls).toBe(0);
+    expect(logText).toContain("RUN FAILED (cli account pool)");
+    expect(logText).toContain("cli_account_pool_not_found: provider=claude account_pool_id=claude-main");
+    expect(logText).not.toContain("should-not-run");
+    expect(taskLogs.some((entry) => entry.includes("cli_account_pool_not_found"))).toBe(true);
+  });
+
+  it("denies G-PROVIDER-LIVE by default without invoking the injected or OS spawn path", async () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+    registerConnectedPool(harness, "codex");
+    const previousBypass = process.env.G_PROVIDER_LIVE;
+    process.env.G_PROVIDER_LIVE = "true";
+    cleanups.push(() => {
+      if (typeof previousBypass === "string") process.env.G_PROVIDER_LIVE = previousBypass;
+      else delete process.env.G_PROVIDER_LIVE;
+    });
+    const spawnSpy = vi.fn() as unknown as typeof spawn;
+    const activeProcesses = new Map();
+    const runtime = createCliRuntimeToolsBase({
+      db: harness.db as any,
+      logsDir: harness.logsDir,
+      buildAgentArgs: () => ["node", "-e", "process.stdout.write('must-not-run')"],
+      clearCliOutputDedup: () => {},
+      normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
+      shouldSkipDuplicateCliOutput: () => false,
+      broadcast: () => {},
+      TASK_RUN_IDLE_TIMEOUT_MS: 0,
+      TASK_RUN_HARD_TIMEOUT_MS: 0,
+      killPidTree: () => {},
+      appendTaskLog: () => {},
+      activeProcesses,
+      createSubtaskFromCli: () => {},
+      completeSubtaskFromCli: () => {},
+      resolveExecutable: resolveTestNodeExecutable,
+      spawnProcess: spawnSpy,
+      cliAccountProfileRoot: path.join(harness.logsDir, "office-accounts"),
+    });
+
+    const logPath = path.join(harness.logsDir, "task-live-gate-denied.log");
+    const child = runtime.spawnCliAgent(
+      "task-live-gate-denied",
+      "codex",
+      "test prompt",
+      harness.logsDir,
+      logPath,
+      undefined,
+      undefined,
+      "codex-main",
+    );
+    let closeCount = 0;
+    child.on("close", () => {
+      closeCount += 1;
+    });
+    await waitForClose(child);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(spawnSpy).not.toHaveBeenCalled();
+    expect(activeProcesses.size).toBe(0);
+    expect(child.pid).toBeUndefined();
+    expect(closeCount).toBe(1);
+    expect(fs.readFileSync(logPath, "utf8")).toContain(`RUN FAILED (approval): ${PROVIDER_LIVE_EXECUTION_GATE_ID}`);
+  });
+
+  it("runs a fake Claude child only through its authoritative isolated profile", async () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+    const profileHome = registerConnectedPool(harness, "claude");
+    const scriptPath = path.join(harness.logsDir, "print-claude-env.js");
+    fs.writeFileSync(
+      scriptPath,
+      [
+        "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);",
+        "process.stdout.write(`ENV_CLAUDECODE=${process.env.CLAUDECODE ?? ''}\\n`);",
+      ].join("\n"),
+      "utf8",
+    );
+    const previousNested = process.env.CLAUDECODE;
+    process.env.CLAUDECODE = "must-not-reach-child";
+    cleanups.push(() => {
+      if (typeof previousNested === "string") process.env.CLAUDECODE = previousNested;
+      else delete process.env.CLAUDECODE;
+    });
+    const runtime = createCliRuntimeTools({
+      db: harness.db as any,
+      logsDir: harness.logsDir,
+      buildAgentArgs: () => ["node", scriptPath],
+      clearCliOutputDedup: () => {},
+      normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
+      shouldSkipDuplicateCliOutput: () => false,
+      broadcast: () => {},
+      TASK_RUN_IDLE_TIMEOUT_MS: 0,
+      TASK_RUN_HARD_TIMEOUT_MS: 0,
+      killPidTree: () => {},
+      appendTaskLog: () => {},
+      activeProcesses: new Map(),
+      createSubtaskFromCli: () => {},
+      completeSubtaskFromCli: () => {},
+    });
+
+    const logPath = path.join(harness.logsDir, "task-claude-isolated.log");
+    const child = runtime.spawnCliAgent(
+      "task-claude-isolated",
+      "claude",
+      "test prompt",
+      harness.logsDir,
+      logPath,
+      undefined,
+      undefined,
+      "claude-main",
+    );
+    await waitForClose(child);
+    const logText = fs.readFileSync(logPath, "utf8");
+
+    expect(logText).toContain(`ENV_HOME=${profileHome}`);
+    expect(logText).toContain("ENV_CLAUDECODE=");
+    expect(logText).not.toContain("must-not-reach-child");
+    expect(logText).not.toContain("RUN FAILED");
+  });
+
+  it("returns a rejected child without invoking spawn when executable resolution fails", async () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+    registerConnectedPool(harness, "codex");
+    const spawnSpy = vi.fn() as unknown as typeof spawn;
+    const runtime = createCliRuntimeToolsBase({
+      db: harness.db as any,
+      logsDir: harness.logsDir,
+      buildAgentArgs: () => ["codex", "exec"],
+      clearCliOutputDedup: () => {},
+      normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
+      shouldSkipDuplicateCliOutput: () => false,
+      broadcast: () => {},
+      TASK_RUN_IDLE_TIMEOUT_MS: 0,
+      TASK_RUN_HARD_TIMEOUT_MS: 0,
+      killPidTree: () => {},
+      appendTaskLog: () => {},
+      activeProcesses: new Map(),
+      createSubtaskFromCli: () => {},
+      completeSubtaskFromCli: () => {},
+      providerLiveExecutionGate: approveTestProviderExecution,
+      resolveExecutable: () => ({ ok: false as const, reason: "executable_not_found: codex" }),
+      spawnProcess: spawnSpy,
+      cliAccountProfileRoot: path.join(harness.logsDir, "office-accounts"),
+    });
+
+    const logPath = path.join(harness.logsDir, "task-resolver-failed.log");
+    const child = runtime.spawnCliAgent(
+      "task-resolver-failed",
+      "codex",
+      "test prompt",
+      harness.logsDir,
+      logPath,
+      undefined,
+      undefined,
+      "codex-main",
+    );
+    await waitForClose(child);
+
+    expect(spawnSpy).not.toHaveBeenCalled();
+    expect(fs.readFileSync(logPath, "utf8")).toContain("RUN FAILED (executable): executable_not_found: codex");
   });
 
   it("auto-assigns single connected pool when cli account pool is not specified", async () => {
@@ -239,8 +523,15 @@ describe("spawnCliAgent codex cli account pool", () => {
     cleanups.push(() => harness.close());
 
     const scriptPath = path.join(harness.logsDir, "print-auto-home.js");
-    fs.writeFileSync(scriptPath, "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);", "utf8");
-    const profileHome = path.join(harness.logsDir, "gemini-main-home");
+    fs.writeFileSync(
+      scriptPath,
+      [
+        "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);",
+        "process.stdout.write(`ENV_USERPROFILE=${process.env.USERPROFILE ?? ''}\\n`);",
+      ].join("\n"),
+      "utf8",
+    );
+    const profileHome = path.join(harness.logsDir, "office-accounts", "gemini", "gemini-main");
     fs.mkdirSync(profileHome, { recursive: true });
     writeAuthArtifact(profileHome, "gemini");
     harness.db
@@ -278,7 +569,11 @@ describe("spawnCliAgent codex cli account pool", () => {
     await waitForClose(child);
     const logText = fs.readFileSync(logPath, "utf8");
 
-    expect(logText).toContain(`ENV_HOME=${profileHome}`);
+    const isolatedRunRoot = path.join(harness.logsDir, ".cli-homes", "gemini");
+    const isolatedRunHome = logText.match(/ENV_HOME=([^\n\r]*)/u)?.[1] ?? "";
+    expect(isolatedRunHome.startsWith(path.join(isolatedRunRoot, "task-3--gemini-main--"))).toBe(true);
+    if (process.platform === "win32") expect(logText).toContain(`ENV_USERPROFILE=${isolatedRunHome}`);
+    expect(logText).not.toContain(`ENV_HOME=${profileHome}`);
     expect(logText).toContain("provider=gemini");
     expect(logText).toContain("selected_by=auto");
   });
@@ -287,8 +582,8 @@ describe("spawnCliAgent codex cli account pool", () => {
     const harness = createHarness();
     cleanups.push(() => harness.close());
 
-    const profileA = path.join(harness.logsDir, "codex-home-a");
-    const profileB = path.join(harness.logsDir, "codex-home-b");
+    const profileA = path.join(harness.logsDir, "office-accounts", "codex", "codex-a");
+    const profileB = path.join(harness.logsDir, "office-accounts", "codex", "codex-b");
     fs.mkdirSync(profileA, { recursive: true });
     fs.mkdirSync(profileB, { recursive: true });
     writeAuthArtifact(profileA, "codex");
@@ -341,11 +636,110 @@ describe("spawnCliAgent codex cli account pool", () => {
     expect(taskLogs.some((entry) => entry.includes("RUN FAILED (cli account pool)"))).toBe(false);
   });
 
+  it("uses a fresh pool-bound Gemini run home when the same task changes account pools", async () => {
+    const harness = createHarness();
+    cleanups.push(() => harness.close());
+    registerConnectedPool(harness, "gemini", "gemini-a");
+    registerConnectedPool(harness, "gemini", "gemini-b");
+    const scriptPath = path.join(harness.logsDir, "print-gemini-pool-home.js");
+    fs.writeFileSync(scriptPath, "process.stdout.write(`ENV_HOME=${process.env.HOME ?? ''}\\n`);", "utf8");
+    const runtime = createCliRuntimeTools({
+      db: harness.db as any,
+      logsDir: harness.logsDir,
+      buildAgentArgs: () => ["node", scriptPath],
+      clearCliOutputDedup: () => {},
+      normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
+      shouldSkipDuplicateCliOutput: () => false,
+      broadcast: () => {},
+      TASK_RUN_IDLE_TIMEOUT_MS: 0,
+      TASK_RUN_HARD_TIMEOUT_MS: 0,
+      killPidTree: () => {},
+      appendTaskLog: () => {},
+      activeProcesses: new Map(),
+      createSubtaskFromCli: () => {},
+      completeSubtaskFromCli: () => {},
+    });
+
+    const homes: string[] = [];
+    for (const poolId of ["gemini-a", "gemini-b"]) {
+      const logPath = path.join(harness.logsDir, `${poolId}.log`);
+      const child = runtime.spawnCliAgent(
+        "same-task",
+        "gemini",
+        "test prompt",
+        harness.logsDir,
+        logPath,
+        undefined,
+        undefined,
+        poolId,
+      );
+      await waitForClose(child);
+      homes.push(fs.readFileSync(logPath, "utf8").match(/ENV_HOME=([^\n\r]*)/u)?.[1] ?? "");
+    }
+
+    expect(homes[0]).toContain("same-task--gemini-a--");
+    expect(homes[1]).toContain("same-task--gemini-b--");
+    expect(homes[0]).not.toBe(homes[1]);
+  });
+
+  it.runIf(process.platform === "win32")(
+    "rejects a Gemini run-root junction before copying credentials or invoking spawn",
+    async () => {
+      const harness = createHarness();
+      cleanups.push(() => harness.close());
+      registerConnectedPool(harness, "gemini", "gemini-main");
+      const junctionTarget = path.join(harness.logsDir, "junction-target");
+      const runRoot = path.join(harness.logsDir, ".cli-homes", "gemini");
+      fs.mkdirSync(junctionTarget, { recursive: true });
+      fs.mkdirSync(path.dirname(runRoot), { recursive: true });
+      try {
+        fs.symlinkSync(junctionTarget, runRoot, "junction");
+      } catch {
+        return;
+      }
+      const spawnSpy = vi.fn() as unknown as typeof spawn;
+      const runtime = createCliRuntimeTools({
+        db: harness.db as any,
+        logsDir: harness.logsDir,
+        buildAgentArgs: () => ["node", "--version"],
+        clearCliOutputDedup: () => {},
+        normalizeStreamChunk: (chunk: Buffer | string) => String(chunk),
+        shouldSkipDuplicateCliOutput: () => false,
+        broadcast: () => {},
+        TASK_RUN_IDLE_TIMEOUT_MS: 0,
+        TASK_RUN_HARD_TIMEOUT_MS: 0,
+        killPidTree: () => {},
+        appendTaskLog: () => {},
+        activeProcesses: new Map(),
+        createSubtaskFromCli: () => {},
+        completeSubtaskFromCli: () => {},
+        spawnProcess: spawnSpy,
+      });
+
+      const logPath = path.join(harness.logsDir, "gemini-junction.log");
+      const child = runtime.spawnCliAgent(
+        "gemini-junction",
+        "gemini",
+        "test prompt",
+        harness.logsDir,
+        logPath,
+        undefined,
+        undefined,
+        "gemini-main",
+      );
+      await waitForClose(child);
+
+      expect(spawnSpy).not.toHaveBeenCalled();
+      expect(fs.readFileSync(logPath, "utf8")).toContain("gemini_run_root_reparse_rejected");
+      expect(fs.readdirSync(junctionTarget)).toEqual([]);
+    },
+  );
+
   it("fails when jules pool is not explicitly selected", async () => {
     const harness = createHarness();
     cleanups.push(() => harness.close());
 
-    const profileHome = path.join(harness.logsDir, "jules-home-main");
+    const profileHome = path.join(harness.logsDir, "office-accounts", "jules", "jules-main");
     fs.mkdirSync(profileHome, { recursive: true });
     writeAuthArtifact(profileHome, "jules");
     harness.db
@@ -395,7 +789,7 @@ describe("spawnCliAgent codex cli account pool", () => {
     const harness = createHarness();
     cleanups.push(() => harness.close());
 
-    const profileHome = path.join(harness.logsDir, "codex-no-auth-home");
+    const profileHome = path.join(harness.logsDir, "office-accounts", "codex", "codex-main");
     fs.mkdirSync(profileHome, { recursive: true });
     harness.db
       .prepare(
@@ -409,6 +803,7 @@ describe("spawnCliAgent codex cli account pool", () => {
       provider: "codex",
       cliAccountPoolId: "codex-main",
       platform: "win32",
+      profileRoot: path.join(harness.logsDir, "office-accounts"),
     });
 
     expect(resolved.ok).toBe(false);
@@ -420,6 +815,7 @@ describe("spawnCliAgent codex cli account pool", () => {
   it("terminates a lingering codex process after final agent output", async () => {
     const harness = createHarness();
     cleanups.push(() => harness.close());
+    registerConnectedPool(harness, "codex");
 
     const previousGrace = process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS;
     process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS = "50";
@@ -470,7 +866,16 @@ describe("spawnCliAgent codex cli account pool", () => {
     });
 
     const logPath = path.join(harness.logsDir, "task-linger.log");
-    const child = runtime.spawnCliAgent("task-linger", "codex", "test prompt", harness.logsDir, logPath);
+    const child = runtime.spawnCliAgent(
+      "task-linger",
+      "codex",
+      "test prompt",
+      harness.logsDir,
+      logPath,
+      undefined,
+      undefined,
+      "codex-main",
+    );
     await waitForClose(child, 5_000);
     const logText = fs.readFileSync(logPath, "utf8");
 
@@ -482,6 +887,7 @@ describe("spawnCliAgent codex cli account pool", () => {
   it("does not treat a non-completion agent message as successful final output", async () => {
     const harness = createHarness();
     cleanups.push(() => harness.close());
+    registerConnectedPool(harness, "codex");
 
     const previousGrace = process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS;
     process.env.TASK_RUN_FINAL_OUTPUT_GRACE_MS = "40";
@@ -532,7 +938,16 @@ describe("spawnCliAgent codex cli account pool", () => {
     });
 
     const logPath = path.join(harness.logsDir, "task-linger-non-final.log");
-    const child = runtime.spawnCliAgent("task-linger-non-final", "codex", "test prompt", harness.logsDir, logPath);
+    const child = runtime.spawnCliAgent(
+      "task-linger-non-final",
+      "codex",
+      "test prompt",
+      harness.logsDir,
+      logPath,
+      undefined,
+      undefined,
+      "codex-main",
+    );
     await waitForClose(child, 5_000);
     const logText = fs.readFileSync(logPath, "utf8");
 
@@ -545,6 +960,7 @@ describe("spawnCliAgent codex cli account pool", () => {
   it("does not reset idle timeout for ignorable Codex CLI noise", async () => {
     const harness = createHarness();
     cleanups.push(() => harness.close());
+    registerConnectedPool(harness, "codex");
 
     const scriptPath = path.join(harness.logsDir, "codex-noise-only.js");
     fs.writeFileSync(
@@ -592,7 +1008,16 @@ describe("spawnCliAgent codex cli account pool", () => {
     });
 
     const logPath = path.join(harness.logsDir, "task-codex-noise-only.log");
-    const child = runtime.spawnCliAgent("task-codex-noise-only", "codex", "test prompt", harness.logsDir, logPath);
+    const child = runtime.spawnCliAgent(
+      "task-codex-noise-only",
+      "codex",
+      "test prompt",
+      harness.logsDir,
+      logPath,
+      undefined,
+      undefined,
+      "codex-main",
+    );
     await waitForClose(child, 5_000);
     const logText = fs.readFileSync(logPath, "utf8");
 

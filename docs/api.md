@@ -2,13 +2,14 @@
 
 This document defines a contributor-facing API baseline for DonggriCompany.
 It is intentionally compact and focused on frequently used endpoints.
-Current baseline target: `v2.0.4` (local snapshot, 2026-05-20).
+Current baseline target: `1.0.0-alpha.2` source candidate. This is a local contract snapshot, not a published GitHub Release.
 
 ## Base
 
 - Base URL (local): `http://127.0.0.1:8790`
 - API prefix: `/api`
-- Health endpoints: `/healthz`, `/api/health`
+- Process liveness: `/livez` (HTTP `200` while the API process is serving)
+- Dependency readiness: `/readyz`; compatibility routes `/health`, `/healthz`, and `/api/health` use the same readiness contract and return HTTP `503` when SQLite integrity, Supervisor ownership, or boot reconciliation is unavailable
 - Swagger UI: `/api/docs`
 - OpenAPI JSON: `/api/openapi.json`
 
@@ -171,6 +172,37 @@ or
 | PATCH  | `/api/subtasks/:id`              | Update subtask                                              |
 
 `GET /api/tasks` supports query filters: `status`, `department_id`, `agent_id`, `project_id`, `workflow_pack_key`.
+
+### Codex / Claude Continuity Checkpoints
+
+The continuity API persists a sanitized handoff/checkpoint chain for one real task and source run. It supports both provider changes and same-provider resume. It does not persist raw prompts, credentials, tokens, or complete transcripts.
+
+| Method | Path                                                    | Purpose                                                                                  |
+| ------ | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| GET    | `/api/continuity/checkpoints/recent`                    | Read recent checkpoint rows                                                              |
+| GET    | `/api/continuity/tasks/:taskId/checkpoints`             | Read the ordered checkpoint chain for one task                                           |
+| POST   | `/api/continuity/checkpoints`                           | Create a `ready_for_transfer` checkpoint from an actual task/run and connected pools     |
+| POST   | `/api/continuity/checkpoints/:checkpointId/validate`    | Recheck workspace identity and target-pool readiness                                     |
+| POST   | `/api/continuity/checkpoints/:checkpointId/accept`      | Consume one matching server-side approval receipt and append an `accepted` checkpoint    |
+| POST   | `/api/continuity/checkpoints/:checkpointId/resume`      | Revalidate the consumed approval, workspace, and readiness immediately before dispatch   |
+| POST   | `/api/continuity/dispatches/:dispatchId/reconcile`      | Reconcile a `dispatch_uncertain` dispatch by its reserved identity without blind respawn |
+
+Every continuity mutation requires a non-empty `idempotency_key` in the JSON body. Browser clients also send the same value as `x-idempotency-key`. Reusing a key with different input fails closed.
+
+`POST .../accept` does not create or infer approval authority. `approval_ref` must identify an unexpired, untampered Control Plane receipt whose operation is exactly `continuity_transfer_accept`. The receipt and persisted preview must match the checkpoint project, checkpoint target, workspace digest (`source_epoch`), exact scope (`checkpoint_id`, `task_id`, `source_run_id`, `target_provider`, `target_account_pool_id`), and command (`continuity accept <checkpoint_id>`). Synthetic values such as `ui:*` are rejected. The endpoint reserves the one-use receipt and idempotency result atomically; a second consumer is rejected.
+
+`POST .../resume` accepts only the checkpoint returned by the successful accept operation. It revalidates that the receipt was consumed into a completed, hash-consistent accept outcome and is still unexpired before attempting dispatch.
+
+Production execution is intentionally unavailable in the current source candidate: no live Supervisor dispatcher or reconciler is registered by default. The default dispatcher reports `continuity_dispatch_adapter_unbound`, and the persisted resume result is `dispatch_uncertain` with blocker `dispatch_failed_or_unknown`; default reconcile remains `unknown`. These endpoints and fake-adapter tests are local contracts, not evidence that Codex or Claude was executed.
+
+Example accept body:
+
+```json
+{
+  "approval_ref": "approval:server-issued-id",
+  "idempotency_key": "continuity-accept-unique-request-id"
+}
+```
 
 ### Reports / Diagnostics
 

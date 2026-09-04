@@ -17,20 +17,22 @@
 
 ## Base Branch Policy
 
-- External contributor PRs must target `dev`.
-- `main` is only for maintainer-approved emergency hotfix PRs.
-- If merged to `main` as hotfix, `main -> dev` back-merge is required.
+- `main` is the only long-lived branch.
+- External contributors create a short-lived branch in a fork and target `main`.
+- Keep the PR focused; unrelated release, deployment, or destructive operations need separate maintainer approval.
 
 ## Checklist
 
-- [ ] Base branch is `dev` (or emergency hotfix to `main` with rationale below)
+- [ ] Base branch is `main`
 - [ ] Linked issue or context is included
 - [ ] `pnpm run format:check` passes
 - [ ] `pnpm run lint` passes
 - [ ] `pnpm run build` passes
 - [ ] `pnpm run test:ci` passes (or reason provided if skipped)
 - [ ] Docs/README were updated if behavior or setup changed
+- [ ] Provider-continuity changes include drift, idempotency, fail-closed, and redaction coverage where applicable
+- [ ] No OAuth token, API key, raw transcript, full patch, runtime DB, or terminal log is included
 
-## Hotfix Rationale (required only when base is `main`)
+## Release or Operational Impact
 
-<!-- Explain why this must go directly to main and who approved it. -->
+<!-- State whether this changes release, deployment, migration, credentials, Docker lifecycle, or destructive-operation scope. -->

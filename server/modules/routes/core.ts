@@ -43,6 +43,7 @@ import { registerCalendarIntakeRoutes } from "./ops/calendar-intake-routes.ts";
 import { registerGmailIntakeRoutes } from "./ops/gmail-intake-routes.ts";
 import type { AgentRow, MeetingMinuteEntryRow, MeetingMinutesRow, MeetingReviewDecision } from "./shared/types.ts";
 import { getDiscordReceiverStatus } from "../../messenger/discord-receiver.ts";
+import { runnerSupervisorRegistry } from "../services/runner-supervisor.ts";
 
 export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> {
   const __ctx: RuntimeContext = ctx;
@@ -70,6 +71,7 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
   const createWorktree = __ctx.createWorktree;
   const crossDeptNextCallbacks = __ctx.crossDeptNextCallbacks;
   const db = __ctx.db;
+  const runnerSupervisor = runnerSupervisorRegistry.getOrCreate(db);
   const dbPath = __ctx.dbPath;
   const delegatedTaskToSubtask = __ctx.delegatedTaskToSubtask;
   const deptCount = __ctx.deptCount;
@@ -230,7 +232,22 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
   // API ENDPOINTS
   // ===========================================================================
 
-  registerUpdateAutoRoutes(__ctx);
+  registerUpdateAutoRoutes(__ctx, {
+    supervisorReadiness: () => {
+      const readiness = runnerSupervisor.getReadiness();
+      return { ready: readiness.ready, reason: readiness.reason ?? undefined };
+    },
+    reconciliationReadiness: () => {
+      const readiness = runnerSupervisor.getReadiness();
+      if (!readiness.bootReconciled) {
+        return { ready: false, reason: "runner_supervisor_boot_reconcile_pending" };
+      }
+      if (readiness.bootReconcileFailures > 0) {
+        return { ready: false, reason: "runner_supervisor_boot_reconcile_failed" };
+      }
+      return { ready: true };
+    },
+  });
   registerCalendarIntakeRoutes(__ctx);
   registerGmailIntakeRoutes(__ctx);
 
@@ -505,6 +522,7 @@ export function registerRoutesPartA(ctx: RuntimeContext): Record<string, never> 
     isTaskWorkflowInterrupted,
     startTaskExecutionForAgent,
     randomDelay,
+    continuitySupervisor: runnerSupervisor,
   });
 
   registerGitHubRoutes({

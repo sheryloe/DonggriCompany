@@ -1,82 +1,199 @@
-import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
+import { afterEach, describe, expect, it } from "vitest";
+import { applyContinuityCheckpointSchema } from "../bootstrap/schema/continuity-checkpoint-schema.ts";
+import { applyContinuityRunSchema } from "../bootstrap/schema/continuity-run-schema.ts";
 import { applyOAuthRunnerIsolationSchema } from "../bootstrap/schema/oauth-runner-isolation.ts";
+import { SqliteContinuityRunLedger, type ContinuityRunStatus } from "../workflow/continuity/run-ledger.ts";
 import { OfficeRunnerOrchestrator } from "./runner-orchestrator.ts";
+import { RunnerSupervisor, type RunnerChildIdentity, type RunnerChildPort } from "./runner-supervisor.ts";
 
-describe("OfficeRunnerOrchestrator", () => {
-  let db: DatabaseSync;
-  let previousEnv: NodeJS.ProcessEnv;
+const IDENTITY: RunnerChildIdentity = {
+  pid: 5252,
+  processStartedAt: "2026-08-29T00:00:00.000Z",
+  processFingerprint: "c".repeat(64),
+  providerNativeSessionId: "native-office-1",
+};
 
-  beforeEach(() => {
-    previousEnv = { ...process.env };
-    process.env.OFFICE_RUNNER_DOCKER_ENABLED = "0";
-    process.env.OFFICE_RUNNER_MAX_ACTIVE = "5";
-    process.env.OFFICE_RUNNER_IDLE_TTL_MS = "900000";
-    db = new DatabaseSync(":memory:");
-    applyOAuthRunnerIsolationSchema(db);
-  });
+class FakeChildPort implements RunnerChildPort {
+  readonly bound = true;
+  startCount = 0;
+  closeCount = 0;
+
+  start() {
+    this.startCount += 1;
+    return { ...IDENTITY };
+  }
+
+  close() {
+    this.closeCount += 1;
+    return {
+      acknowledged: true,
+      alive: false,
+      pid: IDENTITY.pid,
+      processFingerprint: IDENTITY.processFingerprint,
+    };
+  }
+}
+
+describe("OfficeRunnerOrchestrator compatibility adapter", () => {
+  const databases: DatabaseSync[] = [];
 
   afterEach(() => {
-    process.env = previousEnv;
-    db.close();
+    while (databases.length > 0) databases.pop()?.close();
   });
 
-  it("limits active runners to maxActive and queues overflow in FIFO", () => {
-    const events: Array<{ type: string; payload: unknown }> = [];
+  function createDb() {
+    const db = new DatabaseSync(":memory:");
+    applyOAuthRunnerIsolationSchema(db);
+    applyContinuityCheckpointSchema(db);
+    applyContinuityRunSchema(db);
+    databases.push(db);
+    return db;
+  }
+
+  function reserve(db: DatabaseSync, status: ContinuityRunStatus = "reserved") {
+    return new SqliteContinuityRunLedger(db).reserve({
+      run_id: "run-office-1",
+      project_id: "project-1",
+      task_id: "task-1",
+      checkpoint_id: null,
+      provider: "codex",
+      account_pool_id: "codex-main",
+      dispatch_id: "dispatch-office-1",
+      status,
+      created_at: "2026-08-29T00:00:00.000Z",
+    }).run;
+  }
+
+  it("keeps Docker disabled and fails closed through the default unbound Supervisor", async () => {
+    const db = createDb();
+    const orchestrator = new OfficeRunnerOrchestrator({ db, nowMs: Date.now, broadcast: () => undefined });
+
+    expect(orchestrator.getConfig().dockerEnabled).toBe(false);
+    expect(orchestrator.getReadiness()).toMatchObject({ ready: false, reason: "runner_supervisor_unbound" });
+    await expect(orchestrator.requestRunner("codex", "codex-main", { kind: "activate" })).rejects.toThrow(
+      "runner_supervisor_unbound",
+    );
+    expect(db.prepare("SELECT COUNT(*) AS count FROM continuity_runs").get()).toEqual({ count: 0 });
+  });
+
+  it("starts only a pre-reserved continuity run and never writes the legacy prompt queue", async () => {
+    const db = createDb();
+    const child = new FakeChildPort();
+    const supervisor = new RunnerSupervisor(db, {
+      childPort: child,
+      now: () => new Date("2026-08-29T00:01:00.000Z"),
+      instanceId: "office-test",
+    });
+    reserve(db);
+    const broadcasts: string[] = [];
     const orchestrator = new OfficeRunnerOrchestrator({
       db,
-      nowMs: () => Date.now(),
-      broadcast: (type, payload) => events.push({ type, payload }),
+      nowMs: Date.now,
+      supervisor,
+      broadcast: (event) => broadcasts.push(event),
     });
 
-    const requests: Array<{ provider: "jules" | "codex" | "gemini"; pool: string }> = [
-      { provider: "jules", pool: "pool-1" },
-      { provider: "codex", pool: "pool-2" },
-      { provider: "gemini", pool: "pool-3" },
-      { provider: "jules", pool: "pool-4" },
-      { provider: "codex", pool: "pool-5" },
-      { provider: "gemini", pool: "pool-6" },
-    ];
+    const result = await orchestrator.requestRunner("codex", "codex-main", {
+      kind: "cli_run",
+      runId: "run-office-1",
+      dispatchId: "dispatch-office-1",
+    });
 
-    const results = requests.map((entry) =>
-      orchestrator.requestRunner(entry.provider, entry.pool, {
-        kind: "activate",
-      }),
-    );
-
-    expect(results.filter((r) => r.status === "active")).toHaveLength(5);
-    expect(results.filter((r) => r.status === "queued")).toHaveLength(1);
-
-    const activeRunners = orchestrator.listRunners().filter((row) => row.status === "active");
-    expect(activeRunners).toHaveLength(5);
-    const queued = orchestrator.listQueue().filter((item) => item.status === "queued");
-    expect(queued).toHaveLength(1);
-    expect(queued[0].accountPoolId).toBe("pool-6");
-
-    const firstActive = activeRunners[0];
-    orchestrator.deactivateRunner(firstActive.provider, firstActive.accountPoolId);
-
-    const promoted = orchestrator
-      .listRunners()
-      .find((runner) => runner.provider === "gemini" && runner.accountPoolId === "pool-6");
-    expect(promoted?.status).toBe("active");
-    expect(orchestrator.listQueue().filter((item) => item.status === "queued")).toHaveLength(0);
-    expect(events.length).toBeGreaterThan(0);
+    expect(child.startCount).toBe(1);
+    expect(result).toMatchObject({
+      status: "active",
+      runner: { status: "active", containerName: "host-native:run-office-1" },
+      queueItem: { id: "dispatch-office-1", status: "running" },
+    });
+    expect(broadcasts).toEqual(["runner.updated", "runner.queue.updated"]);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM office_runner_queue").get()).toEqual({ count: 0 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM office_cli_runs").get()).toEqual({ count: 0 });
   });
 
-  it("keeps same provider+pool request on existing active runner without queueing", () => {
+  it("treats activate as a readiness/projection adapter and never spawns", async () => {
+    const db = createDb();
+    const child = new FakeChildPort();
+    const supervisor = new RunnerSupervisor(db, { childPort: child, instanceId: "office-test" });
+    const broadcasts: string[] = [];
     const orchestrator = new OfficeRunnerOrchestrator({
       db,
-      nowMs: () => Date.now(),
+      nowMs: Date.now,
+      supervisor,
+      broadcast: (event) => broadcasts.push(event),
+    });
+
+    const result = await orchestrator.requestRunner("claude", "claude-main", { kind: "activate" });
+
+    expect(result).toEqual({ status: "idle", runner: null, queueItem: null });
+    expect(child.startCount).toBe(0);
+    expect(child.closeCount).toBe(0);
+    expect(broadcasts).toEqual([]);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM continuity_runs").get()).toEqual({ count: 0 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM continuity_run_events").get()).toEqual({ count: 0 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM office_runner_queue").get()).toEqual({ count: 0 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM office_cli_runs").get()).toEqual({ count: 0 });
+  });
+
+  it.each([
+    ["running", "active", "running"],
+    ["paused", "idle", "done"],
+    ["completed", "idle", "done"],
+    ["failed", "error", "failed"],
+  ] as const)(
+    "projects persisted %s truth without spawn, queue writes, or broadcasts",
+    async (persistedStatus, expectedStatus, expectedQueueStatus) => {
+      const db = createDb();
+      const child = new FakeChildPort();
+      const supervisor = new RunnerSupervisor(db, { childPort: child, instanceId: "office-test" });
+      reserve(db, persistedStatus);
+      const broadcasts: string[] = [];
+      const orchestrator = new OfficeRunnerOrchestrator({
+        db,
+        nowMs: Date.now,
+        supervisor,
+        broadcast: (event) => broadcasts.push(event),
+      });
+      const runsBefore = db.prepare("SELECT * FROM continuity_runs ORDER BY run_id").all();
+      const eventsBefore = db.prepare("SELECT * FROM continuity_run_events ORDER BY run_id, sequence").all();
+
+      const result = await orchestrator.requestRunner("codex", "codex-main", { kind: "activate" });
+
+      expect(result.status).toBe(expectedStatus);
+      expect(result.runner).toMatchObject({ status: expectedStatus, containerName: "host-native:run-office-1" });
+      expect(result.status).toBe(result.runner?.status);
+      expect(result.queueItem).toMatchObject({ id: "dispatch-office-1", status: expectedQueueStatus });
+      expect(child.startCount).toBe(0);
+      expect(child.closeCount).toBe(0);
+      expect(broadcasts).toEqual([]);
+      expect(db.prepare("SELECT * FROM continuity_runs ORDER BY run_id").all()).toEqual(runsBefore);
+      expect(db.prepare("SELECT * FROM continuity_run_events ORDER BY run_id, sequence").all()).toEqual(eventsBefore);
+      expect(db.prepare("SELECT COUNT(*) AS count FROM office_runner_queue").get()).toEqual({ count: 0 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM office_cli_runs").get()).toEqual({ count: 0 });
+    },
+  );
+
+  it("deactivate delegates to the Supervisor fingerprint-checked pause", async () => {
+    const db = createDb();
+    const child = new FakeChildPort();
+    const supervisor = new RunnerSupervisor(db, {
+      childPort: child,
+      now: () => new Date("2026-08-29T00:01:00.000Z"),
+      instanceId: "office-test",
+    });
+    reserve(db);
+    await supervisor.startReserved("run-office-1", "dispatch-office-1");
+    const orchestrator = new OfficeRunnerOrchestrator({
+      db,
+      nowMs: Date.now,
+      supervisor,
       broadcast: () => undefined,
     });
 
-    const first = orchestrator.requestRunner("jules", "default", { kind: "activate" });
-    const second = orchestrator.requestRunner("jules", "default", { kind: "activate" });
+    const result = await orchestrator.deactivateRunner("codex", "codex-main");
 
-    expect(first.status).toBe("active");
-    expect(second.status).toBe("active");
-    expect(orchestrator.listRunners().filter((row) => row.status === "active")).toHaveLength(1);
-    expect(orchestrator.listQueue().filter((item) => item.status === "queued")).toHaveLength(0);
+    expect(result).toMatchObject({ provider: "codex", accountPoolId: "codex-main", status: "idle" });
+    expect(child.closeCount).toBe(1);
+    expect(supervisor.getRun("run-office-1")?.status).toBe("paused");
   });
 });

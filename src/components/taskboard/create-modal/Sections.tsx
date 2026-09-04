@@ -377,7 +377,13 @@ export function ProjectSection({
                           ja: "Resolving default root...",
                           zh: "Resolving default root...",
                         })
-                      : defaultProjectRoot || "G:\\Donggri_DevDrive\\repos"}
+                      : defaultProjectRoot ||
+                        t({
+                          ko: "서버에서 확인되지 않음",
+                          en: "Not resolved by the server",
+                          ja: "Not resolved by the server",
+                          zh: "Not resolved by the server",
+                        })}
                   </p>
                 </div>
               </div>

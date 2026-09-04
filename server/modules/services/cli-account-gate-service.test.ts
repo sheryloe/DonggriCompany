@@ -12,6 +12,15 @@ vi.mock("node:child_process", () => ({
 }));
 
 const mockedExecFileSync = vi.mocked(execFileSync);
+const originalAccountGateSecret = process.env.DONGGRI_ACCOUNT_GATE_SECRET;
+const mockedResolveExecutable = vi.fn((input: { command: string; argv?: readonly string[] }): any => ({
+  ok: true as const,
+  executable: input.command,
+  argv: [...(input.argv ?? [])],
+  commandPath: input.command,
+  source: "native" as const,
+  shell: false as const,
+}));
 
 describe("CliAccountGateService", () => {
   let db: DatabaseSync;
@@ -20,6 +29,7 @@ describe("CliAccountGateService", () => {
 
   beforeEach(() => {
     mockedExecFileSync.mockReset();
+    mockedResolveExecutable.mockClear();
     db = new DatabaseSync(":memory:");
     applyOAuthRunnerIsolationSchema(db);
     profileRoot = fs.mkdtempSync(path.join(os.tmpdir(), "climpire-cli-pools-"));
@@ -27,17 +37,34 @@ describe("CliAccountGateService", () => {
   });
 
   afterEach(() => {
+    if (typeof originalAccountGateSecret === "string") {
+      process.env.DONGGRI_ACCOUNT_GATE_SECRET = originalAccountGateSecret;
+    } else {
+      delete process.env.DONGGRI_ACCOUNT_GATE_SECRET;
+    }
     db.close();
     fs.rmSync(profileRoot, { recursive: true, force: true });
     vi.restoreAllMocks();
   });
 
-  function createService() {
+  function createService(
+    options: {
+      approveProviderExecution?: boolean;
+      gateRequests?: Array<Record<string, unknown>>;
+    } = {},
+  ) {
     return new CliAccountGateService({
       db,
       nowMs: () => nowValue++,
       profileRoot,
-      containerName: "donggricompany",
+      resolveExecutable: mockedResolveExecutable,
+      execFileCommand: mockedExecFileSync as any,
+      providerLiveExecutionGate: options.approveProviderExecution
+        ? (request) => {
+            options.gateRequests?.push(request);
+            return request.gateId === "G-PROVIDER-LIVE";
+          }
+        : undefined,
     });
   }
 
@@ -49,6 +76,34 @@ describe("CliAccountGateService", () => {
     expect(pool.accountPoolId).toBe("codex-main");
     expect(pool.profileHome).toBe(path.join(profileRoot, "codex", "codex-main"));
     expect(pool.status).toBe("auth_required");
+  });
+
+  it("keeps canonical dot and dash pool identities isolated and rejects noncanonical case", () => {
+    const service = createService();
+    const dotted = service.createPool("codex", "account.one");
+    const dashed = service.createPool("codex", "account-one");
+
+    expect(dotted.profileHome).toBe(path.join(profileRoot, "codex", "account.one"));
+    expect(dashed.profileHome).toBe(path.join(profileRoot, "codex", "account-one"));
+    expect(dotted.profileHome).not.toBe(dashed.profileHome);
+    expect(() => service.createPool("codex", "Account.One")).toThrowError(
+      expect.objectContaining({ code: "cli_account_pool_invalid", status: 400 }),
+    );
+  });
+
+  it("rejects a corrupted database row whose profile path escapes the canonical account root", () => {
+    const service = createService();
+    const outsideProfile = path.join(os.tmpdir(), `outside-cli-profile-${Date.now()}`);
+    db.prepare(
+      `INSERT INTO cli_account_pools
+       (id, provider, account_pool_id, label, profile_home, status, created_at, updated_at)
+       VALUES ('corrupt-pool', 'codex', 'codex-main', 'Corrupt', ?, 'connected', 1, 1)`,
+    ).run(outsideProfile);
+
+    expect(() => service.verifyPool("codex", "codex-main")).toThrowError(
+      expect.objectContaining({ code: "cli_profile_error", status: 409 }),
+    );
+    expect(fs.existsSync(outsideProfile)).toBe(false);
   });
 
   it("throws cli_not_connected when pool is missing", () => {
@@ -68,7 +123,11 @@ describe("CliAccountGateService", () => {
     const created = service.createPool("codex", "pool-a", "Pool A");
     const authDir = path.posix.join(created.profileHome, ".codex");
     fs.mkdirSync(authDir, { recursive: true });
-    fs.writeFileSync(path.posix.join(authDir, "auth.json"), JSON.stringify({ token: "x" }), "utf8");
+    fs.writeFileSync(
+      path.posix.join(authDir, "auth.json"),
+      JSON.stringify({ tokens: { access_token: "test-access", account_id: "test-account" } }),
+      "utf8",
+    );
 
     const result = service.verifyPool("codex", "pool-a");
     if (result.binaryInstalled) {
@@ -80,18 +139,42 @@ describe("CliAccountGateService", () => {
     }
   });
 
-  it("returns Codex login command with device auth in docker exec string", () => {
+  it("recognizes only the isolated Claude credentials contract", () => {
+    const service = createService();
+    const created = service.createPool("claude", "claude-main", "Claude Main");
+    const credentialsPath = path.join(created.profileHome, ".claude", ".credentials.json");
+    fs.mkdirSync(path.dirname(credentialsPath), { recursive: true });
+    fs.writeFileSync(
+      credentialsPath,
+      JSON.stringify({ claudeAiOauth: { accessToken: "test-access", refreshToken: "test-refresh" } }),
+      "utf8",
+    );
+
+    const result = service.verifyPool("claude", "claude-main");
+
+    expect(result.binaryInstalled).toBe(true);
+    expect(result.authArtifactFound).toBe(true);
+    expect(result.pool.status).toBe("connected");
+  });
+
+  it("fails closed instead of returning a legacy Docker login command", () => {
     const service = createService();
     service.createPool("codex", "codex-main", "Codex Main");
 
-    const result = service.getLoginCommand("codex", "codex-main");
-    expect(result.provider).toBe("codex");
-    expect(result.accountPoolId).toBe("codex-main");
-    expect(result.command).toContain("docker exec -it donggricompany sh -lc");
-    expect(result.command).toContain("codex login --device-auth");
+    try {
+      service.getLoginCommand("codex", "codex-main");
+      throw new Error("expected getLoginCommand to fail closed");
+    } catch (error) {
+      const typed = error as CliAccountGateError;
+      expect(typed.code).toBe("runner_supervisor_unbound");
+      expect(typed.status).toBe(503);
+      expect(typed.message).not.toContain("docker exec");
+    }
   });
 
   it("syncs codex pools from auth report and includes usage metadata", () => {
+    const previousSecret = process.env.DONGGRI_ACCOUNT_GATE_SECRET;
+    process.env.DONGGRI_ACCOUNT_GATE_SECRET = "must-not-reach-child";
     mockedExecFileSync.mockImplementation((command: string, args?: readonly string[]) => {
       const commandName = String(command);
       const argv = Array.isArray(args) ? args.map(String) : [];
@@ -147,7 +230,8 @@ describe("CliAccountGateService", () => {
       return Buffer.from("");
     });
 
-    const service = createService();
+    const gateRequests: Array<Record<string, unknown>> = [];
+    const service = createService({ approveProviderExecution: true, gateRequests });
     const result = service.syncCodexPoolsFromMultiAuth({ live: true });
 
     expect(result.accounts).toHaveLength(2);
@@ -159,6 +243,32 @@ describe("CliAccountGateService", () => {
     expect(result.accounts[0]?.expiresAt).toBe(1711000000000);
     expect(JSON.stringify(result.accounts)).not.toContain("refreshToken");
     expect(result.pools.length).toBeGreaterThanOrEqual(2);
+    const providerCalls = mockedExecFileSync.mock.calls.filter(([command]) => String(command) === "codex-multi-auth");
+    expect(providerCalls).toHaveLength(1);
+    expect(providerCalls[0]?.[2]).toMatchObject({ shell: false });
+    expect((providerCalls[0]?.[2]?.env as NodeJS.ProcessEnv).DONGGRI_ACCOUNT_GATE_SECRET).toBeUndefined();
+    expect(gateRequests).toContainEqual(
+      expect.objectContaining({
+        gateId: "G-PROVIDER-LIVE",
+        operation: "account_diagnostic",
+        provider: "codex",
+        taskId: null,
+        runId: null,
+      }),
+    );
+    if (typeof previousSecret === "string") process.env.DONGGRI_ACCOUNT_GATE_SECRET = previousSecret;
+    else delete process.env.DONGGRI_ACCOUNT_GATE_SECRET;
+  });
+
+  it("fails closed before provider invocation when executable identity cannot be resolved", () => {
+    mockedResolveExecutable.mockImplementationOnce(() => ({
+      ok: false as const,
+      reason: "executable_not_found: codex",
+    }));
+    const service = createService();
+
+    expect(() => service.syncCodexPoolsFromMultiAuth()).toThrowError("Codex CLI is not installed");
+    expect(mockedExecFileSync).not.toHaveBeenCalled();
   });
 
   it("repairs legacy /app profile paths during codex sync", () => {
@@ -184,7 +294,7 @@ describe("CliAccountGateService", () => {
       return Buffer.from("");
     });
 
-    const service = createService();
+    const service = createService({ approveProviderExecution: true });
     service.syncCodexPoolsFromMultiAuth({ live: true });
 
     const row = db
@@ -251,6 +361,7 @@ describe("CliAccountGateService", () => {
       expect(result.accounts[1]?.isCurrent).toBe(true);
       expect(result.accounts[0]?.usageSummary).toBeNull();
       expect(JSON.stringify(result.accounts)).not.toContain("refreshToken");
+      expect(mockedExecFileSync).not.toHaveBeenCalled();
     } finally {
       if (typeof previousStoragePath === "string") {
         process.env.CODEX_MULTI_AUTH_STORAGE_PATH = previousStoragePath;
@@ -258,5 +369,41 @@ describe("CliAccountGateService", () => {
         delete process.env.CODEX_MULTI_AUTH_STORAGE_PATH;
       }
     }
+  });
+
+  it("does not allow an environment variable to bypass diagnostic provider gates", () => {
+    const previousLive = process.env.G_PROVIDER_LIVE;
+    const previousStoragePath = process.env.CODEX_MULTI_AUTH_STORAGE_PATH;
+    process.env.G_PROVIDER_LIVE = "true";
+    process.env.CODEX_MULTI_AUTH_STORAGE_PATH = path.join(profileRoot, "missing-storage.json");
+    try {
+      const service = createService();
+      expect(() => service.syncCodexPoolsFromMultiAuth({ live: true })).toThrowError(
+        expect.objectContaining({ code: "cli_sync_failed" }),
+      );
+      expect(mockedExecFileSync).not.toHaveBeenCalled();
+    } finally {
+      if (typeof previousLive === "string") process.env.G_PROVIDER_LIVE = previousLive;
+      else delete process.env.G_PROVIDER_LIVE;
+      if (typeof previousStoragePath === "string") process.env.CODEX_MULTI_AUTH_STORAGE_PATH = previousStoragePath;
+      else delete process.env.CODEX_MULTI_AUTH_STORAGE_PATH;
+    }
+  });
+
+  it("gates Jules remote health and Codex login status before injected execution", () => {
+    const service = createService();
+    const jules = service.createPool("jules", "jules-main", "Jules Main");
+    const julesAuth = path.join(jules.profileHome, ".jules", "cache", "oauth_creds.json");
+    fs.mkdirSync(path.dirname(julesAuth), { recursive: true });
+    fs.writeFileSync(julesAuth, JSON.stringify({ access_token: "access", refresh_token: "refresh" }), "utf8");
+
+    const julesResult = service.verifyPool("jules", "jules-main");
+    expect(julesResult.pool.status).toBe("auth_required");
+    expect(julesResult.pool.lastError).toContain("G-PROVIDER-LIVE");
+
+    service.createPool("codex", "codex-status", "Codex Status");
+    const codexResult = service.verifyPool("codex", "codex-status");
+    expect(codexResult.authArtifactFound).toBe(false);
+    expect(mockedExecFileSync).not.toHaveBeenCalled();
   });
 });

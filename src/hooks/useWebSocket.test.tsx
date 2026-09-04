@@ -3,6 +3,7 @@ import { act, render, screen } from "@testing-library/react";
 import { useEffect } from "react";
 import { useWebSocket } from "./useWebSocket";
 import { bootstrapSession } from "../api";
+import type { WSEventType } from "../types";
 
 vi.mock("../api", () => ({
   bootstrapSession: vi.fn(),
@@ -54,14 +55,19 @@ class MockWebSocket {
   }
 }
 
-function Harness(props: { onTaskUpdate: (payload: unknown) => void }) {
-  const { connected, on } = useWebSocket();
+function Harness(props: { onTaskUpdate: (payload: unknown) => void; eventType?: WSEventType }) {
+  const { connected, connectionState, on } = useWebSocket();
 
   useEffect(() => {
-    return on("task_update", props.onTaskUpdate);
-  }, [on, props.onTaskUpdate]);
+    return on(props.eventType ?? "task_update", props.onTaskUpdate);
+  }, [on, props.eventType, props.onTaskUpdate]);
 
-  return <div data-testid="connected">{connected ? "connected" : "disconnected"}</div>;
+  return (
+    <>
+      <div data-testid="connected">{connected ? "connected" : "disconnected"}</div>
+      <div data-testid="connection-state">{connectionState}</div>
+    </>
+  );
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -103,6 +109,7 @@ describe("useWebSocket", () => {
     expect(bootstrapSessionMock.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(MockWebSocket.instances).toHaveLength(0);
     expect(screen.getByTestId("connected").textContent).toBe("disconnected");
+    expect(screen.getByTestId("connection-state").textContent).toBe("connecting");
   });
 
   it("연결 성공 후 이벤트를 타입별 리스너에 전달한다", async () => {
@@ -121,11 +128,46 @@ describe("useWebSocket", () => {
       ws.emitOpen();
     });
     expect(screen.getByTestId("connected").textContent).toBe("connected");
+    expect(screen.getByTestId("connection-state").textContent).toBe("connected");
 
     act(() => {
       ws.emitMessage({ type: "task_update", payload: { id: "task-1" } });
     });
     expect(onTaskUpdate).toHaveBeenCalledWith({ id: "task-1" });
+  });
+
+  it("continuity_run_event를 전용 리스너에 전달한다", async () => {
+    bootstrapSessionMock.mockResolvedValue(true);
+    const onProjection = vi.fn();
+    render(<Harness eventType="continuity_run_event" onTaskUpdate={onProjection} />);
+    await act(async () => flushMicrotasks());
+
+    act(() => {
+      MockWebSocket.instances[0].emitMessage({
+        type: "continuity_run_event",
+        payload: { task_id: "task-1", event_sequence: 2 },
+      });
+    });
+    expect(onProjection).toHaveBeenCalledWith({ task_id: "task-1", event_sequence: 2 });
+  });
+
+  it("bootstrap 대기 중 unmount되면 늦은 WebSocket을 만들지 않는다", async () => {
+    let resolveBootstrap: ((ready: boolean) => void) | undefined;
+    bootstrapSessionMock.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveBootstrap = resolve;
+        }),
+    );
+    const { unmount } = render(<Harness onTaskUpdate={vi.fn()} />);
+    await act(async () => flushMicrotasks());
+    unmount();
+
+    await act(async () => {
+      resolveBootstrap?.(true);
+      await flushMicrotasks();
+    });
+    expect(MockWebSocket.instances).toHaveLength(0);
   });
 
   it("소켓 종료 후 재연결 타이머가 동작하고 malformed JSON은 무시한다", async () => {
@@ -152,6 +194,7 @@ describe("useWebSocket", () => {
       ws.emitClose();
     });
     expect(screen.getByTestId("connected").textContent).toBe("disconnected");
+    expect(screen.getByTestId("connection-state").textContent).toBe("reconnecting");
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2100);
@@ -159,6 +202,31 @@ describe("useWebSocket", () => {
     });
 
     expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("이전 소켓의 늦은 오류가 새 연결 상태를 덮어쓰지 않는다", async () => {
+    vi.useFakeTimers();
+    bootstrapSessionMock.mockResolvedValue(true);
+    render(<Harness onTaskUpdate={vi.fn()} />);
+    await act(async () => flushMicrotasks());
+
+    const first = MockWebSocket.instances[0];
+    act(() => {
+      first.emitOpen();
+      first.emitClose();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+      await flushMicrotasks();
+    });
+    const second = MockWebSocket.instances[1];
+    act(() => second.emitOpen());
+    expect(screen.getByTestId("connection-state").textContent).toBe("connected");
+
+    act(() => first.onerror?.());
+
+    expect(second.readyState).toBe(MockWebSocket.OPEN);
+    expect(screen.getByTestId("connection-state").textContent).toBe("connected");
   });
 
   it("1008 unauthorized 종료 뒤에는 강제 세션 bootstrap으로 재시도한다", async () => {
@@ -181,6 +249,7 @@ describe("useWebSocket", () => {
     act(() => {
       ws.emitClose(1008);
     });
+    expect(screen.getByTestId("connection-state").textContent).toBe("auth_recovering");
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2100);

@@ -2,7 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import type { AgentRow, OneShotRunOptions, OneShotRunResult } from "./conversation-types.ts";
-import { resolveCliAccountPoolEnv } from "../agents/cli-account-pool-env.ts";
+import { resolveCliAccountPoolEnv, resolveDefaultCliAccountProfileRoot } from "../agents/cli-account-pool-env.ts";
+import {
+  buildMinimalCliChildEnv,
+  isProviderLiveExecutionApproved,
+  PROVIDER_LIVE_EXECUTION_GATE_ID,
+  type ProviderLiveExecutionGate,
+} from "../agents/cli-runtime.ts";
+import { resolveHostExecutable, type ResolveHostExecutableInput } from "../agents/host-executable-resolver.ts";
 import { resolveProviderRuntimeKind } from "../agents/provider-runtime-kind.ts";
 import { resolveProviderExecutionPolicy } from "../agents/provider-policy-resolver.ts";
 import { previewCanonicalRouting } from "../../company/canonical-policy.ts";
@@ -31,6 +38,11 @@ type CreateOneShotRunnerDeps = {
   normalizeConversationReply: (raw: string, maxChars?: number, opts?: { maxSentences?: number }) => string;
   buildAgentArgs: (provider: string, model?: string, reasoningLevel?: string, opts?: { noTools?: boolean }) => string[];
   withCliPathFallback: (pathValue: string | undefined) => string;
+  spawnProcess?: typeof spawn;
+  providerLiveExecutionGate?: ProviderLiveExecutionGate;
+  resolveExecutable?: (input: ResolveHostExecutableInput) => ReturnType<typeof resolveHostExecutable>;
+  terminationAckTimeoutMs?: number;
+  cliAccountProfileRoot?: string;
 };
 
 export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
@@ -50,11 +62,17 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
     normalizeConversationReply,
     buildAgentArgs,
     withCliPathFallback,
+    spawnProcess = spawn,
+    providerLiveExecutionGate,
+    resolveExecutable = resolveHostExecutable,
+    terminationAckTimeoutMs = 1_500,
+    cliAccountProfileRoot = resolveDefaultCliAccountProfileRoot(),
   } = deps;
   const NO_TOOLS_POLICY_ERROR = "tool_use_blocked_by_no_tools_policy";
   const JULES_ONE_SHOT_UNSUPPORTED_ERROR = "jules_not_supported_for_one_shot";
   const CLI_TOOL_SIGNAL_REGEX =
     /"type"\s*:\s*"(?:tool_use|tool_result|command_execution|function_call|tool_call|mcp_tool_call)"|"tool_use_id"\s*:|"toolName"\s*:/i;
+  const unconfirmedTerminationHandles = new Set<ReturnType<typeof spawn>>();
 
   function hasCliToolSignal(text: string): boolean {
     return CLI_TOOL_SIGNAL_REGEX.test(text);
@@ -224,6 +242,7 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
           cliAccountPoolId: julesOneShotFallback ? null : ((agent as any).cli_account_pool_id ?? null),
           platform: process.platform,
           selectionSeed: runId,
+          profileRoot: cliAccountProfileRoot,
         });
         if (!poolEnv.ok) {
           if (julesOneShotFallback) {
@@ -246,61 +265,95 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
         const reasoningLevel = executionPolicy.reasoningLevel;
         const args = buildAgentArgs(provider, model, reasoningLevel, { noTools });
 
-        await new Promise<void>((resolve, reject) => {
-          const cleanEnv = { ...process.env };
-          delete cleanEnv.CLAUDECODE;
-          delete cleanEnv.CLAUDE_CODE;
-          cleanEnv.PATH = withCliPathFallback(String(cleanEnv.PATH ?? process.env.PATH ?? ""));
-          cleanEnv.NO_COLOR = "1";
-          cleanEnv.FORCE_COLOR = "0";
-          cleanEnv.CI = "1";
-          if (!cleanEnv.TERM) cleanEnv.TERM = "dumb";
-          Object.assign(cleanEnv, poolEnv.envPatch);
-          const effectiveHome = String(cleanEnv.HOME ?? "").trim();
-          safeWrite(
-            `[one-shot] CLI account env: provider=${provider} pool=${poolEnv.poolId ?? "default"} selected_by=${poolEnv.selectedBy} home=${effectiveHome || "(empty)"}\n`,
-          );
+        const cleanEnv = buildMinimalCliChildEnv(process.env, process.platform);
+        cleanEnv.PATH = withCliPathFallback(String(cleanEnv.PATH ?? process.env.PATH ?? ""));
+        Object.assign(cleanEnv, poolEnv.envPatch);
+        const effectiveHome = String(cleanEnv.HOME ?? "").trim();
+        safeWrite(
+          `[one-shot] CLI account env: provider=${provider} pool=${poolEnv.poolId ?? "default"} selected_by=${poolEnv.selectedBy} home=${effectiveHome || "(empty)"}\n`,
+        );
+        const executable = resolveExecutable({
+          command: args[0],
+          argv: args.slice(1),
+          pathValue: cleanEnv.PATH,
+          platform: process.platform,
+          allowedCommands: [provider],
+        });
+        if (!executable.ok) throw new Error(`host executable error: ${executable.reason}`);
+        if (
+          !isProviderLiveExecutionApproved(providerLiveExecutionGate, {
+            operation: "one_shot_run",
+            runId,
+            taskId: streamTaskId ?? runId,
+            provider,
+            poolId: poolEnv.poolId,
+            projectPath: path.resolve(projectPath),
+            executable: executable.executable,
+          })
+        ) {
+          throw new Error(`provider live execution approval required: ${PROVIDER_LIVE_EXECUTION_GATE_ID}`);
+        }
+        safeWrite(
+          `[one-shot] Host executable: source=${executable.source} command=${executable.commandPath} shell=false\n`,
+        );
 
-          const child = spawn(args[0], args.slice(1), {
+        await new Promise<void>((resolve, reject) => {
+          const child = spawnProcess(executable.executable, executable.argv, {
             cwd: projectPath,
             env: cleanEnv,
-            shell: process.platform === "win32",
+            shell: false,
             stdio: ["pipe", "pipe", "pipe"],
             detached: false,
             windowsHide: true,
           });
           activeChild = child;
           let settled = false;
+          let abortReason: string | null = null;
+          let terminationAckTimer: ReturnType<typeof setTimeout> | null = null;
+          let timeout: ReturnType<typeof setTimeout> | null = null;
           const settle = (callback: () => void) => {
             if (settled) return;
             settled = true;
+            if (timeout) clearTimeout(timeout);
+            if (terminationAckTimer) clearTimeout(terminationAckTimer);
             abortActiveRun = null;
             detachChildListeners();
             callback();
           };
           const abortRun = (reason: string) => {
-            if (settled) return;
+            if (settled || abortReason) return;
+            abortReason = reason;
             const pid = child.pid ?? 0;
-            detachChildListeners();
-            if (pid > 0) killPidTree(pid);
-            settle(() => reject(new Error(reason)));
+            try {
+              if (pid > 0) killPidTree(pid);
+              else child.kill?.("SIGTERM");
+            } catch {
+              // Wait for a close acknowledgement even when the first kill path races.
+            }
+            terminationAckTimer = setTimeout(
+              () => {
+                unconfirmedTerminationHandles.add(child);
+                child.once("close", () => unconfirmedTerminationHandles.delete(child));
+                settle(() => reject(new Error(`${reason}: termination_unconfirmed`)));
+              },
+              Math.max(25, Math.trunc(terminationAckTimeoutMs)),
+            );
           };
           abortActiveRun = abortRun;
 
-          const timeout = setTimeout(() => {
+          timeout = setTimeout(() => {
             abortRun(`timeout after ${timeoutMs}ms`);
           }, timeoutMs);
 
           activeErrorListener = (err: Error) => {
-            clearTimeout(timeout);
             settle(() => reject(err));
           };
           activeStdoutListener = (chunk: Buffer) => onChunk(chunk, "stdout");
           activeStderrListener = (chunk: Buffer) => onChunk(chunk, "stderr");
           activeCloseListener = (code: number | null) => {
-            clearTimeout(timeout);
             exitCode = code ?? 1;
-            settle(() => resolve());
+            if (abortReason) settle(() => reject(new Error(abortReason!)));
+            else settle(() => resolve());
           };
           child.on("error", activeErrorListener);
           child.stdout?.on("data", activeStdoutListener);
@@ -322,21 +375,21 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
       if (message === NO_TOOLS_POLICY_ERROR) {
         if (opts.rawOutput) {
           const raw = rawOutput.trim();
-          if (raw) return { text: raw };
+          if (raw) return { text: raw, error: NO_TOOLS_POLICY_ERROR };
           const pretty = prettyStreamJson(rawOutput).trim();
-          if (pretty) return { text: pretty };
-          return { text: "" };
+          if (pretty) return { text: pretty, error: NO_TOOLS_POLICY_ERROR };
+          return { text: "", error: NO_TOOLS_POLICY_ERROR };
         }
         const partial = normalizeConversationReply(rawOutput, 320);
-        if (partial) return { text: partial };
+        if (partial) return { text: partial, error: NO_TOOLS_POLICY_ERROR };
         const pretty = prettyStreamJson(rawOutput);
         const roughSource = pretty.trim() || hasStructuredJsonLines(rawOutput) ? pretty : rawOutput;
         const rough = roughSource.replace(/\s+/g, " ").trim();
         if (rough) {
           const clipped = rough.length > 320 ? `${rough.slice(0, 319).trimEnd()}…` : rough;
-          return { text: clipped };
+          return { text: clipped, error: NO_TOOLS_POLICY_ERROR };
         }
-        return { text: "" };
+        return { text: "", error: NO_TOOLS_POLICY_ERROR };
       }
       onChunk(`\n[one-shot-error] ${message}\n`, "stderr");
       if (opts.rawOutput) {
@@ -362,8 +415,10 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
       await new Promise<void>((resolve) => safeEnd(resolve));
     }
 
-    if (exitCode !== 0 && !rawOutput.trim()) {
-      return { text: "", error: `${provider} exited with code ${exitCode}` };
+    if (exitCode !== 0) {
+      const error = `${provider} exited with code ${exitCode}`;
+      if (opts.rawOutput) return { text: rawOutput.trim(), error };
+      return { text: normalizeConversationReply(rawOutput), error };
     }
 
     if (opts.rawOutput) {
@@ -392,5 +447,6 @@ export function createOneShotRunner(deps: CreateOneShotRunnerDeps) {
 
   return {
     runAgentOneShot,
+    getUnconfirmedTerminationCount: () => unconfirmedTerminationHandles.size,
   };
 }

@@ -22,6 +22,8 @@ import { registerGoalCommandRoutes } from "./ops/goal-commands.ts";
 import { registerQualityMetricRoutes } from "./ops/quality-metrics.ts";
 import { registerStrategicMaintenanceRoutes } from "./ops/strategic-maintenance.ts";
 import { registerControlPlaneRoutes } from "./ops/control-plane.ts";
+import { registerContinuityRoutes } from "./ops/continuity.ts";
+import { runnerSupervisorRegistry } from "../services/runner-supervisor.ts";
 
 export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   const __ctx: RuntimeContext = ctx;
@@ -46,6 +48,7 @@ export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   const createWorktree = __ctx.createWorktree;
   const crossDeptNextCallbacks = __ctx.crossDeptNextCallbacks;
   const db = __ctx.db;
+  const runnerSupervisor = runnerSupervisorRegistry.getOrCreate(db);
   const dbPath = __ctx.dbPath;
   const delegatedTaskToSubtask = __ctx.delegatedTaskToSubtask;
   const deptCount = __ctx.deptCount;
@@ -217,7 +220,7 @@ export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   registerTaskTerminalRoutes(__ctx);
 
   registerOAuthRoutes(__ctx);
-  registerOfficeRunnerRoutes(__ctx);
+  registerOfficeRunnerRoutes(__ctx, { supervisor: runnerSupervisor });
 
   registerModelRoutes(__ctx);
   registerCompanyRoutes(__ctx);
@@ -225,6 +228,7 @@ export function registerRoutesPartC(ctx: RuntimeContext): RouteOpsExports {
   registerQualityMetricRoutes({ app, db });
   registerStrategicMaintenanceRoutes(__ctx);
   registerControlPlaneRoutes({ app, db });
+  registerContinuityRoutes({ app, db, broadcast, supervisor: runnerSupervisor });
 
   const { normalizeSkillLearnProviders } = registerSkillRoutes(__ctx);
   registerModuleRoutes(__ctx);

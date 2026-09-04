@@ -11,8 +11,13 @@ async function importRuntimeModule() {
 }
 
 describe("db runtime", () => {
+  const temporaryDirectories: string[] = [];
+
   afterEach(() => {
     process.env = { ...ORIGINAL_ENV };
+    for (const directory of temporaryDirectories.splice(0)) {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("readNonNegativeIntEnv는 음수/비수치 입력을 fallback으로 처리한다", async () => {
@@ -42,20 +47,48 @@ describe("db runtime", () => {
     expect(runtime.REVIEW_MAX_REVISION_SIGNALS_PER_DEPT_PER_ROUND).toBe(10);
   });
 
-  it("initializeDatabaseRuntime는 DB/로그 디렉터리를 초기화한다", async () => {
+  it("initializeDatabaseRuntime는 DB를 열기 전에 누락된 공백/비ASCII 부모 경로를 만든다", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "claw-empire-runtime-test-"));
-    const dbPath = path.join(tmpDir, "test.sqlite");
+    temporaryDirectories.push(tmpDir);
+    const dbPath = path.join(tmpDir, "새 데이터 폴더", "중첩 경로", "test.sqlite");
     const logsDir = path.join(tmpDir, "logs");
     process.env.DB_PATH = dbPath;
     process.env.LOGS_DIR = logsDir;
+
+    expect(fs.existsSync(path.dirname(dbPath))).toBe(false);
 
     const runtime = await importRuntimeModule();
     const initialized = runtime.initializeDatabaseRuntime();
 
     expect(initialized.dbPath).toBe(dbPath);
     expect(initialized.logsDir).toBe(logsDir);
+    expect(fs.existsSync(path.dirname(dbPath))).toBe(true);
+    expect(initialized.db.prepare("SELECT 1 AS ready").get()).toEqual({ ready: 1 });
     expect(fs.existsSync(logsDir)).toBe(true);
 
     initialized.db.close();
+  });
+
+  it("APP_DATA_DIR만 지정된 dev:local 클린 스타트에서도 기본 DB 부모를 먼저 만든다", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "donggri-app-data-test-"));
+    temporaryDirectories.push(tmpDir);
+    const appDataDir = path.join(tmpDir, "새 앱 데이터", "runtime");
+    delete process.env.DB_PATH;
+    process.env.APP_DATA_DIR = appDataDir;
+
+    const runtime = await importRuntimeModule();
+    const initialized = runtime.initializeDatabaseRuntime();
+
+    expect(initialized.dbPath).toBe(path.join(appDataDir, "claw-empire.sqlite"));
+    expect(fs.existsSync(appDataDir)).toBe(true);
+    expect(fs.existsSync(initialized.dbPath)).toBe(true);
+
+    initialized.db.close();
+  });
+
+  it("ensureDatabaseParentDirectory는 메모리 DB에 파일시스템 경로를 만들지 않는다", async () => {
+    const runtime = await importRuntimeModule();
+
+    expect(runtime.ensureDatabaseParentDirectory(":memory:")).toBeNull();
   });
 });

@@ -165,10 +165,14 @@ const REQUEST_EXAMPLE_OVERRIDES = {
 const RESPONSE_EXAMPLE_OVERRIDES = {
   "GET /api/health 200": {
     ok: true,
-    status: "healthy",
+    status: "ready",
+    checks: {
+      database: { ok: true },
+      supervisor: { ok: true },
+      reconciliation: { ok: true },
+    },
     version: readPackageVersion(),
-    app: "DonggriCompany",
-    dbPath: "/workspace/donggri-company.sqlite",
+    app: "Dongri-grigri",
   },
   "GET /api/auth/session 200": {
     ok: true,

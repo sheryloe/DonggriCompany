@@ -16,6 +16,15 @@ import type {
 type MutationSqliteDb = Pick<DatabaseSync, "exec" | "prepare">;
 type SqliteRow = Record<string, SQLOutputValue>;
 
+export type AtomicExecutionCompletionResult =
+  | { status: "completed"; reservation_id: string }
+  | { status: "replay"; outcome: StoredMutationOutcome }
+  | { status: "idempotency_conflict" }
+  | { status: "execution_in_flight" }
+  | { status: "approval_reused" }
+  | { status: "approval_missing" }
+  | { status: "persistence_corrupt" };
+
 function parseJsonObject<T>(value: unknown): T | null {
   if (typeof value !== "string") return null;
   try {
@@ -60,6 +69,105 @@ function rollbackQuietly(db: MutationSqliteDb): void {
 
 export class SqliteMutationAuthorizerPersistence implements MutationAuthorizerPersistence {
   constructor(private readonly db: MutationSqliteDb) {}
+
+  /**
+   * Transaction-neutral one-shot completion used by compound SQLite effects.
+   *
+   * The caller owns BEGIN IMMEDIATE/COMMIT and must roll back if any later
+   * operation fails. No callback, await, file I/O or process work is performed
+   * here. This lets a coordinator consume an approval and persist idempotency,
+   * effect and audit evidence in the same commit as its domain rows.
+   */
+  consumeApprovalAndCompleteInTransaction(input: {
+    idempotency_key: string;
+    request_digest: string;
+    reservation_id: string;
+    approval_id: string;
+    outcome: StoredMutationOutcome;
+    created_at: string;
+    completed_at: string;
+    audit_event: MutationAuditEvent;
+  }): AtomicExecutionCompletionResult {
+    const existing = this.db
+      .prepare(
+        `SELECT request_digest, reservation_id, state, outcome_json
+         FROM control_plane_idempotency_results
+         WHERE idempotency_key = ?`,
+      )
+      .get(input.idempotency_key) as SqliteRow | undefined;
+    if (existing) {
+      if (existing.request_digest !== input.request_digest) return { status: "idempotency_conflict" };
+      if (existing.state === "in_flight") return { status: "execution_in_flight" };
+      if (existing.state !== "completed") return { status: "persistence_corrupt" };
+      const outcome = parseStoredOutcome(existing.outcome_json);
+      return outcome ? { status: "replay", outcome } : { status: "persistence_corrupt" };
+    }
+
+    const approval = this.db
+      .prepare(
+        `SELECT approval_id, consumed_reservation_id
+         FROM control_plane_approval_receipts
+         WHERE approval_id = ?`,
+      )
+      .get(input.approval_id) as SqliteRow | undefined;
+    if (!approval) return { status: "approval_missing" };
+    if (approval.consumed_reservation_id !== null) return { status: "approval_reused" };
+
+    const consumed = this.db
+      .prepare(
+        `UPDATE control_plane_approval_receipts
+         SET consumed_reservation_id = ?, consumed_at = ?
+         WHERE approval_id = ? AND consumed_reservation_id IS NULL`,
+      )
+      .run(input.reservation_id, input.created_at, input.approval_id);
+    if (Number(consumed.changes) !== 1) return { status: "approval_reused" };
+
+    const serialized = serializeJson(input.outcome);
+    const serializedHash = sha256(serialized);
+    this.db
+      .prepare(
+        `INSERT INTO control_plane_idempotency_results (
+          idempotency_key, request_digest, reservation_id, approval_id,
+          state, outcome_json, created_at, lease_expires_at, attempt_count, completed_at
+        ) VALUES (?, ?, ?, ?, 'completed', ?, ?, ?, 1, ?)`,
+      )
+      .run(
+        input.idempotency_key,
+        input.request_digest,
+        input.reservation_id,
+        input.approval_id,
+        serialized,
+        input.created_at,
+        input.completed_at,
+        input.completed_at,
+      );
+    this.db
+      .prepare(
+        `INSERT INTO control_plane_execution_effects (
+          reservation_id, outcome_json, outcome_sha256, recorded_at
+        ) VALUES (?, ?, ?, ?)`,
+      )
+      .run(input.reservation_id, serialized, serializedHash, input.completed_at);
+    this.db
+      .prepare(
+        `INSERT INTO control_plane_mutation_audit (
+          event_id, event_type, preview_id, approval_id,
+          idempotency_key_digest, request_digest, reason, event_json, occurred_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.audit_event.event_id,
+        input.audit_event.event_type,
+        input.audit_event.preview_id ?? null,
+        input.audit_event.approval_id ?? null,
+        input.audit_event.idempotency_key_digest ?? null,
+        input.audit_event.request_digest ?? null,
+        input.audit_event.reason ?? null,
+        serializeJson(input.audit_event),
+        input.audit_event.occurred_at,
+      );
+    return { status: "completed", reservation_id: input.reservation_id };
+  }
 
   async savePreview(
     preview: MutationPreview,

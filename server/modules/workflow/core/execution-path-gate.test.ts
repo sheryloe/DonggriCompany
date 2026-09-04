@@ -14,6 +14,7 @@ type FakeDb = Pick<DatabaseSync, "prepare">;
 
 const originalAllowedRoots = process.env.PROJECT_PATH_ALLOWED_ROOTS;
 const originalBootstrap = process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP;
+const originalControlRoot = process.env.DONGGRI_CONTROL_ROOT;
 const originalCwd = process.cwd();
 const tempDirs: string[] = [];
 
@@ -64,6 +65,11 @@ afterEach(() => {
     delete process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP;
   } else {
     process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP = originalBootstrap;
+  }
+  if (originalControlRoot === undefined) {
+    delete process.env.DONGGRI_CONTROL_ROOT;
+  } else {
+    process.env.DONGGRI_CONTROL_ROOT = originalControlRoot;
   }
   process.chdir(originalCwd);
   while (tempDirs.length > 0) {
@@ -279,7 +285,7 @@ describe("evaluateExecutionPathGate", () => {
     });
   });
 
-  it("allows Donggri sibling runtime projects when env roots are unset", () => {
+  it("allows runtime projects under an explicit Donggri control root", () => {
     delete process.env.PROJECT_PATH_ALLOWED_ROOTS;
     process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP = "1";
 
@@ -288,6 +294,7 @@ describe("evaluateExecutionPathGate", () => {
     const runtimeProject = path.join(workspaceRoot, "runtime", "DonggriCompany", "workflow-sample");
     fs.mkdirSync(projectRoot, { recursive: true });
     fs.mkdirSync(runtimeProject, { recursive: true });
+    process.env.DONGGRI_CONTROL_ROOT = workspaceRoot;
     process.chdir(projectRoot);
 
     const result = evaluateExecutionPathGate({
@@ -305,5 +312,26 @@ describe("evaluateExecutionPathGate", () => {
         path.normalize(path.join(workspaceRoot, "runtime")),
       );
     }
+  });
+
+  it("keeps a standalone clean clone portable when no control root is configured", () => {
+    delete process.env.PROJECT_PATH_ALLOWED_ROOTS;
+    delete process.env.DONGGRI_CONTROL_ROOT;
+    process.env.WORKTREE_ALLOW_GIT_BOOTSTRAP = "1";
+
+    const standaloneRoot = createTempDir("path-gate-standalone-");
+    process.chdir(standaloneRoot);
+
+    const result = evaluateExecutionPathGate({
+      db: createFakeDb({}) as DatabaseSync,
+      task: {
+        project_id: null,
+        project_path: standaloneRoot,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.allowedRoots.map((root) => path.normalize(root))).toContain(path.normalize(standaloneRoot));
+    expect(result.allowedRoots.join("\n")).not.toMatch(/G:[\\/]Donggri_DevDrive/i);
   });
 });

@@ -4,6 +4,7 @@ export type DashboardProjectStatus = "clean" | "dirty" | "missing" | "not_git";
 
 export type ControlPlaneDashboardProject = {
   key: string;
+  path?: string;
   summary: string | null;
   lifecycle_status: string | null;
   enabled: boolean;

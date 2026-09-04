@@ -130,7 +130,7 @@ export default function App() {
     setAgents,
   });
 
-  const { connected, on } = useWebSocket();
+  const { connected, connectionState, on } = useWebSocket();
   const shouldIncludeSeedAgents = useCallback(() => false, []);
   const scheduleLiveSync = useLiveSyncScheduler({
     setTasks,
@@ -261,6 +261,8 @@ export default function App() {
   return (
     <AppMainLayout
       connected={connected}
+      connectionState={connectionState}
+      on={on}
       view={view}
       setView={setView}
       departments={departments}

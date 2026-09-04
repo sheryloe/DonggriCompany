@@ -13,7 +13,6 @@ import {
 import type { GitHubCreateRepoResponse, GitHubStatus } from "../../api";
 import type { AssignmentMode, Project } from "../../types";
 
-const DEFAULT_PROJECT_ROOT = "G:\\Donggri_DevDrive\\repos";
 const CLONE_POLL_INTERVAL_MS = 1_000;
 const CLONE_TIMEOUT_MS = 120_000;
 
@@ -81,7 +80,8 @@ export function slugifyRepositoryName(value: string): string {
 }
 
 export function joinProjectPath(root: string, leaf: string): string {
-  const base = root.trim() || DEFAULT_PROJECT_ROOT;
+  const base = root.trim();
+  if (!base) return "";
   const name = leaf.trim();
   if (!name) return base;
   const separator = base.includes("\\") ? "\\" : "/";
@@ -91,9 +91,11 @@ export function joinProjectPath(root: string, leaf: string): string {
 export async function getDefaultProjectRoot(): Promise<string> {
   try {
     const result = await browseProjectPath();
-    return result.current_path || DEFAULT_PROJECT_ROOT;
+    return result.current_path.trim();
   } catch {
-    return DEFAULT_PROJECT_ROOT;
+    // The browser cannot safely infer a host filesystem root. Keep the field
+    // empty until the server projects a configured/allowed location.
+    return "";
   }
 }
 

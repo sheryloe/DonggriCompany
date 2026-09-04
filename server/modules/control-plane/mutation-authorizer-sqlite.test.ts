@@ -343,4 +343,40 @@ describe("SqliteMutationAuthorizerPersistence", () => {
     expect(callback).not.toHaveBeenCalled();
     db.close();
   });
+
+  it("completes a compound execution inside the caller transaction and rolls back as one unit", async () => {
+    const db = createDatabase();
+    const authorizer = createAuthorizer(db);
+    const approved = await createApprovedMutation(authorizer);
+    const persistence = new SqliteMutationAuthorizerPersistence(db);
+    const outcome = { status: "succeeded" as const, value: { target_run_id: "run:target" } };
+
+    db.exec("BEGIN IMMEDIATE");
+    expect(
+      persistence.consumeApprovalAndCompleteInTransaction({
+        idempotency_key: "atomic:rollback",
+        request_digest: "a".repeat(64),
+        reservation_id: "reservation:atomic",
+        approval_id: approved.receipt.approval_id,
+        outcome,
+        created_at: "2026-07-25T00:00:01.000Z",
+        completed_at: "2026-07-25T00:00:01.000Z",
+        audit_event: {
+          event_id: "event:atomic",
+          event_type: "execution_completed",
+          occurred_at: "2026-07-25T00:00:01.000Z",
+          approval_id: approved.receipt.approval_id,
+        },
+      }),
+    ).toEqual({ status: "completed", reservation_id: "reservation:atomic" });
+    db.exec("ROLLBACK");
+
+    expect(
+      db.prepare("SELECT consumed_reservation_id FROM control_plane_approval_receipts WHERE approval_id = ?").get(
+        approved.receipt.approval_id,
+      ),
+    ).toEqual({ consumed_reservation_id: null });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM control_plane_idempotency_results").get()).toEqual({ count: 0 });
+    db.close();
+  });
 });

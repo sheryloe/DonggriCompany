@@ -44,7 +44,12 @@ export type TaskExecutionControlRouteDeps = Pick<
   | "isTaskWorkflowInterrupted"
   | "startTaskExecutionForAgent"
   | "randomDelay"
->;
+> & {
+  /** Structurally injected; legacy activeProcesses are intentionally separate. */
+  continuitySupervisor?: {
+    pause(runId: string, reason?: string): Promise<{ status: string; run_id: string }>;
+  } | null;
+};
 
 export function registerTaskExecutionControlRoutes(deps: TaskExecutionControlRouteDeps): void {
   const {
@@ -77,6 +82,7 @@ export function registerTaskExecutionControlRoutes(deps: TaskExecutionControlRou
     isTaskWorkflowInterrupted,
     startTaskExecutionForAgent,
     randomDelay,
+    continuitySupervisor,
   } = deps;
 
   function requireCsrfGuard(req: { method?: string; header(name: string): string | undefined }, res: any): boolean {
@@ -206,7 +212,7 @@ export function registerTaskExecutionControlRoutes(deps: TaskExecutionControlRou
     });
   });
 
-  app.post("/api/tasks/:id/stop", (req, res) => {
+  app.post("/api/tasks/:id/stop", async (req, res) => {
     const id = String(req.params.id);
     if (!requireCsrfGuard(req as any, res)) return;
 
@@ -302,8 +308,68 @@ export function registerTaskExecutionControlRoutes(deps: TaskExecutionControlRou
 
     stopProgressTimer(id);
 
+    if (targetStatus === "pending" && continuitySupervisor) {
+      const managedRun = db
+        .prepare(
+          `SELECT run_id FROM continuity_runs
+           WHERE task_id = ? AND status IN ('running','pause_requested','paused')
+           ORDER BY created_at DESC, run_id DESC LIMIT 1`,
+        )
+        .get(id) as { run_id?: unknown } | undefined;
+      if (typeof managedRun?.run_id === "string" && managedRun.run_id) {
+        try {
+          const paused = await continuitySupervisor.pause(managedRun.run_id, "task_pause_request");
+          if (paused.run_id !== managedRun.run_id || paused.status !== "paused") {
+            return res.status(202).json({
+              ok: true,
+              stopped: false,
+              status: task.status,
+              acknowledged: false,
+              message: "Pause requested; waiting for close and dead-process proof.",
+            });
+          }
+          db.prepare("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?").run("pending", nowMs(), id);
+          if (task.assigned_agent_id) {
+            db.prepare("UPDATE agents SET status = 'idle', current_task_id = NULL WHERE id = ?").run(
+              task.assigned_agent_id,
+            );
+          }
+          appendTaskLog(id, "system", `PAUSE_ACK received for continuity run ${managedRun.run_id}`);
+          broadcast("task_update", db.prepare("SELECT * FROM tasks WHERE id = ?").get(id));
+          return res.status(200).json({
+            ok: true,
+            stopped: true,
+            status: "pending",
+            acknowledged: true,
+            run_id: managedRun.run_id,
+            rolled_back: false,
+            interrupt: buildInterruptProofPayload(id, task.assigned_agent_id),
+          });
+        } catch {
+          return res.status(202).json({
+            ok: true,
+            stopped: false,
+            status: task.status,
+            acknowledged: false,
+            run_id: managedRun.run_id,
+            message: "Pause requested; Supervisor has not produced a verified ACK.",
+          });
+        }
+      }
+    }
+
     const activeChild = activeProcesses.get(id);
     if (!activeChild?.pid) {
+      if (targetStatus === "pending" && task.status !== "pending") {
+        return res.status(202).json({
+          ok: true,
+          stopped: false,
+          status: task.status,
+          acknowledged: false,
+          message: "No verified close and dead-process proof is available.",
+          interrupt: buildInterruptProofPayload(id, task.assigned_agent_id),
+        });
+      }
       db.prepare("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?").run(targetStatus, nowMs(), id);
       if (targetStatus !== "pending") {
         cancelDelegatedWorkflowState();
@@ -394,16 +460,28 @@ export function registerTaskExecutionControlRoutes(deps: TaskExecutionControlRou
         : `${actionLabel} sent to pid ${activeChild.pid}`,
     );
 
-    const shouldRollback = targetStatus !== "pending";
-    const rolledBack = shouldRollback ? rollbackTaskWorktree(id, `stop_${targetStatus}`) : false;
+    if (targetStatus === "pending") {
+      return res.status(202).json({
+        ok: true,
+        stopped: false,
+        status: task.status,
+        pid: activeChild.pid,
+        acknowledged: false,
+        rolled_back: false,
+        message: "Pause signal sent; waiting for close and dead-process proof.",
+        interrupt: buildInterruptProofPayload(id, task.assigned_agent_id),
+      });
+    }
+
+    // The pending branch above always returns after sending a graceful
+    // interrupt. Reaching this point therefore means a confirmed cancel.
+    const rolledBack = rollbackTaskWorktree(id, `stop_${targetStatus}`);
 
     const t = nowMs();
     db.prepare("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?").run(targetStatus, t, id);
-    if (targetStatus !== "pending") {
-      cancelDelegatedWorkflowState();
-      clearTaskWorkflowState(id);
-      endTaskExecutionSession(id, `stop_${targetStatus}`);
-    }
+    cancelDelegatedWorkflowState();
+    clearTaskWorkflowState(id);
+    endTaskExecutionSession(id, `stop_${targetStatus}`);
 
     if (task.assigned_agent_id) {
       db.prepare("UPDATE agents SET status = 'idle', current_task_id = NULL WHERE id = ?").run(task.assigned_agent_id);
@@ -414,45 +492,22 @@ export function registerTaskExecutionControlRoutes(deps: TaskExecutionControlRou
     const updatedTask = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
     broadcast("task_update", updatedTask);
 
-    if (targetStatus === "pending") {
-      notifyCeo(
-        pickL(
-          l(
-            [
-              `'${task.title}' 작업이 보류 상태로 전환되었습니다. 인터럽트(SIGINT)로 브레이크를 걸었고 세션은 유지됩니다.${rolledBack ? " 코드 변경분은 git rollback 처리되었습니다." : ""}`,
-            ],
-            [
-              `'${task.title}' was moved to pending. A graceful interrupt (SIGINT) was sent and the session is preserved.${rolledBack ? " Code changes were rolled back via git." : ""}`,
-            ],
-            [
-              `'${task.title}' は保留状態に変更されました。SIGINT による中断を送り、セッションは維持されます。${rolledBack ? " コード変更は git でロールバックされました。" : ""}`,
-            ],
-            [
-              `'${task.title}' 已转为待处理状态。已发送 SIGINT 中断，且会话将被保留。${rolledBack ? " 代码变更已通过 git 回滚。" : ""}`,
-            ],
-          ),
-          lang,
+    notifyCeo(
+      pickL(
+        l(
+          [
+            `'${task.title}' 작업이 취소되었습니다.${rolledBack ? " 코드 변경분은 git rollback 처리되었습니다." : ""}`,
+          ],
+          [`'${task.title}' was cancelled.${rolledBack ? " Code changes were rolled back via git." : ""}`],
+          [
+            `'${task.title}' はキャンセルされました。${rolledBack ? " コード変更は git でロールバックされました。" : ""}`,
+          ],
+          [`'${task.title}' 已取消。${rolledBack ? " 代码变更已通过 git 回滚。" : ""}`],
         ),
-        id,
-      );
-    } else {
-      notifyCeo(
-        pickL(
-          l(
-            [
-              `'${task.title}' 작업이 취소되었습니다.${rolledBack ? " 코드 변경분은 git rollback 처리되었습니다." : ""}`,
-            ],
-            [`'${task.title}' was cancelled.${rolledBack ? " Code changes were rolled back via git." : ""}`],
-            [
-              `'${task.title}' はキャンセルされました。${rolledBack ? " コード変更は git でロールバックされました。" : ""}`,
-            ],
-            [`'${task.title}' 已取消。${rolledBack ? " 代码变更已通过 git 回滚。" : ""}`],
-          ),
-          lang,
-        ),
-        id,
-      );
-    }
+        lang,
+      ),
+      id,
+    );
 
     res.json({
       ok: true,
@@ -460,7 +515,7 @@ export function registerTaskExecutionControlRoutes(deps: TaskExecutionControlRou
       status: targetStatus,
       pid: activeChild.pid,
       rolled_back: rolledBack,
-      interrupt: targetStatus === "pending" ? buildInterruptProofPayload(id, task.assigned_agent_id) : null,
+      interrupt: null,
     });
   });
 

@@ -409,6 +409,37 @@ function safeTextEquals(left: string, right: string): boolean {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+export function verifyMutationPreviewDigests(preview: MutationPreview): boolean {
+  try {
+    if (preview.schema_version !== "1.0.0") return false;
+    assertIdentifier(preview.preview_id, "preview_id");
+    assertIdentifier(preview.spec_id, "spec_id");
+    assertIdentifier(preview.project_id, "project_id");
+    assertIdentifier(preview.operation, "operation");
+    assertNonEmptyText(preview.resolved_target, "resolved_target");
+    assertNonEmptyText(preview.source_epoch, "source_epoch", 512);
+    assertNonEmptyText(preview.projection_epoch, "projection_epoch", 512);
+    assertNonEmptyText(preview.requester, "requester", 512);
+    assertJsonValue(preview.scope, "scope");
+    assertJsonValue(preview.command as unknown, "command");
+
+    const issuedAt = Date.parse(preview.issued_at);
+    const expiresAt = Date.parse(preview.expires_at);
+    const targetDigest = sha256(preview.resolved_target);
+    return (
+      Number.isFinite(issuedAt) &&
+      Number.isFinite(expiresAt) &&
+      issuedAt < expiresAt &&
+      preview.target_digest === targetDigest &&
+      preview.scope_digest === sha256(stableJson(preview.scope)) &&
+      preview.command_digest === sha256(stableJson(preview.command as unknown as JsonValue)) &&
+      preview.confirmation_text === `승인 ${preview.operation} ${targetDigest.slice(0, 12)}`
+    );
+  } catch {
+    return false;
+  }
+}
+
 function receiptHashInput(receipt: Omit<ApprovalReceipt, "receipt_sha256">): string {
   return stableJson(receipt as unknown as JsonValue);
 }
@@ -810,30 +841,9 @@ export class MutationAuthorizer {
 
   private previewIntegrityValid(preview: MutationPreview): boolean {
     try {
-      if (preview.schema_version !== "1.0.0") return false;
-      assertIdentifier(preview.preview_id, "preview_id");
-      assertIdentifier(preview.spec_id, "spec_id");
-      assertIdentifier(preview.project_id, "project_id");
-      assertIdentifier(preview.operation, "operation");
-      assertNonEmptyText(preview.resolved_target, "resolved_target");
-      assertNonEmptyText(preview.source_epoch, "source_epoch", 512);
-      assertNonEmptyText(preview.projection_epoch, "projection_epoch", 512);
-      assertNonEmptyText(preview.requester, "requester", 512);
-      assertJsonValue(preview.scope, "scope");
+      if (!verifyMutationPreviewDigests(preview)) return false;
       assertStructuredCommand(preview.command, this.allowedExecutableIds, this.allowedCwdRefs);
-
-      const issuedAt = Date.parse(preview.issued_at);
-      const expiresAt = Date.parse(preview.expires_at);
-      const targetDigest = sha256(preview.resolved_target);
-      return (
-        Number.isFinite(issuedAt) &&
-        Number.isFinite(expiresAt) &&
-        issuedAt < expiresAt &&
-        preview.target_digest === targetDigest &&
-        preview.scope_digest === sha256(stableJson(preview.scope)) &&
-        preview.command_digest === sha256(stableJson(preview.command as unknown as JsonValue)) &&
-        preview.confirmation_text === `승인 ${preview.operation} ${targetDigest.slice(0, 12)}`
-      );
+      return true;
     } catch {
       return false;
     }

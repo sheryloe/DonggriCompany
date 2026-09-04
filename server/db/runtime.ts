@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import { DEFAULT_DB_PATH, DEFAULT_LOGS_DIR, LEGACY_DB_PATH } from "../config/runtime.ts";
@@ -55,11 +56,22 @@ export const SUBTASK_DELEGATION_SWEEP_MS = Math.max(
 );
 export const CLI_OUTPUT_DEDUP_WINDOW_MS = Math.max(0, readNonNegativeIntEnv("CLI_OUTPUT_DEDUP_WINDOW_MS", 1500));
 
+export function ensureDatabaseParentDirectory(dbPath: string): string | null {
+  if (dbPath === ":memory:") return null;
+
+  const parentDirectory = path.dirname(path.resolve(dbPath));
+  fs.mkdirSync(parentDirectory, { recursive: true });
+  return parentDirectory;
+}
+
 export function initializeDatabaseRuntime(): {
   dbPath: string;
   db: DatabaseSync;
   logsDir: string;
 } {
+  const dbPath = process.env.DB_PATH ?? DEFAULT_DB_PATH;
+  ensureDatabaseParentDirectory(dbPath);
+
   if (!process.env.DB_PATH && !fs.existsSync(DEFAULT_DB_PATH) && fs.existsSync(LEGACY_DB_PATH)) {
     fs.renameSync(LEGACY_DB_PATH, DEFAULT_DB_PATH);
     for (const suffix of ["-wal", "-shm"]) {
@@ -69,7 +81,6 @@ export function initializeDatabaseRuntime(): {
     console.log("[Dongri-grigri] Migrated legacy database: climpire.sqlite -> claw-empire.sqlite");
   }
 
-  const dbPath = process.env.DB_PATH ?? DEFAULT_DB_PATH;
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);

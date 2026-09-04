@@ -8,6 +8,12 @@ export default defineConfig({
     // A single long-lived Windows fork can lose its Tinypool IPC channel after
     // enough suites; use one isolated fork per file, scheduled sequentially.
     pool: "forks",
+    poolOptions: {
+      forks: {
+        singleFork: false,
+        isolate: true,
+      },
+    },
     maxWorkers: 1,
     fileParallelism: false,
     include: ["server/**/*.{test,spec}.ts"],

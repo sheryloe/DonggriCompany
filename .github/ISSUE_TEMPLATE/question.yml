@@ -1,5 +1,5 @@
 name: Question
-description: Ask a question about Claw-Empire usage, setup, or internals.
+description: Ask a question about Dongri-grigri usage, setup, or internals.
 title: "[Question] "
 labels:
   - question
@@ -13,7 +13,7 @@ body:
     attributes:
       label: Context
       description: What are you trying to do? Provide relevant background.
-      placeholder: e.g. I'm setting up OpenClaw with Telegram and...
+      placeholder: e.g. I'm setting up the local Command Center and...
     validations:
       required: true
   - type: textarea

@@ -1,6 +1,6 @@
 services:
   donggricompany:
     environment:
-      OFFICE_RUNNER_DOCKER_ENABLED: ${OFFICE_RUNNER_DOCKER_ENABLED:-1}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:rw
+      # V1 executes provider CLIs through the Windows host-native Supervisor.
+      # Never grant the application access to the host Docker daemon socket.
+      OFFICE_RUNNER_DOCKER_ENABLED: "0"

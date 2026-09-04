@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyBaseSchema } from "../../bootstrap/schema/base-schema.ts";
 
 const ORIGINAL_PROJECT_PATH_ALLOWED_ROOTS = process.env.PROJECT_PATH_ALLOWED_ROOTS;
+const ORIGINAL_DONGGRI_CONTROL_ROOT = process.env.DONGGRI_CONTROL_ROOT;
 
 const childProcessMocks = vi.hoisted(() => ({
   spawn: vi.fn(),
@@ -93,6 +94,11 @@ describe("github routes", () => {
     } else {
       process.env.PROJECT_PATH_ALLOWED_ROOTS = ORIGINAL_PROJECT_PATH_ALLOWED_ROOTS;
     }
+    if (ORIGINAL_DONGGRI_CONTROL_ROOT === undefined) {
+      delete process.env.DONGGRI_CONTROL_ROOT;
+    } else {
+      process.env.DONGGRI_CONTROL_ROOT = ORIGINAL_DONGGRI_CONTROL_ROOT;
+    }
     childProcessMocks.spawn.mockReset();
     childProcessMocks.execFileSync.mockReset();
     oauthHelperMocks.decryptSecret.mockClear();
@@ -112,6 +118,11 @@ describe("github routes", () => {
       delete process.env.PROJECT_PATH_ALLOWED_ROOTS;
     } else {
       process.env.PROJECT_PATH_ALLOWED_ROOTS = ORIGINAL_PROJECT_PATH_ALLOWED_ROOTS;
+    }
+    if (ORIGINAL_DONGGRI_CONTROL_ROOT === undefined) {
+      delete process.env.DONGGRI_CONTROL_ROOT;
+    } else {
+      process.env.DONGGRI_CONTROL_ROOT = ORIGINAL_DONGGRI_CONTROL_ROOT;
     }
     vi.unstubAllGlobals();
     vi.clearAllMocks();
@@ -162,6 +173,32 @@ describe("github routes", () => {
     } finally {
       db.close();
     }
+  });
+
+  it("selects an external clean-clone default without inventing a Dev Drive", async () => {
+    const { resolveGitHubDefaultProjectRoot } = await import("./github-routes.ts");
+
+    expect(
+      resolveGitHubDefaultProjectRoot({
+        allowedRoots: [],
+        controlRoot: "C:\\Users\\dev\\src\\DonggriCompany",
+        controlPlaneConfigured: false,
+        homeDir: "C:\\Users\\dev",
+      }),
+    ).toBe(path.normalize("C:\\Users\\dev\\Projects"));
+  });
+
+  it("prefers an explicitly allowed project root", async () => {
+    const { resolveGitHubDefaultProjectRoot } = await import("./github-routes.ts");
+
+    expect(
+      resolveGitHubDefaultProjectRoot({
+        allowedRoots: ["E:\\PortableProjects"],
+        controlRoot: "C:\\Users\\dev\\src\\DonggriCompany",
+        controlPlaneConfigured: false,
+        homeDir: "C:\\Users\\dev",
+      }),
+    ).toBe(path.normalize("E:\\PortableProjects"));
   });
 
   it("fails when GitHub omits repository metadata from a 201 response", async () => {
@@ -310,6 +347,59 @@ describe("github routes", () => {
         }),
       );
       expect(JSON.stringify(childProcessMocks.spawn.mock.calls[0])).not.toContain("encrypted-token@github.com");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("uses PROJECT_PATH_ALLOWED_ROOTS when a clone target is omitted", async () => {
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "github-default-allowed-root-"));
+    tempDirs.push(rootDir);
+    process.env.PROJECT_PATH_ALLOWED_ROOTS = rootDir;
+
+    const { app, db } = await createHarness();
+    try {
+      insertActiveGitHubAccount(db);
+      childProcessMocks.spawn.mockImplementation(() => createMockSpawnChild(0));
+
+      const response = await request(app).post("/api/github/clone").send({
+        owner: "octocat",
+        repo: "portable-repo",
+        branch: "main",
+      });
+
+      const expectedTarget = path.join(rootDir, "portable-repo");
+      expect(response.status).toBe(200);
+      expect(response.body.target_path).toBe(expectedTarget);
+      expect(childProcessMocks.spawn).toHaveBeenCalledWith(
+        "git",
+        expect.arrayContaining(["https://github.com/octocat/portable-repo.git", expectedTarget]),
+        expect.any(Object),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it("uses an explicit DONGGRI_CONTROL_ROOT for the local repo estate", async () => {
+    const controlRoot = fs.mkdtempSync(path.join(os.tmpdir(), "github-control-root-"));
+    tempDirs.push(controlRoot);
+    delete process.env.PROJECT_PATH_ALLOWED_ROOTS;
+    process.env.DONGGRI_CONTROL_ROOT = controlRoot;
+
+    const { app, db } = await createHarness();
+    try {
+      insertActiveGitHubAccount(db);
+      childProcessMocks.spawn.mockImplementation(() => createMockSpawnChild(0));
+
+      const response = await request(app).post("/api/github/clone").send({
+        owner: "octocat",
+        repo: "portable-repo",
+      });
+
+      const expectedTarget = path.join(controlRoot, "repos", "portable-repo");
+      expect(response.status).toBe(200);
+      expect(response.body.target_path).toBe(expectedTarget);
     } finally {
       db.close();
     }

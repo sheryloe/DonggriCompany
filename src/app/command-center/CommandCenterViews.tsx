@@ -14,17 +14,24 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { ControlPlaneDashboardProject, ControlPlaneDashboardState } from "../../api/control-plane-dashboard";
-import type { Agent, CompanyStats, Task } from "../../types";
+import type { ContinuityLiveProjection } from "../../api/continuity";
+import type { Agent, CompanyStats, Project, Task, WebSocketConnectionState } from "../../types";
+import ContinuityTransitMap from "./ContinuityTransitMap";
+import ContinuityTransferPanel from "./ContinuityTransferPanel";
 import type { CommandCenterView } from "./useCommandCenterNavigation";
 
 type Props = {
   connected: boolean;
+  connectionState: WebSocketConnectionState;
   view: CommandCenterView;
   selectedId: string | null;
   tasks: Task[];
   agents: Agent[];
   stats: CompanyStats | null;
   dashboard: ControlPlaneDashboardState | null;
+  runtimeProjects?: Project[];
+  continuity?: ContinuityLiveProjection[];
+  continuityUnavailable?: boolean;
   loading: boolean;
   error: string | null;
   decisionInboxCount: number;
@@ -42,6 +49,10 @@ type Props = {
 export type CommandCreateInput = {
   title: string;
   departmentId: string;
+  projectId?: string;
+  projectPath?: string;
+  provider: "codex" | "claude";
+  assignedAgentId?: string;
   runAfterCreate: boolean;
 };
 
@@ -134,6 +145,8 @@ function DashboardState({ loading, error, onRetry }: Pick<Props, "loading" | "er
 function TodayView(props: Props) {
   const [command, setCommand] = useState("");
   const [departmentId, setDepartmentId] = useState("planning");
+  const [projectId, setProjectId] = useState("");
+  const [provider, setProvider] = useState<"codex" | "claude">("codex");
   const [commandState, setCommandState] = useState<"idle" | "saving" | "saved" | "started" | "error">("idle");
   const running = props.tasks.filter((task) => task.status === "in_progress" || task.status === "collaborating");
   const waiting = props.tasks.filter((task) => task.status === "inbox" || task.status === "pending");
@@ -142,12 +155,29 @@ function TodayView(props: Props) {
   const projects = props.dashboard?.projects.slice(0, 5) ?? [];
   const workingAgents = props.agents.filter((agent) => agent.status === "working").length;
   const activeSpec = selectDonggriCompanyActiveSpec(props.dashboard);
+  const providerAgents = props.agents.filter((agent) => agent.cli_provider === provider);
+  const selectedAgent = providerAgents.find((agent) => agent.department_id === departmentId) ?? providerAgents[0];
+  const normalizePath = (value: string) => value.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
   const submitCommand = async (runAfterCreate: boolean) => {
     const title = command.trim();
     if (!title || commandState === "saving") return;
     setCommandState("saving");
     try {
-      const taskId = await props.onCreateCommand({ title, departmentId, runAfterCreate });
+      const project = props.dashboard?.projects.find((candidate) => candidate.key === projectId);
+      const selectedProjectPath = project?.path;
+      const runtimeProject = props.runtimeProjects?.find(
+        (candidate) =>
+          selectedProjectPath && normalizePath(candidate.project_path) === normalizePath(selectedProjectPath),
+      );
+      const taskId = await props.onCreateCommand({
+        title,
+        departmentId,
+        projectId: runtimeProject?.id,
+        projectPath: project?.path,
+        provider,
+        assignedAgentId: selectedAgent?.id,
+        runAfterCreate,
+      });
       setCommand("");
       setCommandState(runAfterCreate ? "started" : "saved");
       props.onNavigate("tasks", taskId);
@@ -221,12 +251,10 @@ function TodayView(props: Props) {
             <strong>{running.length}</strong>
             <small>실제 task 상태</small>
           </article>
-          <article className={workingAgents > 0 ? "is-active" : ""}>
+          <article className={props.connected ? (workingAgents > 0 ? "is-active" : "") : "is-service"}>
             <span>작업 에이전트</span>
-            <strong>
-              {workingAgents}/{props.agents.length}
-            </strong>
-            <small>실시간 연결 데이터</small>
+            <strong>{props.connected ? `${workingAgents}/${props.agents.length}` : "—"}</strong>
+            <small>{props.connected ? "실시간 연결 데이터" : "연결 복구 후 갱신"}</small>
           </article>
           <article className="is-active">
             <span>활성 단계</span>
@@ -260,8 +288,24 @@ function TodayView(props: Props) {
             void submitCommand(false);
           }}
         >
-          <label htmlFor="cc-command-input">Codex 업무 명령</label>
+          <label htmlFor="cc-command-input">AI 업무 명령</label>
           <div className="cc-command-fields">
+            <select aria-label="대상 프로젝트" value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+              <option value="">프로젝트 선택</option>
+              {(props.dashboard?.projects ?? []).map((project) => (
+                <option key={project.key} value={project.key}>
+                  {project.key}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="실행 제공자"
+              value={provider}
+              onChange={(event) => setProvider(event.target.value as "codex" | "claude")}
+            >
+              <option value="codex">Codex</option>
+              <option value="claude">Claude</option>
+            </select>
             <select
               aria-label="담당 마스터 역할"
               value={departmentId}
@@ -273,6 +317,11 @@ function TodayView(props: Props) {
                 </option>
               ))}
             </select>
+            <span className="cc-runner-readout" aria-live="polite">
+              {selectedAgent
+                ? `${selectedAgent.name_ko || selectedAgent.name} · ${selectedAgent.cli_provider === "claude" ? "Claude" : "Codex"} 연결`
+                : `${provider === "codex" ? "Codex" : "Claude"} 연결 에이전트 없음`}
+            </span>
             <input
               id="cc-command-input"
               maxLength={160}
@@ -291,7 +340,7 @@ function TodayView(props: Props) {
             <button
               className="is-run"
               type="button"
-              disabled={!command.trim() || commandState === "saving"}
+              disabled={!command.trim() || commandState === "saving" || !selectedAgent}
               onClick={() => void submitCommand(true)}
             >
               등록 후 실행 <ArrowRight aria-hidden="true" size={17} />
@@ -308,6 +357,16 @@ function TodayView(props: Props) {
           </small>
         </form>
       </section>
+
+      <ContinuityTransitMap
+        connectionState={props.connectionState}
+        tasks={props.tasks}
+        agents={props.agents}
+        projects={props.dashboard?.projects ?? []}
+        continuity={props.continuity ?? []}
+        continuityUnavailable={props.continuityUnavailable}
+        onOpenTask={(taskId) => props.onNavigate("tasks", taskId)}
+      />
 
       <section className="cc-map-section" aria-labelledby="cc-map-title">
         <div className="cc-section-heading">
@@ -605,6 +664,7 @@ function TasksView(props: Props) {
                 실행 로그
               </button>
             </div>
+            <ContinuityTransferPanel task={selected} agents={props.agents} />
             {selected.result?.trim() && (
               <div className="cc-task-result">
                 <strong>실행 결과</strong>

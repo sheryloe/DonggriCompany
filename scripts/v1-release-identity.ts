@@ -3,12 +3,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
+import { resolveDonggriControlRoot } from "../server/config/control-root.ts";
 import { resolveReleaseIdentity } from "../server/modules/release/release-identity.ts";
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..");
 const REPOSITORY_SELECTION_SHA = path.join(PROJECT_ROOT, "contracts", "v1", "selection-manifest.sha256");
+const CONTROL_ROOT = resolveDonggriControlRoot({
+  envValue: process.env.DONGGRI_CONTROL_ROOT,
+  repoRoot: PROJECT_ROOT,
+});
 const CONTROL_PLANE_SELECTION_SHA = path.resolve(
-  "G:\\Donggri_DevDrive\\storage\\codex-control\\specs",
+  CONTROL_ROOT,
+  "storage",
+  "codex-control",
+  "specs",
   "20260725-donggricompany-v1-stabilization-certification-v1",
   "SELECTION_MANIFEST.sha256",
 );

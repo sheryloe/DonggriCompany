@@ -1,8 +1,16 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import type { CliStatusResult, CliToolDef, CliToolStatus, CliUsageEntry, CliUsageWindow } from "./types.ts";
+import {
+  buildMinimalCliChildEnv,
+  isProviderLiveExecutionApproved,
+  type ProviderLiveExecutionGate,
+} from "../cli-runtime.ts";
+import { resolveHostExecutable } from "../host-executable-resolver.ts";
+
+const CLI_TOOL_COMMAND_ALLOWLIST = Object.freeze(["claude", "codex", "gemini", "jules", "kimi", "opencode"]);
 
 type CreateUsageCliToolsDeps = {
   jsonHasKey: (filePath: string, key: string) => boolean;
@@ -12,6 +20,11 @@ type CreateUsageCliToolsDeps = {
   readGeminiCredsFromKeychain: () => unknown;
   freshGeminiToken: () => Promise<string | null>;
   getGeminiProjectId: (token: string) => Promise<string | null>;
+  sourceEnv?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  resolveExecutable?: typeof resolveHostExecutable;
+  execFileCommand?: typeof execFile;
+  providerLiveExecutionGate?: ProviderLiveExecutionGate;
 };
 
 export function createUsageCliTools(deps: CreateUsageCliToolsDeps) {
@@ -23,7 +36,32 @@ export function createUsageCliTools(deps: CreateUsageCliToolsDeps) {
     readGeminiCredsFromKeychain,
     freshGeminiToken,
     getGeminiProjectId,
+    sourceEnv = process.env,
+    platform = process.platform,
+    resolveExecutable = resolveHostExecutable,
+    execFileCommand = execFile,
+    providerLiveExecutionGate,
   } = deps;
+
+  function resolveCliCommand(command: string, argv: readonly string[] = []) {
+    const env = buildMinimalCliChildEnv(sourceEnv, platform);
+    if (!CLI_TOOL_COMMAND_ALLOWLIST.includes(command)) {
+      return {
+        env,
+        executable: { ok: false as const, reason: `cli_tool_command_not_allowed: ${command}` },
+      };
+    }
+    return {
+      env,
+      executable: resolveExecutable({
+        command,
+        argv,
+        pathValue: env.PATH,
+        platform,
+        allowedCommands: [command],
+      }),
+    };
+  }
 
   async function fetchClaudeUsage(): Promise<CliUsageEntry> {
     const token = readClaudeToken();
@@ -194,13 +232,10 @@ export function createUsageCliTools(deps: CreateUsageCliToolsDeps) {
       authHint: "Run: gemini auth login",
       getVersion: () => {
         try {
-          const whichCmd = process.platform === "win32" ? "where" : "which";
-          const geminiPath = execFileSync(whichCmd, ["gemini"], { encoding: "utf8", timeout: 3000 })
-            .split("\n")[0]
-            .trim();
-          if (!geminiPath) return null;
-          const realPath = fs.realpathSync(geminiPath);
-          let dir = path.dirname(realPath);
+          const resolved = resolveCliCommand("gemini").executable;
+          if (!resolved.ok) return null;
+          const inspectionPath = resolved.source === "npm-cmd" ? resolved.argv[0] : resolved.commandPath;
+          let dir = path.dirname(inspectionPath);
           for (let i = 0; i < 10; i++) {
             const pkgPath = path.join(dir, "node_modules", "@google", "gemini-cli", "package.json");
             if (fs.existsSync(pkgPath)) {
@@ -268,22 +303,47 @@ export function createUsageCliTools(deps: CreateUsageCliToolsDeps) {
   const CLI_STATUS_TTL = 30_000;
 
   function execWithTimeout(cmd: string, args: string[], timeoutMs: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const opts: any = { timeout: timeoutMs };
-      if (process.platform === "win32") opts.shell = true;
-      const child = execFile(cmd, args, opts, (err, stdout) => {
-        if (err) return reject(err);
-        resolve(String(stdout).trim());
-      });
-      child.unref?.();
+    const resolved = resolveCliCommand(cmd, args);
+    const executable = resolved.executable;
+    if (!executable.ok) return Promise.reject(new Error(executable.reason));
+    if (
+      !isProviderLiveExecutionApproved(providerLiveExecutionGate, {
+        operation: "cli_status_probe",
+        runId: null,
+        taskId: null,
+        provider: cmd,
+        poolId: null,
+        projectPath: null,
+        executable: executable.executable,
+      })
+    ) {
+      return Promise.reject(new Error("provider live execution approval required: G-PROVIDER-LIVE"));
+    }
+    return new Promise<string>((resolve, reject) => {
+      execFileCommand(
+        executable.executable,
+        [...executable.argv],
+        {
+          timeout: timeoutMs,
+          encoding: "utf8",
+          env: resolved.env,
+          shell: false,
+          windowsHide: true,
+        },
+        (error, stdout) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve(String(stdout).trim());
+        },
+      );
     });
   }
 
   async function detectCliTool(tool: CliToolDef): Promise<CliToolStatus> {
-    const whichCmd = process.platform === "win32" ? "where" : "which";
-    try {
-      await execWithTimeout(whichCmd, [tool.name], 3000);
-    } catch {
+    const installed = resolveCliCommand(tool.name).executable;
+    if (!installed.ok) {
       return { installed: false, version: null, authenticated: false, authHint: tool.authHint };
     }
 

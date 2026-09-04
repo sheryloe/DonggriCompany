@@ -174,6 +174,57 @@ projects:
     expect(after.projection_epoch).not.toBe(before.projection_epoch);
   });
 
+  it("resolves relative project paths against controlRoot without rebasing absolute paths", async () => {
+    const controlRoot = await fs.mkdtemp(path.join(os.tmpdir(), "donggri-source-adapter-paths-"));
+    temporaryDirectories.push(controlRoot);
+    const controlPlaneRoot = path.join(controlRoot, "storage", "codex-control");
+    await fs.mkdir(path.join(controlPlaneRoot, "registry"), { recursive: true });
+    await fs.mkdir(path.join(controlPlaneRoot, "specs"), { recursive: true });
+    await fs.writeFile(
+      path.join(controlPlaneRoot, "registry", "projects.yaml"),
+      [
+        "projects:",
+        "  RelativeProject:",
+        "    path: repos/DonggriCompany",
+        "    status: active",
+        "  WindowsProject:",
+        "    path: 'G:\\External\\WindowsProject'",
+        "    status: active",
+        "  PosixProject:",
+        "    path: /srv/donggri/PosixProject",
+        "    status: active",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(controlPlaneRoot, "specs", "_active.md"),
+      [
+        "## Current Active Spec (DonggriCompany)",
+        "",
+        "- Spec ID: `20260725-donggricompany-v1`",
+        "- Status: implementation",
+        "- Phase: preflight",
+        "- Related repo: `G:\\Donggri_DevDrive\\repos\\DonggriCompany`",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const snapshot = new ControlPlaneSourceAdapter({
+      controlRoot,
+      controlPlaneRoot,
+      sourceEpoch: CANDIDATE_SOURCE_EPOCH,
+    }).readSnapshot();
+
+    expect(snapshot.parse_errors).toEqual([]);
+    expect(snapshot.projects.map((project) => [project.key, project.path])).toEqual([
+      ["RelativeProject", path.resolve(controlRoot, "repos", "DonggriCompany")],
+      ["WindowsProject", "G:\\External\\WindowsProject"],
+      ["PosixProject", "/srv/donggri/PosixProject"],
+    ]);
+  });
+
   it("fails closed with explicit source-missing evidence when the Control Plane documents are absent", async () => {
     const controlRoot = await fs.mkdtemp(path.join(os.tmpdir(), "donggri-source-adapter-missing-"));
     temporaryDirectories.push(controlRoot);
@@ -210,5 +261,14 @@ projects:
     expect(() => new ControlPlaneSourceAdapter({ sourceEpoch: "sha256:not-a-digest" })).toThrow(
       "candidate_source_epoch_required",
     );
+  });
+
+  it("uses the current repository as the portable degraded default instead of a private drive", () => {
+    const snapshot = new ControlPlaneSourceAdapter({ sourceEpoch: CANDIDATE_SOURCE_EPOCH }).readSnapshot();
+
+    expect(snapshot.files.projects.absolute_path).toBe(
+      path.resolve(process.cwd(), "storage", "codex-control", "registry", "projects.yaml"),
+    );
+    expect(snapshot.files.projects.absolute_path).toContain(path.basename(process.cwd()));
   });
 });

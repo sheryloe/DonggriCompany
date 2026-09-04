@@ -39,6 +39,7 @@ type FakeDbState = {
     consumed_at: number | null;
   }>;
   nextInterruptInjectionId: number;
+  continuityRunsByTask: Map<string, string>;
 };
 
 type FakeRes = {
@@ -72,6 +73,16 @@ function createFakeDb(state: FakeDbState): {
 } {
   return {
     prepare(sql: string) {
+      if (sql.includes("SELECT run_id FROM continuity_runs") && sql.includes("WHERE task_id = ?")) {
+        return {
+          get: (taskId: string) => {
+            const runId = state.continuityRunsByTask.get(taskId);
+            return runId ? { run_id: runId } : undefined;
+          },
+          all: () => [],
+          run: () => ({ changes: 0 }),
+        };
+      }
       if (sql.startsWith("SELECT * FROM tasks WHERE id = ?")) {
         return {
           get: (id: string) => state.tasks.get(id),
@@ -206,6 +217,7 @@ function createDeps(seed?: {
   agent?: Partial<AgentRow>;
   activePid?: number | null;
   sessionId?: string | null;
+  continuityRunId?: string | null;
 }): {
   deps: TaskExecutionControlRouteDeps;
   routes: Map<string, (req: any, res: any) => any>;
@@ -221,6 +233,7 @@ function createDeps(seed?: {
     startTaskExecutionForAgent: ReturnType<typeof vi.fn>;
     randomDelay: ReturnType<typeof vi.fn>;
     ensureTaskExecutionSession: ReturnType<typeof vi.fn>;
+    continuityPause: ReturnType<typeof vi.fn>;
   };
   maps: {
     activeProcesses: Map<string, { pid: number; kill: () => void }>;
@@ -261,6 +274,7 @@ function createDeps(seed?: {
     linkedSubtasksByDelegatedTask: new Map(),
     interruptInjections: [],
     nextInterruptInjectionId: 1,
+    continuityRunsByTask: new Map(seed?.continuityRunId ? [[taskId, seed.continuityRunId]] : []),
   };
 
   const routes = new Map<string, (req: any, res: any) => any>();
@@ -298,6 +312,7 @@ function createDeps(seed?: {
     taskExecutionSessions.set(taskIdInput, created);
     return created;
   });
+  const continuityPause = vi.fn(async (runId: string) => ({ status: "paused", run_id: runId }));
 
   const deps: TaskExecutionControlRouteDeps = {
     app: app as any,
@@ -329,6 +344,7 @@ function createDeps(seed?: {
     isTaskWorkflowInterrupted: () => false,
     startTaskExecutionForAgent,
     randomDelay,
+    continuitySupervisor: seed?.continuityRunId ? { pause: continuityPause } : null,
   };
 
   return {
@@ -346,6 +362,7 @@ function createDeps(seed?: {
       startTaskExecutionForAgent,
       randomDelay,
       ensureTaskExecutionSession,
+      continuityPause,
     },
     maps: {
       activeProcesses,
@@ -361,7 +378,7 @@ describe("registerTaskExecutionControlRoutes", () => {
     vi.useRealTimers();
   });
 
-  it("pause 요청 시 active pid에 interrupt를 보내고 pending으로 전환한다", () => {
+  it("pause signal 뒤 close/dead 증거 전에는 202를 반환하고 task를 변경하지 않는다", async () => {
     const harness = createDeps({ activePid: 4321 });
     registerTaskExecutionControlRoutes(harness.deps);
 
@@ -376,14 +393,15 @@ describe("registerTaskExecutionControlRoutes", () => {
       header: (name: string) => (name.toLowerCase() === "x-csrf-token" ? getCsrfToken() : undefined),
     };
     const res = createFakeRes();
-    handler?.(req, res);
+    await handler?.(req, res);
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
     expect(res.payload).toMatchObject({
       ok: true,
-      stopped: true,
-      status: "pending",
+      stopped: false,
+      status: "in_progress",
       pid: 4321,
+      acknowledged: false,
       rolled_back: false,
       interrupt: {
         session_id: expect.any(String),
@@ -398,7 +416,7 @@ describe("registerTaskExecutionControlRoutes", () => {
     expect(payload.interrupt?.control_token).toBe(
       buildTaskInterruptControlToken("task-1", String(payload.interrupt?.session_id ?? "")),
     );
-    expect(harness.state.tasks.get("task-1")?.status).toBe("pending");
+    expect(harness.state.tasks.get("task-1")?.status).toBe("in_progress");
     expect(harness.maps.stopRequestedTasks.has("task-1")).toBe(true);
     expect(harness.maps.stopRequestModeByTask.get("task-1")).toBe("pause");
     expect(harness.spies.interruptPidTree).toHaveBeenCalledWith(4321);
@@ -490,10 +508,15 @@ describe("registerTaskExecutionControlRoutes", () => {
     );
   });
 
-  it("pause -> inject -> resume 통합 흐름이 순차 처리된다", () => {
+  it("Supervisor close/dead ACK 뒤에만 pending으로 전환하고 inject/resume을 허용한다", async () => {
     vi.useFakeTimers();
     const sessionId = "session-qa-inject";
-    const harness = createDeps({ activePid: 5678, sessionId, agent: { status: "idle" } });
+    const harness = createDeps({
+      activePid: null,
+      sessionId,
+      agent: { status: "idle" },
+      continuityRunId: "run:managed:1",
+    });
     registerTaskExecutionControlRoutes(harness.deps);
 
     const stopHandler = harness.routes.get("/api/tasks/:id/stop");
@@ -521,9 +544,11 @@ describe("registerTaskExecutionControlRoutes", () => {
       },
     };
     const stopRes = createFakeRes();
-    stopHandler?.(stopReq, stopRes);
+    await stopHandler?.(stopReq, stopRes);
     expect(stopRes.statusCode).toBe(200);
+    expect(stopRes.payload).toMatchObject({ acknowledged: true, run_id: "run:managed:1" });
     expect(harness.state.tasks.get("task-1")?.status).toBe("pending");
+    expect(harness.spies.continuityPause).toHaveBeenCalledWith("run:managed:1", "task_pause_request");
 
     const injectReq = {
       params: { id: "task-1" },

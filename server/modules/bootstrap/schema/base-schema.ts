@@ -1,4 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
+import { applyContinuityCheckpointSchema } from "./continuity-checkpoint-schema.ts";
+import { applyContinuityRunSchema } from "./continuity-run-schema.ts";
 import { applyControlPlaneMutationSchema } from "./control-plane-mutation-schema.ts";
 import { applyMemorySchema } from "./memory-schema.ts";
 import { applyModuleSchema } from "./module-schema.ts";
@@ -509,6 +511,8 @@ CREATE TABLE IF NOT EXISTS api_providers (
 
   ensureCanonicalCompatibilityColumns(db);
   ensureCanonicalCompatibilityIndexes(db);
+  applyContinuityCheckpointSchema(db);
+  applyContinuityRunSchema(db);
   applyControlPlaneMutationSchema(db);
   applyMemorySchema(db);
   applyModuleSchema(db);

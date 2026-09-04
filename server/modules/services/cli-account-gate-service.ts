@@ -5,6 +5,13 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { isExecutionProvider, type ExecutionProvider } from "./oauth-gate-service.ts";
+import { isCanonicalCliAccountPoolId, isCliAuthArtifactValid } from "../workflow/agents/cli-account-pool-env.ts";
+import {
+  buildMinimalCliChildEnv,
+  isProviderLiveExecutionApproved,
+  type ProviderLiveExecutionGate,
+} from "../workflow/agents/cli-runtime.ts";
+import { resolveHostExecutable } from "../workflow/agents/host-executable-resolver.ts";
 
 type DbLike = Pick<DatabaseSync, "prepare">;
 
@@ -121,7 +128,9 @@ type CliAccountGateServiceDeps = {
   db: DbLike;
   nowMs: () => number;
   profileRoot?: string;
-  containerName?: string;
+  resolveExecutable?: typeof resolveHostExecutable;
+  execFileCommand?: typeof execFileSync;
+  providerLiveExecutionGate?: ProviderLiveExecutionGate;
 };
 
 export class CliAccountGateError extends Error {
@@ -130,7 +139,9 @@ export class CliAccountGateError extends Error {
     | "cli_auth_required"
     | "cli_install_required"
     | "cli_profile_error"
+    | "cli_account_pool_invalid"
     | "cli_sync_failed"
+    | "runner_supervisor_unbound"
     | "unsupported_provider";
   readonly status: number;
 
@@ -146,13 +157,17 @@ export class CliAccountGateService {
   private readonly db: DbLike;
   private readonly nowMs: () => number;
   private readonly profileRoot: string;
-  private readonly containerName: string;
+  private readonly resolveExecutable: typeof resolveHostExecutable;
+  private readonly execFileCommand: typeof execFileSync;
+  private readonly providerLiveExecutionGate: ProviderLiveExecutionGate | undefined;
 
   constructor(deps: CliAccountGateServiceDeps) {
     this.db = deps.db;
     this.nowMs = deps.nowMs;
-    this.profileRoot = (deps.profileRoot ?? resolveDefaultOfficeCliProfileRoot()).trim();
-    this.containerName = (deps.containerName ?? process.env.OFFICE_APP_CONTAINER_NAME ?? "donggricompany").trim();
+    this.profileRoot = path.resolve((deps.profileRoot ?? resolveDefaultOfficeCliProfileRoot()).trim());
+    this.resolveExecutable = deps.resolveExecutable ?? resolveHostExecutable;
+    this.execFileCommand = deps.execFileCommand ?? execFileSync;
+    this.providerLiveExecutionGate = deps.providerLiveExecutionGate;
   }
 
   listPools(): CliAccountPoolView[] {
@@ -167,7 +182,7 @@ export class CliAccountGateService {
   }
 
   syncCodexPoolsFromMultiAuth(options?: { live?: boolean }): SyncCodexPoolsResult {
-    if (!isBinaryInstalled("codex")) {
+    if (!isBinaryInstalled("codex", this.resolveExecutable)) {
       throw new CliAccountGateError("cli_install_required", 412, "Codex CLI is not installed");
     }
     const now = this.nowMs();
@@ -200,11 +215,34 @@ export class CliAccountGateService {
     const reportCommands = ["codex-multi-auth", "codex"];
     for (const command of reportCommands) {
       try {
-        const output = execFileSync(command, reportArgs, {
+        const env = buildMinimalCliChildEnv(process.env, process.platform);
+        const executable = this.resolveExecutable({
+          command,
+          argv: reportArgs,
+          pathValue: env.PATH,
+          platform: process.platform,
+          allowedCommands: [command],
+        });
+        if (!executable.ok) throw new Error(executable.reason);
+        if (
+          !isProviderLiveExecutionApproved(this.providerLiveExecutionGate, {
+            operation: "account_diagnostic",
+            runId: null,
+            taskId: null,
+            provider: "codex",
+            poolId: null,
+            projectPath: null,
+            executable: executable.executable,
+          })
+        ) {
+          throw new Error("provider live execution approval required: G-PROVIDER-LIVE");
+        }
+        const output = this.execFileCommand(executable.executable, executable.argv, {
           stdio: "pipe",
           timeout: 30_000,
           encoding: "utf8",
-          shell: process.platform === "win32",
+          env,
+          shell: false,
         });
         report = parseCodexAuthReportJson(output);
         break;
@@ -359,6 +397,7 @@ export class CliAccountGateService {
   private repairLegacyGeneratedProfileHome(row: CliAccountPoolRow, nextProfileHome: string, now: number): void {
     if (!isLegacyGeneratedOfficeProfileHome(row.profile_home)) return;
     if (path.normalize(row.profile_home) === path.normalize(nextProfileHome)) return;
+    this.assertProfileHomeAvailable(row.provider, row.account_pool_id, nextProfileHome);
     this.db
       .prepare(
         `UPDATE cli_account_pools
@@ -373,7 +412,7 @@ export class CliAccountGateService {
     if (!isExecutionProvider(normalizedProvider)) {
       throw new CliAccountGateError("unsupported_provider", 400, `Unsupported provider: ${provider}`);
     }
-    const normalizedPool = normalizePool(accountPoolId);
+    const normalizedPool = requireCanonicalPoolId(accountPoolId);
     if (!normalizedPool) {
       throw new CliAccountGateError("cli_not_connected", 400, "accountPoolId is required");
     }
@@ -382,7 +421,8 @@ export class CliAccountGateService {
     const existing = this.getPoolRow(normalizedProvider, normalizedPool);
     const id = existing?.id ?? randomUUID();
     const nextLabel = (label ?? existing?.label ?? `${normalizedProvider}-${normalizedPool}`).trim();
-    const profileHome = existing?.profile_home ?? this.buildProfileHome(normalizedProvider, normalizedPool);
+    const profileHome = this.buildProfileHome(normalizedProvider, normalizedPool);
+    this.assertProfileHomeAvailable(normalizedProvider, normalizedPool, profileHome);
     this.db
       .prepare(
         `INSERT INTO cli_account_pools (
@@ -400,7 +440,7 @@ export class CliAccountGateService {
 
   updatePool(provider: string, accountPoolId: string, patch: { label?: string }): CliAccountPoolView {
     const normalizedProvider = normalizeProvider(provider);
-    const normalizedPool = normalizePool(accountPoolId);
+    const normalizedPool = requireCanonicalPoolId(accountPoolId);
     const row = this.mustGetPoolRow(normalizedProvider, normalizedPool);
     const nextLabel = typeof patch.label === "string" ? patch.label.trim() : row.label;
     const now = this.nowMs();
@@ -412,7 +452,7 @@ export class CliAccountGateService {
 
   deletePool(provider: string, accountPoolId: string): void {
     const normalizedProvider = normalizeProvider(provider);
-    const normalizedPool = normalizePool(accountPoolId);
+    const normalizedPool = requireCanonicalPoolId(accountPoolId);
     this.db
       .prepare("DELETE FROM cli_account_pools WHERE provider = ? AND account_pool_id = ?")
       .run(normalizedProvider, normalizedPool);
@@ -423,11 +463,12 @@ export class CliAccountGateService {
     if (!isExecutionProvider(normalizedProvider)) {
       throw new CliAccountGateError("unsupported_provider", 400, `Unsupported provider: ${provider}`);
     }
-    const normalizedPool = normalizePool(accountPoolId);
+    const normalizedPool = requireCanonicalPoolId(accountPoolId);
     const row = this.mustGetPoolRow(normalizedProvider, normalizedPool);
     const now = this.nowMs();
 
     try {
+      this.assertProfileRootBoundary();
       fs.mkdirSync(row.profile_home, { recursive: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -439,7 +480,7 @@ export class CliAccountGateService {
       };
     }
 
-    const binaryInstalled = isBinaryInstalled(normalizedProvider);
+    const binaryInstalled = isBinaryInstalled(normalizedProvider, this.resolveExecutable);
     if (!binaryInstalled) {
       this.updatePoolStatus(
         row.provider,
@@ -457,7 +498,15 @@ export class CliAccountGateService {
 
     const authArtifactFound = hasAuthArtifact(normalizedProvider, row.profile_home);
     if (!authArtifactFound) {
-      if (normalizedProvider === "codex" && isCodexGlobalAccountDetected()) {
+      if (
+        normalizedProvider === "codex" &&
+        isCodexGlobalAccountDetected(
+          row.account_pool_id,
+          this.resolveExecutable,
+          this.execFileCommand,
+          this.providerLiveExecutionGate,
+        )
+      ) {
         this.updatePoolStatus(
           row.provider,
           row.account_pool_id,
@@ -480,7 +529,13 @@ export class CliAccountGateService {
     }
 
     if (normalizedProvider === "jules") {
-      const health = verifyJulesRemoteSessionHealth(row.profile_home);
+      const health = verifyJulesRemoteSessionHealth(
+        row.profile_home,
+        row.account_pool_id,
+        this.resolveExecutable,
+        this.execFileCommand,
+        this.providerLiveExecutionGate,
+      );
       if (!health.ok) {
         this.updatePoolStatus(row.provider, row.account_pool_id, "auth_required", now, health.error);
         return {
@@ -504,40 +559,19 @@ export class CliAccountGateService {
     if (!isExecutionProvider(normalizedProvider)) {
       throw new CliAccountGateError("unsupported_provider", 400, `Unsupported provider: ${provider}`);
     }
-    const normalizedPool = normalizePool(accountPoolId);
-    const row = this.mustGetPoolRow(normalizedProvider, normalizedPool);
-
-    const commandMap: Record<ExecutionProvider, string> = {
-      codex: "codex login --device-auth",
-      gemini: "gemini",
-      claude: "claude",
-      // In Docker, localhost callback ports from browser cannot reach container process.
-      // Force manual code flow to avoid redirect failures on 127.0.0.1:<random-port>.
-      jules: "jules login --no-launch-browser",
-    };
-    const noteMap: Record<ExecutionProvider, string | null> = {
-      codex: null,
-      gemini: "Interactive shell opens. Complete Gemini login in that session.",
-      claude: "Interactive shell opens. Complete Claude authentication in that session.",
-      jules: "Manual code login mode is used to avoid localhost callback issues in Docker.",
-    };
-    const binaryInstalled = isBinaryInstalled(normalizedProvider);
-    const loginCommand = commandMap[normalizedProvider];
-    const command = `docker exec -it ${this.containerName} sh -lc 'mkdir -p "${row.profile_home}" && HOME="${row.profile_home}" ${loginCommand}'`;
-    return {
-      provider: normalizedProvider,
-      accountPoolId: normalizedPool,
-      profileHome: row.profile_home,
-      binaryInstalled,
-      command,
-      note: noteMap[normalizedProvider],
-    };
+    const normalizedPool = requireCanonicalPoolId(accountPoolId);
+    this.mustGetPoolRow(normalizedProvider, normalizedPool);
+    throw new CliAccountGateError(
+      "runner_supervisor_unbound",
+      503,
+      "Host-native login command generation is disabled until the Runner Supervisor owns profile isolation",
+    );
   }
 
   ensureProviderPoolReady(provider: string, accountPoolId: string): CliAccountPoolView | null {
     const normalizedProvider = normalizeProvider(provider);
     if (!isExecutionProvider(normalizedProvider)) return null;
-    const normalizedPool = normalizePool(accountPoolId);
+    const normalizedPool = requireCanonicalPoolId(accountPoolId);
     if (!normalizedPool) {
       throw new CliAccountGateError("cli_not_connected", 400, "accountPoolId is required");
     }
@@ -609,13 +643,80 @@ export class CliAccountGateService {
         `CLI account pool not found: ${provider}:${accountPoolId}`,
       );
     }
+    const expectedProfileHome = this.buildProfileHome(provider, accountPoolId);
+    const actualProfileHome = path.resolve(row.profile_home);
+    const matchesExpected =
+      process.platform === "win32"
+        ? actualProfileHome.toLowerCase() === expectedProfileHome.toLowerCase()
+        : actualProfileHome === expectedProfileHome;
+    if (!matchesExpected) {
+      throw new CliAccountGateError(
+        "cli_profile_error",
+        409,
+        `CLI account profile identity mismatch for ${provider}:${accountPoolId}`,
+      );
+    }
+    this.assertProfileHomeAvailable(provider, accountPoolId, expectedProfileHome);
     return row;
   }
 
   private buildProfileHome(provider: string, accountPoolId: string): string {
-    const safeProvider = sanitizeToken(provider) || "provider";
-    const safePool = sanitizeToken(accountPoolId) || "pool";
-    return path.join(this.profileRoot, safeProvider, safePool);
+    if (!isExecutionProvider(provider) || !isCanonicalCliAccountPoolId(accountPoolId)) {
+      throw new CliAccountGateError(
+        "cli_account_pool_invalid",
+        400,
+        "Canonical provider and accountPoolId are required",
+      );
+    }
+    const providerRoot = path.resolve(this.profileRoot, provider);
+    const profileHome = path.resolve(providerRoot, accountPoolId);
+    const relative = path.relative(providerRoot, profileHome);
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new CliAccountGateError(
+        "cli_account_pool_invalid",
+        400,
+        "Account pool profile path escaped its provider root",
+      );
+    }
+    return profileHome;
+  }
+
+  private assertProfileHomeAvailable(provider: string, accountPoolId: string, profileHome: string): void {
+    const collision = this.db
+      .prepare(
+        `SELECT provider, account_pool_id
+         FROM cli_account_pools
+         WHERE profile_home = ? COLLATE NOCASE
+           AND NOT (provider = ? AND account_pool_id = ?)
+         LIMIT 1`,
+      )
+      .get(profileHome, provider, accountPoolId) as { provider?: string; account_pool_id?: string } | undefined;
+    if (collision) {
+      throw new CliAccountGateError(
+        "cli_account_pool_invalid",
+        409,
+        `CLI account profile path is already owned by ${collision.provider}:${collision.account_pool_id}`,
+      );
+    }
+  }
+
+  private assertProfileRootBoundary(): void {
+    let existing = this.profileRoot;
+    while (!fs.existsSync(existing)) {
+      const parent = path.dirname(existing);
+      if (parent === existing) {
+        throw new CliAccountGateError("cli_profile_error", 409, "CLI account profile root has no valid ancestor");
+      }
+      existing = parent;
+    }
+    const lstat = fs.lstatSync(existing);
+    if (!lstat.isDirectory() || lstat.isSymbolicLink()) {
+      throw new CliAccountGateError("cli_profile_error", 409, "CLI account profile root boundary is invalid");
+    }
+    const realExisting = fs.realpathSync.native(existing);
+    if (process.platform === "win32" && realExisting.toLowerCase() !== path.resolve(existing).toLowerCase()) {
+      throw new CliAccountGateError("cli_profile_error", 409, "CLI account profile root reparse point is not allowed");
+    }
   }
 
   private toView(row: CliAccountPoolRow): CliAccountPoolView {
@@ -644,13 +745,16 @@ function normalizePool(raw: unknown): string {
   return raw.trim();
 }
 
-function sanitizeToken(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64);
+function requireCanonicalPoolId(raw: unknown): string {
+  const value = normalizePool(raw);
+  if (!isCanonicalCliAccountPoolId(value)) {
+    throw new CliAccountGateError(
+      "cli_account_pool_invalid",
+      400,
+      "accountPoolId must be a canonical lower-case identifier",
+    );
+  }
+  return value;
 }
 
 function resolveDefaultOfficeCliProfileRoot(): string {
@@ -674,27 +778,55 @@ function isLegacyGeneratedOfficeProfileHome(raw: string): boolean {
   return normalized.startsWith("/app/.office-accounts/") || /^[a-z]:\/app\/\.office-accounts\//.test(normalized);
 }
 
-function isBinaryInstalled(provider: string): boolean {
-  const command = process.platform === "win32" ? "where" : "which";
-  try {
-    execFileSync(command, [provider], { stdio: "ignore", timeout: 3000 });
-    return true;
-  } catch {
-    return false;
-  }
+function isBinaryInstalled(provider: string, resolver: typeof resolveHostExecutable): boolean {
+  const env = buildMinimalCliChildEnv(process.env, process.platform);
+  return resolver({
+    command: provider,
+    pathValue: env.PATH,
+    platform: process.platform,
+    allowedCommands: [provider],
+  }).ok;
 }
 
-function verifyJulesRemoteSessionHealth(profileHome: string): { ok: true } | { ok: false; error: string } {
-  const env: NodeJS.ProcessEnv = { ...process.env, HOME: profileHome };
+function verifyJulesRemoteSessionHealth(
+  profileHome: string,
+  poolId: string,
+  resolver: typeof resolveHostExecutable,
+  execFileCommand: typeof execFileSync,
+  providerLiveExecutionGate: ProviderLiveExecutionGate | undefined,
+): { ok: true } | { ok: false; error: string } {
+  const env: NodeJS.ProcessEnv = buildMinimalCliChildEnv(process.env, process.platform);
+  env.HOME = profileHome;
   if (process.platform === "win32") {
     env.USERPROFILE = profileHome;
   }
   try {
-    execFileSync("jules", ["remote", "list", "--session"], {
+    const executable = resolver({
+      command: "jules",
+      argv: ["remote", "list", "--session"],
+      pathValue: env.PATH,
+      platform: process.platform,
+      allowedCommands: ["jules"],
+    });
+    if (!executable.ok) throw new Error(executable.reason);
+    if (
+      !isProviderLiveExecutionApproved(providerLiveExecutionGate, {
+        operation: "account_diagnostic",
+        runId: null,
+        taskId: null,
+        provider: "jules",
+        poolId,
+        projectPath: null,
+        executable: executable.executable,
+      })
+    ) {
+      throw new Error("provider live execution approval required: G-PROVIDER-LIVE");
+    }
+    execFileCommand(executable.executable, executable.argv, {
       stdio: "pipe",
       timeout: 8_000,
       env,
-      shell: process.platform === "win32",
+      shell: false,
     });
     return { ok: true };
   } catch (error) {
@@ -818,19 +950,47 @@ function mapCodexExecutionIssue(
   return "unknown";
 }
 
-function isCodexGlobalAccountDetected(): boolean {
-  if (!isBinaryInstalled("codex")) return false;
+function isCodexGlobalAccountDetected(
+  poolId: string,
+  resolver: typeof resolveHostExecutable,
+  execFileCommand: typeof execFileSync,
+  providerLiveExecutionGate: ProviderLiveExecutionGate | undefined,
+): boolean {
+  if (!isBinaryInstalled("codex", resolver)) return false;
+  const env = buildMinimalCliChildEnv(process.env, process.platform);
   const probes: string[][] = [
     ["login", "status"],
     ["auth", "status"],
   ];
   for (const args of probes) {
     try {
-      const output = execFileSync("codex", args, {
+      const executable = resolver({
+        command: "codex",
+        argv: args,
+        pathValue: env.PATH,
+        platform: process.platform,
+        allowedCommands: ["codex"],
+      });
+      if (!executable.ok) return false;
+      if (
+        !isProviderLiveExecutionApproved(providerLiveExecutionGate, {
+          operation: "account_diagnostic",
+          runId: null,
+          taskId: null,
+          provider: "codex",
+          poolId,
+          projectPath: null,
+          executable: executable.executable,
+        })
+      ) {
+        return false;
+      }
+      const output = execFileCommand(executable.executable, executable.argv, {
         stdio: "pipe",
         timeout: 8_000,
         encoding: "utf8",
-        shell: process.platform === "win32",
+        env,
+        shell: false,
       });
       const normalized = output.toLowerCase();
       if (normalized.includes("logged in") || normalized.includes("authenticated") || normalized.includes("account")) {
@@ -865,19 +1025,10 @@ function hasAuthArtifact(provider: string, profileHome: string): boolean {
   const markers: Record<ExecutionProvider, string[]> = {
     codex: [".codex/auth.json"],
     gemini: [".gemini/oauth_creds.json", ".config/gcloud/application_default_credentials.json"],
-    claude: [".claude.json", ".claude/auth.json"],
+    claude: [".claude/.credentials.json"],
     jules: [".jules/auth.json", ".jules/credentials.json", ".jules/cache/oauth_creds.json"],
   };
   const markerList = markers[provider as ExecutionProvider];
   if (!Array.isArray(markerList) || markerList.length === 0) return false;
-  return markerList.some((relativePath) => fileExistsNonEmpty(path.join(profileHome, relativePath)));
-}
-
-function fileExistsNonEmpty(filePath: string): boolean {
-  try {
-    const stat = fs.statSync(filePath);
-    return stat.isFile() && stat.size > 0;
-  } catch {
-    return false;
-  }
+  return markerList.some((relativePath) => isCliAuthArtifactValid(provider, path.join(profileHome, relativePath)));
 }

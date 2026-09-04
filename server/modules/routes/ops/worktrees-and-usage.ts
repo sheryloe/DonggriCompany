@@ -1,8 +1,109 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import type { RuntimeContext } from "../../../types/runtime-context.ts";
 import type { CliUsageEntry } from "../shared/types.ts";
+import {
+  isCanonicalCliAccountPoolId,
+  isCliAuthArtifactValid,
+  resolveCliAccountPoolEnv,
+  resolveDefaultCliAccountProfileRoot,
+} from "../../workflow/agents/cli-account-pool-env.ts";
+import {
+  buildMinimalCliChildEnv,
+  isProviderLiveExecutionApproved,
+  type ProviderLiveExecutionGate,
+} from "../../workflow/agents/cli-runtime.ts";
+import { resolveHostExecutable } from "../../workflow/agents/host-executable-resolver.ts";
+
+function sameResolvedPath(left: string, right: string, platform: NodeJS.Platform): boolean {
+  const resolvedLeft = path.resolve(left);
+  const resolvedRight = path.resolve(right);
+  return platform === "win32"
+    ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
+    : resolvedLeft === resolvedRight;
+}
+
+export async function runJulesSessionListWithHostIsolation(
+  rawProfileHome: string,
+  deps: {
+    accountPoolId: string;
+    profileRoot: string;
+    sourceEnv?: NodeJS.ProcessEnv;
+    platform?: NodeJS.Platform;
+    resolveExecutable?: typeof resolveHostExecutable;
+    execFile?: typeof execFile;
+    providerLiveExecutionGate?: ProviderLiveExecutionGate;
+  },
+): Promise<string> {
+  const platform = deps.platform ?? process.platform;
+  const profileHome = path.resolve(String(rawProfileHome ?? "").trim());
+  if (!rawProfileHome || !path.isAbsolute(rawProfileHome)) throw new Error("jules_profile_home_absolute_required");
+  const accountPoolId = String(deps.accountPoolId ?? "").trim();
+  if (!isCanonicalCliAccountPoolId(accountPoolId)) throw new Error("jules_account_pool_identity_invalid");
+  if (!deps.profileRoot || !path.isAbsolute(deps.profileRoot)) throw new Error("jules_profile_root_absolute_required");
+  const profileRoot = path.resolve(deps.profileRoot);
+  const expectedProfileHome = path.resolve(profileRoot, "jules", accountPoolId);
+  if (!sameResolvedPath(profileHome, expectedProfileHome, platform)) {
+    throw new Error("jules_profile_home_authority_mismatch");
+  }
+  const rootStat = fs.lstatSync(profileRoot);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("jules_profile_root_identity_invalid");
+  const realProfileRoot = fs.realpathSync.native(profileRoot);
+  if (!sameResolvedPath(realProfileRoot, profileRoot, platform)) throw new Error("jules_profile_root_reparse_rejected");
+  const lstat = fs.lstatSync(profileHome);
+  if (!lstat.isDirectory() || lstat.isSymbolicLink()) throw new Error("jules_profile_home_identity_invalid");
+  const realProfileHome = fs.realpathSync.native(profileHome);
+  if (!sameResolvedPath(realProfileHome, profileHome, platform)) {
+    throw new Error("jules_profile_home_reparse_rejected");
+  }
+
+  const env = buildMinimalCliChildEnv(deps.sourceEnv ?? process.env, platform);
+  env.HOME = realProfileHome;
+  if (platform === "win32") env.USERPROFILE = realProfileHome;
+  const resolver = deps.resolveExecutable ?? resolveHostExecutable;
+  const executable = resolver({
+    command: "jules",
+    argv: ["remote", "list", "--session"],
+    pathValue: env.PATH,
+    platform,
+    allowedCommands: ["jules"],
+  });
+  if (!executable.ok) throw new Error(executable.reason);
+  if (
+    !isProviderLiveExecutionApproved(deps.providerLiveExecutionGate, {
+      operation: "usage_probe",
+      runId: null,
+      taskId: null,
+      provider: "jules",
+      poolId: accountPoolId,
+      projectPath: null,
+      executable: executable.executable,
+    })
+  ) {
+    throw new Error("provider live execution approval required: G-PROVIDER-LIVE");
+  }
+  return new Promise<string>((resolve, reject) => {
+    (deps.execFile ?? execFile)(
+      executable.executable,
+      [...executable.argv],
+      {
+        env,
+        timeout: 8_000,
+        encoding: "utf8",
+        shell: false,
+        windowsHide: true,
+      },
+      (error, stdout) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(String(stdout));
+      },
+    );
+  });
+}
 
 function readGitLines(cwd: string, args: string[], timeout = 8000): string[] {
   const output = execFileSync("git", args, { cwd, stdio: "pipe", timeout }).toString().trim();
@@ -245,7 +346,9 @@ function inspectWorktreeVerification(wtInfo?: {
 export function registerWorktreeAndUsageRoutes(
   ctx: RuntimeContext,
   deps: {
-    runJulesSessionList?: (profileHome: string) => string;
+    runJulesSessionList?: (profileHome: string, accountPoolId: string) => Promise<string>;
+    cliAccountProfileRoot?: string;
+    providerLiveExecutionGate?: ProviderLiveExecutionGate;
   } = {},
 ): {
   refreshCliUsageData: () => Promise<Record<string, CliUsageEntry>>;
@@ -269,20 +372,17 @@ export function registerWorktreeAndUsageRoutes(
     getGeminiProjectId,
     broadcast,
   } = ctx;
+  const cliAccountProfileRoot = path.resolve(
+    deps.cliAccountProfileRoot ?? resolveDefaultCliAccountProfileRoot(process.env, process.platform),
+  );
   const runJulesSessionList =
     deps.runJulesSessionList ??
-    ((profileHome: string) => {
-      const envPatch: NodeJS.ProcessEnv = { ...process.env, HOME: profileHome };
-      if (process.platform === "win32") {
-        envPatch.USERPROFILE = profileHome;
-      }
-      return execFileSync("jules", ["remote", "list", "--session"], {
-        env: envPatch,
-        timeout: 8_000,
-        stdio: "pipe",
-        shell: process.platform === "win32",
-      }).toString("utf8");
-    });
+    ((profileHome: string, accountPoolId: string) =>
+      runJulesSessionListWithHostIsolation(profileHome, {
+        accountPoolId,
+        profileRoot: cliAccountProfileRoot,
+        providerLiveExecutionGate: deps.providerLiveExecutionGate,
+      }));
 
   app.get("/api/tasks/:id/diff", (req, res) => {
     const id = String(req.params.id);
@@ -476,9 +576,27 @@ export function registerWorktreeAndUsageRoutes(
     }
   }
 
+  function resolveAuthoritativeConnectedProfile(pool: CliPoolRow): string | null {
+    const resolved = resolveCliAccountPoolEnv({
+      db: db as any,
+      provider: pool.provider,
+      cliAccountPoolId: pool.account_pool_id,
+      platform: process.platform,
+      profileRoot: cliAccountProfileRoot,
+      policy: {
+        requireExplicitSelection: true,
+        requireConnectedStatus: true,
+        requireAuthoritativePool: true,
+      },
+    });
+    if (!resolved.ok || !resolved.profileHome || resolved.poolId !== pool.account_pool_id) return null;
+    return resolved.profileHome;
+  }
+
   function readCodexTokensFromProfile(profileHome: string): { access_token: string; account_id: string } | null {
     try {
       const authPath = path.join(profileHome, ".codex", "auth.json");
+      if (!isCliAuthArtifactValid("codex", authPath)) return null;
       const parsed = JSON.parse(fs.readFileSync(authPath, "utf8")) as {
         tokens?: { access_token?: string; account_id?: string };
       };
@@ -539,6 +657,7 @@ export function registerWorktreeAndUsageRoutes(
         provider === "gemini"
           ? path.join(profileHome, ".gemini", "oauth_creds.json")
           : path.join(profileHome, ".jules", "cache", "oauth_creds.json");
+      if (!isCliAuthArtifactValid(provider, sourcePath)) return null;
       const raw = JSON.parse(fs.readFileSync(sourcePath, "utf8")) as Record<string, unknown>;
       const accessToken = String(raw.access_token ?? "").trim();
       if (!accessToken) return null;
@@ -617,6 +736,7 @@ export function registerWorktreeAndUsageRoutes(
       next.expires_in = expiresInSec;
     }
     try {
+      if (!isCliAuthArtifactValid(creds.provider, creds.sourcePath)) return;
       fs.writeFileSync(creds.sourcePath, JSON.stringify(next, null, 2), { encoding: "utf8", mode: 0o600 });
     } catch {
       // best effort only
@@ -626,6 +746,7 @@ export function registerWorktreeAndUsageRoutes(
   async function resolveFreshGoogleAccessTokenFromProfile(
     profileHome: string,
     provider: GoogleProfileProvider,
+    pool: CliPoolRow,
   ): Promise<string | null> {
     const creds = readGoogleCredsFromProfile(profileHome, provider);
     if (!creds) return null;
@@ -641,6 +762,8 @@ export function registerWorktreeAndUsageRoutes(
 
     const refreshed = await refreshGoogleAccessToken(creds);
     if (!refreshed) return creds.accessToken;
+    const currentProfileHome = resolveAuthoritativeConnectedProfile(pool);
+    if (!currentProfileHome || !sameResolvedPath(currentProfileHome, profileHome, process.platform)) return null;
     persistRefreshedGoogleCreds(creds, refreshed, now);
     return refreshed.accessToken;
   }
@@ -884,13 +1007,16 @@ export function registerWorktreeAndUsageRoutes(
     return { counts, lastActive };
   }
 
-  function readJulesSessionUsageFromProfile(profileHome: string): {
+  async function readJulesSessionUsageFromProfile(
+    profileHome: string,
+    accountPoolId: string,
+  ): Promise<{
     counts: CliSessionUsageCounts;
     lastActive: string | null;
     error: string | null;
-  } {
+  }> {
     try {
-      const output = runJulesSessionList(profileHome);
+      const output = await runJulesSessionList(profileHome, accountPoolId);
       const parsed = parseJulesSessionList(output);
       return { counts: parsed.counts, lastActive: parsed.lastActive, error: null };
     } catch (error) {
@@ -927,11 +1053,14 @@ export function registerWorktreeAndUsageRoutes(
     const entries = await Promise.all(
       pools.map(async (pool) => {
         let usage: CliUsageEntry = { windows: [], error: "not_implemented" };
-        if (pool.provider === "codex") {
-          const tokens = readCodexTokensFromProfile(pool.profile_home);
+        const profileHome = resolveAuthoritativeConnectedProfile(pool);
+        if (!profileHome) {
+          usage = { windows: [], error: "profile_error" };
+        } else if (pool.provider === "codex") {
+          const tokens = readCodexTokensFromProfile(profileHome);
           usage = tokens ? await fetchCodexUsageByTokens(tokens) : { windows: [], error: "unauthenticated" };
         } else if (pool.provider === "gemini") {
-          const accessToken = await resolveFreshGoogleAccessTokenFromProfile(pool.profile_home, "gemini");
+          const accessToken = await resolveFreshGoogleAccessTokenFromProfile(profileHome, "gemini", pool);
           usage = accessToken
             ? await fetchGeminiQuotaUsageByToken(accessToken)
             : { windows: [], error: "unauthenticated" };
@@ -952,19 +1081,28 @@ export function registerWorktreeAndUsageRoutes(
   async function readCliSessionUsage(): Promise<CliSessionUsageEntry[]> {
     const pools = readConnectedJulesPools();
     if (pools.length === 0) return [];
-    const entries = pools.map((pool) => {
-      const baseLabel = String(pool.label || pool.account_pool_id).trim() || pool.account_pool_id;
-      const sessionUsage = readJulesSessionUsageFromProfile(pool.profile_home);
-      return {
-        key: `${pool.provider}:${pool.account_pool_id}`,
-        provider: "jules",
-        accountPoolId: pool.account_pool_id,
-        label: baseLabel,
-        sessions: sessionUsage.counts,
-        lastActive: sessionUsage.lastActive,
-        error: sessionUsage.error,
-      } as CliSessionUsageEntry;
-    });
+    const entries = await Promise.all(
+      pools.map(async (pool) => {
+        const baseLabel = String(pool.label || pool.account_pool_id).trim() || pool.account_pool_id;
+        const profileHome = resolveAuthoritativeConnectedProfile(pool);
+        const sessionUsage = profileHome
+          ? await readJulesSessionUsageFromProfile(profileHome, pool.account_pool_id)
+          : {
+              counts: { in_progress: 0, awaiting: 0, completed: 0, failed: 0, unknown: 0, total: 0 },
+              lastActive: null,
+              error: "profile_error",
+            };
+        return {
+          key: `${pool.provider}:${pool.account_pool_id}`,
+          provider: "jules",
+          accountPoolId: pool.account_pool_id,
+          label: baseLabel,
+          sessions: sessionUsage.counts,
+          lastActive: sessionUsage.lastActive,
+          error: sessionUsage.error,
+        } as CliSessionUsageEntry;
+      }),
+    );
     return entries.sort((a, b) => a.label.localeCompare(b.label) || a.accountPoolId.localeCompare(b.accountPoolId));
   }
 

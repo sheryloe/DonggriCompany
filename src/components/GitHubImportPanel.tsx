@@ -14,10 +14,16 @@ import { useI18n } from "../i18n";
 import GitHubDeviceConnect from "./github-import/GitHubDeviceConnect";
 import GitHubImportWizard from "./github-import/GitHubImportWizard";
 import type { WizardStep } from "./github-import/model";
+import { getDefaultProjectRoot, joinProjectPath } from "./project-creation/github-project-flow";
 
 interface GitHubImportPanelProps {
   onComplete: (result: { projectId: string; projectPath: string; branch: string }) => void;
   onCancel: () => void;
+}
+
+export async function resolveGitHubImportTargetPath(repoName: string): Promise<string> {
+  const serverProjectedRoot = await getDefaultProjectRoot();
+  return joinProjectPath(serverProjectedRoot, repoName);
 }
 
 export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImportPanelProps) {
@@ -179,13 +185,14 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
   }, [handleRepoSelect, patToken, selectedRepo]);
 
   const handleBranchSelect = useCallback(
-    (branchName: string) => {
+    async (branchName: string) => {
       setSelectedBranch(branchName);
       setStep("clone");
       if (selectedRepo) {
         setProjectName(selectedRepo.name);
-        setTargetPath(`G:\\Donggri_DevDrive\\repos\\${selectedRepo.name}`);
+        setTargetPath("");
         setCoreGoal("");
+        setTargetPath(await resolveGitHubImportTargetPath(selectedRepo.name));
       }
     },
     [selectedRepo],
@@ -335,7 +342,9 @@ export default function GitHubImportPanel({ onComplete, onCancel }: GitHubImport
       onPatRetry={() => {
         void handlePatRetry();
       }}
-      onBranchSelect={handleBranchSelect}
+      onBranchSelect={(branchName) => {
+        void handleBranchSelect(branchName);
+      }}
       onProjectNameChange={setProjectName}
       onTargetPathChange={setTargetPath}
       onCoreGoalChange={setCoreGoal}

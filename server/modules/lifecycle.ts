@@ -11,6 +11,7 @@ import { startGmailIntakeReceiver } from "../messenger/gmail-intake-receiver.ts"
 import { startTelegramReceiver } from "../messenger/telegram-receiver.ts";
 import { registerGracefulShutdownHandlers } from "./lifecycle/register-graceful-shutdown.ts";
 import { startStrategicMaintenanceScheduler } from "./strategic-maintenance/service.ts";
+import { runnerSupervisorRegistry } from "./services/runner-supervisor.ts";
 
 type StartupCliStatus = Record<string, { installed?: boolean; authenticated?: boolean }>;
 
@@ -706,6 +707,7 @@ export function startLifecycle(ctx: RuntimeContext): void {
     wsClients,
     wss,
     server,
+    supervisor: runnerSupervisorRegistry.getOrCreate(db),
     onBeforeClose: () => {
       telegramReceiver.stop();
       discordReceiver.stop();
